@@ -1,0 +1,10 @@
+{
+    "extends": "@packages/config/typescript/base.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "rootDir": "./src"
+    },
+    "include": [
+        "src/**/*.ts"
+    ]
+}

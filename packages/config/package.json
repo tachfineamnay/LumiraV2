@@ -1,0 +1,11 @@
+{
+    "name": "@packages/config",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./index.js",
+    "exports": {
+        "./eslint": "./eslint/index.js",
+        "./typescript/base.json": "./typescript/base.json",
+        "./tailwind": "./tailwind/index.js"
+    }
+}

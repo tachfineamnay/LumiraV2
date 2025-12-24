@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "CommonJS",
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "baseUrl": ".",
+    "paths": {
+      "@packages/database": [
+        "./packages/database/src"
+      ],
+      "@packages/shared": [
+        "./packages/shared/src"
+      ],
+      "@packages/ui": [
+        "./packages/ui/src"
+      ],
+      "@packages/config/*": [
+        "./packages/config/*"
+      ]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "apps/**/node_modules",
+    "dist",
+    ".next"
+  ]
+}

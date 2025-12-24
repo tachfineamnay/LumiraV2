@@ -1,0 +1,78 @@
+AUDIT COMPLET DU PROJET : LUMIRA V2
+Date : 2025-12-23
+--------------------------------------------------------------------------------
+
+1. STRUCTURE ET ARCHITECTURE
+---------------------------
+- Type de projet : Monorepo géré avec Turborepo et pnpm.
+- Gestionnaire de packages : pnpm (v8.15.4).
+- Organisation :
+    - apps/
+        - api : Backend NestJS (API principale).
+        - web : Frontend Next.js 14 (App Router).
+    - packages/
+        - database : Configuration Prisma partagée (Source de vérité de la DB).
+        - ui : Composants UI partagés (utilisant Tailwind CSS).
+        - shared : Utilitaires et types partagés.
+        - config : Configuration de build/lint partagée.
+
+2. STACK TECHNIQUE
+-----------------
+- Backend (apps/api) :
+    - Framework : NestJS 10.
+    - Authentification : Passport + JWT (Admin & Client).
+    - Stockage : AWS SDK S3 (Uploads).
+    - Paiements : Stripe.
+    - Emails : NestJS Mailer + Handlebars + Nodemailer.
+    - Validation : class-validator + class-transformer.
+- Frontend (apps/web) :
+    - Framework : Next.js 14.1.0 (App Router).
+    - Design : Tailwind CSS, Framer Motion (animations), Lucide React (icones).
+    - Gestion de formulaires : React Hook Form + Zod.
+    - Client API : Axios.
+- Base de données (packages/database) :
+    - ORM : Prisma.
+    - Type : PostgreSQL.
+    - Schéma : Unifié dans packages/database/prisma/schema.prisma (comprend User, Order, Expert, Product, etc.).
+
+3. SÉCURITÉ ET AUDIT DÉPENDANCES
+------------------------------
+- Résultat 'pnpm audit' :
+    - 9 vulnérabilités trouvées au total.
+    - 4 vulnérabilités de niveau HAUT (High).
+    > ACTION : Une mise à jour des dépendances est fortement recommandée (pnpm update).
+
+4. ENVIRONNEMENT ET CONFIGURATION
+-------------------------------
+- Fichiers .env :
+    - .env présent à la racine.
+    - Variable manquante dans .env.example : N8N_WEBHOOK_SECRET.
+- Docker :
+    - Dockerfiles présents dans apps/api et apps/web.
+    - Configuration docker/ à la racine pour déploiement Coolify (référé dans l'historique).
+
+5. QUALITÉ ET TESTS
+-----------------
+- Linting : ESLint et Prettier configurés globalement et par application.
+- Tests :
+    - Tests E2E configurés avec Playwright dans le dossier /tests racine.
+    - Tests unitaires NestJS configurés via Jest dans apps/api.
+- Build : Les répertoires 'dist' (API) et '.next' (Web) sont présents, indiquant des builds récents.
+
+6. OBSERVATIONS ET POINTS CRITIQUES (DASHBOARD AUDIT)
+--------------------------------------------------
+[!] DOUBLON DE SCHÉMA : Un dossier prisma/ existe à la racine avec un schéma très basique. Le schéma de référence est dans packages/database. Le dossier racine prisma/ doit être supprimé pour éviter toute confusion.
+[!] MIGRATIONS : Absence du dossier 'migrations' dans packages/database/prisma. Cela suggère l'usage de 'prisma db push' au lieu de migrations trackées. Pour la production, il est recommandé de passer aux migrations Prisma.
+[!] SCRIPTS DE TEST : Présence de 'test-n8n-webhook.js' à la racine de apps/api. Ce fichier devrait être déplacé dans un dossier de tests ou de scripts.
+[?] ENHANCEMENT : La stack est solide et moderne, mais attention à la synchronisation des schémas JSON pour les champs formData et generatedContent dans les commandes.
+
+7. RÉSUMÉ DES RECOMMANDATIONS
+---------------------------
+1. Nettoyer le projet : Supprimer le dossier /prisma racine.
+2. Sécurité : Mettre à jour les dépendances vulnérables.
+3. Documentation : Mettre à jour .env.example avec les secrets N8N.
+4. Processus : Initialiser les migrations Prisma pour un meilleur suivi de la DB.
+5. Organisation : Ranger les scripts de test ponctuels dans des dossiers dédiés.
+
+--------------------------------------------------------------------------------
+FIN DE L'AUDIT

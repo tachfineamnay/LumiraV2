@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  TRIAL
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  AWAITING_VALIDATION
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum ProductOrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ExpertRole {
+  EXPERT
+  ADMIN
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISION_NEEDED
+}
+
+enum ValidationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AudioVoice {
+  MASCULINE
+  FEMININE
+}
+
+enum DeliveryFormat {
+  EMAIL
+  WHATSAPP
+}
+
+enum FileType {
+  FACE_PHOTO
+  PALM_PHOTO
+}
+
+enum ProductLevel {
+  INITIE
+  MYSTIQUE
+  PROFOND
+  INTEGRALE
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  email              String             @unique
+  firstName          String
+  lastName           String
+  phone              String?
+  dateOfBirth        DateTime?
+  stripeCustomerId   String?            @unique
+  subscriptionStatus SubscriptionStatus @default(INACTIVE)
+  totalOrders        Int                @default(0)
+  lastOrderAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  profile UserProfile?
+  orders  Order[]
+
+  @@index([email])
+  @@index([createdAt(sort: Desc)])
+}
+
+model UserProfile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id])
+  birthDate        String?
+  birthTime        String?
+  birthPlace       String?
+  specificQuestion String?   @db.Text
+  objective        String?   @db.Text
+  facePhotoUrl     String?
+  palmPhotoUrl     String?
+  profileCompleted Boolean   @default(false)
+  submittedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  orderNumber       String      @unique
+  userId            String
+  user              User        @relation(fields: [userId], references: [id])
+  userEmail         String
+  userName          String?
+  level             Int
+  amount            Int
+  currency          String      @default("eur")
+  status            OrderStatus @default(PENDING)
+  paymentIntentId   String?
+  stripeSessionId   String?
+  paidAt            DateTime?
+  formData          Json
+  clientInputs      Json?
+  expertPrompt      String?     @db.Text
+  expertInstructions String?    @db.Text
+  generatedContent  Json?
+  errorLog          String?     @db.Text
+  expertReview      Json?
+  expertValidation  Json?
+  revisionCount     Int         @default(0)
+  deliveredAt       DateTime?
+  deliveryMethod    DeliveryFormat?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  files OrderFile[]
+
+  @@index([userId])
+  @@index([userEmail])
+  @@index([status])
+  @@index([level])
+  @@index([createdAt(sort: Desc)])
+  @@index([paymentIntentId])
+}
+
+model OrderFile {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name        String
+  url         String
+  key         String
+  contentType String
+  size        Int
+  type        FileType
+  uploadedAt  DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model ProductOrder {
+  id              String             @id @default(cuid())
+  productId       String
+  customerId      String?
+  customerEmail   String?
+  amount          Int
+  currency        String             @default("eur")
+  status          ProductOrderStatus @default(PENDING)
+  paymentIntentId String             @unique
+  completedAt     DateTime?
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+model Expert {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  name      String
+  role      ExpertRole @default(EXPERT)
+  isActive  Boolean    @default(true)
+  lastLogin DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([isActive])
+  @@index([createdAt(sort: Desc)])
+}
+
+model ProcessedEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  eventType   String
+  processedAt DateTime @default(now())
+  data        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId])
+}
+
+model Product {
+  id           String       @id
+  name         String
+  description  String
+  amountCents  Int
+  currency     String       @default("eur")
+  level        ProductLevel
+  features     String[]
+  limitedOffer String?
+  isActive     Boolean      @default(true)
+  comingSoon   Boolean      @default(false)
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}

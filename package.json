@@ -1,0 +1,43 @@
+{
+  "name": "lumira-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean",
+    "db:generate": "turbo run db:generate",
+    "db:push": "turbo run db:push",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "prepare": "husky install",
+    "db:migrate": "turbo run db:migrate",
+    "db:seed": "turbo run db:seed",
+    "db:studio": "turbo run db:studio"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@swc/helpers": "^0.5.17",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "playwright": "^1.57.0",
+    "prettier": "^3.1.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "lint-staged": {
+    "**/*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "**/*.{json,md,css}": [
+      "prettier --write"
+    ]
+  },
+  "packageManager": "pnpm@8.15.4"
+}
