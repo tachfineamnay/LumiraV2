@@ -8,6 +8,9 @@ COPY . .
 # Enable corepack for pnpm
 RUN corepack enable
 
+# Force development environment for build to ensure all dependencies are resolved
+ENV NODE_ENV=development
+
 # Install all dependencies (including devDeps for build)
 RUN pnpm install --frozen-lockfile --ignore-scripts --production=false
 
