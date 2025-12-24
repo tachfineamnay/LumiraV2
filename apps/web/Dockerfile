@@ -1,32 +1,24 @@
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+FROM node:20-alpine
+RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/ ./packages/
-RUN corepack enable && pnpm install --frozen-lockfile
 
-# Stage 2: Build
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app ./
+# Copy all project files
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED 1
+
+# Enable corepack for pnpm
+RUN corepack enable
+
+# Install all dependencies (including devDeps for build)
+RUN pnpm install --frozen-lockfile --ignore-scripts --production=false
+
+# Build the Web app
+# Ensure public and static files are handled by the framework output
 RUN pnpm --filter web build
 
-# Stage 3: Runner
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV production
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/apps/web/public ./apps/web/public
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-
-USER nextjs
+ENV NODE_ENV=production
 EXPOSE 3000
 ENV PORT 3000
-CMD ["node", "apps/web/server.js"]
+
+# Next.js standalone output is handled if configured, otherwise run from source/dist
+# If output: 'standalone' is not enabled, use:
+CMD ["pnpm", "--filter", "web", "start"]
