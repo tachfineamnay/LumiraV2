@@ -1,27 +1,38 @@
-FROM node:20-alpine
+# Base stage for shared setup
+FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
+RUN corepack enable
 WORKDIR /app
 
-# Copy all project files
+# Build stage
+FROM base AS builder
+# Install build dependencies for native modules like bcrypt
+RUN apk add --no-cache python3 make g++
 COPY . .
-
-# Enable corepack for pnpm
-RUN corepack enable
-
-# Install all dependencies (including devDeps for build)
-RUN pnpm install --frozen-lockfile --ignore-scripts --production=false
-
-# Generate Prisma client
+RUN pnpm install --frozen-lockfile --production=false
 RUN pnpm --filter @packages/database db:generate
-
-# Build the API
 RUN pnpm --filter api build
 
-# Cleanup node_modules (optional but recommended for production)
-# RUN pnpm install --prod --frozen-lockfile --ignore-scripts
-
+# Production stage
+FROM base AS runner
 ENV NODE_ENV=production
-EXPOSE 3001
+# Re-install only production dependencies
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/packages/database/package.json ./packages/database/
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 
-# Run from the api directory or adjust paths
+# Install production dependencies
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+
+# Copy build artifacts
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/packages/database/dist ./packages/database/dist
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+
+# Copy Prisma client from builder
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+
+EXPOSE 3001
 CMD ["node", "apps/api/dist/main.js"]
