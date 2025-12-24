@@ -8,20 +8,17 @@ COPY . .
 # Enable corepack for pnpm
 RUN corepack enable
 
-# Force development environment for build to ensure all dependencies are resolved
-ENV NODE_ENV=development
-
 # Install all dependencies (including devDeps for build)
+# We use --production=false to ensure devDependencies are installed even if NODE_ENV is production
 RUN pnpm install --frozen-lockfile --ignore-scripts --production=false
 
 # Build the Web app
-# Ensure public and static files are handled by the framework output
+# Next.js will use NODE_ENV=production internally for 'next build'
 RUN pnpm --filter web build
 
 ENV NODE_ENV=production
 EXPOSE 3000
 ENV PORT 3000
 
-# Next.js standalone output is handled if configured, otherwise run from source/dist
-# If output: 'standalone' is not enabled, use:
+# Run the web app
 CMD ["pnpm", "--filter", "web", "start"]

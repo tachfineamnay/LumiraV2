@@ -23,6 +23,7 @@
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@swc/helpers": "^0.5.17",
+    "eslint-config-prettier": "^9.1.0",
     "husky": "^8.0.3",
     "lint-staged": "^15.2.0",
     "playwright": "^1.57.0",
