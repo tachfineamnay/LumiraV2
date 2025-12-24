@@ -9,7 +9,7 @@ COPY . .
 RUN corepack enable
 
 # Install all dependencies (including devDeps for build)
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN pnpm install --frozen-lockfile --ignore-scripts --production=false
 
 # Generate Prisma client
 RUN pnpm --filter @packages/database db:generate
