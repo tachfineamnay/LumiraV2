@@ -1,29 +1,27 @@
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:20-alpine
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY apps/api/package.json ./apps/api/
-COPY packages/ ./packages/
-RUN corepack enable && pnpm install --frozen-lockfile --ignore-scripts --production=false
 
-# Stage 2: Build
-FROM node:20-alpine AS builder
-RUN apk add --no-cache openssl
-WORKDIR /app
-COPY --from=deps /app ./
+# Copy all project files
 COPY . .
+
+# Enable corepack for pnpm
 RUN corepack enable
+
+# Install all dependencies (including devDeps for build)
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# Generate Prisma client
 RUN pnpm --filter @packages/database db:generate
+
+# Build the API
 RUN pnpm --filter api build
 
-# Stage 3: Runner
-FROM node:20-alpine AS runner
-RUN apk add --no-cache openssl
-WORKDIR /app
+# Cleanup node_modules (optional but recommended for production)
+# RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+
 ENV NODE_ENV=production
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/database/prisma ./prisma
 EXPOSE 3001
-CMD ["node", "dist/main.js"]
+
+# Run from the api directory or adjust paths
+CMD ["node", "apps/api/dist/main.js"]
