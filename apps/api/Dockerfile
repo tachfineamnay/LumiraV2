@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/ ./packages/
-RUN corepack enable && pnpm install --frozen-lockfile --ignore-scripts
+RUN corepack enable && pnpm install --frozen-lockfile --ignore-scripts --production=false
 
 # Stage 2: Build
 FROM node:20-alpine AS builder
@@ -20,7 +20,7 @@ RUN pnpm --filter @packages/database db:generate
 FROM node:20-alpine AS runner
 RUN apk add --no-cache openssl
 WORKDIR /app
-ENV NODE_ENV production
+ENV NODE_ENV=production
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/database/prisma ./prisma
