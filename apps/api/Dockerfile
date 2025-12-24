@@ -13,6 +13,7 @@ RUN apk add --no-cache openssl
 WORKDIR /app
 COPY --from=deps /app ./
 COPY . .
+RUN corepack enable
 RUN pnpm --filter api build
 RUN pnpm --filter @packages/database db:generate
 
