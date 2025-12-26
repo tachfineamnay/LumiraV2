@@ -12,7 +12,8 @@
         "db:seed": "npx -y tsx@latest prisma/seed.ts",
         "db:reset": "prisma migrate reset --force",
         "db:fresh": "pnpm db:reset && pnpm db:seed",
-        "build": "pnpm db:generate && tsc"
+        "build": "pnpm db:generate && tsc",
+        "test": "echo 'No tests yet'"
     },
     "dependencies": {
         "@prisma/client": "^5.7.0",
