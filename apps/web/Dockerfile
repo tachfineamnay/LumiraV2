@@ -8,8 +8,7 @@ WORKDIR /app
 FROM base AS builder
 COPY . .
 RUN pnpm install --frozen-lockfile --production=false
-RUN pnpm --filter @packages/database db:generate
-RUN pnpm --filter web build
+RUN pnpm turbo run build --filter=web...
 
 # Production stage
 FROM base AS runner

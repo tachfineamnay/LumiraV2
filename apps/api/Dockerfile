@@ -9,15 +9,16 @@ FROM base AS builder
 # Install build dependencies for native modules like bcrypt
 RUN apk add --no-cache python3 make g++
 COPY . .
-RUN pnpm install --frozen-lockfile --production=false
-RUN pnpm --filter @packages/database db:generate
-RUN pnpm --filter api build
+# Build dependencies
+RUN pnpm turbo run build --filter=api...
 
 # Production stage
 FROM base AS runner
 ENV NODE_ENV=production
-# Re-install only production dependencies
+# Re-install only production dependencies - install all workspace dependencies first
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+
+# Copy all package.jsons to install production dependencies
 COPY --from=builder /app/apps/api/package.json ./apps/api/
 COPY --from=builder /app/packages/database/package.json ./packages/database/
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/

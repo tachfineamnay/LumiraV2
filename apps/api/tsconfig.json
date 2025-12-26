@@ -11,6 +11,20 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "paths": {
+      "@packages/database": [
+        "../../packages/database/src"
+      ],
+      "@packages/shared": [
+        "../../packages/shared/src"
+      ],
+      "@packages/ui": [
+        "../../packages/ui/src"
+      ],
+      "@packages/config/*": [
+        "../../packages/config/*"
+      ]
+    },
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": false,
