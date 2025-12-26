@@ -1,37 +1,49 @@
-# Base stage for shared setup
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable
 WORKDIR /app
 
-# Build stage
-FROM base AS builder
-# Install build dependencies for native modules like bcrypt
-RUN apk add --no-cache python3 make g++
+# 1. Prune
+FROM base AS pruner
+# Install turbo globally for the pruning step
+RUN npm install -g turbo
 COPY . .
-# Build dependencies
+RUN turbo prune --scope=api --docker
+
+# 2. Build
+FROM base AS builder
+# Install native deps
+RUN apk add --no-cache python3 make g++
+WORKDIR /app
+
+# Copy lockfile and package.jsons from pruner
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# Install dependencies (frozen lockfile to respect pnpm-lock.yaml)
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY --from=pruner /app/out/full/ .
+
+# Build API
 RUN pnpm turbo run build --filter=api...
 
-# Production stage
+# 3. Production Runner
 FROM base AS runner
+WORKDIR /app
 ENV NODE_ENV=production
-# Re-install only production dependencies - install all workspace dependencies first
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 
-# Copy all package.jsons to install production dependencies
-COPY --from=builder /app/apps/api/package.json ./apps/api/
-COPY --from=builder /app/packages/database/package.json ./packages/database/
-COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+# Copy necessary files for runner
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 
-# Install production dependencies
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile
 
-# Copy build artifacts
+# Copy built artifacts
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/packages/database/dist ./packages/database/dist
-COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-
-# Copy Prisma client from builder
+# Copy Prisma assets if strictly needed by runtime (usually engines)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 

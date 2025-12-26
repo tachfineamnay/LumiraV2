@@ -1,26 +1,49 @@
-# Base stage for shared setup
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable
 WORKDIR /app
 
-# Build stage
-FROM base AS builder
+# 1. Prune
+FROM base AS pruner
+# Install turbo globally for the pruning step
+RUN npm install -g turbo
 COPY . .
-RUN pnpm install --frozen-lockfile --production=false
+RUN turbo prune --scope=web --docker
+
+# 2. Build
+FROM base AS builder
+RUN apk add --no-cache python3 make g++
+WORKDIR /app
+
+# Copy lockfile and package.jsons from pruner
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY --from=pruner /app/out/full/ .
+
+# Build Web
 RUN pnpm turbo run build --filter=web...
 
-# Production stage
+# 3. Production Runner
 FROM base AS runner
+WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT 3000
 
-# Copy necessary files for Next.js standalone (if configured) or just use pnpm start
-# For simplicity in this setup, we'll keep the full node_modules but pruned
-COPY --from=builder /app ./
+# Copy necessary files for runner
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 
-# Expose port
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile
+
+# Copy built artifacts
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
 EXPOSE 3000
-
-# Run the web app
 CMD ["pnpm", "--filter", "web", "start"]
