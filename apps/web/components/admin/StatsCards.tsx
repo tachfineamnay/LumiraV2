@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, ClipboardList, Loader2, CheckCircle2, Trophy, Euro } from 'lucide-react';
 
 interface StatCardProps {
     title: string;
@@ -58,7 +58,6 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {
-    const { ClipboardList, Loader2, CheckCircle2, Trophy, Euro } = require('lucide-react');
 
     const cards: StatCardProps[] = [
         {

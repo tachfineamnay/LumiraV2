@@ -15,7 +15,7 @@ export default function Home() {
 
         <div className="flex gap-4">
           <Button variant="primary" className="shadow-lg transform hover:scale-105 transition-all">
-            Lancer l'Application
+            Lancer l&apos;Application
           </Button>
           <Button variant="secondary" className="hover:bg-gray-200">
             Documentation Dev

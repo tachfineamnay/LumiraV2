@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, Loader2, Eye, FileText, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -62,8 +63,9 @@ export function ContentValidator({ selectedOrder, onValidate }: ContentValidator
             toast.success(selectedAction === 'approve' ? 'Lecture approuvée !' : 'Lecture rejetée - Régénération lancée');
             setValidationNotes('');
             setRejectionReason('');
-        } catch (error: any) {
-            toast.error(error.message || 'Erreur lors de la validation');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Erreur lors de la validation';
+            toast.error(message);
         } finally {
             setLoading(false);
             setAction(null);
@@ -145,9 +147,11 @@ export function ContentValidator({ selectedOrder, onValidate }: ContentValidator
                         {content.mandala && (
                             <div className="bg-white/5 rounded-xl p-4 mb-3">
                                 <h4 className="text-xs font-bold text-white/60 mb-2">Mandala</h4>
-                                <img
+                                <Image
                                     src={content.mandala}
                                     alt="Mandala"
+                                    width={400}
+                                    height={400}
                                     className="max-w-full h-auto rounded-lg"
                                 />
                             </div>

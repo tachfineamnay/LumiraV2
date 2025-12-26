@@ -16,7 +16,7 @@ export default function SanctuaireDashboard() {
         <div className="space-y-8">
             <div className="flex flex-col gap-2">
                 <h1 className="text-4xl font-black tracking-tight text-white">Bonjour, Explorateur</h1>
-                <p className="text-slate-400">Voici l'état de votre chemin vibratoire actuel.</p>
+                <p className="text-slate-400">Voici l&apos;état de votre chemin vibratoire actuel.</p>
             </div>
 
             {/* Stats Grid */}
@@ -49,7 +49,7 @@ export default function SanctuaireDashboard() {
                     <div className="relative z-10">
                         <span className="px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded-full text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-4 inline-block">Dernière Lecture</span>
                         <h3 className="text-2xl font-bold mb-4">Lecture Spirituelle Intégrale</h3>
-                        <p className="text-slate-300 mb-8 max-w-sm">Votre thème a été analysé. Les énergies actuelles favorisent la clarté mentale et l'expansion créative.</p>
+                        <p className="text-slate-300 mb-8 max-w-sm">Votre thème a été analysé. Les énergies actuelles favorisent la clarté mentale et l&apos;expansion créative.</p>
                         <Button data-testid="download-pdf" className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl px-6 py-3 flex items-center gap-2 font-bold shadow-[0_0_20px_rgba(79,70,229,0.3)]">
                             Consulter le PDF
                             <ExternalLink className="w-4 h-4" />

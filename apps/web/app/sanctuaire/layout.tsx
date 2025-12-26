@@ -9,8 +9,7 @@ import {
     Sparkles,
     Compass,
     User as UserIcon,
-    LogOut,
-    ChevronRight
+    LogOut
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 

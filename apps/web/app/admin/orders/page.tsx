@@ -15,8 +15,13 @@ interface Order {
     amount: number;
     status: string;
     createdAt: string;
-    formData?: any;
-    user?: any;
+    formData?: Record<string, unknown>;
+    user?: {
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+    };
 }
 
 export default function OrdersPage() {
@@ -58,7 +63,7 @@ export default function OrdersPage() {
                 const data = await statsRes.json();
                 setStats(data);
             }
-        } catch (error) {
+        } catch {
             toast.error('Erreur de chargement');
         } finally {
             setLoading(false);
@@ -91,8 +96,9 @@ export default function OrdersPage() {
             }
 
             fetchData();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Une erreur est survenue';
+            toast.error(message);
         }
     };
 

@@ -14,7 +14,12 @@ interface Order {
     amount: number;
     status: string;
     createdAt: string;
-    generatedContent?: any;
+    generatedContent?: {
+        lecture?: string;
+        audio?: string;
+        mandala?: string;
+        rituals?: string[];
+    };
     revisionCount?: number;
 }
 

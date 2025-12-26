@@ -42,7 +42,7 @@ export default function AdminLoginPage() {
 
             // Redirect to orders
             router.push('/admin/orders');
-        } catch (error) {
+        } catch {
             toast.error('Erreur de connexion au serveur');
             setLoading(false);
         }

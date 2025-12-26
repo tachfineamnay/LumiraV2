@@ -25,7 +25,7 @@ type FormData = z.infer<typeof formSchema>;
 export default function CommandePage() {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
-    const [order, setOrder] = useState<any>(null);
+    const [order, setOrder] = useState<{ id: string; totalAmount: number; firstName: string; lastName: string; email: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const stripe = useStripe();
@@ -50,8 +50,10 @@ export default function CommandePage() {
             });
             setOrder(response.data);
             nextStep();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Une erreur est survenue lors de la création de la commande.');
+        } catch (err: unknown) {
+            const errorResponse = err as { response?: { data?: { message?: string } } };
+            const message = errorResponse.response?.data?.message;
+            setError(message || 'Une erreur est survenue lors de la création de la commande.');
         } finally {
             setLoading(false);
         }
@@ -89,8 +91,10 @@ export default function CommandePage() {
             } else if (result.paymentIntent?.status === 'succeeded') {
                 nextStep();
             }
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Erreur de paiement');
+        } catch (err: unknown) {
+            const errorResponse = err as { response?: { data?: { message?: string } } };
+            const message = errorResponse.response?.data?.message;
+            setError(message || 'Erreur de paiement');
         } finally {
             setLoading(false);
         }
@@ -240,9 +244,9 @@ export default function CommandePage() {
                                 <div className="w-24 h-24 bg-green-500/20 border border-green-500/40 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_30px_rgba(34,197,94,0.2)]">
                                     <CheckCircle2 className="w-12 h-12 text-green-500" />
                                 </div>
-                                <h2 className="text-4xl font-black mb-4 tracking-tight">C'est fait !</h2>
+                                <h2 className="text-4xl font-black mb-4 tracking-tight">C&apos;est fait !</h2>
                                 <p className="text-slate-400 text-lg mb-12 max-w-sm mx-auto">
-                                    Votre lecture est en cours de préparation. Vous recevrez une notification par email dès qu'elle sera disponible dans votre sanctuaire.
+                                    Votre lecture est en cours de préparation. Vous recevrez une notification par email dès qu&apos;elle sera disponible dans votre sanctuaire.
                                 </p>
                                 <Button onClick={() => window.location.href = '/sanctuaire'} className="w-full py-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg shadow-[0_0_20px_rgba(79,70,229,0.3)]">
                                     Accéder au Sanctuaire

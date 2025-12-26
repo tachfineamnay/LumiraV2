@@ -8,6 +8,15 @@ import { ClientsList } from '../../../components/admin/ClientsList';
 import { ClientStats } from '../../../components/admin/ClientStats';
 import { OrderQueue } from '../../../components/admin/OrderQueue';
 
+interface BaseOrder {
+    id: string;
+    orderNumber: string;
+    level: number;
+    amount: number;
+    status: string;
+    createdAt: string;
+}
+
 interface Client {
     id: string;
     email: string;
@@ -31,7 +40,7 @@ export default function ClientsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [clientStats, setClientStats] = useState<ClientStatsData | null>(null);
-    const [clientOrders, setClientOrders] = useState<any[]>([]);
+    const [clientOrders, setClientOrders] = useState<BaseOrder[]>([]);
     const [editing, setEditing] = useState(false);
     const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '' });
     const [searchQuery, setSearchQuery] = useState('');
@@ -119,8 +128,9 @@ export default function ClientsPage() {
             setEditing(false);
             setSelectedClient({ ...selectedClient, ...editForm });
             fetchClients();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Échec de la mise à jour';
+            toast.error(message);
         }
     };
 
@@ -143,8 +153,9 @@ export default function ClientsPage() {
             setClientStats(null);
             setClientOrders([]);
             fetchClients();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Échec de la suppression';
+            toast.error(message);
         }
     };
 

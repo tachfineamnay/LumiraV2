@@ -15,7 +15,13 @@ interface Order {
     status: string;
     createdAt: string;
     deliveredAt?: string;
-    generatedContent?: any;
+    generatedContent?: {
+        lecture?: string;
+        audio?: string;
+        mandala?: string;
+        rituals?: string[];
+        generatedAt?: string;
+    };
 }
 
 const levelNames: Record<number, { name: string; color: string }> = {
@@ -95,8 +101,9 @@ export default function HistoryPage() {
 
             toast.success('Régénération lancée !');
             fetchData();
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Échec de la régénération';
+            toast.error(message);
         } finally {
             setRegenerating(null);
         }
@@ -160,8 +167,8 @@ export default function HistoryPage() {
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: index * 0.03 }}
                                         className={`p-4 rounded-xl border transition-all cursor-pointer ${selectedOrder?.id === order.id
-                                                ? 'bg-white/10 border-amber-500/30'
-                                                : 'bg-white/5 border-transparent hover:border-white/10'
+                                            ? 'bg-white/10 border-amber-500/30'
+                                            : 'bg-white/5 border-transparent hover:border-white/10'
                                             }`}
                                         onClick={() => handleViewOrder(order)}
                                     >
@@ -169,8 +176,8 @@ export default function HistoryPage() {
                                             <div>
                                                 <span className="font-mono text-white font-bold">{order.orderNumber}</span>
                                                 <span className={`ml-2 px-2 py-0.5 text-xs font-medium rounded-full ${order.status === 'COMPLETED'
-                                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                                        : 'bg-rose-500/20 text-rose-400'
+                                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                                    : 'bg-rose-500/20 text-rose-400'
                                                     }`}>
                                                     {order.status}
                                                 </span>

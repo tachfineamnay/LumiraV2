@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, Calendar, ShoppingBag, Euro, Star, ChevronRight } from 'lucide-react';
+import { User, Mail, ChevronRight } from 'lucide-react';
 
 interface Client {
     id: string;
@@ -77,14 +77,14 @@ export function ClientsList({
                                 transition={{ delay: index * 0.03 }}
                                 onClick={() => onSelect?.(client)}
                                 className={`w-full text-left p-4 rounded-xl transition-all group ${selectedClientId === client.id
-                                        ? 'bg-amber-500/20 border border-amber-500/30'
-                                        : 'bg-white/5 border border-transparent hover:border-white/10 hover:bg-white/10'
+                                    ? 'bg-amber-500/20 border border-amber-500/30'
+                                    : 'bg-white/5 border border-transparent hover:border-white/10 hover:bg-white/10'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${selectedClientId === client.id
-                                            ? 'bg-gradient-to-br from-amber-400 to-amber-600'
-                                            : 'bg-gradient-to-br from-purple-500 to-indigo-600'
+                                        ? 'bg-gradient-to-br from-amber-400 to-amber-600'
+                                        : 'bg-gradient-to-br from-purple-500 to-indigo-600'
                                         }`}>
                                         {client.firstName[0]}{client.lastName[0]}
                                     </div>

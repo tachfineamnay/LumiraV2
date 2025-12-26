@@ -14,7 +14,7 @@ interface Order {
     amount: number;
     status: string;
     createdAt: string;
-    formData?: any;
+    formData?: Record<string, unknown>;
     user?: {
         profile?: {
             birthDate?: string;
@@ -60,8 +60,9 @@ export function ContentGenerator({ selectedOrder, onProcess }: ContentGeneratorP
             toast.success('Commande envoyée à n8n !');
             setExpertPrompt('');
             setExpertInstructions('');
-        } catch (error: any) {
-            toast.error(error.message || 'Erreur lors de l\'envoi');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Erreur lors de l\'envoi';
+            toast.error(message);
         } finally {
             setLoading(false);
         }
