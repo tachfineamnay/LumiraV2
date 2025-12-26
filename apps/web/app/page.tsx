@@ -1,47 +1,91 @@
-import { Button } from "@packages/ui";
-import { CATALOG_CATEGORIES } from "@packages/shared";
+"use client";
+
+import { motion } from "framer-motion";
+import { Mandala } from "../components/ui/Mandala";
+import { Button } from "../components/ui/Button";
+import { GlassCard } from "../components/ui/GlassCard";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-brand-light">
-      <div className="z-10 max-w-5xl w-full items-center justify-center font-mono text-sm flex flex-col gap-8 text-center">
-        <h1 className="text-6xl font-extrabold text-brand-dark tracking-tighter">
-          LUMIRA <span className="text-brand">V2</span>
-        </h1>
-        <p className="text-xl text-gray-600 max-w-2xl">
-          La nouvelle fondation de la cartographie vibratoire spirituelle.
-          Architecture Monorepo Turborepo haute performance.
-        </p>
+    <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      {/* Background Elements */}
+      <div className="absolute inset-0 bg-cosmic-mesh opacity-80" />
+      <Mandala />
 
-        <div className="flex gap-4">
-          <Button variant="primary" className="shadow-lg transform hover:scale-105 transition-all">
-            Lancer l&apos;Application
-          </Button>
-          <Button variant="secondary" className="hover:bg-gray-200">
-            Documentation Dev
-          </Button>
-        </div>
+      {/* Stars Effect */}
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-150 mix-blend-overlay" />
 
-        <div className="mt-12 w-full max-w-3xl border border-gray-200 p-8 rounded-2xl bg-white shadow-xl">
-          <h2 className="text-xl font-bold mb-6 text-brand-dark">Catalogue Vibratoire</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {CATALOG_CATEGORIES.map((cat) => (
-              <div
-                key={cat.id}
-                className="bg-brand-light/30 border border-brand/10 p-4 rounded-xl flex flex-col items-center gap-2"
-                data-testid={`level-${cat.id.toLowerCase()}`}
-              >
-                <span className="font-semibold text-brand-dark">{cat.name}</span>
-                <span className="text-xs text-gray-500 uppercase tracking-widest">{cat.id}</span>
-              </div>
-            ))}
+      {/* Hero Content */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className="flex flex-col items-center gap-8"
+        >
+          <div className="space-y-4">
+            <motion.h1
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.8 }}
+              className="text-6xl md:text-8xl font-serif italic text-transparent bg-clip-text bg-gradient-to-br from-divine via-white to-ethereal text-shadow-gold"
+            >
+              Oracle Lumira
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="text-xl md:text-2xl text-gold font-light tracking-wide max-w-2xl mx-auto"
+            >
+              Révélez votre cartographie vibratoire et accédez à l'alliance sacrée de votre destinée.
+            </motion.p>
           </div>
-        </div>
 
-        <footer className="mt-16 text-gray-400 text-xs uppercase tracking-widest">
-          Propulsé par Turborepo • Next.js 14 • NestJS 10
-        </footer>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+            className="flex flex-col md:flex-row gap-6 mt-8"
+          >
+            <Button variant="gold" size="lg" className="min-w-[200px]">
+              Découvrir mon Avenir
+            </Button>
+            <Button variant="secondary" size="lg" className="min-w-[200px]">
+              Connexion Céleste
+            </Button>
+          </motion.div>
+        </motion.div>
+
+        {/* Feature Cards Preview */}
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.2, duration: 0.8 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24"
+        >
+          {['Guidance Astrale', 'Soins Énergétiques', 'Cercle Initiatique'].map((feature, i) => (
+            <GlassCard key={i} hoverEffect className="flex flex-col items-center text-center gap-4 py-8">
+              <div className="w-12 h-12 rounded-full bg-gold/10 flex items-center justify-center border border-gold/20 text-gold text-2xl">
+                ✦
+              </div>
+              <h3 className="text-lg font-serif text-divine">{feature}</h3>
+              <div className="w-12 h-[1px] bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
+            </GlassCard>
+          ))}
+        </motion.div>
       </div>
+
+      {/* Footer */}
+      <motion.footer
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 2 }}
+        className="absolute bottom-8 text-ethereal/40 text-xs tracking-[0.2em]"
+      >
+        LUMIRA V2 • SYSTEME ORACLE • 2024
+      </motion.footer>
     </main>
   );
 }
