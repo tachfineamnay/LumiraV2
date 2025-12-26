@@ -23,7 +23,11 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
+# Copy source code
 COPY --from=pruner /app/out/full/ .
+
+# Generate Prisma Client (Explicitly)
+RUN pnpm turbo run db:generate --filter=@packages/database
 
 # Build Web
 RUN pnpm turbo run build --filter=web...
@@ -39,7 +43,7 @@ COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 
 # Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 # Copy built artifacts
 COPY --from=builder /app/apps/web/.next ./apps/web/.next
