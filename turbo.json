@@ -32,6 +32,11 @@
                 "^build"
             ]
         },
+        "type-check": {
+            "dependsOn": [
+                "^build"
+            ]
+        },
         "db:generate": {
             "cache": false
         },

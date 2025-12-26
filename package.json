@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
+    "type-check": "pnpm typecheck",
     "clean": "turbo run clean",
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",
