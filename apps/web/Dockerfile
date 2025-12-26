@@ -36,18 +36,8 @@ RUN pnpm turbo run build --filter=web...
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT 3000
-
-# Copy necessary files for runner
-COPY --from=pruner /app/out/json/ .
-COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-
-# Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
-
 # Copy built artifacts
 COPY --from=builder /app/apps/web/.next ./apps/web/.next
-COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
 CMD ["pnpm", "--filter", "web", "start"]
