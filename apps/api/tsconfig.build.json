@@ -3,7 +3,17 @@
   "compilerOptions": {
     "declaration": true,
     "sourceMap": true,
-    "paths": {}
+    "paths": {
+      "@packages/database": [
+        "../../packages/database/dist"
+      ],
+      "@packages/shared": [
+        "../../packages/shared/dist"
+      ],
+      "@packages/config/*": [
+        "../../packages/config/*"
+      ]
+    }
   },
   "exclude": [
     "node_modules",
