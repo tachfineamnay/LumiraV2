@@ -4,31 +4,76 @@ import { motion } from "framer-motion";
 
 export const Mandala = () => {
     return (
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden flex items-center justify-center opacity-10 mix-blend-screen">
-            <motion.svg
-                viewBox="0 0 100 100"
-                className="w-[150vmax] h-[150vmax] text-gold"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 120, repeat: Infinity, ease: "linear" }}
+        <div className="relative w-full h-full flex items-center justify-center overflow-hidden pointer-events-none select-none">
+            <motion.div
+                animate={{
+                    rotate: 360,
+                }}
+                transition={{
+                    duration: 60,
+                    repeat: Infinity,
+                    ease: "linear",
+                }}
+                className="relative w-[800px] h-[800px] opacity-[0.15]"
             >
-                {/* Simple geometric mandala pattern */}
-                <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="0.2" />
-                <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="0.2" />
-                <path d="M50 2 L50 98 M2 50 L98 50" stroke="currentColor" strokeWidth="0.2" />
-                <path d="M16 16 L84 84 M84 16 L16 84" stroke="currentColor" strokeWidth="0.2" />
-                <rect x="25" y="25" width="50" height="50" fill="none" stroke="currentColor" strokeWidth="0.2" transform="rotate(45 50 50)" />
-                <circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="1 2" />
+                <svg
+                    viewBox="0 0 200 200"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-full h-full stroke-gold"
+                >
+                    {/* Sacred Geometry: Concentric circles and lines */}
+                    <circle cx="100" cy="100" r="90" strokeWidth="0.5" />
+                    <circle cx="100" cy="100" r="70" strokeWidth="0.3" />
+                    <circle cx="100" cy="100" r="50" strokeWidth="0.2" />
 
-                {/* Decorative rays */}
-                {[...Array(12)].map((_, i) => (
+                    <path d="M100 10V190" strokeWidth="0.2" />
+                    <path d="M10 100H190" strokeWidth="0.2" />
+                    <path d="M36.4 36.4L163.6 163.6" strokeWidth="0.2" />
+                    <path d="M36.4 163.6L163.6 36.4" strokeWidth="0.2" />
+
+                    {/* Hexagon pattern */}
                     <path
-                        key={i}
-                        d={`M50 50 L${50 + 45 * Math.cos(i * 30 * Math.PI / 180)} ${50 + 45 * Math.sin(i * 30 * Math.PI / 180)}`}
-                        stroke="currentColor"
-                        strokeWidth="0.1"
+                        d="M100 30L160.6 65V135L100 170L39.4 135V65L100 30Z"
+                        strokeWidth="0.4"
                     />
-                ))}
-            </motion.svg>
+
+                    {/* Cardinale Spheres */}
+                    <motion.circle
+                        animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                        transition={{ duration: 4, repeat: Infinity }}
+                        cx="100" cy="10" r="3" fill="#FFD700"
+                    />
+                    <motion.circle
+                        animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                        transition={{ duration: 4, repeat: Infinity, delay: 1 }}
+                        cx="190" cy="100" r="3" fill="#8B5CF6"
+                    />
+                    <motion.circle
+                        animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                        transition={{ duration: 4, repeat: Infinity, delay: 2 }}
+                        cx="100" cy="190" r="3" fill="#FFFFFF"
+                    />
+                    <motion.circle
+                        animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.2, 0.8] }}
+                        transition={{ duration: 4, repeat: Infinity, delay: 3 }}
+                        cx="10" cy="100" r="3" fill="#F0E6FF"
+                    />
+
+                    {/* Intricate petals */}
+                    {[...Array(12)].map((_, i) => (
+                        <ellipse
+                            key={i}
+                            cx="100"
+                            cy="100"
+                            rx="60"
+                            ry="15"
+                            transform={`rotate(${i * 30} 100 100)`}
+                            strokeWidth="0.2"
+                        />
+                    ))}
+                </svg>
+            </motion.div>
         </div>
     );
 };

@@ -2,163 +2,227 @@
 
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Mandala } from "../components/ui/Mandala";
-import { Button } from "../components/ui/Button";
+import { RoyalButton } from "../components/ui/RoyalButton";
 import { GlassCard } from "../components/ui/GlassCard";
 import { useRef } from "react";
+import { Star, Sparkles, Wand2, ArrowDown, Check, StarIcon } from "lucide-react";
 
 export default function Home() {
-  const ref = useRef(null);
+  const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({
-    target: ref,
+    target: containerRef,
     offset: ["start start", "end start"],
   });
 
-  const yText = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
-  const opacityText = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
+  const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.9]);
+
+  const dimensions = [
+    {
+      id: "I",
+      title: "Éveil du Lotus",
+      price: "111€",
+      popular: false,
+      features: ["Cartographie de base", "Alignement énergétique", "Support 7 jours"],
+    },
+    {
+      id: "II",
+      title: "Dimension Stellaire",
+      price: "222€",
+      popular: true,
+      features: ["Cartographie complète", "Lecture fractale Alpha", "Soin quantique à distance", "Support 14 jours"],
+    },
+    {
+      id: "III",
+      title: "Vortex Ascensionnel",
+      price: "444€",
+      popular: false,
+      features: ["Tout le niveau II", "Projection temporelle 2026", "Session de guidance 1h", "Accès prioritaire"],
+    },
+    {
+      id: "IV",
+      title: "Oracle Absolu",
+      price: "888€",
+      popular: false,
+      features: ["Immersion totale", "Consultation illimitée", "Réajustement perpétuel", "L'Arche Lumira"],
+    },
+  ];
 
   return (
-    <main ref={ref} className="relative min-h-screen flex flex-col items-center overflow-x-hidden selection:bg-gold/20">
+    <main ref={containerRef} className="relative bg-void min-h-screen overflow-x-hidden">
 
-      {/* 🌌 THE PORTAL BACKGROUND */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 bg-cosmic-mesh opacity-60" />
+      {/* 🌌 THE COSMIC PORTAL (Mandala Background) */}
+      <div className="fixed inset-0 flex items-center justify-center z-0 pointer-events-none">
         <Mandala />
-        {/* Starfield Layer 1 (Static but twinkling) */}
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-40 mix-blend-overlay" />
-        {/* Vignette */}
-        <div className="absolute inset-0 bg-radial-gradient-vignette opacity-80" />
       </div>
 
-      {/* 🔮 HERO SECTION (THE ALTAR) */}
-      <section className="relative w-full h-screen flex flex-col items-center justify-center text-center px-4 pt-20">
-
+      {/* 🏠 HERO SECTION */}
+      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 z-10 pt-20">
         <motion.div
-          style={{ y: yText, opacity: opacityText }}
-          className="flex flex-col items-center gap-12 max-w-5xl mx-auto z-10"
+          style={{ opacity: heroOpacity, scale: heroScale }}
+          className="max-w-4xl"
         >
-          {/* SUPRA-TITLE */}
           <motion.span
-            initial={{ opacity: 0, letterSpacing: "1em" }}
-            animate={{ opacity: 1, letterSpacing: "0.5em" }}
-            transition={{ duration: 1.5, ease: "easeOut" }}
-            className="text-gold/80 text-xs md:text-sm font-sans tracking-[0.5em] uppercase"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-gold-light uppercase tracking-[0.5em] text-xs md:text-sm font-sans mb-8 block"
           >
-            L'Architecture Sacrée de votre Âme
+            Explore les lois cachées de ton identité cosmique
           </motion.span>
 
-          {/* MASSIVE TITLE */}
           <motion.h1
-            initial={{ scale: 0.8, opacity: 0, filter: "blur(10px)" }}
-            animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
-            transition={{ delay: 0.2, duration: 1.2, ease: "circOut" }}
-            className="text-6xl md:text-9xl font-serif italic text-transparent bg-clip-text bg-gradient-to-b from-divine via-white to-ethereal/50 drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+            initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            className="text-7xl md:text-9xl font-serif italic text-divine mb-6 drop-shadow-[0_0_30px_rgba(240,230,255,0.3)]"
           >
-            Oracle <br className="md:hidden" />
-            <span className="text-liquid-gold font-normal">Lumira</span>
+            Oracle <span className="text-glow-gold">Lumira</span>
           </motion.h1>
 
-          {/* SUBTITLE */}
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1, duration: 1 }}
-            className="text-lg md:text-xl text-ethereal/80 font-light max-w-xl leading-relaxed"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8, duration: 1 }}
+            className="text-ethereal max-w-2xl mx-auto text-lg md:text-xl font-light leading-relaxed mb-12"
           >
-            Une expérience <strong>"One-Shot"</strong>. Une lecture fractale unique de votre code originel, fusionnant sagesse ancestrale et technologie quantique.
+            Une fusion entre algorithmes mystiques et résonances stellaires pour cartographier votre vibration originelle.
           </motion.p>
 
-          {/* CTA CLUSTER */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.5, duration: 1 }}
-            className="flex flex-col md:flex-row gap-6 mt-8"
+            transition={{ delay: 1.2, duration: 0.8 }}
           >
-            <Button variant="gold" size="lg" className="min-w-[240px] text-deep">
-              Initier l'Exploration
-            </Button>
-            <Button variant="stardust" size="lg" className="min-w-[240px]">
-              Découvrir le Protocole
-            </Button>
+            <RoyalButton
+              label="Lancer mon exploration cosmique"
+              icon={Sparkles}
+              className="text-lg"
+            />
           </motion.div>
-
         </motion.div>
 
-        {/* SCROLL INDICATOR */}
+        {/* Scroll Indicator */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 2.5, duration: 1 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+          transition={{ delay: 2, duration: 1 }}
+          className="absolute bottom-12 flex flex-col items-center gap-3"
         >
-          <span className="text-[10px] uppercase tracking-[0.3em] text-ethereal/40">Scroll</span>
-          <div className="w-[1px] h-12 bg-gradient-to-b from-gold/0 via-gold/50 to-gold/0" />
+          <span className="text-gold-light/40 text-[10px] uppercase tracking-widest">Découvrir les mystères</span>
+          <motion.div
+            animate={{ y: [0, 10, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="text-gold"
+          >
+            <ArrowDown className="w-5 h-5" />
+          </motion.div>
         </motion.div>
-
       </section>
 
-      {/* 🧩 PREVIEW SECTION (THE ARTIFACTS) */}
-      <section className="relative w-full py-32 px-4 z-10 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            { title: "Cartographie Vibratoire", icon: "✦", desc: "Décodage de votre signature énergétique unique." },
-            { title: "Soins Quantiques", icon: "✧", desc: "Harmonisation des fréquences dissonantes." },
-            { title: "Guidance 2026", icon: "✺", desc: "Projection temporelle et alignement de destinée." }
-          ].map((item, i) => (
-            <GlassCard key={i} hoverEffect className="group flex flex-col items-center text-center gap-6 py-12 border-white/5">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-gold text-3xl group-hover:scale-110 group-hover:shadow-[0_0_30px_rgba(255,215,0,0.3)] transition-all duration-500">
-                {item.icon}
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl md:text-2xl font-serif text-divine group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-gold transition-all duration-300">
-                  {item.title}
-                </h3>
-                <p className="text-sm text-ethereal/60 leading-relaxed max-w-[250px] mx-auto">
-                  {item.desc}
-                </p>
-              </div>
-            </GlassCard>
+      {/* 🏛️ THE GALLERY OF DIMENSIONS */}
+      <section className="relative py-32 px-6 z-10 max-w-7xl mx-auto">
+        <div className="text-center mb-24">
+          <h2 className="text-4xl md:text-5xl font-serif text-divine mb-4">La Galerie des Dimensions</h2>
+          <div className="w-24 h-[1px] bg-gold/50 mx-auto" />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {dimensions.map((dim, i) => (
+            <motion.div
+              key={dim.id}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1, duration: 0.6 }}
+              viewport={{ once: true }}
+            >
+              <GlassCard className="h-full flex flex-col relative">
+                {dim.popular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gold-gradient text-void px-4 py-1 rounded-full text-xs font-bold shadow-lg">
+                    RECOMMANDÉ
+                  </div>
+                )}
+
+                <div className="w-12 h-12 rounded-full border border-gold/30 flex items-center justify-center text-gold font-serif text-xl mb-6 mandala-pulse">
+                  {dim.id}
+                </div>
+
+                <h3 className="text-2xl font-serif text-divine mb-2">{dim.title}</h3>
+                <div className="text-3xl font-bold text-gold mb-8 drop-shadow-md">{dim.price}</div>
+
+                <ul className="space-y-4 mb-10 flex-grow">
+                  {dim.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-start gap-3 text-sm text-ethereal/80">
+                      <Check className="w-4 h-4 text-gold shrink-0 mt-0.5" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <RoyalButton
+                  label="Entrer dans cette dimension"
+                  variant="secondary"
+                  className="w-full"
+                />
+              </GlassCard>
+            </motion.div>
           ))}
         </div>
       </section>
 
-      {/* 🌀 SANCTUARY PREVIEW (THE ORB) */}
-      <section className="relative w-full py-24 z-10 flex flex-col items-center text-center">
-        <h2 className="text-4xl md:text-5xl font-serif text-transparent bg-clip-text bg-gradient-to-b from-gold via-warm-gold to-transparent mb-16 opacity-80">
-          Le Sanctuaire
-        </h2>
-
-        {/* Abstract Orb Representation */}
-        <div className="relative w-64 h-64 md:w-96 md:h-96">
-          <div className="absolute inset-0 rounded-full border border-white/10 animate-[spin_30s_linear_infinite]" />
-          <div className="absolute inset-4 rounded-full border border-white/5 animate-[spin_20s_linear_infinite_reverse]" />
-          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-aurora-violet/20 to-transparent blur-3xl animate-pulse" />
-
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center space-y-2 backdrop-blur-md p-6 rounded-full bg-black/20 border border-white/5">
-              <span className="text-3xl">🔒</span>
-              <p className="text-xs uppercase tracking-widest text-gold/80">Accès Réservé</p>
+      {/* 🌟 TESTIMONIALS */}
+      <section className="relative py-24 px-6 z-10 bg-void/50 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto text-center">
+          <Sparkles className="w-12 h-12 text-gold/30 mx-auto mb-8" />
+          <p className="text-2xl md:text-3xl font-serif italic text-ethereal leading-relaxed mb-12">
+            "Une expérience qui transcende la lecture traditionnelle. Lumira a mis des mots sur des sensations que je portais depuis toujours."
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <div className="w-12 h-12 rounded-full border-2 border-gold/40 p-1">
+              <div className="w-full h-full rounded-full bg-mystic/20" />
+            </div>
+            <div className="text-left">
+              <div className="text-divine font-medium">Elena S.</div>
+              <div className="flex text-gold">
+                {[...Array(5)].map((_, i) => <StarIcon key={i} className="w-3 h-3 fill-current" />)}
+              </div>
             </div>
           </div>
-
-          {/* Satellite Icons */}
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i}
-              className="absolute w-12 h-12 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm flex items-center justify-center top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-              style={{
-                transform: `rotate(${i * 90}deg) translateY(-140px) rotate(-${i * 90}deg)`
-              }}
-            >
-              <div className="w-2 h-2 bg-gold/50 rounded-full shadow-[0_0_10px_gold]" />
-            </div>
-          ))}
         </div>
       </section>
 
-      <footer className="w-full py-12 text-center relative z-10 border-t border-white/5">
-        <p className="text-ethereal/30 text-[10px] uppercase tracking-[0.3em] font-sans">
-          Orchestrated by Lumira • 2026 Edition
-        </p>
+      {/* 🌙 FOOTER */}
+      <footer className="relative py-20 px-6 z-10 border-t border-white/5">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
+          <div className="space-y-4">
+            <h4 className="text-xl font-serif text-divine">Oracle Lumira</h4>
+            <p className="text-ethereal/50 text-sm leading-relaxed">
+              Votre portail vers l'architecture invisible de l'âme. <br />
+              Codé avec intention, manifesté dans les étoiles.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <span className="text-gold/50 text-xs uppercase tracking-widest font-sans mb-2">Navigation</span>
+            <a href="#" className="text-ethereal/70 hover:text-gold transition-colors">Le Sanctuaire</a>
+            <a href="#" className="text-ethereal/70 hover:text-gold transition-colors">L'Expert Desk</a>
+            <a href="#" className="text-ethereal/70 hover:text-gold transition-colors">Politique de Confidentialité</a>
+          </div>
+          <div className="flex flex-col gap-3">
+            <span className="text-gold/50 text-xs uppercase tracking-widest font-sans mb-2">Nous Contacter</span>
+            <p className="text-ethereal/70">cosmos@lumira.oracle</p>
+            <div className="flex justify-center md:justify-start gap-4 mt-2">
+              <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:border-gold transition-colors cursor-pointer">
+                <span className="text-xs">IG</span>
+              </div>
+              <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:border-gold transition-colors cursor-pointer">
+                <span className="text-xs">TW</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-20 text-center text-ethereal/20 text-[10px] uppercase tracking-[0.5em]">
+          Design System by Lumira Team 2025
+        </div>
       </footer>
     </main>
   );

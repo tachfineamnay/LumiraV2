@@ -1,20 +1,21 @@
-'use client';
+"use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import React from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
     ClipboardList,
     CheckCircle2,
     History,
     Users,
     LogOut,
-    Shield,
-    BarChart3,
-} from 'lucide-react';
-import { cn } from '../../lib/utils';
-import { motion } from 'framer-motion';
-import { useAuth } from '../../context/AuthContext';
+    Wand2,
+    Bell,
+    LayoutDashboard
+} from "lucide-react";
+import { cn } from "../../lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AdminLayout({
     children,
@@ -26,134 +27,118 @@ export default function AdminLayout({
     const { user, logout } = useAuth();
 
     // Don't apply layout to login page
-    if (pathname === '/admin/login') {
+    if (pathname === "/admin/login") {
         return <>{children}</>;
     }
 
     const menuItems = [
-        { name: 'Commandes', href: '/admin/orders', icon: ClipboardList },
-        { name: 'Validations', href: '/admin/validations', icon: CheckCircle2 },
-        { name: 'Historique', href: '/admin/history', icon: History },
-        { name: 'Clients', href: '/admin/clients', icon: Users },
+        { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+        { name: "Commandes", href: "/admin/orders", icon: ClipboardList },
+        { name: "Validations", href: "/admin/validations", icon: CheckCircle2 },
+        { name: "Historique", href: "/admin/history", icon: History },
+        { name: "Clients", href: "/admin/clients", icon: Users },
     ];
 
     const handleLogout = () => {
-        localStorage.removeItem('expert_token');
-        localStorage.removeItem('expert_refresh_token');
-        localStorage.removeItem('expert_user');
+        localStorage.removeItem("expert_token");
+        localStorage.removeItem("expert_refresh_token");
+        localStorage.removeItem("expert_user");
         if (logout) logout();
-        router.push('/admin/login');
+        router.push("/admin/login");
     };
 
     return (
-        <div className="flex min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 text-white">
-            {/* Sidebar */}
-            <aside className="w-64 border-r border-white/10 bg-white/5 backdrop-blur-xl hidden md:flex flex-col">
-                <div className="p-6">
-                    <Link href="/admin/orders" className="flex items-center gap-3 group">
-                        <motion.div
-                            whileHover={{ scale: 1.1, rotate: 5 }}
-                            className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center font-black text-white shadow-lg shadow-amber-500/30"
-                        >
-                            <Shield className="w-5 h-5" />
-                        </motion.div>
+        <div className="flex min-h-screen bg-slate-900 text-slate-50 selection:bg-amber-400/20 font-sans">
+            {/* 🏛️ ADMIN SIDEBAR */}
+            <aside className="w-64 border-r border-white/5 bg-slate-950/50 backdrop-blur-xl hidden md:flex flex-col z-20">
+                <div className="p-6 border-b border-white/5">
+                    <Link href="/admin" className="flex items-center gap-3 group">
+                        <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center text-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.2)] group-hover:shadow-[0_0_30px_rgba(251,191,36,0.4)] transition-all duration-500">
+                            <Wand2 className="w-6 h-6" />
+                        </div>
                         <div>
-                            <span className="text-lg font-bold tracking-tight text-white">Expert Desk</span>
-                            <p className="text-[10px] text-amber-400/80 uppercase tracking-wider">Oracle Lumira</p>
+                            <span className="text-lg font-serif italic text-white block">Expert Desk</span>
+                            <span className="text-[10px] text-amber-400/60 uppercase tracking-widest font-bold">Poste de commande</span>
                         </div>
                     </Link>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-1">
+                <nav className="flex-1 p-4 space-y-1">
                     {menuItems.map((item) => {
-                        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+                        const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
                                 className={cn(
-                                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+                                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group relative",
                                     isActive
-                                        ? "bg-white/10 text-white border border-white/20"
-                                        : "text-white/60 hover:text-white hover:bg-white/5"
+                                        ? "bg-amber-400 text-slate-900 font-bold shadow-lg"
+                                        : "text-slate-400 hover:text-white hover:bg-white/5"
                                 )}
                             >
+                                <item.icon className={cn(
+                                    "w-5 h-5",
+                                    isActive ? "text-slate-900" : "text-slate-500 group-hover:text-amber-400"
+                                )} />
+                                <span className="text-sm">{item.name}</span>
                                 {isActive && (
                                     <motion.div
-                                        layoutId="activeTab"
-                                        className="absolute left-0 w-1 h-8 bg-amber-500 rounded-r-full"
+                                        layoutId="active-pill"
+                                        className="absolute inset-0 bg-amber-400 rounded-xl -z-10"
+                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     />
                                 )}
-                                <item.icon className={cn(
-                                    "w-5 h-5 transition-colors",
-                                    isActive ? "text-amber-400" : "text-white/40 group-hover:text-amber-400/80"
-                                )} />
-                                <span className="font-medium">{item.name}</span>
                             </Link>
                         );
                     })}
                 </nav>
 
-                {/* Stats link */}
-                <div className="px-4 mb-2">
-                    <Link
-                        href="/admin"
-                        className={cn(
-                            "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
-                            pathname === '/admin' && !pathname?.includes('/admin/')
-                                ? "bg-gradient-to-r from-amber-500/20 to-purple-500/20 text-white border border-amber-500/30"
-                                : "text-white/60 hover:text-white hover:bg-white/5"
-                        )}
-                    >
-                        <BarChart3 className="w-5 h-5 text-amber-400" />
-                        <span className="font-medium">Dashboard</span>
-                    </Link>
-                </div>
-
-                {/* User & Logout */}
-                <div className="p-4 border-t border-white/10">
-                    <div className="flex items-center gap-3 mb-4 px-2">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-lg">
-                            {user?.name?.[0] || 'E'}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{user?.name || 'Expert'}</p>
-                            <p className="text-[10px] text-amber-400 uppercase tracking-wider">
-                                {user?.role || 'Expert'}
-                            </p>
-                        </div>
-                    </div>
+                <div className="p-4 border-t border-white/5">
                     <button
                         onClick={handleLogout}
-                        className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-white/60 hover:text-rose-400 hover:bg-rose-400/10 transition-all group"
+                        className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 transition-all group"
                     >
                         <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                        <span className="font-medium">Déconnexion</span>
+                        <span className="text-sm font-medium">Déconnexion</span>
                     </button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-auto">
-                {/* Header */}
-                <header className="h-16 border-b border-white/10 bg-white/5 backdrop-blur-md flex items-center justify-between px-8 sticky top-0 z-10">
-                    <div className="flex items-center gap-2 text-amber-400">
-                        <Shield className="w-5 h-5" />
-                        <span className="text-sm font-bold uppercase tracking-wider">Expert Mode</span>
+            {/* 🌌 MAIN DASHBOARD */}
+            <main className="flex-1 flex flex-col min-w-0 bg-[#0B0F1A]">
+                {/* STICKY HEADER */}
+                <header className="h-16 border-b border-white/5 bg-slate-950/50 backdrop-blur-md flex items-center justify-between px-8 sticky top-0 z-10 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-sm font-medium text-slate-400">
+                            {menuItems.find(i => pathname === i.href || (i.href !== "/admin" && pathname?.startsWith(i.href)))?.name || "Dashboard"}
+                        </h2>
                     </div>
+
                     <div className="flex items-center gap-4">
-                        <div className="text-right hidden sm:block">
-                            <p className="text-sm font-bold text-white">{user?.name || 'Admin'}</p>
-                            <p className="text-[10px] text-amber-400 uppercase tracking-wider">Grand Maître</p>
-                        </div>
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-white shadow-lg shadow-amber-500/20">
-                            {user?.name?.[0] || 'A'}
+                        {/* Notification Bell */}
+                        <button className="relative p-2 text-slate-400 hover:text-amber-400 transition-colors">
+                            <Bell className="w-5 h-5" />
+                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-400 rounded-full animate-pulse shadow-[0_0_10px_#fbbf24]" />
+                        </button>
+
+                        <div className="h-8 w-[1px] bg-white/5 mx-2" />
+
+                        {/* Profile Info */}
+                        <div className="flex items-center gap-3">
+                            <div className="text-right hidden sm:block">
+                                <p className="text-sm font-bold text-white leading-none mb-1">{user?.name || "Expert"}</p>
+                                <p className="text-[10px] text-amber-400 uppercase tracking-widest leading-none">Grand Maître</p>
+                            </div>
+                            <div className="w-10 h-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center font-bold text-amber-400 shadow-xl overflow-hidden">
+                                {user?.name?.[0] || "A"}
+                            </div>
                         </div>
                     </div>
                 </header>
 
-                {/* Content */}
-                <div className="p-8">
+                {/* PAGE CONTENT */}
+                <div className="p-8 flex-1">
                     {children}
                 </div>
             </main>

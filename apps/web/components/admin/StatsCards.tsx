@@ -24,24 +24,29 @@ export function StatCard({ title, value, icon: Icon, color, subtitle }: StatCard
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 relative overflow-hidden"
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            whileHover={{ y: -5, transition: { duration: 0.2 } }}
+            className="bg-slate-800/40 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden group hover:border-white/10 transition-all duration-300"
         >
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between relative z-10">
                 <div>
-                    <p className="text-white/60 text-sm font-medium">{title}</p>
-                    <p className="text-3xl font-bold text-white mt-2">{value}</p>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</p>
+                    <p className="text-3xl font-serif italic text-white mt-2 drop-shadow-md">{value}</p>
                     {subtitle && (
-                        <p className="text-white/40 text-xs mt-1">{subtitle}</p>
+                        <p className="text-slate-500 text-[10px] mt-1 font-medium">{subtitle}</p>
                     )}
                 </div>
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colorClasses[color]} flex items-center justify-center shadow-lg`}>
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colorClasses[color]} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500`}>
                     <Icon className="w-6 h-6 text-white" />
                 </div>
             </div>
 
+            {/* Subtle Gradient Overlay */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${colorClasses[color]} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
+
             {/* Glow effect */}
-            <div className={`absolute -bottom-8 -right-8 w-32 h-32 bg-gradient-to-br ${colorClasses[color]} rounded-full opacity-20 blur-2xl`} />
+            <div className={`absolute -bottom-12 -right-12 w-32 h-32 bg-gradient-to-br ${colorClasses[color]} rounded-full opacity-10 blur-3xl group-hover:opacity-20 transition-opacity duration-500`} />
         </motion.div>
     );
 }

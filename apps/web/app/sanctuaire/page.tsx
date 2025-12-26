@@ -1,84 +1,152 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Sparkles, Compass, History, ExternalLink } from 'lucide-react';
-import { Button } from '@packages/ui';
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { MandalaNav } from "../../components/ui/MandalaNav";
+import { GlassCard } from "../../components/ui/GlassCard";
+import {
+    Star,
+    Book,
+    Layers,
+    MessageCircle,
+    User,
+    Lock,
+    ChevronRight,
+    Sparkles,
+    Download,
+    Play
+} from "lucide-react";
+import { RoyalButton } from "../../components/ui/RoyalButton";
 
 export default function SanctuaireDashboard() {
-    const stats = [
-        { name: 'Lectures Totales', value: '1', icon: Sparkles, color: 'text-indigo-400' },
-        { name: 'Chemins Explorés', value: '3', icon: Compass, color: 'text-purple-400' },
-        { name: 'Dernière Activité', value: 'Aujourd\'hui', icon: History, color: 'text-emerald-400' },
+    const portals = [
+        {
+            title: "Chemin Spirituel",
+            desc: "L'analyse complète de votre structure vibratoire.",
+            icon: Star,
+            color: "amber",
+            locked: false,
+            action: "Consulter",
+        },
+        {
+            title: "Lectures & Tirages",
+            desc: "Vos messages stellaires du moment.",
+            icon: Book,
+            color: "emerald",
+            locked: false,
+            action: "Explorer",
+        },
+        {
+            title: "Synthèse Alpha",
+            desc: "La réunion de toutes vos dimensions.",
+            icon: Layers,
+            color: "purple",
+            locked: true,
+            action: "Débloquer",
+        },
+        {
+            title: "Espace Oral",
+            desc: "Conversations avec votre expert Lumira.",
+            icon: MessageCircle,
+            color: "cyan",
+            locked: false,
+            action: "Entrer",
+        },
+        {
+            title: "Rituels Sonores",
+            desc: "Fréquences sacrées pour votre alignement.",
+            icon: Sparkles,
+            color: "indigo",
+            locked: true,
+            action: "Débloquer",
+        },
+        {
+            title: "Archives Célestes",
+            desc: "Historique de vos transmutations.",
+            icon: History,
+            color: "rose",
+            locked: false,
+            action: "Voir",
+        },
     ];
 
     return (
-        <div className="space-y-8">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-black tracking-tight text-white">Bonjour, Explorateur</h1>
-                <p className="text-slate-400">Voici l&apos;état de votre chemin vibratoire actuel.</p>
+        <div className="max-w-7xl mx-auto px-6 py-12 flex flex-col items-center">
+
+            {/* 🏛️ WELCOME MESSAGE */}
+            <div className="text-center mb-16">
+                <motion.h1
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-4xl md:text-5xl font-serif italic text-purple-400 mb-4"
+                >
+                    Votre Sanctuaire Personnel
+                </motion.h1>
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-ethereal/60 tracking-widest uppercase text-xs"
+                >
+                    Explorez votre univers intérieur à travers le mandala sacré
+                </motion.p>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {stats.map((stat, i) => (
+            {/* 🌀 CENTRAL MANDALA NAV */}
+            <section className="relative mb-32 flex justify-center items-center h-[500px]">
+                <MandalaNav />
+            </section>
+
+            {/* 🧩 DASHBOARD CARDS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
+                {portals.map((portal, i) => (
                     <motion.div
-                        key={stat.name}
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
+                        key={portal.title}
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.1 }}
-                        className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl"
+                        viewport={{ once: true }}
                     >
-                        <div className={`p-3 bg-slate-950 border border-slate-800 rounded-2xl w-fit mb-4 ${stat.color}`}>
-                            <stat.icon className="w-6 h-6" />
-                        </div>
-                        <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">{stat.name}</p>
-                        <p className="text-2xl font-black text-white">{stat.value}</p>
+                        <GlassCard className={`relative h-full flex flex-col ${portal.locked ? 'opacity-60' : ''}`}>
+                            <div className={`w-12 h-12 rounded-xl bg-${portal.color}-500/10 flex items-center justify-center mb-6`}>
+                                <portal.icon className={`w-6 h-6 text-${portal.color}-400`} />
+                            </div>
+
+                            <h3 className="text-xl font-serif italic text-divine mb-3">{portal.title}</h3>
+                            <p className="text-ethereal/50 text-sm mb-8 flex-grow">{portal.desc}</p>
+
+                            <div className="mt-auto">
+                                {portal.locked ? (
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest">
+                                            <Lock className="w-3 h-3" />
+                                            Contenu Verrouillé
+                                        </div>
+                                        <RoyalButton
+                                            label="Débloquer l'accès"
+                                            variant="secondary"
+                                            className="w-full !border-amber-400/30 !text-amber-400"
+                                        />
+                                    </div>
+                                ) : (
+                                    <button className="flex items-center gap-2 text-gold-light hover:text-gold transition-colors text-sm font-bold uppercase tracking-widest group">
+                                        {portal.action}
+                                        <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Locked Overlay */}
+                            {portal.locked && (
+                                <div className="absolute inset-0 bg-void/40 backdrop-blur-[2px] rounded-2xl pointer-events-none" />
+                            )}
+                        </GlassCard>
                     </motion.div>
                 ))}
             </div>
 
-            {/* Featured Content */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <motion.div
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="bg-gradient-to-br from-indigo-900/40 to-slate-950 border border-indigo-500/20 rounded-[2.5rem] p-8 relative overflow-hidden group"
-                >
-                    <div className="relative z-10">
-                        <span className="px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded-full text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-4 inline-block">Dernière Lecture</span>
-                        <h3 className="text-2xl font-bold mb-4">Lecture Spirituelle Intégrale</h3>
-                        <p className="text-slate-300 mb-8 max-w-sm">Votre thème a été analysé. Les énergies actuelles favorisent la clarté mentale et l&apos;expansion créative.</p>
-                        <Button data-testid="download-pdf" className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl px-6 py-3 flex items-center gap-2 font-bold shadow-[0_0_20px_rgba(79,70,229,0.3)]">
-                            Consulter le PDF
-                            <ExternalLink className="w-4 h-4" />
-                        </Button>
-                    </div>
-                    <Sparkles className="absolute -right-12 -bottom-12 w-64 h-64 text-indigo-500/10 group-hover:rotate-12 transition-transform duration-700" />
-                </motion.div>
-
-                <motion.div
-                    initial={{ x: 20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="bg-slate-900/50 border border-slate-800 rounded-[2.5rem] p-8 flex flex-col justify-between"
-                >
-                    <div>
-                        <h3 className="text-2xl font-bold mb-4">Évolution Prochaine</h3>
-                        <p className="text-slate-400 mb-6">Passez au niveau <span className="text-purple-400 font-bold">Mystique</span> pour débloquer la guidance audio et les rituels sonores personnalisés.</p>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="h-2 bg-slate-950 rounded-full overflow-hidden">
-                            <div className="h-full bg-indigo-600 w-1/4 shadow-[0_0_10px_rgba(79,70,229,0.5)]" />
-                        </div>
-                        <div className="flex justify-between text-xs text-slate-500 font-bold">
-                            <span>INITIÉ</span>
-                            <span>INTEGRAL</span>
-                        </div>
-                    </div>
-                </motion.div>
-            </div>
         </div>
     );
 }
+
+import { History } from "lucide-react";
