@@ -49,7 +49,7 @@ export default function Home() {
   ];
 
   return (
-    <main ref={containerRef} className="relative bg-void min-h-screen overflow-x-hidden">
+    <main ref={containerRef} className="relative bg-cosmic-void min-h-screen overflow-x-hidden starfield">
 
       {/* 🌌 THE COSMIC PORTAL (Mandala Background) */}
       <div className="fixed inset-0 flex items-center justify-center z-0 pointer-events-none">
@@ -75,9 +75,9 @@ export default function Home() {
             initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)" }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
             transition={{ duration: 1.2, ease: "easeOut" }}
-            className="text-7xl md:text-9xl font-serif italic text-divine mb-6 drop-shadow-[0_0_30px_rgba(240,230,255,0.3)]"
+            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-playfair italic text-cosmic-divine mb-6 text-glow-hero"
           >
-            Oracle <span className="text-glow-gold">Lumira</span>
+            Oracle <span className="text-cosmic-gold">Lumira</span>
           </motion.h1>
 
           <motion.p

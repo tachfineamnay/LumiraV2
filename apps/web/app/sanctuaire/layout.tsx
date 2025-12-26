@@ -17,7 +17,7 @@ export default function SanctuaireLayout({
     const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     return (
-        <div className="min-h-screen bg-void-deep text-divine selection:bg-gold/20 flex flex-col">
+        <div className="min-h-screen bg-cosmic-void text-cosmic-divine selection:bg-cosmic-gold/20 flex flex-col starfield">
 
             {/* 🏛️ FLOATING HEADER */}
             <header className="fixed top-0 left-0 right-0 z-50 p-4 flex justify-between items-center pointer-events-none">
