@@ -3,9 +3,14 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Mandala } from "../components/ui/Mandala";
 import { RoyalButton } from "../components/ui/RoyalButton";
-import { GlassCard } from "../components/ui/GlassCard";
 import { useRef } from "react";
-import { Star, Sparkles, Wand2, ArrowDown, Check, StarIcon } from "lucide-react";
+import { Star, Sparkles, Clock, ArrowDown, ChevronDown } from "lucide-react";
+import { Header } from "../components/landing/Header";
+import { Footer } from "../components/landing/Footer";
+import { LevelCardPremium, Level } from "../components/landing/LevelCardPremium";
+import { TestimonialsCarousel } from "../components/landing/TestimonialsCarousel";
+import { HowItWorks } from "../components/landing/HowItWorks";
+import Link from "next/link";
 
 export default function Home() {
   const containerRef = useRef(null);
@@ -14,42 +19,56 @@ export default function Home() {
     offset: ["start start", "end start"],
   });
 
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
-  const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.9]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
+  const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
 
-  const dimensions = [
+  const levels: Level[] = [
     {
-      id: "I",
-      title: "Éveil du Lotus",
-      price: "111€",
-      popular: false,
-      features: ["Cartographie de base", "Alignement énergétique", "Support 7 jours"],
+      id: 1,
+      name: "Éveil du Lotus",
+      subtitle: "Initié",
+      price: 111,
+      originalPrice: 149,
+      icon: "🪷",
+      color: "blue",
+      features: ["Cartographie vibratoire de base", "Analyse des centres d'énergie", "Protocole d'alignement audio", "Support email 7 jours"],
     },
     {
-      id: "II",
-      title: "Dimension Stellaire",
-      price: "222€",
+      id: 2,
+      name: "Dimension Stellaire",
+      subtitle: "Mystique",
+      price: 222,
+      originalPrice: 299,
+      icon: "✨",
+      color: "purple",
       popular: true,
-      features: ["Cartographie complète", "Lecture fractale Alpha", "Soin quantique à distance", "Support 14 jours"],
+      features: ["Cartographie complète HD", "Lecture fractale Alpha", "Soin quantique fréquentiel", "Mandala dynamique personnalisé", "Accès Espace Oral (1 mois)"],
     },
     {
-      id: "III",
-      title: "Vortex Ascensionnel",
-      price: "444€",
-      popular: false,
-      features: ["Tout le niveau II", "Projection temporelle 2026", "Session de guidance 1h", "Accès prioritaire"],
+      id: 3,
+      name: "Vortex Ascensionnel",
+      subtitle: "Profond",
+      price: 444,
+      originalPrice: 599,
+      icon: "🌀",
+      color: "amber",
+      features: ["Tout le niveau II", "Projection temporelle 2026", "Session de guidance expert (1h)", "Séquence sonore 528Hz unique", "Support prioritaire 24/7"],
     },
     {
-      id: "IV",
-      title: "Oracle Absolu",
-      price: "888€",
-      popular: false,
-      features: ["Immersion totale", "Consultation illimitée", "Réajustement perpétuel", "L'Arche Lumira"],
+      id: 4,
+      name: "Oracle Absolu",
+      subtitle: "Intégral",
+      price: 888,
+      originalPrice: 1111,
+      icon: "👑",
+      color: "emerald",
+      features: ["Immersion totale & Archivage", "Consultation illimitée (1 an)", "Réajustement mensuel", "L'Arche Lumira (Espace Privé)", "Accès VIP événements"],
     },
   ];
 
   return (
     <main ref={containerRef} className="relative bg-cosmic-void min-h-screen overflow-x-hidden starfield">
+      <Header />
 
       {/* 🌌 THE COSMIC PORTAL (Mandala Background) */}
       <div className="fixed inset-0 flex items-center justify-center z-0 pointer-events-none">
@@ -57,48 +76,97 @@ export default function Home() {
       </div>
 
       {/* 🏠 HERO SECTION */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 z-10 pt-20">
+      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-20 overflow-hidden z-10">
         <motion.div
           style={{ opacity: heroOpacity, scale: heroScale }}
-          className="max-w-4xl"
+          className="max-w-5xl"
         >
-          <motion.span
+          {/* Social Proof Badge */}
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-gold-light uppercase tracking-[0.5em] text-xs md:text-sm font-sans mb-8 block"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-cosmic-gold/10 border border-cosmic-gold/30 rounded-full mb-8 backdrop-blur-md"
           >
-            Explore les lois cachées de ton identité cosmique
-          </motion.span>
-
-          <motion.h1
-            initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)" }}
-            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-            transition={{ duration: 1.2, ease: "easeOut" }}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-playfair italic text-cosmic-divine mb-6 text-glow-hero"
-          >
-            Oracle <span className="text-cosmic-gold">Lumira</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8, duration: 1 }}
-            className="text-ethereal max-w-2xl mx-auto text-lg md:text-xl font-light leading-relaxed mb-12"
-          >
-            Une fusion entre algorithmes mystiques et résonances stellaires pour cartographier votre vibration originelle.
-          </motion.p>
+            <div className="flex -space-x-2">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 border-2 border-cosmic-void shadow-stellar" />
+              ))}
+            </div>
+            <span className="text-cosmic-gold text-[10px] font-bold tracking-widest uppercase">
+              +2,500 âmes éveillées
+            </span>
+          </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.2, duration: 0.8 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8 }}
           >
-            <RoyalButton
-              label="Lancer mon exploration cosmique"
-              icon={Sparkles}
-              className="text-lg"
-            />
+            <h1 className="text-6xl md:text-8xl lg:text-9xl font-playfair italic text-cosmic-divine mb-6 text-glow-hero leading-tight">
+              Oracle <span className="text-cosmic-gold">Lumira</span>
+            </h1>
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-xl md:text-2xl text-cosmic-ethereal max-w-3xl mx-auto italic mb-10 leading-relaxed font-light"
+            >
+              "Naviguez à travers les lois invisibles de votre architecture spirituelle dès aujourd'hui."
+            </motion.p>
+          </motion.div>
+
+          {/* CTA Group */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            className="flex flex-col items-center gap-8"
+          >
+            <Link href="#niveaux">
+              <RoyalButton
+                label="Commencer mon Voyage"
+                className="px-12 py-6 text-xl shadow-aurora"
+              />
+            </Link>
+
+            {/* Stats Bar */}
+            <div className="flex flex-wrap items-center justify-center gap-6 md:gap-12 text-cosmic-ethereal mt-4">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map(i => <Star key={i} className="w-4 h-4 text-cosmic-gold fill-cosmic-gold" />)}
+                </div>
+                <div className="text-left">
+                  <p className="text-cosmic-divine font-bold text-sm leading-none">4.9/5</p>
+                  <p className="text-[10px] uppercase font-bold tracking-widest opacity-40">500+ consultations</p>
+                </div>
+              </div>
+              <div className="hidden sm:block w-px h-8 bg-white/10" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-cosmic-gold" />
+                </div>
+                <div className="text-left">
+                  <p className="text-cosmic-divine font-bold text-sm leading-none">Livraison 24h</p>
+                  <p className="text-[10px] uppercase font-bold tracking-widest opacity-40">Analyse prioritaire</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Ethical Urgency */}
+            <motion.div
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-500/5 border border-amber-400/20 rounded-full"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+              </span>
+              <span className="text-amber-400 text-[10px] font-bold uppercase tracking-widest">
+                Portails actifs : 12 explorateurs connectés
+              </span>
+            </motion.div>
           </motion.div>
         </motion.div>
 
@@ -107,123 +175,69 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 2, duration: 1 }}
-          className="absolute bottom-12 flex flex-col items-center gap-3"
+          className="absolute bottom-10 flex flex-col items-center gap-3"
         >
-          <span className="text-gold-light/40 text-[10px] uppercase tracking-widest">Découvrir les mystères</span>
+          <span className="text-cosmic-gold/30 text-[10px] uppercase tracking-[0.3em] font-bold">Descendre dans l'abysse</span>
           <motion.div
-            animate={{ y: [0, 10, 0] }}
+            animate={{ y: [0, 8, 0] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="text-gold"
+            className="text-cosmic-gold/50"
           >
             <ArrowDown className="w-5 h-5" />
           </motion.div>
         </motion.div>
       </section>
 
-      {/* 🏛️ THE GALLERY OF DIMENSIONS */}
-      <section className="relative py-32 px-6 z-10 max-w-7xl mx-auto">
-        <div className="text-center mb-24">
-          <h2 className="text-4xl md:text-5xl font-serif text-divine mb-4">La Galerie des Dimensions</h2>
-          <div className="w-24 h-[1px] bg-gold/50 mx-auto" />
-        </div>
+      {/* 🧩 HOW IT WORKS */}
+      <HowItWorks />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {dimensions.map((dim, i) => (
-            <motion.div
-              key={dim.id}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1, duration: 0.6 }}
-              viewport={{ once: true }}
-            >
-              <GlassCard className="h-full flex flex-col relative">
-                {dim.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gold-gradient text-void px-4 py-1 rounded-full text-xs font-bold shadow-lg">
-                    RECOMMANDÉ
-                  </div>
-                )}
-
-                <div className="w-12 h-12 rounded-full border border-gold/30 flex items-center justify-center text-gold font-serif text-xl mb-6 mandala-pulse">
-                  {dim.id}
-                </div>
-
-                <h3 className="text-2xl font-serif text-divine mb-2">{dim.title}</h3>
-                <div className="text-3xl font-bold text-gold mb-8 drop-shadow-md">{dim.price}</div>
-
-                <ul className="space-y-4 mb-10 flex-grow">
-                  {dim.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-3 text-sm text-ethereal/80">
-                      <Check className="w-4 h-4 text-gold shrink-0 mt-0.5" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                <RoyalButton
-                  label="Entrer dans cette dimension"
-                  variant="secondary"
-                  className="w-full"
-                />
-              </GlassCard>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* 🌟 TESTIMONIALS */}
-      <section className="relative py-24 px-6 z-10 bg-void/50 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto text-center">
-          <Sparkles className="w-12 h-12 text-gold/30 mx-auto mb-8" />
-          <p className="text-2xl md:text-3xl font-serif italic text-ethereal leading-relaxed mb-12">
-            "Une expérience qui transcende la lecture traditionnelle. Lumira a mis des mots sur des sensations que je portais depuis toujours."
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <div className="w-12 h-12 rounded-full border-2 border-gold/40 p-1">
-              <div className="w-full h-full rounded-full bg-mystic/20" />
-            </div>
-            <div className="text-left">
-              <div className="text-divine font-medium">Elena S.</div>
-              <div className="flex text-gold">
-                {[...Array(5)].map((_, i) => <StarIcon key={i} className="w-3 h-3 fill-current" />)}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 🌙 FOOTER */}
-      <footer className="relative py-20 px-6 z-10 border-t border-white/5">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
-          <div className="space-y-4">
-            <h4 className="text-xl font-serif text-divine">Oracle Lumira</h4>
-            <p className="text-ethereal/50 text-sm leading-relaxed">
-              Votre portail vers l'architecture invisible de l'âme. <br />
-              Codé avec intention, manifesté dans les étoiles.
+      {/* 🏛️ LEVEL CARDS (Pricing) */}
+      <section id="niveaux" className="py-24 relative z-10">
+        <div className="max-w-7xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-20"
+          >
+            <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">
+              Choisissez votre Profondeur
+            </span>
+            <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-6xl text-cosmic-divine mt-4 mb-6">
+              Vecteurs de Transformation
+            </h2>
+            <p className="text-cosmic-ethereal max-w-2xl mx-auto text-lg leading-relaxed font-light">
+              Du simple éveil à l'immersion absolue, trouvez la clé qui ouvrira les portes de votre architecture vibratoire.
             </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {levels.map((level, i) => (
+              <motion.div
+                key={level.id}
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                viewport={{ once: true }}
+              >
+                <LevelCardPremium level={level} />
+              </motion.div>
+            ))}
           </div>
-          <div className="flex flex-col gap-3">
-            <span className="text-gold/50 text-xs uppercase tracking-widest font-sans mb-2">Navigation</span>
-            <a href="#" className="text-ethereal/70 hover:text-gold transition-colors">Le Sanctuaire</a>
-            <a href="#" className="text-ethereal/70 hover:text-gold transition-colors">L'Expert Desk</a>
-            <a href="#" className="text-ethereal/70 hover:text-gold transition-colors">Politique de Confidentialité</a>
-          </div>
-          <div className="flex flex-col gap-3">
-            <span className="text-gold/50 text-xs uppercase tracking-widest font-sans mb-2">Nous Contacter</span>
-            <p className="text-ethereal/70">cosmos@lumira.oracle</p>
-            <div className="flex justify-center md:justify-start gap-4 mt-2">
-              <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:border-gold transition-colors cursor-pointer">
-                <span className="text-xs">IG</span>
-              </div>
-              <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center hover:border-gold transition-colors cursor-pointer">
-                <span className="text-xs">TW</span>
-              </div>
-            </div>
+
+          <div className="text-center mt-16">
+            <button className="text-cosmic-gold/60 hover:text-cosmic-gold transition-colors flex items-center gap-2 mx-auto uppercase text-xs font-bold tracking-widest group">
+              <span>Voir le comparatif détaillé</span>
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-1 transition-transform" />
+            </button>
           </div>
         </div>
-        <div className="mt-20 text-center text-ethereal/20 text-[10px] uppercase tracking-[0.5em]">
-          Design System by Lumira Team 2025
-        </div>
-      </footer>
+      </section>
+
+      {/* 🌟 TESTIMONIALS CAROUSEL */}
+      <TestimonialsCarousel />
+
+      <Footer />
     </main>
   );
 }
