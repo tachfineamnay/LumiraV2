@@ -5,26 +5,7 @@ import { motion } from 'framer-motion';
 import { Send, Loader2, Sparkles, FileText, User, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    userName: string | null;
-    userEmail: string;
-    level: number;
-    amount: number;
-    status: string;
-    createdAt: string;
-    formData?: Record<string, unknown>;
-    user?: {
-        profile?: {
-            birthDate?: string;
-            birthTime?: string;
-            birthPlace?: string;
-            specificQuestion?: string;
-            objective?: string;
-        };
-    };
-}
+import { Order } from '../../lib/types';
 
 interface ContentGeneratorProps {
     selectedOrder: Order | null;

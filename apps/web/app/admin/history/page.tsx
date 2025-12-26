@@ -5,24 +5,7 @@ import { toast, Toaster } from 'sonner';
 import { motion } from 'framer-motion';
 import { RefreshCw, RotateCcw, Eye, Calendar, Euro, User, FileText } from 'lucide-react';
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    userName: string | null;
-    userEmail: string;
-    level: number;
-    amount: number;
-    status: string;
-    createdAt: string;
-    deliveredAt?: string;
-    generatedContent?: {
-        lecture?: string;
-        audio?: string;
-        mandala?: string;
-        rituals?: string[];
-        generatedAt?: string;
-    };
-}
+import { Order } from '../../../lib/types';
 
 const levelNames: Record<number, { name: string; color: string }> = {
     1: { name: 'Initié', color: 'from-emerald-500 to-emerald-600' },

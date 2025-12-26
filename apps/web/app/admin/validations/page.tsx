@@ -5,23 +5,7 @@ import { toast, Toaster } from 'sonner';
 import { OrderQueue } from '../../../components/admin/OrderQueue';
 import { ContentValidator } from '../../../components/admin/ContentValidator';
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    userName: string | null;
-    userEmail: string;
-    level: number;
-    amount: number;
-    status: string;
-    createdAt: string;
-    generatedContent?: {
-        lecture?: string;
-        audio?: string;
-        mandala?: string;
-        rituals?: string[];
-    };
-    revisionCount?: number;
-}
+import { Order } from '../../../lib/types';
 
 export default function ValidationsPage() {
     const [orders, setOrders] = useState<Order[]>([]);

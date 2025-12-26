@@ -6,22 +6,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, Loader2, Eye, FileText, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    userName: string | null;
-    userEmail: string;
-    level: number;
-    status: string;
-    generatedContent?: {
-        lecture?: string;
-        audio?: string;
-        mandala?: string;
-        rituals?: string[];
-        generatedAt?: string;
-    };
-    revisionCount?: number;
-}
+import { Order } from '../../lib/types';
 
 interface ContentValidatorProps {
     selectedOrder: Order | null;

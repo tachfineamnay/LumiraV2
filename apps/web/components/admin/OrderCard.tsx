@@ -4,16 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { User, Calendar, Euro, Eye, Trash2, ArrowRight } from 'lucide-react';
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    userName: string | null;
-    userEmail: string;
-    level: number;
-    amount: number;
-    status: string;
-    createdAt: string;
-}
+import { Order } from '../../lib/types';
 
 interface OrderCardProps {
     order: Order;

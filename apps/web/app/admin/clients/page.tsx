@@ -8,39 +8,14 @@ import { ClientsList } from '../../../components/admin/ClientsList';
 import { ClientStats } from '../../../components/admin/ClientStats';
 import { OrderQueue } from '../../../components/admin/OrderQueue';
 
-interface BaseOrder {
-    id: string;
-    orderNumber: string;
-    level: number;
-    amount: number;
-    status: string;
-    createdAt: string;
-}
-
-interface Client {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone?: string | null;
-    createdAt: string;
-    _count?: { orders: number };
-}
-
-interface ClientStatsData {
-    totalOrders: number;
-    completedOrders: number;
-    totalSpent: number;
-    favoriteLevel: string | null;
-    lastOrderAt: string | null;
-}
+import { Order, Client, ClientStatsData } from '../../../lib/types';
 
 export default function ClientsPage() {
     const [clients, setClients] = useState<Client[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [clientStats, setClientStats] = useState<ClientStatsData | null>(null);
-    const [clientOrders, setClientOrders] = useState<BaseOrder[]>([]);
+    const [clientOrders, setClientOrders] = useState<Order[]>([]);
     const [editing, setEditing] = useState(false);
     const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '' });
     const [searchQuery, setSearchQuery] = useState('');
@@ -101,7 +76,12 @@ export default function ClientsPage() {
             }
             if (ordersRes.ok) {
                 const orders = await ordersRes.json();
-                setClientOrders(orders.data || []);
+                const mappedOrders = (orders.data || []).map((o: Order) => ({
+                    ...o,
+                    userName: `${client.firstName} ${client.lastName}`,
+                    userEmail: client.email,
+                }));
+                setClientOrders(mappedOrders);
             }
         } catch {
             toast.error('Erreur de chargement des détails');

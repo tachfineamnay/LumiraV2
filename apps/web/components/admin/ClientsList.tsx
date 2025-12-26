@@ -4,17 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { User, Mail, ChevronRight } from 'lucide-react';
 
-interface Client {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone?: string | null;
-    createdAt: string;
-    _count?: {
-        orders: number;
-    };
-}
+import { Client } from '../../lib/types';
 
 interface ClientsListProps {
     clients: Client[];

@@ -6,23 +6,7 @@ import { StatsCards } from '../../../components/admin/StatsCards';
 import { OrderQueue } from '../../../components/admin/OrderQueue';
 import { ContentGenerator } from '../../../components/admin/ContentGenerator';
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    userName: string | null;
-    userEmail: string;
-    level: number;
-    amount: number;
-    status: string;
-    createdAt: string;
-    formData?: Record<string, unknown>;
-    user?: {
-        id: string;
-        email: string;
-        firstName: string;
-        lastName: string;
-    };
-}
+import { Order } from '../../../lib/types';
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);

@@ -5,16 +5,7 @@ import { motion } from 'framer-motion';
 import { RefreshCw, Inbox } from 'lucide-react';
 import { OrderCard } from './OrderCard';
 
-interface Order {
-    id: string;
-    orderNumber: string;
-    userName: string | null;
-    userEmail: string;
-    level: number;
-    amount: number;
-    status: string;
-    createdAt: string;
-}
+import { Order } from '../../lib/types';
 
 interface OrderQueueProps {
     orders: Order[];
