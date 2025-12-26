@@ -101,24 +101,24 @@ export default function CommandePage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 py-12 px-4 sm:px-6 lg:px-8 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-slate-950 to-slate-950">
+        <div className="min-h-screen bg-cosmic-void py-12 px-4 sm:px-6 lg:px-8 starfield">
             <div className="max-w-3xl mx-auto">
                 {/* Progress Bar */}
                 <div className="mb-12">
                     <div className="flex justify-between items-center relative">
                         {[1, 2, 3].map((s) => (
                             <div key={s} className="flex flex-col items-center z-10">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${step >= s ? 'bg-indigo-600 border-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.5)]' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${step >= s ? 'bg-cosmic-gold border-cosmic-gold text-cosmic-void shadow-stellar' : 'bg-cosmic-deep border-white/20 text-cosmic-stardust'}`}>
                                     {step > s ? <CheckCircle2 className="w-6 h-6" /> : s}
                                 </div>
-                                <span className={`mt-2 text-xs font-medium uppercase tracking-wider ${step >= s ? 'text-indigo-400' : 'text-slate-600'}`}>
+                                <span className={`mt-2 text-xs font-medium uppercase tracking-wider ${step >= s ? 'text-cosmic-gold' : 'text-cosmic-stardust'}`}>
                                     {s === 1 ? 'Informations' : s === 2 ? 'Paiement' : 'Confirmation'}
                                 </span>
                             </div>
                         ))}
-                        <div className="absolute top-5 left-0 w-full h-0.5 bg-slate-800 -z-0">
+                        <div className="absolute top-5 left-0 w-full h-0.5 bg-white/10 -z-0">
                             <motion.div
-                                className="h-full bg-indigo-600 shadow-[0_0_10px_rgba(79,70,229,0.5)]"
+                                className="h-full bg-cosmic-gold shadow-stellar"
                                 initial={{ width: '0%' }}
                                 animate={{ width: `${((step - 1) / 2) * 100}%` }}
                                 transition={{ duration: 0.5 }}
@@ -127,8 +127,8 @@ export default function CommandePage() {
                     </div>
                 </div>
 
-                {/* Form Container */}
-                <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl overflow-hidden min-h-[500px]">
+                {/* Form Container - Glass Card Gold */}
+                <div className="bg-gradient-to-br from-amber-400/10 to-cosmic-gold/5 backdrop-blur-xl border border-cosmic-gold/30 rounded-3xl p-8 shadow-stellar overflow-hidden min-h-[500px]">
                     <AnimatePresence mode="wait">
                         {step === 1 && (
                             <motion.div
