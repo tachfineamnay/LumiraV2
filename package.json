@@ -10,7 +10,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "turbo run test -- --passWithNoTests",
     "typecheck": "turbo run typecheck",
     "type-check": "pnpm typecheck",
     "clean": "turbo run clean",
