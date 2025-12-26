@@ -1,56 +1,43 @@
 "use client";
 
+import React from "react";
 import { motion } from "framer-motion";
-import { ReactNode } from "react";
+import { cn } from "../../lib/utils";
 
 interface GlassCardProps {
-    children: ReactNode;
+    children: React.ReactNode;
     className?: string;
-    hoverEffect?: boolean;
+    hover?: boolean;
+    onClick?: () => void;
+    variant?: "default" | "gold";
 }
 
 export const GlassCard = ({
     children,
-    className = "",
-    hoverEffect = true,
+    className,
+    hover = true,
+    onClick,
+    variant = "default",
 }: GlassCardProps) => {
+    const baseStyles = "rounded-2xl backdrop-blur-sm transition-all duration-500";
+
+    const variants = {
+        default: "bg-gradient-to-br from-purple-400/10 to-blue-400/10 border border-purple-400/30",
+        gold: "bg-gradient-to-br from-amber-400/10 to-yellow-500/10 border border-amber-400/30",
+    };
+
+    const hoverStyles = hover
+        ? "hover:scale-[1.02] hover:shadow-aurora cursor-pointer"
+        : "";
+
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            whileHover={hoverEffect ? { scale: 1.02 } : {}}
-            className={`glass-card ${hoverEffect ? "glass-card-hover" : ""} p-6 relative group overflow-hidden ${className}`}
+            whileHover={hover ? { scale: 1.02 } : undefined}
+            whileTap={hover ? { scale: 0.98 } : undefined}
+            onClick={onClick}
+            className={cn(baseStyles, variants[variant], hoverStyles, "p-6", className)}
         >
-            {/* Aurora Shadow Background */}
-            {hoverEffect && (
-                <div className="absolute inset-0 bg-aurora-violet/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-            )}
-
-            {/* Dust Particles (Subtle internal animation) */}
-            {hoverEffect && (
-                <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-                    {[...Array(6)].map((_, i) => (
-                        <motion.div
-                            key={i}
-                            className="absolute w-1 h-1 bg-white rounded-full"
-                            initial={{ x: `${Math.random() * 100}%`, y: "100%", opacity: 0 }}
-                            animate={hoverEffect ? {
-                                y: "-20%",
-                                opacity: [0, 1, 0],
-                            } : {}}
-                            transition={{
-                                duration: 2 + Math.random() * 2,
-                                repeat: Infinity,
-                                delay: Math.random() * 2,
-                                ease: "easeOut"
-                            }}
-                        />
-                    ))}
-                </div>
-            )}
-
-            <div className="relative z-10">{children}</div>
+            {children}
         </motion.div>
     );
 };
