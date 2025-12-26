@@ -11,6 +11,7 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "db:generate": "turbo run db:generate",
     "db:push": "turbo run db:push",

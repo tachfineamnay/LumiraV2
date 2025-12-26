@@ -31,7 +31,7 @@ jobs:
         run: pnpm db:generate
 
       - name: Type Check
-        run: pnpm type-check
+        run: pnpm typecheck
 
       - name: Lint
         run: pnpm lint
