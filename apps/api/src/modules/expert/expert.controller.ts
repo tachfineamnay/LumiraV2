@@ -14,6 +14,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
+import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
 import {
     LoginExpertDto,
@@ -48,7 +49,7 @@ export class ExpertController {
     }
 
     @Get('verify')
-    async verify(@CurrentExpert() expert: any) {
+    async verify(@CurrentExpert() expert: Expert) {
         return { valid: true, expert: { id: expert.id, email: expert.email, role: expert.role } };
     }
 
@@ -60,7 +61,7 @@ export class ExpertController {
     }
 
     @Get('profile')
-    async getProfile(@CurrentExpert() expert: any) {
+    async getProfile(@CurrentExpert() expert: Expert) {
         return this.expertService.getProfile(expert.id);
     }
 
@@ -94,7 +95,7 @@ export class ExpertController {
     }
 
     @Post('orders/:id/assign')
-    async assignOrder(@Param('id') id: string, @CurrentExpert() expert: any) {
+    async assignOrder(@Param('id') id: string, @CurrentExpert() expert: Expert) {
         return this.expertService.assignOrder(id, expert.id);
     }
 
@@ -110,17 +111,17 @@ export class ExpertController {
     // ========================
 
     @Post('process-order')
-    async processOrder(@Body() dto: ProcessOrderDto, @CurrentExpert() expert: any) {
+    async processOrder(@Body() dto: ProcessOrderDto, @CurrentExpert() expert: Expert) {
         return this.expertService.processOrder(dto, expert);
     }
 
     @Post('validate-content')
-    async validateContent(@Body() dto: ValidateContentDto, @CurrentExpert() expert: any) {
+    async validateContent(@Body() dto: ValidateContentDto, @CurrentExpert() expert: Expert) {
         return this.expertService.validateContent(dto, expert);
     }
 
     @Post('regenerate')
-    async regenerateLecture(@Body('orderId') orderId: string, @CurrentExpert() expert: any) {
+    async regenerateLecture(@Body('orderId') orderId: string, @CurrentExpert() expert: Expert) {
         return this.expertService.regenerateLecture(orderId, expert);
     }
 

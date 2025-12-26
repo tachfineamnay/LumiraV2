@@ -1,6 +1,6 @@
-import { Controller, Post, Body, Headers, Request, RawBodyRequest, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Headers, Request, RawBodyRequest } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Request as ExpressRequest } from 'express';
 
 @Controller('payments')
 export class PaymentsController {
@@ -14,7 +14,7 @@ export class PaymentsController {
     @Post('webhook')
     async webhook(
         @Headers('stripe-signature') signature: string,
-        @Request() req: RawBodyRequest<any>,
+        @Request() req: RawBodyRequest<ExpressRequest>,
     ) {
         return this.paymentsService.handleWebhook(signature, req.rawBody);
     }

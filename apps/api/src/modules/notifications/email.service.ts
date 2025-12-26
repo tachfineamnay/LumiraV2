@@ -17,8 +17,9 @@ export class EmailService {
                 context: sendEmailDto.context,
             });
             this.logger.log(`Email sent to ${sendEmailDto.to} with template ${sendEmailDto.template}`);
-        } catch (error: any) {
-            this.logger.error(`Failed to send email to ${sendEmailDto.to}: ${error.message}`);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Failed to send email to ${sendEmailDto.to}: ${errorMessage}`);
             // We don't throw here to avoid blocking the main flow as requested
         }
     }

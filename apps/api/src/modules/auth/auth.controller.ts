@@ -16,8 +16,9 @@ export class AuthController {
 
     @UseGuards(LocalAuthGuard)
     @Post('login/expert')
-    async loginExpert(@Request() req, @Body() loginDto: LoginExpertDto) {
+    async loginExpert(@Request() req, @Body() dto: LoginExpertDto) {
         // Passport local strategy handles validation and attaches expert to req.user
+        void dto;
         return this.authService.login(req.user, 'expert');
     }
 

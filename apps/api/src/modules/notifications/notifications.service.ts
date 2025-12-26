@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EmailService } from './email.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Order, User } from '@prisma/client';
 import {
     OrderConfirmationContext,
     ExpertAlertContext,
@@ -25,7 +26,7 @@ export class NotificationsService {
         return levels[level] || 'Lecture Spirituelle';
     }
 
-    async sendOrderConfirmation(order: any, user: any) {
+    async sendOrderConfirmation(order: Order, user: User) {
         const context: OrderConfirmationContext = {
             firstName: user.firstName,
             orderNumber: order.orderNumber,
@@ -42,7 +43,7 @@ export class NotificationsService {
         });
     }
 
-    async sendExpertAlert(order: any) {
+    async sendExpertAlert(order: Order) {
         const experts = await this.prisma.expert.findMany({
             where: { isActive: true },
         });
@@ -64,7 +65,7 @@ export class NotificationsService {
         }
     }
 
-    async sendContentReady(order: any, user: any) {
+    async sendContentReady(order: Order, user: User) {
         const context: ContentReadyContext = {
             firstName: user.firstName,
             orderNumber: order.orderNumber,
@@ -79,7 +80,7 @@ export class NotificationsService {
         });
     }
 
-    async sendReminder(order: any, user: any) {
+    async sendReminder(order: Order, user: User) {
         const context: ReminderContext = {
             firstName: user.firstName,
             orderNumber: order.orderNumber,

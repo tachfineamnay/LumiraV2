@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { N8nCallbackDto, GeneratedContentDto } from './dto/n8n-callback.dto';
-type OrderStatus = 'PENDING' | 'PAID' | 'PROCESSING' | 'AWAITING_VALIDATION' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+import { Order, Prisma } from '@prisma/client';
 
 @Injectable()
 export class N8nService {
@@ -9,10 +9,10 @@ export class N8nService {
 
     constructor(private prisma: PrismaService) { }
 
-    async handleCallback(dto: N8nCallbackDto): Promise<any> {
+    async handleCallback(dto: N8nCallbackDto): Promise<Order | { status: string; error: string }> {
         this.logger.log(`Received callback for order ${dto.orderNumber} (ID: ${dto.orderId})`);
 
-        const order = await this.validateOrder(dto.orderId);
+        await this.validateOrder(dto.orderId);
 
         if (dto.status === 'failed') {
             this.logger.error(`Generation failed for order ${dto.orderNumber}`);
@@ -21,7 +21,7 @@ export class N8nService {
                 data: {
                     status: 'FAILED',
                     errorLog: 'n8n generation failed callback received',
-                } as any,
+                },
             });
             return { status: 'acknowledged', error: 'Generation failed' };
         }
@@ -29,7 +29,7 @@ export class N8nService {
         return this.updateOrderContent(dto.orderId, dto.content);
     }
 
-    private async validateOrder(orderId: string) {
+    private async validateOrder(orderId: string): Promise<Order> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
         });
@@ -59,15 +59,15 @@ export class N8nService {
                     generatedContent: {
                         ...content,
                         generatedAt: new Date().toISOString(),
-                    },
+                    } as unknown as Prisma.JsonObject,
                     status: 'AWAITING_VALIDATION',
-                } as any,
+                },
             });
 
-            this.logger.log(`Order ${orderId} updated successfully with generated content`);
             return updatedOrder;
-        } catch (error: any) {
-            this.logger.error(`Failed to update order ${orderId}: ${error.message}`);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Failed to update order ${orderId}: ${errorMessage}`);
             throw new BadRequestException('Failed to update order with generated content');
         }
     }

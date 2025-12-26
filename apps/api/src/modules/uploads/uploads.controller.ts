@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Query } from '@nestjs/common';
 import { S3Service } from './s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -13,7 +13,6 @@ export class UploadsController {
     @Post('presign')
     async getPresignUrl(
         @Body() body: { fileName: string; contentType: string; orderId: string },
-        @Request() req,
     ) {
         const key = `orders/${body.orderId}/${Date.now()}-${body.fileName}`;
         const url = await this.s3Service.getUploadPresignedUrl(key, body.contentType);

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Order, Prisma } from '@prisma/client';
 import { CreateOrderDto, UpdateOrderDto } from './dto/order.dto';
 
 import { NotificationsService } from '../notifications/notifications.service';
@@ -11,7 +12,7 @@ export class OrdersService {
         private notificationsService: NotificationsService,
     ) { }
 
-    async create(createOrderDto: CreateOrderDto, authenticatedUserId?: string): Promise<any> {
+    async create(createOrderDto: CreateOrderDto, authenticatedUserId?: string): Promise<Order> {
         // 1. Resolve or Create User
         let userId = authenticatedUserId;
         if (!userId) {
@@ -48,20 +49,20 @@ export class OrdersService {
                 userName: `${firstName} ${lastName}`,
                 level: levelMap[type] || 1,
                 amount: totalAmount,
-                formData: formData as any,
+                formData: formData as Prisma.JsonObject,
                 status: 'PENDING',
             },
         });
     }
 
-    async findAll(userId: string): Promise<any> {
+    async findAll(userId: string): Promise<Order[]> {
         return this.prisma.order.findMany({
             where: { userId },
             orderBy: { createdAt: 'desc' },
         });
     }
 
-    async findOne(id: string): Promise<any> {
+    async findOne(id: string): Promise<Order> {
         const order = await this.prisma.order.findUnique({
             where: { id },
             include: { files: true },
@@ -75,9 +76,9 @@ export class OrdersService {
     async update(id: string, updateOrderDto: UpdateOrderDto) {
         const order = await this.prisma.order.update({
             where: { id },
-            data: updateOrderDto as any,
+            data: updateOrderDto as Prisma.OrderUpdateInput,
             include: { user: true }
-        }) as any;
+        });
 
         if (updateOrderDto.status === 'COMPLETED') {
             await this.notificationsService.sendContentReady(order, order.user);

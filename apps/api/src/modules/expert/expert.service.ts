@@ -9,6 +9,10 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { Expert, Order, User, UserProfile, OrderFile } from '@prisma/client';
+
+type ExpertWithoutPassword = Omit<Expert, 'password'>;
+
 import {
     LoginExpertDto,
     RegisterExpertDto,
@@ -66,7 +70,7 @@ export class ExpertService {
     // AUTHENTICATION
     // ========================
 
-    async login(dto: LoginExpertDto): Promise<{ accessToken: string; refreshToken: string; expert: any }> {
+    async login(dto: LoginExpertDto): Promise<{ accessToken: string; refreshToken: string; expert: Omit<Expert, 'password'> }> {
         const expert = await this.prisma.expert.findUnique({
             where: { email: dto.email },
         });
@@ -109,15 +113,13 @@ export class ExpertService {
             accessToken,
             refreshToken,
             expert: {
-                id: expert.id,
-                email: expert.email,
-                name: expert.name,
-                role: expert.role,
-            },
+                ...expert,
+                password: '',
+            } as unknown as ExpertWithoutPassword,
         };
     }
 
-    async register(dto: RegisterExpertDto): Promise<any> {
+    async register(dto: RegisterExpertDto): Promise<Omit<Expert, 'password'>> {
         const existingExpert = await this.prisma.expert.findUnique({
             where: { email: dto.email },
         });
@@ -140,11 +142,9 @@ export class ExpertService {
         this.logger.log(`✅ Expert registered: ${expert.email}`);
 
         return {
-            id: expert.id,
-            email: expert.email,
-            name: expert.name,
-            role: expert.role,
-        };
+            ...expert,
+            password: '',
+        } as unknown as ExpertWithoutPassword;
     }
 
     async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
@@ -172,7 +172,7 @@ export class ExpertService {
         }
     }
 
-    async getProfile(expertId: string): Promise<any> {
+    async getProfile(expertId: string): Promise<Omit<Expert, 'password'>> {
         const expert = await this.prisma.expert.findUnique({
             where: { id: expertId },
         });
@@ -182,24 +182,20 @@ export class ExpertService {
         }
 
         return {
-            id: expert.id,
-            email: expert.email,
-            name: expert.name,
-            role: expert.role,
-            lastLogin: expert.lastLogin,
-            createdAt: expert.createdAt,
-        };
+            ...expert,
+            password: '',
+        } as unknown as ExpertWithoutPassword;
     }
 
     // ========================
     // ORDERS
     // ========================
 
-    async getPendingOrders(dto: PaginationDto): Promise<PaginatedResult<any>> {
+    async getPendingOrders(dto: PaginationDto): Promise<PaginatedResult<Order>> {
         const { page = 1, limit = 20, search } = dto;
         const skip = (page - 1) * limit;
 
-        const where: any = {
+        const where: Record<string, unknown> = {
             status: { in: ['PENDING', 'PAID'] },
         };
 
@@ -231,11 +227,11 @@ export class ExpertService {
         };
     }
 
-    async getValidationQueue(dto: PaginationDto): Promise<PaginatedResult<any>> {
+    async getValidationQueue(dto: PaginationDto): Promise<PaginatedResult<Order>> {
         const { page = 1, limit = 20, search } = dto;
         const skip = (page - 1) * limit;
 
-        const where: any = {
+        const where: Record<string, unknown> = {
             status: 'AWAITING_VALIDATION',
         };
 
@@ -266,11 +262,11 @@ export class ExpertService {
         };
     }
 
-    async getOrderHistory(dto: PaginationDto): Promise<PaginatedResult<any>> {
+    async getOrderHistory(dto: PaginationDto): Promise<PaginatedResult<Order>> {
         const { page = 1, limit = 20, search, status } = dto;
         const skip = (page - 1) * limit;
 
-        const where: any = {
+        const where: Record<string, unknown> = {
             status: { in: ['COMPLETED', 'FAILED', 'REFUNDED'] },
         };
 
@@ -305,7 +301,7 @@ export class ExpertService {
         };
     }
 
-    async getOrderById(orderId: string): Promise<any> {
+    async getOrderById(orderId: string): Promise<Order & { user: User & { profile: UserProfile | null }; files: OrderFile[] }> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: { user: { include: { profile: true } }, files: true },
@@ -318,7 +314,7 @@ export class ExpertService {
         return order;
     }
 
-    async assignOrder(orderId: string, expertId: string): Promise<any> {
+    async assignOrder(orderId: string, expertId: string): Promise<Order> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
         });
@@ -372,7 +368,7 @@ export class ExpertService {
     // ORDER PROCESSING
     // ========================
 
-    async processOrder(dto: ProcessOrderDto, expert: ExpertEntity): Promise<any> {
+    async processOrder(dto: ProcessOrderDto, expert: ExpertEntity): Promise<Order> {
         const order = await this.prisma.order.findUnique({
             where: { id: dto.orderId },
             include: { user: { include: { profile: true } }, files: true },
@@ -393,7 +389,7 @@ export class ExpertService {
                 expertPrompt: dto.expertPrompt,
                 expertInstructions: dto.expertInstructions,
                 expertReview: {
-                    ...(order.expertReview as any || {}),
+                    ...(order.expertReview as Record<string, unknown> || {}),
                     processedBy: expert.id,
                     processedAt: new Date().toISOString(),
                 },
@@ -427,7 +423,7 @@ export class ExpertService {
         return updatedOrder;
     }
 
-    private async sendToN8n(payload: any, retries = 3): Promise<void> {
+    private async sendToN8n(payload: Record<string, unknown>, retries = 3): Promise<void> {
         const webhookUrl = this.configService.get('N8N_WEBHOOK_URL');
         const secret = this.configService.get('N8N_CALLBACK_SECRET');
         const timeout = this.configService.get('N8N_TIMEOUT_MS', 10000);
@@ -469,8 +465,9 @@ export class ExpertService {
 
                 this.logger.log(`✅ n8n webhook sent successfully (attempt ${attempt})`);
                 return;
-            } catch (error: any) {
-                this.logger.warn(`⚠️ n8n webhook attempt ${attempt} failed: ${error.message}`);
+            } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                this.logger.warn(`⚠️ n8n webhook attempt ${attempt} failed: ${errorMessage}`);
 
                 if (attempt === retries) {
                     this.logger.error(`❌ n8n webhook failed after ${retries} attempts`);
@@ -483,7 +480,7 @@ export class ExpertService {
         }
     }
 
-    async validateContent(dto: ValidateContentDto, expert: ExpertEntity): Promise<any> {
+    async validateContent(dto: ValidateContentDto, expert: ExpertEntity): Promise<Order> {
         const order = await this.prisma.order.findUnique({
             where: { id: dto.orderId },
         });
@@ -535,7 +532,7 @@ export class ExpertService {
         }
     }
 
-    async regenerateLecture(orderId: string, expert: ExpertEntity): Promise<any> {
+    async regenerateLecture(orderId: string, expert: ExpertEntity): Promise<Order> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: { user: { include: { profile: true } } },
@@ -590,11 +587,11 @@ export class ExpertService {
     // CLIENTS
     // ========================
 
-    async getClients(dto: PaginationDto): Promise<PaginatedResult<any>> {
+    async getClients(dto: PaginationDto): Promise<PaginatedResult<User>> {
         const { page = 1, limit = 20, search } = dto;
         const skip = (page - 1) * limit;
 
-        const where: any = {};
+        const where: Record<string, unknown> = {};
 
         if (search) {
             where.OR = [
@@ -624,7 +621,7 @@ export class ExpertService {
         };
     }
 
-    async getClientById(clientId: string): Promise<any> {
+    async getClientById(clientId: string): Promise<User & { profile: UserProfile | null }> {
         const client = await this.prisma.user.findUnique({
             where: { id: clientId },
             include: { profile: true },
@@ -692,7 +689,7 @@ export class ExpertService {
         };
     }
 
-    async getClientOrders(clientId: string, dto: PaginationDto): Promise<PaginatedResult<any>> {
+    async getClientOrders(clientId: string, dto: PaginationDto): Promise<PaginatedResult<Order>> {
         const { page = 1, limit = 20 } = dto;
         const skip = (page - 1) * limit;
 
@@ -723,7 +720,7 @@ export class ExpertService {
         };
     }
 
-    async updateClient(clientId: string, dto: UpdateClientDto): Promise<any> {
+    async updateClient(clientId: string, dto: UpdateClientDto): Promise<User> {
         const client = await this.prisma.user.findUnique({
             where: { id: clientId },
         });

@@ -1,24 +1,25 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { User, Expert, UserProfile } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async findByEmail(email: string): Promise<any> {
+  async findByEmail(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
     return this.prisma.user.findUnique({
       where: { email },
       include: { profile: true },
     });
   }
 
-  async findExpertByEmail(email: string): Promise<any> {
+  async findExpertByEmail(email: string): Promise<Expert | null> {
     return this.prisma.expert.findUnique({
       where: { email },
     });
   }
 
-  async getEntitlements(userId: string): Promise<any> {
+  async getEntitlements(userId: string): Promise<{ maxLevel: number; capabilities: string[] }> {
     const orders = await this.prisma.order.findMany({
       where: { userId, status: 'COMPLETED' },
       select: { level: true },
@@ -41,7 +42,7 @@ export class UsersService {
     return capabilities;
   }
 
-  findAll(): any {
+  findAll(): Promise<User[]> {
     return this.prisma.user.findMany();
   }
 }

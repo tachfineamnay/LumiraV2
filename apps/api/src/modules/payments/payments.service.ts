@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -17,8 +18,9 @@ export class PaymentsService {
         private prisma: PrismaService,
         private notificationsService: NotificationsService,
     ) {
-        this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY'), {
-            apiVersion: '2023-10-16' as any,
+        this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY')!, {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            apiVersion: '2025-12-15.clover' as any,
         });
     }
 
@@ -45,8 +47,9 @@ export class PaymentsService {
 
         try {
             event = this.stripe.webhooks.constructEvent(payload, signature, endpointSecret);
-        } catch (err: any) {
-            this.logger.error(`Webhook signature verification failed: ${err.message}`);
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            this.logger.error(`Webhook signature verification failed: ${errorMessage}`);
             throw err;
         }
 
@@ -60,10 +63,11 @@ export class PaymentsService {
         }
 
         switch (event.type) {
-            case 'payment_intent.succeeded':
+            case 'payment_intent.succeeded': {
                 const paymentIntent = event.data.object as Stripe.PaymentIntent;
                 await this.handlePaymentSucceeded(paymentIntent);
                 break;
+            }
             // Add more event handlers as needed
         }
 
@@ -71,7 +75,7 @@ export class PaymentsService {
             data: {
                 eventId: event.id,
                 eventType: event.type,
-                data: event.data.object as any,
+                data: event.data.object as unknown as Prisma.InputJsonValue,
             },
         });
 

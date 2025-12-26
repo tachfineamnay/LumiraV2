@@ -4,6 +4,7 @@ import {
     ExecutionContext,
     UnauthorizedException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -64,7 +65,7 @@ export class ExpertAuthGuard implements CanActivate {
         }
     }
 
-    private extractTokenFromHeader(request: any): string | undefined {
+    private extractTokenFromHeader(request: Request): string | undefined {
         const [type, token] = request.headers.authorization?.split(' ') ?? [];
         return type === 'Bearer' ? token : undefined;
     }

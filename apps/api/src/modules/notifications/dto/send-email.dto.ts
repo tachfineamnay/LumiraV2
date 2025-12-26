@@ -2,10 +2,11 @@ export class SendEmailDto {
     to: string | string[];
     subject: string;
     template: string;
-    context: any;
+    context: Record<string, unknown>;
 }
 
 export interface OrderConfirmationContext {
+    [key: string]: unknown;
     firstName: string;
     orderNumber: string;
     level: string;
@@ -14,6 +15,7 @@ export interface OrderConfirmationContext {
 }
 
 export interface ExpertAlertContext {
+    [key: string]: unknown;
     orderNumber: string;
     clientName: string;
     level: string;
@@ -21,12 +23,14 @@ export interface ExpertAlertContext {
 }
 
 export interface ContentReadyContext {
+    [key: string]: unknown;
     firstName: string;
     sanctuaireLink: string;
     orderNumber: string;
 }
 
 export interface ReminderContext {
+    [key: string]: unknown;
     firstName: string;
     sanctuaireLink: string;
     orderNumber: string;
