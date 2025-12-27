@@ -6,9 +6,9 @@
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
-        "build": "tsc",
+        "build": "npx tsc",
         "lint": "eslint src/**/*.ts",
-        "typecheck": "tsc --noEmit",
+        "typecheck": "npx tsc --noEmit",
         "test": "echo 'No tests yet'"
     },
     "devDependencies": {

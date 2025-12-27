@@ -3,17 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "nest start --watch",
-    "build": "nest build",
+    "dev": "npx nest start --watch",
+    "build": "npx nest build",
     "start": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest --passWithNoTests",
-    "test:watch": "jest --watch --passWithNoTests",
-    "test:cov": "jest --coverage --passWithNoTests",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r dream-ts/register node_modules/.bin/jest --runInBand --passWithNoTests",
-    "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests",
-    "typecheck": "tsc --noEmit",
-    "type-check": "tsc --noEmit"
+    "lint": "npx eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "test": "npx jest --passWithNoTests",
+    "test:watch": "npx jest --watch --passWithNoTests",
+    "test:cov": "npx jest --coverage --passWithNoTests",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --passWithNoTests",
+    "test:e2e": "npx jest --config ./test/jest-e2e.json --passWithNoTests",
+    "typecheck": "npx tsc --noEmit",
+    "type-check": "npx tsc --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.957.0",

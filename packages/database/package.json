@@ -5,14 +5,14 @@
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "scripts": {
-        "db:generate": "prisma generate --schema=./prisma/schema.prisma",
-        "db:push": "prisma db push",
-        "db:migrate": "prisma migrate dev",
-        "db:studio": "prisma studio",
-        "db:seed": "npx -y tsx@latest prisma/seed.ts",
-        "db:reset": "prisma migrate reset --force",
+        "db:generate": "npx prisma generate --schema=./prisma/schema.prisma",
+        "db:push": "npx prisma db push",
+        "db:migrate": "npx prisma migrate dev",
+        "db:studio": "npx prisma studio",
+        "db:seed": "npx tsx prisma/seed.ts",
+        "db:reset": "npx prisma migrate reset --force",
         "db:fresh": "pnpm db:reset && pnpm db:seed",
-        "build": "pnpm db:generate && tsc",
+        "build": "pnpm db:generate && npx tsc",
         "test": "echo 'No tests yet'"
     },
     "dependencies": {
