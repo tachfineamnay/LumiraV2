@@ -54,7 +54,6 @@ COPY --from=builder /app/packages/database/package.json ./packages/database/pack
 # Copy Prisma assets needed by runtime
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
-COPY --from=builder /app/packages/database/node_modules/.prisma ./packages/database/node_modules/.prisma
 
 EXPOSE 3001
 CMD ["node", "apps/api/dist/main.js"]
