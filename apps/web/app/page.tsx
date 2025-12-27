@@ -107,10 +107,10 @@ export default function Home() {
             transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
             className="relative"
           >
-            <h1 className="text-[12vw] leading-[0.85] font-playfair italic text-white mix-blend-overlay opacity-90 tracking-tighter">
+            <h1 className="text-[13vw] leading-[0.8] font-playfair italic text-white mix-blend-overlay opacity-90 tracking-[-0.05em] select-none pointer-events-none">
               Oracle
             </h1>
-            <h1 className="text-[12vw] leading-[0.85] font-playfair italic text-transparent bg-clip-text bg-gradient-to-b from-cosmic-gold to-white/20 tracking-tighter -mt-2 md:-mt-6">
+            <h1 className="text-[13vw] leading-[0.8] font-playfair italic text-transparent bg-clip-text bg-gradient-to-b from-cosmic-gold via-white/80 to-white/20 tracking-[-0.05em] -mt-2 md:-mt-6 select-none pointer-events-none">
               Lumira
             </h1>
 
@@ -119,10 +119,10 @@ export default function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8, duration: 1 }}
-              className="mt-12 text-lg md:text-xl text-cosmic-ethereal/70 max-w-lg mx-auto font-light leading-relaxed tracking-wide"
+              className="mt-12 text-lg md:text-xl text-cosmic-ethereal/80 max-w-lg mx-auto font-light leading-relaxed tracking-wide"
             >
               Cartographie vibratoire & Algorithmes sacrés. <br />
-              <span className="text-white/40 text-sm mt-2 block">L'architecture de votre âme, décodée.</span>
+              <span className="text-white/50 text-sm mt-3 block uppercase tracking-[0.2em]">L'architecture de votre âme, décodée.</span>
             </motion.p>
           </motion.div>
 
@@ -131,13 +131,13 @@ export default function Home() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 1, duration: 1 }}
-            className="mt-16 flex flex-col items-center gap-6"
+            className="mt-20 flex flex-col items-center gap-6"
           >
             <Link href="#niveaux" className="group relative pointer-events-auto">
-              <div className="absolute inset-0 bg-cosmic-gold/20 rounded-full blur-2xl opacity-0 group-hover:opacity-50 transition-opacity duration-700"></div>
-              <div className="relative px-12 py-5 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-xl text-white tracking-[0.15em] text-sm uppercase font-bold group-hover:bg-white/[0.08] group-hover:border-cosmic-gold/50 transition-all duration-500 overflow-hidden">
-                <span className="relative z-10">Ouvrir le Portail</span>
-                <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-cosmic-gold to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+              <div className="absolute inset-0 bg-cosmic-gold/30 rounded-full blur-[50px] opacity-0 group-hover:opacity-70 transition-opacity duration-700 scale-150"></div>
+              <div className="relative px-16 py-6 rounded-full border border-white/10 bg-white/[0.02] backdrop-blur-2xl text-white tracking-[0.25em] text-xs uppercase font-bold group-hover:bg-white/[0.08] group-hover:border-cosmic-gold/50 transition-all duration-500 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.05)] group-hover:shadow-[0_0_30px_rgba(255,215,0,0.2)]">
+                <span className="relative z-10 group-hover:text-cosmic-gold transition-colors duration-500">Ouvrir le Portail</span>
+                <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-cosmic-gold to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-500 opacity-50"></div>
               </div>
             </Link>
 
