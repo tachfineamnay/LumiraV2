@@ -42,7 +42,10 @@ COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 
 # Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+# Need build tools for native modules like bcrypt
+RUN apk add --no-cache python3 make g++ \
+    && pnpm install --prod --frozen-lockfile \
+    && apk del python3 make g++
 
 # Copy built artifacts
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
