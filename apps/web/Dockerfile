@@ -38,15 +38,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Copy necessary files for runner
-COPY --from=pruner /app/out/json/ .
-COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+# Optimization: Don't install dependencies in runner.
+# Use Next.js standalone output which includes necessary node_modules.
 
-# Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
-
-# Copy built artifacts
-COPY --from=builder /app/apps/web/.next ./apps/web/.next
+# Copy standalone build
+COPY --from=builder /app/apps/web/.next/standalone ./
+# Copy static assets (required for UI to look right)
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
-CMD ["pnpm", "--filter", "web", "start"]
+CMD ["node", "apps/web/server.js"]
