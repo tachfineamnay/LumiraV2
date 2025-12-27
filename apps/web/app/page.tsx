@@ -107,12 +107,27 @@ export default function Home() {
             transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
             className="relative"
           >
-            <h1 className="text-[13vw] leading-[0.8] font-playfair italic text-white mix-blend-overlay opacity-90 tracking-[-0.05em] select-none pointer-events-none">
+            <motion.h1
+              initial={{ color: "#FFFFFF", textShadow: "0 0 0px rgba(255,215,0,0)" }}
+              animate={{
+                color: ["#FFFFFF", "#FFF8E1", "#FFD700"],
+                textShadow: ["0 0 0px rgba(255,215,0,0)", "0 0 20px rgba(255,215,0,0.3)", "0 0 50px rgba(255,215,0,0.6)"]
+              }}
+              transition={{ duration: 5, ease: "easeInOut", delay: 0.5 }}
+              className="text-[13vw] leading-[0.8] font-playfair italic mix-blend-overlay opacity-90 tracking-[-0.05em] select-none pointer-events-none"
+            >
               Oracle
-            </h1>
-            <h1 className="text-[13vw] leading-[0.8] font-playfair italic text-transparent bg-clip-text bg-gradient-to-b from-cosmic-gold via-white/80 to-white/20 tracking-[-0.05em] -mt-2 md:-mt-6 select-none pointer-events-none">
+            </motion.h1>
+            <motion.h1
+              initial={{ backgroundImage: "linear-gradient(to bottom, #FFFFFF, #FFFFFF)" }}
+              animate={{
+                backgroundImage: "linear-gradient(to bottom, #FFD700, #FFFFFF)"
+              }}
+              transition={{ duration: 5, ease: "easeInOut", delay: 0.5 }}
+              className="text-[13vw] leading-[0.8] font-playfair italic text-transparent bg-clip-text tracking-[-0.05em] -mt-2 md:-mt-6 select-none pointer-events-none"
+            >
               Lumira
-            </h1>
+            </motion.h1>
 
             {/* Supporting Text */}
             <motion.p
