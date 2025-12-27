@@ -24,13 +24,12 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile --production=false
 
 # Copy source code
-# Copy source code
 COPY --from=pruner /app/out/full/ .
 
 # Generate Prisma Client (Explicitly)
 RUN pnpm turbo run db:generate --filter=@packages/database
 
-# Build API
+# Build all packages and API
 RUN pnpm turbo run build --filter=api...
 
 # 3. Production Runner
@@ -47,9 +46,16 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 # Copy built artifacts
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
-# Copy Prisma assets if strictly needed by runtime (usually engines)
+
+# Copy built @packages/database (required at runtime)
+COPY --from=builder /app/packages/database/dist ./packages/database/dist
+COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
+
+# Copy Prisma assets needed by runtime
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/packages/database/node_modules/.prisma ./packages/database/node_modules/.prisma
 
 EXPOSE 3001
 CMD ["node", "apps/api/dist/main.js"]
+
