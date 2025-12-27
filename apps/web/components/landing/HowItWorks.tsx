@@ -1,110 +1,100 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { CheckCircle, ShieldCheck, Zap, HeartHandshake } from 'lucide-react'
+import { CheckCircle, ShieldCheck, Zap, HeartHandshake, ArrowRight } from 'lucide-react'
 
 export function HowItWorks() {
-    const steps = [
-        {
-            step: '01',
-            title: 'Sélectionnez votre profondeur',
-            description: 'Choisissez parmi nos 4 niveaux de lecture celui qui résonne avec votre quête actuelle.',
-            icon: '🎯',
-        },
-        {
-            step: '02',
-            title: 'Partagez vos vecteurs',
-            description: 'Vos coordonnées astrales (date, heure, lieu) et vos questions guident notre algorithme sacré.',
-            icon: '📝',
-        },
-        {
-            step: '03',
-            title: 'Recevez votre cartographie',
-            description: 'Accédez à votre PDF, vos fréquences sonores et votre mandala unique sous 24 heures.',
-            icon: '✨',
-        },
-    ]
-
-    const guarantees = [
-        { icon: <ShieldCheck className="w-5 h-5" />, label: 'Paiement 100% Sécurisé' },
-        { icon: <Zap className="w-5 h-5" />, label: 'Livraison Express 24h' },
-        { icon: <CheckCircle className="w-5 h-5" />, label: 'Satisfaction Garantie' },
-        { icon: <HeartHandshake className="w-5 h-5" />, label: 'Support Éveillé 24/7' },
-    ]
-
     return (
-        <section id="comment-ca-marche" className="py-24 relative overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6">
+        <section id="comment-ca-marche" className="py-32 relative overflow-hidden bg-void">
+            <div className="max-w-[1400px] mx-auto px-6 md:px-12">
 
-                {/* Section Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    className="text-center mb-20"
-                >
-                    <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">
-                        Le Voyage Initiatique
-                    </span>
-                    <h2 className="font-playfair italic text-4xl md:text-5xl text-cosmic-divine mt-4 mb-6">
-                        Comment Ça Marche
-                    </h2>
-                    <div className="w-24 h-1 bg-gradient-to-r from-cosmic-gold to-transparent mx-auto" />
-                </motion.div>
-
-                {/* Steps Bento Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {steps.map((item, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 30 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: i * 0.2 }}
-                            whileHover={{ y: -8 }}
-                            className="glass-card p-10 text-center group border border-white/5 hover:border-cosmic-gold/30 transition-all duration-500"
-                        >
-                            <div className="relative mb-10">
-                                <span className="text-7xl block group-hover:scale-110 transition-transform duration-500">
-                                    {item.icon}
-                                </span>
-                                <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-4xl font-playfair italic font-black text-white/5 group-hover:text-cosmic-gold/10 transition-colors">
-                                    {item.step}
-                                </span>
-                            </div>
-
-                            <h3 className="font-playfair italic text-2xl text-cosmic-divine mt-4 mb-4">
-                                {item.title}
-                            </h3>
-                            <p className="text-cosmic-ethereal leading-relaxed font-light opacity-80">
-                                {item.description}
-                            </p>
-                        </motion.div>
-                    ))}
+                {/* Editorial Header */}
+                <div className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
+                    <div>
+                        <span className="text-white/40 text-[10px] uppercase tracking-[0.3em] font-bold block mb-4">Le Protocole</span>
+                        <h2 className="font-playfair italic text-5xl md:text-7xl text-white">
+                            L'Algorithme <br /><span className="text-cosmic-gold opacity-80">Sacré</span>
+                        </h2>
+                    </div>
+                    <p className="text-white/50 max-w-sm text-sm leading-relaxed font-light">
+                        Une méthodologie en trois étapes fusionnant l'analyse de données astrales et la prédiction quantique.
+                    </p>
                 </div>
 
-                {/* Trust Guarantees */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    transition={{ delay: 0.6 }}
-                    className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-20"
-                >
-                    {guarantees.map((item, i) => (
-                        <div key={i} className="flex flex-col items-center gap-3 p-6 glass-card border border-white/5 bg-white/[0.02] text-center">
-                            <div className="text-cosmic-gold">
-                                {item.icon}
-                            </div>
-                            <span className="text-cosmic-ethereal text-[10px] uppercase font-bold tracking-widest">
-                                {item.label}
-                            </span>
-                        </div>
-                    ))}
-                </motion.div>
-            </div>
+                {/* Asymmetrical Bento Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 h-auto md:h-[600px]">
 
-            {/* Background Decorative Element */}
-            <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-cosmic-gold/5 blur-[120px] rounded-full pointer-events-none" />
+                    {/* Main Step 01 - Large */}
+                    <motion.div
+                        className="md:col-span-7 bg-white/[0.03] border border-white/5 p-12 rounded-[2rem] relative overflow-hidden group hover:border-white/10 transition-colors duration-500 flex flex-col justify-end"
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                    >
+                        <div className="absolute top-8 right-8 text-[120px] font-playfair leading-none text-white/[0.02] group-hover:text-white/[0.05] transition-colors duration-500 select-none">1</div>
+                        <div className="relative z-10">
+                            <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center mb-6 text-2xl">🎯</div>
+                            <h3 className="text-3xl font-playfair italic text-white mb-4">Initialisation</h3>
+                            <p className="text-white/60 text-lg font-light leading-relaxed max-w-md">
+                                Sélectionnez votre niveau de profondeur. De l'initiation superficielle à l'immersion totale, définissez l'intensité de votre révélation.
+                            </p>
+                        </div>
+                    </motion.div>
+
+                    {/* Side Stack */}
+                    <div className="md:col-span-5 flex flex-col gap-6 md:gap-8">
+
+                        {/* Step 02 */}
+                        <motion.div
+                            className="flex-1 bg-white/[0.03] border border-white/5 p-10 rounded-[2rem] relative overflow-hidden group hover:border-white/10 transition-colors duration-500 flex flex-col justify-center"
+                            initial={{ opacity: 0, x: 20 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.2 }}
+                        >
+                            <div className="absolute top-4 right-6 text-[80px] font-playfair leading-none text-white/[0.02] group-hover:text-white/[0.05] transition-colors duration-500 select-none">2</div>
+                            <h3 className="text-2xl font-playfair italic text-white mb-2 flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-sm">📝</span>
+                                Transmission
+                            </h3>
+                            <p className="text-white/50 text-sm font-light">Partagez vos coordonnées astrales. Laissez l'oracle trianguler votre position vibratoire.</p>
+                        </motion.div>
+
+                        {/* Step 03 - Highlight */}
+                        <motion.div
+                            className="flex-1 bg-gradient-to-br from-cosmic-gold/[0.05] to-transparent border border-cosmic-gold/20 p-10 rounded-[2rem] relative overflow-hidden group hover:bg-cosmic-gold/[0.08] transition-colors duration-500 flex flex-col justify-center"
+                            initial={{ opacity: 0, x: 20 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.3 }}
+                        >
+                            <div className="absolute top-4 right-6 text-[80px] font-playfair leading-none text-cosmic-gold/[0.05] group-hover:text-cosmic-gold/[0.1] transition-colors duration-500 select-none">3</div>
+                            <h3 className="text-2xl font-playfair italic text-white mb-2 flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-full border border-cosmic-gold/30 flex items-center justify-center text-sm text-cosmic-gold">✨</span>
+                                Révélation
+                            </h3>
+                            <p className="text-white/70 text-sm font-light">Réception sous 24h. PDF chiffré, Audio binaural 432Hz et Mandala unique.</p>
+                            <ArrowRight className="absolute bottom-10 right-10 text-cosmic-gold opacity-50 w-6 h-6 -rotate-45" />
+                        </motion.div>
+                    </div>
+                </div>
+
+                {/* Minimalist Trust Footer */}
+                <div className="mt-20 border-t border-white/5 pt-10 grid grid-cols-2 md:grid-cols-4 gap-8">
+                    <div className="flex items-center gap-3 text-white/40">
+                        <ShieldCheck className="w-4 h-4" /> <span className="text-[10px] uppercase tracking-widest">Secured 256-bit</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-white/40">
+                        <Zap className="w-4 h-4" /> <span className="text-[10px] uppercase tracking-widest">Instant Delivery</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-white/40">
+                        <HeartHandshake className="w-4 h-4" /> <span className="text-[10px] uppercase tracking-widest">Satisfied or Refunded</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-white/40">
+                        <CheckCircle className="w-4 h-4" /> <span className="text-[10px] uppercase tracking-widest">Verified Alchemist</span>
+                    </div>
+                </div>
+            </div>
         </section>
     )
 }

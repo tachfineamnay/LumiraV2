@@ -1,215 +1,102 @@
 'use client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Quote, Star } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Quote } from 'lucide-react'
 
 const TESTIMONIALS = [
     {
         id: 1,
         name: 'Sophie M.',
-        level: 'Mystique',
+        title: 'Architecte d\'Intérieur',
         avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&h=200&auto=format&fit=crop',
         rating: 5,
-        text: "Une révélation ! L'Oracle Lumira a mis des mots sur ce que je ressentais depuis des années. La lecture était d'une précision troublante et d'une grande poésie.",
-        date: 'Il y a 3 jours',
+        text: "Une expérience d'une rare élégance. L'Oracle a su capter des fréquences de mon passé que je pensais oubliées. La justesse de l'analyse est troublante.",
+        date: 'Initiée le 12 Dec',
     },
     {
         id: 2,
         name: 'Jean-Pierre D.',
-        level: 'Intégral',
+        title: 'Dirigeant Tech',
         avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&h=200&auto=format&fit=crop',
         rating: 5,
-        text: "L'accompagnement avec l'expert Lumira a transformé ma vision de ma carrière. La Synthèse Alpha est un document que je relis chaque semaine.",
-        date: 'Il y a 1 semaine',
+        text: "Au-delà du mysticisme, il y a une mathématique implacable dans ces lectures. Un outil de connaissance de soi d'une puissance redoutable.",
+        date: 'Initié le 08 Dec',
     },
     {
         id: 3,
         name: 'Élodie L.',
-        level: 'Initié',
+        title: 'Artiste Sonore',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&h=200&auto=format&fit=crop',
         rating: 5,
-        text: "Le format audio est magique. Je l'écoute avant de dormir et je me sens beaucoup plus alignée le lendemain. Un investissement pour soi-même.",
-        date: 'Il y a 2 jours',
+        text: "Les fréquences binaurales fournies avec la lecture sont devenues mon rituel quotidien. Une qualité de production sonore digne des plus grands studios.",
+        date: 'Initiée le 15 Dec',
     },
 ]
 
 export function TestimonialsCarousel() {
     const [current, setCurrent] = useState(0)
-    const [direction, setDirection] = useState(0)
 
-    // Auto-play
+    // Auto-play slow
     useEffect(() => {
         const timer = setInterval(() => {
-            setDirection(1)
             setCurrent(prev => (prev + 1) % TESTIMONIALS.length)
-        }, 8000)
+        }, 10000)
         return () => clearInterval(timer)
     }, [])
 
-    const slideVariants = {
-        enter: (direction: number) => ({
-            x: direction > 0 ? 300 : -300,
-            opacity: 0,
-            scale: 0.9,
-        }),
-        center: {
-            zIndex: 1,
-            x: 0,
-            opacity: 1,
-            scale: 1,
-        },
-        exit: (direction: number) => ({
-            zIndex: 0,
-            x: direction < 0 ? 300 : -300,
-            opacity: 0,
-            scale: 0.9,
-        }),
-    }
-
-    const navigate = (newDirection: number) => {
-        setDirection(newDirection)
-        setCurrent(prev => (prev + newDirection + TESTIMONIALS.length) % TESTIMONIALS.length)
-    }
-
     return (
-        <section id="temoignages" className="py-24 relative overflow-hidden">
-            {/* Background Effect */}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cosmic-gold/5 to-transparent pointer-events-none" />
+        <section id="temoignages" className="py-40 relative bg-void overflow-hidden">
+            <div className="max-w-7xl mx-auto px-6 relative z-10">
 
-            <div className="max-w-6xl mx-auto px-6 relative">
+                {/* Editorial Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
 
-                {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    className="text-center mb-16"
-                >
-                    <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">
-                        Ce qu'ils disent de l'Oracle
-                    </span>
-                    <h2 className="font-playfair italic text-4xl md:text-5xl text-cosmic-divine mt-4">
-                        Témoignages Stellaires
-                    </h2>
+                    {/* Left: Text & Nav */}
+                    <div className="relative">
+                        <span className="text-white/20 text-[10px] uppercase tracking-[0.3em] font-bold block mb-12">Résonances</span>
 
-                    {/* Rating Summary */}
-                    <div className="flex items-center justify-center gap-3 mt-8">
-                        <div className="flex gap-1">
-                            {[1, 2, 3, 4, 5].map(i => (
-                                <Star key={i} className="w-5 h-5 text-cosmic-gold fill-cosmic-gold shadow-stellar" />
-                            ))}
-                        </div>
-                        <div className="h-6 w-px bg-white/20" />
-                        <div className="text-left">
-                            <p className="text-cosmic-divine font-bold leading-none">4.9 / 5</p>
-                            <p className="text-cosmic-ethereal text-[10px] uppercase font-bold tracking-widest opacity-60">
-                                Sur la base de 500+ consultations
-                            </p>
-                        </div>
-                    </div>
-                </motion.div>
-
-                {/* Carousel Container */}
-                <div className="relative min-h-[400px] flex items-center justify-center">
-
-                    {/* Main Card */}
-                    <div className="relative w-full max-w-3xl h-full">
-                        <AnimatePresence mode="wait" custom={direction}>
+                        <AnimatePresence mode="wait">
                             <motion.div
                                 key={current}
-                                custom={direction}
-                                variants={slideVariants}
-                                initial="enter"
-                                animate="center"
-                                exit="exit"
-                                transition={{
-                                    x: { type: "spring", stiffness: 300, damping: 30 },
-                                    opacity: { duration: 0.4 },
-                                    scale: { duration: 0.4 }
-                                }}
-                                className="glass-card p-10 md:p-16 relative overflow-hidden backdrop-blur-2xl border border-white/10"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.8 }}
                             >
-                                {/* Background Decoration */}
-                                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                                    <Quote className="w-32 h-32 text-cosmic-gold" />
-                                </div>
-
-                                {/* Rating */}
-                                <div className="flex gap-1 mb-8">
-                                    {[...Array(TESTIMONIALS[current].rating)].map((_, i) => (
-                                        <Star key={i} className="w-4 h-4 text-cosmic-gold fill-cosmic-gold" />
-                                    ))}
-                                </div>
-
-                                {/* Text */}
-                                <blockquote className="text-cosmic-divine text-xl md:text-2xl font-light leading-relaxed mb-12 italic font-playfair">
+                                <Quote className="w-12 h-12 text-cosmic-gold opacity-30 mb-8" />
+                                <p className="font-playfair italic text-3xl md:text-5xl text-white leading-tight mb-12">
                                     "{TESTIMONIALS[current].text}"
-                                </blockquote>
+                                </p>
 
-                                {/* Author Info */}
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 rounded-full border-2 border-cosmic-gold/30 p-1 flex-shrink-0">
-                                            <img
-                                                src={TESTIMONIALS[current].avatar}
-                                                alt={TESTIMONIALS[current].name}
-                                                className="w-full h-full rounded-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
-                                            />
-                                        </div>
-                                        <div>
-                                            <p className="text-cosmic-divine font-bold text-lg">
-                                                {TESTIMONIALS[current].name}
-                                            </p>
-                                            <p className="text-cosmic-gold text-xs font-bold uppercase tracking-widest">
-                                                Niveau {TESTIMONIALS[current].level}
-                                            </p>
-                                        </div>
+                                <div className="flex items-center gap-6">
+                                    <div className="w-12 h-12 rounded-full overflow-hidden grayscale hover:grayscale-0 transition-all duration-700">
+                                        <img src={TESTIMONIALS[current].avatar} className="w-full h-full object-cover" alt="" />
                                     </div>
-                                    <div className="text-right hidden sm:block">
-                                        <p className="text-cosmic-stardust text-[10px] font-bold uppercase tracking-widest opacity-50">
-                                            Vérifié
-                                        </p>
-                                        <p className="text-cosmic-ethereal/40 text-xs">
-                                            {TESTIMONIALS[current].date}
-                                        </p>
+                                    <div>
+                                        <div className="text-white font-playfair text-xl">{TESTIMONIALS[current].name}</div>
+                                        <div className="text-white/40 text-xs uppercase tracking-widest mt-1">{TESTIMONIALS[current].title}</div>
                                     </div>
                                 </div>
                             </motion.div>
                         </AnimatePresence>
+
+                        {/* Minimal Nav Dots */}
+                        <div className="flex gap-4 mt-20">
+                            {TESTIMONIALS.map((_, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setCurrent(i)}
+                                    className={`h-[2px] transition-all duration-500 ${current === i ? 'w-16 bg-white' : 'w-8 bg-white/10 hover:bg-white/30'}`}
+                                />
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Navigation Arrows */}
-                    <div className="absolute inset-0 flex items-center justify-between pointer-events-none z-20">
-                        <button
-                            onClick={() => navigate(-1)}
-                            className="pointer-events-auto p-4 rounded-full bg-white/5 border border-white/10 hover:bg-cosmic-gold/20 hover:border-cosmic-gold/50 transition-all group scale-75 md:scale-100 -translate-x-2 md:-translate-x-12"
-                        >
-                            <ChevronLeft className="w-6 h-6 text-cosmic-gold group-hover:-translate-x-0.5 transition-transform" />
-                        </button>
-                        <button
-                            onClick={() => navigate(1)}
-                            className="pointer-events-auto p-4 rounded-full bg-white/5 border border-white/10 hover:bg-cosmic-gold/20 hover:border-cosmic-gold/50 transition-all group scale-75 md:scale-100 translate-x-2 md:translate-x-12"
-                        >
-                            <ChevronRight className="w-6 h-6 text-cosmic-gold group-hover:translate-x-0.5 transition-transform" />
-                        </button>
+                    {/* Right: Visual Abstract - Optional Decorative Element */}
+                    <div className="hidden lg:block relative h-full min-h-[500px]">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-cosmic-gold/10 to-transparent rounded-full blur-[100px] opacity-20 animate-pulse delay-700"></div>
+                        {/* This could be a 3D spline or another Mandala in the future */}
                     </div>
-                </div>
-
-                {/* Indicators */}
-                <div className="flex justify-center gap-3 mt-12">
-                    {TESTIMONIALS.map((_, i) => (
-                        <button
-                            key={i}
-                            onClick={() => {
-                                setDirection(i > current ? 1 : -1)
-                                setCurrent(i)
-                            }}
-                            className={`h-1 rounded-full transition-all duration-500 ${i === current
-                                    ? 'w-12 bg-cosmic-gold'
-                                    : 'w-4 bg-white/10 hover:bg-white/30'
-                                }`}
-                        />
-                    ))}
                 </div>
             </div>
         </section>
