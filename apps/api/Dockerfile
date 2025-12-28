@@ -39,7 +39,7 @@ ENV HUSKY=0
 RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+RUN pnpm install --prod --no-frozen-lockfile --ignore-scripts
 
 # RÉCUPÉRATION DES ARTIFACTS (CRUCIAL)
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
