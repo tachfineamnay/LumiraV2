@@ -9,8 +9,18 @@ async function bootstrap() {
 
   const port = Number(configService.get<string>("PORT") ?? 3001);
   const webOrigin = configService.get<string>("WEB_URL") ?? "http://localhost:3000";
+  const allowedOrigins = [
+    webOrigin,
+    "https://oraclelumira.com",
+    "https://desk.oraclelumira.com",
+    "http://localhost:3000",
+    "http://desk.localhost:3000"
+  ];
 
-  app.enableCors({ origin: webOrigin });
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+  });
   app.setGlobalPrefix("api");
 
   await app.listen(port);

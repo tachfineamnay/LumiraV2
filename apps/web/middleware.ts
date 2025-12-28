@@ -11,6 +11,11 @@ export function middleware(request: NextRequest) {
     // If accessing desk.oraclelumira.com, rewrite to /admin routes
     if (hostname.includes('desk.oraclelumira.com') || hostname.includes('desk.localhost')) {
 
+        // BLOCK SANCTUAIRE ACCESS FROM DESK
+        if (pathname.startsWith('/sanctuaire')) {
+            return NextResponse.rewrite(new URL('/404', request.url))
+        }
+
         // Already on /admin path - let it through
         if (pathname.startsWith('/admin')) {
             return NextResponse.next()
@@ -22,6 +27,7 @@ export function middleware(request: NextRequest) {
         }
 
         // Rewrite root and other paths to /admin equivalent
+        // e.g. desk.com/orders -> desk.com/admin/orders
         const newUrl = new URL(`/admin${pathname === '/' ? '' : pathname}`, request.url)
         return NextResponse.rewrite(newUrl)
     }
