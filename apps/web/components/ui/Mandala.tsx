@@ -74,6 +74,57 @@ export const Mandala = () => {
                     ))}
                 </svg>
             </motion.div>
+
+            {/* Vitruvian Man Core (Static Center) */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 2, delay: 0.5 }}
+                className="absolute w-[400px] h-[400px] flex items-center justify-center opacity-40 pointer-events-none mix-blend-screen"
+            >
+                <svg
+                    viewBox="0 0 100 100"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-full h-full stroke-gold drop-shadow-[0_0_15px_rgba(255,215,0,0.3)]"
+                >
+                    {/* Circle Container */}
+                    <circle cx="50" cy="50" r="45" strokeWidth="0.3" className="opacity-50" />
+
+                    {/* Square Container */}
+                    <rect x="15" y="15" width="70" height="70" strokeWidth="0.3" className="opacity-50" />
+
+                    {/* The Man - Abstract Geometric Lines */}
+
+                    {/* Head */}
+                    <circle cx="50" cy="28" r="6" strokeWidth="0.6" />
+
+                    {/* Torso Line */}
+                    <path d="M50 34 L50 70" strokeWidth="0.6" />
+
+                    {/* Arms - Horizontal */}
+                    <path d="M22 45 L78 45" strokeWidth="0.5" />
+
+                    {/* Arms - Angled (Vitruvian variants) */}
+                    <path d="M24 38 L76 38" strokeWidth="0.3" opacity="0.7" />
+                    <path d="M50 38 L24 25" strokeWidth="0.3" opacity="0.0" /> {/* Hidden guide, just visualizing */}
+
+                    {/* Legs - Standing */}
+                    <path d="M50 70 L40 92" strokeWidth="0.5" />
+                    <path d="M50 70 L60 92" strokeWidth="0.5" />
+
+                    {/* Legs - Spread (Vitruvian variants) */}
+                    <path d="M50 70 L30 85" strokeWidth="0.3" opacity="0.7" />
+                    <path d="M50 70 L70 85" strokeWidth="0.3" opacity="0.7" />
+
+                    {/* Connecting Energy Lines (Chakras hint) */}
+                    <circle cx="50" cy="45" r="1" fill="#FFD700" className="animate-pulse" /> {/* Heart */}
+                    <circle cx="50" cy="38" r="0.5" fill="#FFFFFF" /> {/* Throat */}
+                    <circle cx="50" cy="28" r="0.5" fill="#FFFFFF" /> {/* Third Eye */}
+                    <circle cx="50" cy="55" r="0.5" fill="#FFFFFF" /> {/* Solar Plexus */}
+
+                </svg>
+            </motion.div>
         </div>
     );
 };
