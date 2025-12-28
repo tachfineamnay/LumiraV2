@@ -3,12 +3,69 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// ========================================
+// CONFIGURATION
+// ========================================
+const SALT_ROUNDS = 12;
+const ADMIN_PASSWORD = 'AdminLumira2025!';
+const CLIENT_PASSWORD = 'ClientLumira2025!';
+
 async function main() {
-    console.log('🌱 Seeding database...');
+    console.log('');
+    console.log('🌟 ══════════════════════════════════════════════════════════');
+    console.log('   ORACLE LUMIRA V2 - DATABASE SEEDING');
+    console.log('   ══════════════════════════════════════════════════════════');
+    console.log('');
 
     // ========================================
-    // 1. PRODUITS
+    // 1. EXPERTS (Admin & Expert)
     // ========================================
+    console.log('👤 Creating experts...');
+
+    const adminPasswordHash = await bcrypt.hash(ADMIN_PASSWORD, SALT_ROUNDS);
+
+    // Admin expert
+    const admin = await prisma.expert.upsert({
+        where: { email: 'admin@oraclelumira.com' },
+        update: {
+            password: adminPasswordHash,
+            name: 'Master Lumira',
+            role: ExpertRole.ADMIN,
+            isActive: true,
+        },
+        create: {
+            email: 'admin@oraclelumira.com',
+            password: adminPasswordHash,
+            name: 'Master Lumira',
+            role: ExpertRole.ADMIN,
+            isActive: true,
+        },
+    });
+    console.log(`   ✅ Admin: ${admin.email} (Master Lumira)`);
+
+    // Expert user
+    const expert = await prisma.expert.upsert({
+        where: { email: 'expert@oraclelumira.com' },
+        update: {
+            password: adminPasswordHash,
+            name: 'Amine Expert',
+            role: ExpertRole.EXPERT,
+            isActive: true,
+        },
+        create: {
+            email: 'expert@oraclelumira.com',
+            password: adminPasswordHash,
+            name: 'Amine Expert',
+            role: ExpertRole.EXPERT,
+            isActive: true,
+        },
+    });
+    console.log(`   ✅ Expert: ${expert.email} (Amine Expert)`);
+
+    // ========================================
+    // 2. PRODUCTS
+    // ========================================
+    console.log('');
     console.log('📦 Creating products...');
 
     const products = [
@@ -16,12 +73,12 @@ async function main() {
             id: 'initie',
             level: ProductLevel.INITIE,
             name: 'Initié',
-            description: 'Découverte de votre chemin spirituel',
-            amountCents: 0,
+            description: 'Analyse de base de votre thème astral.',
+            amountCents: 4900, // 49€
             features: [
-                'Tirage 1 carte oracle',
+                'Thème astral de base',
                 'Interprétation personnalisée',
-                'PDF 2 pages'
+                'PDF 4 pages',
             ],
             isActive: true,
         },
@@ -29,13 +86,13 @@ async function main() {
             id: 'mystique',
             level: ProductLevel.MYSTIQUE,
             name: 'Mystique',
-            description: "Exploration de votre profil d'âme",
-            amountCents: 4700, // centimes (47€)
+            description: 'Plongée profonde dans vos alignements stellaires.',
+            amountCents: 9900, // 99€
             features: [
-                "Profil de l'âme complet",
-                'Dons et talents naturels',
-                'Audio 5 minutes',
-                'PDF 4 pages détaillé'
+                'Analyse des alignements stellaires',
+                'Profil de l\'âme complet',
+                'Audio 10 minutes',
+                'PDF 8 pages détaillé',
             ],
             isActive: true,
         },
@@ -43,13 +100,13 @@ async function main() {
             id: 'profond',
             level: ProductLevel.PROFOND,
             name: 'Profond',
-            description: 'Transformation et libération des blocages',
-            amountCents: 6700, // centimes (67€)
+            description: 'Rapport complet incluant les transits planétaires annuels.',
+            amountCents: 14900, // 149€
             features: [
+                'Transits planétaires annuels',
                 'Analyse des blocages énergétiques',
-                'Rituel de transformation personnalisé',
-                'Méditation guidée audio 12 minutes',
-                'PDF 6-8 pages avec rituel'
+                'Méditation guidée audio 20 minutes',
+                'PDF 12 pages avec prévisions',
             ],
             isActive: true,
         },
@@ -57,14 +114,15 @@ async function main() {
             id: 'integrale',
             level: ProductLevel.INTEGRALE,
             name: 'Intégrale',
-            description: 'Cartographie complète de votre chemin de vie',
-            amountCents: 9700, // centimes (97€)
+            description: 'L\'expérience Lumira totale : Destinée, Karma et Guidance.',
+            amountCents: 19900, // 199€
             features: [
                 'Cartographie complète du chemin de vie',
+                'Analyse karmique approfondie',
+                'Guidance personnalisée',
                 'Mandala personnel HD',
-                'Analyse des cycles et transitions',
-                'Audio complet 25 minutes',
-                'PDF 15 pages + Mandala à imprimer'
+                'Audio complet 30 minutes',
+                'PDF 20 pages + Mandala à imprimer',
             ],
             isActive: true,
         },
@@ -76,53 +134,102 @@ async function main() {
             update: product,
             create: product,
         });
-        console.log(`  ✅ Product ${product.name} created/updated`);
+        console.log(`   ✅ ${product.name} - ${product.amountCents / 100}€`);
     }
 
     // ========================================
-    // 2. EXPERT ADMIN
+    // 3. TEST CLIENT (User & UserProfile)
     // ========================================
-    console.log('👤 Creating expert admin...');
+    console.log('');
+    console.log('🧪 Creating test client...');
 
-    const hashedPassword = await bcrypt.hash('mdp123', 12);
+    const clientPasswordHash = await bcrypt.hash(CLIENT_PASSWORD, SALT_ROUNDS);
 
-    await prisma.expert.upsert({
-        where: { email: 'expert@oraclelumira.com' },
+    // Create or update test user
+    const testUser = await prisma.user.upsert({
+        where: { email: 'client@test.com' },
         update: {
-            password: hashedPassword,
-            name: 'Oracle Expert',
-            role: ExpertRole.ADMIN,
-            isActive: true,
+            firstName: 'Test',
+            lastName: 'Client',
+            phone: '+33612345678',
+            dateOfBirth: new Date('1990-05-15'),
         },
         create: {
-            email: 'expert@oraclelumira.com',
-            password: hashedPassword,
-            name: 'Oracle Expert',
-            role: ExpertRole.ADMIN,
-            isActive: true,
+            email: 'client@test.com',
+            firstName: 'Test',
+            lastName: 'Client',
+            phone: '+33612345678',
+            dateOfBirth: new Date('1990-05-15'),
         },
     });
-    console.log('  ✅ Expert admin created/updated');
+    console.log(`   ✅ User: ${testUser.email} (${testUser.firstName} ${testUser.lastName})`);
+
+    // Create or update user profile
+    await prisma.userProfile.upsert({
+        where: { userId: testUser.id },
+        update: {
+            birthDate: '1990-05-15',
+            birthTime: '14:30',
+            birthPlace: 'Paris',
+            profileCompleted: true,
+            submittedAt: new Date(),
+        },
+        create: {
+            userId: testUser.id,
+            birthDate: '1990-05-15',
+            birthTime: '14:30',
+            birthPlace: 'Paris',
+            profileCompleted: true,
+            submittedAt: new Date(),
+        },
+    });
+    console.log(`   ✅ UserProfile: Paris, 1990-05-15 à 14:30`);
 
     // ========================================
-    // 3. RÉSUMÉ
+    // 4. SUMMARY
     // ========================================
     const productCount = await prisma.product.count();
     const expertCount = await prisma.expert.count();
+    const userCount = await prisma.user.count();
+    const profileCount = await prisma.userProfile.count();
 
     console.log('');
-    console.log('🎉 Seed completed!');
-    console.log(`   📦 Products: ${productCount}`);
-    console.log(`   👤 Experts: ${expertCount}`);
+    console.log('🎉 ══════════════════════════════════════════════════════════');
+    console.log('   SEED COMPLETED SUCCESSFULLY!');
+    console.log('   ══════════════════════════════════════════════════════════');
     console.log('');
-    console.log('🔐 Expert login:');
-    console.log('   Email: expert@oraclelumira.com');
-    console.log('   Password: mdp123');
+    console.log('   📊 Database Statistics:');
+    console.log(`      📦 Products:     ${productCount}`);
+    console.log(`      👤 Experts:      ${expertCount}`);
+    console.log(`      🧑 Users:        ${userCount}`);
+    console.log(`      📋 Profiles:     ${profileCount}`);
+    console.log('');
+    console.log('   🔐 Login Credentials:');
+    console.log('');
+    console.log('      ADMIN:');
+    console.log('      └─ Email:    admin@oraclelumira.com');
+    console.log('      └─ Password: AdminLumira2025!');
+    console.log('');
+    console.log('      EXPERT:');
+    console.log('      └─ Email:    expert@oraclelumira.com');
+    console.log('      └─ Password: AdminLumira2025!');
+    console.log('');
+    console.log('      TEST CLIENT:');
+    console.log('      └─ Email:    client@test.com');
+    console.log('      └─ Password: ClientLumira2025!');
+    console.log('');
+    console.log('══════════════════════════════════════════════════════════════');
+    console.log('');
 }
 
 main()
     .catch((e) => {
-        console.error('❌ Seed error:', e);
+        console.error('');
+        console.error('❌ ══════════════════════════════════════════════════════════');
+        console.error('   SEED ERROR');
+        console.error('   ══════════════════════════════════════════════════════════');
+        console.error('');
+        console.error(e);
         process.exit(1);
     })
     .finally(async () => {
