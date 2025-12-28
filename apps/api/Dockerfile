@@ -43,6 +43,9 @@ RUN pnpm install --prod --no-frozen-lockfile --ignore-scripts
 
 # RÉCUPÉRATION DES ARTIFACTS (CRUCIAL)
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
+# Copie du package @packages/database buildé
+COPY --from=builder /app/packages/database/dist ./packages/database/dist
+COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
 # Copie du client Prisma généré
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
