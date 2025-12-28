@@ -17,7 +17,7 @@ COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 # Désactiver Husky pour le build
 ENV HUSKY=0 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copie du code source complet
 COPY --from=pruner /app/out/full/ .
