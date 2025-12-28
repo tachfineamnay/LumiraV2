@@ -192,5 +192,3 @@ export default function AdminDashboard() {
         </div>
     );
 }
-
-import { ChevronRight } from "lucide-react";
