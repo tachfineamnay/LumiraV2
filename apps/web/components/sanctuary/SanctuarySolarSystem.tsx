@@ -10,7 +10,7 @@ const PLANETS = [
     { key: "profile", label: "Profil", icon: User, color: "gold", route: "/sanctuaire/profile", orbitRadius: 110, size: 40, speed: 20, startAngle: 0 },
 
     // Middle Orbit
-    { key: "path", label: "Chemin", icon: Star, color: "amber", route: "/sanctuaire/path", orbitRadius: 180, size: 56, speed: 35, startAngle: 120 },
+    { key: "path", label: "Chemin", icon: Star, color: "amber", route: "/sanctuaire/rituals", orbitRadius: 180, size: 56, speed: 35, startAngle: 120 },
     { key: "draws", label: "Tirages", icon: Book, color: "emerald", route: "/sanctuaire/draws", orbitRadius: 180, size: 48, speed: 35, startAngle: 300 },
 
     // Outer Orbit

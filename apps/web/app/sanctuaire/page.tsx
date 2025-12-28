@@ -27,7 +27,7 @@ export default function SanctuaireDashboard() {
         { title: "Rituels & Pratiques", description: "Exercices pour l'âme", icon: Map, route: "/sanctuaire/rituals", requiredLevel: 2 },
         { title: "Mandala Sacré", description: "Votre essence visualisée", icon: Crown, route: "/sanctuaire/mandala", requiredLevel: 3 },
         { title: "Synthèse Profonde", description: "Analyse complète de votre chemin", icon: FileText, route: "/sanctuaire/synthesis", requiredLevel: 3 },
-        { title: "Guidance Avancée", description: "Mentorat spirituel direct", icon: Star, route: "/sanctuaire/guidance", requiredLevel: 4 },
+        { title: "Guidance Oracle", description: "Mentorat spirituel direct", icon: Star, route: "/sanctuaire/chat", requiredLevel: 4 },
     ];
 
     return (
