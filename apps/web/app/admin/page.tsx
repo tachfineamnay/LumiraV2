@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
     TrendingUp,
     Users,
@@ -8,20 +9,24 @@ import {
     Clock,
     AlertCircle,
     ArrowRight,
-    ShieldCheck
+    ShieldCheck,
+    ChevronRight,
+    Loader2
 } from "lucide-react";
 import { StatsCards } from "../../components/admin/StatsCards";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { motion } from "framer-motion";
 
 export default function AdminDashboard() {
+    const router = useRouter();
+    const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
-        pendingOrders: 12,
-        processingOrders: 5,
-        awaitingValidation: 8,
-        completedOrders: 145,
-        totalRevenue: 1245000,
-        todayOrders: 3,
+        pendingOrders: 0,
+        processingOrders: 0,
+        awaitingValidation: 0,
+        completedOrders: 0,
+        totalRevenue: 0,
+        todayOrders: 0,
     });
 
     const [recentActivity, setRecentActivity] = useState([
@@ -30,6 +35,41 @@ export default function AdminDashboard() {
         { id: 3, type: "completion", text: "Lecture livrée à Thomas M.", time: "il y a 1h", status: "success" },
         { id: 4, type: "system", text: "Maintenance système effectuée", time: "il y a 4h", status: "info" },
     ]);
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+    const fetchStats = useCallback(async () => {
+        const token = localStorage.getItem('expert_token');
+        if (!token) {
+            router.push('/admin/login');
+            return;
+        }
+
+        try {
+            const res = await fetch(`${apiUrl}/api/expert/stats`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (res.status === 401) {
+                localStorage.removeItem('expert_token');
+                router.push('/admin/login');
+                return;
+            }
+
+            if (res.ok) {
+                const data = await res.json();
+                setStats(data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch stats:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [apiUrl, router]);
+
+    useEffect(() => {
+        fetchStats();
+    }, [fetchStats]);
 
     return (
         <div className="space-y-10">
@@ -74,8 +114,8 @@ export default function AdminDashboard() {
                                 <GlassCard className="!p-4 border-white/5 hover:border-amber-400/20 transition-all flex items-center justify-between group">
                                     <div className="flex items-center gap-4">
                                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activity.status === 'pending' ? 'bg-amber-400/10 text-amber-400' :
-                                                activity.status === 'warning' ? 'bg-rose-400/10 text-rose-400' :
-                                                    'bg-emerald-400/10 text-emerald-400'
+                                            activity.status === 'warning' ? 'bg-rose-400/10 text-rose-400' :
+                                                'bg-emerald-400/10 text-emerald-400'
                                             }`}>
                                             {activity.type === 'order' ? <ShoppingBag className="w-5 h-5" /> :
                                                 activity.type === 'validation' ? <AlertCircle className="w-5 h-5" /> :

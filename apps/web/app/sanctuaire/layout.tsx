@@ -4,17 +4,23 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
+import { SanctuaireProvider, useSanctuaire } from "../../context/SanctuaireContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, User as UserIcon, LogOut, ChevronDown, Bell } from "lucide-react";
+import { Home, User as UserIcon, LogOut, ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { LevelBadge } from "../../components/ui/LevelBadge";
 
-export default function SanctuaireLayout({
+function SanctuaireLayoutContent({
     children,
 }: {
     children: React.ReactNode;
 }) {
     const { user, logout } = useAuth();
+    const { levelMetadata, isLoading: entitlementsLoading } = useSanctuaire();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+    // Determine display level (default to 1 if no orders)
+    const displayLevel = (levelMetadata?.level || 1) as 1 | 2 | 3 | 4;
 
     return (
         <div className="min-h-screen bg-cosmic-void text-cosmic-divine selection:bg-cosmic-gold/20 flex flex-col starfield">
@@ -28,9 +34,15 @@ export default function SanctuaireLayout({
                 </div>
 
                 <div className="flex items-center gap-4 pointer-events-auto">
-                    {/* Level Badge */}
-                    <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-mystic/40 to-mystic/10 border border-mystic/30 backdrop-blur-md">
-                        <span className="text-xs font-bold text-white tracking-widest uppercase">✨ Initié</span>
+                    {/* Dynamic Level Badge */}
+                    <div className="hidden sm:block">
+                        {entitlementsLoading ? (
+                            <div className="px-4 py-2 rounded-full bg-white/5 animate-pulse">
+                                <span className="text-xs text-white/30">Chargement...</span>
+                            </div>
+                        ) : (
+                            <LevelBadge level={displayLevel} />
+                        )}
                     </div>
 
                     <div className="relative">
@@ -56,13 +68,16 @@ export default function SanctuaireLayout({
                                     <div className="p-3 border-b border-white/5 mb-2">
                                         <p className="text-xs text-ethereal/50 uppercase tracking-widest">Identité</p>
                                         <p className="text-sm font-medium pt-1">{user?.email}</p>
-                                        <p className="text-[10px] text-gold/60 mt-1 italic">Statut du profil : Complet</p>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <span className="text-[10px] text-gold/60 italic">Niveau:</span>
+                                            {!entitlementsLoading && <LevelBadge level={displayLevel} showName={true} className="scale-75 origin-left" />}
+                                        </div>
                                     </div>
                                     <nav className="flex flex-col gap-1">
-                                        <button className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-white/5 transition-colors text-left">
+                                        <Link href="/sanctuaire/profile" className="flex items-center gap-3 w-full px-3 py-2 rounded-xl hover:bg-white/5 transition-colors text-left">
                                             <UserIcon className="w-4 h-4 text-gold" />
                                             <span className="text-sm">Mon Profil</span>
-                                        </button>
+                                        </Link>
                                         <button className="flex items-center gap-3 w-full px-3 py-2 rounded-xl transition-colors text-left text-rose-400 hover:bg-rose-400/10" onClick={logout}>
                                             <LogOut className="w-4 h-4" />
                                             <span className="text-sm">Déconnexion</span>
@@ -107,5 +122,19 @@ export default function SanctuaireLayout({
                 </div>
             </motion.div>
         </div>
+    );
+}
+
+export default function SanctuaireLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    return (
+        <SanctuaireProvider>
+            <SanctuaireLayoutContent>
+                {children}
+            </SanctuaireLayoutContent>
+        </SanctuaireProvider>
     );
 }

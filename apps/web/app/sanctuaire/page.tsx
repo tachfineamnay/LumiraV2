@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { SanctuarySolarSystem } from "../../components/sanctuary/SanctuarySolarSystem";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { LockedCard } from "../../components/ui/LockedCard";
 import { LevelBadge } from "../../components/ui/LevelBadge";
+import { useSanctuaire } from "../../context/SanctuaireContext";
 import {
     Star,
     User,
@@ -14,21 +16,109 @@ import {
     Crown,
     FileText,
     ChevronRight,
-    Map
+    Map,
+    Loader2
 } from "lucide-react";
 
-export default function SanctuaireDashboard() {
-    // Simulated user level (1 = Initié, 2 = Mystique, etc.)
-    const userLevel = 1;
+// =============================================================================
+// DASHBOARD CARDS CONFIG
+// =============================================================================
 
-    const dashboardCards = [
-        { title: "Mon Profil", description: "Votre identité spirituelle", icon: User, route: "/sanctuaire/profile", requiredLevel: 1 },
-        { title: "Mes Lectures", description: "Historique de vos révélations", icon: Eye, route: "/sanctuaire/draws", requiredLevel: 1 },
-        { title: "Rituels & Pratiques", description: "Exercices pour l'âme", icon: Map, route: "/sanctuaire/rituals", requiredLevel: 2 },
-        { title: "Mandala Sacré", description: "Votre essence visualisée", icon: Crown, route: "/sanctuaire/mandala", requiredLevel: 3 },
-        { title: "Synthèse Profonde", description: "Analyse complète de votre chemin", icon: FileText, route: "/sanctuaire/synthesis", requiredLevel: 3 },
-        { title: "Guidance Oracle", description: "Mentorat spirituel direct", icon: Star, route: "/sanctuaire/chat", requiredLevel: 4 },
-    ];
+interface DashboardCard {
+    title: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+    route: string;
+    requiredLevel: number;
+    requiredCapability: string;
+}
+
+const dashboardCards: DashboardCard[] = [
+    {
+        title: "Mon Profil",
+        description: "Votre identité spirituelle",
+        icon: User,
+        route: "/sanctuaire/profile",
+        requiredLevel: 1,
+        requiredCapability: "sanctuaire.sphere.profile"
+    },
+    {
+        title: "Mes Lectures",
+        description: "Historique de vos révélations",
+        icon: Eye,
+        route: "/sanctuaire/draws",
+        requiredLevel: 1,
+        requiredCapability: "sanctuaire.sphere.readings"
+    },
+    {
+        title: "Rituels & Pratiques",
+        description: "Exercices pour l'âme",
+        icon: Map,
+        route: "/sanctuaire/rituals",
+        requiredLevel: 2,
+        requiredCapability: "sanctuaire.sphere.rituals"
+    },
+    {
+        title: "Mandala Sacré",
+        description: "Votre essence visualisée",
+        icon: Crown,
+        route: "/sanctuaire/mandala",
+        requiredLevel: 2,
+        requiredCapability: "sanctuaire.sphere.mandala"
+    },
+    {
+        title: "Synthèse Profonde",
+        description: "Analyse complète de votre chemin",
+        icon: FileText,
+        route: "/sanctuaire/synthesis",
+        requiredLevel: 3,
+        requiredCapability: "sanctuaire.sphere.synthesis"
+    },
+    {
+        title: "Guidance Oracle",
+        description: "Mentorat spirituel direct",
+        icon: Star,
+        route: "/sanctuaire/chat",
+        requiredLevel: 4,
+        requiredCapability: "sanctuaire.sphere.guidance"
+    },
+];
+
+// =============================================================================
+// LEVEL TO PRODUCT MAPPING
+// =============================================================================
+
+const getLevelInfo = (level: number): { name: "Initié" | "Mystique" | "Profond" | "Intégral"; productId: "initie" | "mystique" | "profond" | "integrale" } => {
+    switch (level) {
+        case 2: return { name: "Mystique", productId: "mystique" };
+        case 3: return { name: "Profond", productId: "profond" };
+        case 4: return { name: "Intégral", productId: "integrale" };
+        default: return { name: "Initié", productId: "initie" };
+    }
+};
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
+
+export default function SanctuaireDashboard() {
+    const { highestLevel, hasCapability, isLoading, levelMetadata } = useSanctuaire();
+
+    // Display level (show 1 as minimum for UI consistency)
+    const displayLevel = Math.max(1, highestLevel) as 1 | 2 | 3 | 4;
+
+    if (isLoading) {
+        return (
+            <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-12 h-12 text-cosmic-gold animate-spin" />
+                    <p className="text-cosmic-ethereal/60 text-sm tracking-widest uppercase">
+                        Chargement de votre sanctuaire...
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto px-6 py-12 flex flex-col items-center min-h-screen">
@@ -36,7 +126,7 @@ export default function SanctuaireDashboard() {
             {/* 🏛️ WELCOME MESSAGE */}
             <div className="text-center mb-0 relative z-10">
                 <div className="flex justify-center mb-6">
-                    <LevelBadge level={userLevel as 1 | 2 | 3 | 4} />
+                    <LevelBadge level={displayLevel} />
                 </div>
                 <motion.h1
                     initial={{ opacity: 0, y: -20 }}
@@ -87,9 +177,11 @@ export default function SanctuaireDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                     {dashboardCards.map((card, i) => {
                         const Icon = card.icon;
-                        const isLocked = userLevel < card.requiredLevel;
+                        const hasAccess = hasCapability(card.requiredCapability);
+                        const levelInfo = getLevelInfo(card.requiredLevel);
+                        const isIntegral = card.requiredLevel === 4;
 
-                        if (isLocked) {
+                        if (!hasAccess) {
                             return (
                                 <motion.div
                                     key={card.title}
@@ -98,10 +190,14 @@ export default function SanctuaireDashboard() {
                                     transition={{ delay: i * 0.1 }}
                                 >
                                     <LockedCard
-                                        level={card.requiredLevel === 2 ? "Mystique" : card.requiredLevel === 3 ? "Profond" : "Intégral"}
+                                        level={levelInfo.name}
                                         title={card.title}
-                                        message={`Accédez à ${card.title.toLowerCase()} et aux rituels avancés.`}
-                                        onUnlock={() => console.log("Upgrade modal")}
+                                        message={`Accédez à ${card.title.toLowerCase()} et aux fonctionnalités avancées.`}
+                                        action={{
+                                            label: isIntegral ? "Bientôt disponible" : `Débloquer niveau ${levelInfo.name}`,
+                                            productId: levelInfo.productId,
+                                            comingSoon: isIntegral,
+                                        }}
                                     />
                                 </motion.div>
                             );
@@ -114,35 +210,37 @@ export default function SanctuaireDashboard() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.1 }}
                             >
-                                <GlassCard className="h-full min-h-[220px] flex flex-col justify-between group hover:bg-white/5 transition-all duration-500 border-white/5 hover:border-cosmic-gold/30">
-                                    <div>
-                                        <div className="flex justify-between items-start mb-6">
-                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cosmic-gold/10 to-amber-900/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 border border-cosmic-gold/20">
-                                                <Icon className="w-7 h-7 text-cosmic-gold" />
+                                <Link href={card.route}>
+                                    <GlassCard className="h-full min-h-[220px] flex flex-col justify-between group hover:bg-white/5 transition-all duration-500 border-white/5 hover:border-cosmic-gold/30 cursor-pointer">
+                                        <div>
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cosmic-gold/10 to-amber-900/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 border border-cosmic-gold/20">
+                                                    <Icon className="w-7 h-7 text-cosmic-gold" />
+                                                </div>
+                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                                    <Star className="w-4 h-4 text-cosmic-gold animate-pulse" />
+                                                </div>
                                             </div>
-                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                                <Star className="w-4 h-4 text-cosmic-gold animate-pulse" />
-                                            </div>
+
+                                            <h3 className="text-xl font-playfair italic text-cosmic-divine mb-2 group-hover:text-amber-200 transition-colors">
+                                                {card.title}
+                                            </h3>
+                                            <p className="text-cosmic-ethereal/60 text-sm leading-relaxed">
+                                                {card.description}
+                                            </p>
                                         </div>
 
-                                        <h3 className="text-xl font-playfair italic text-cosmic-divine mb-2 group-hover:text-amber-200 transition-colors">
-                                            {card.title}
-                                        </h3>
-                                        <p className="text-cosmic-ethereal/60 text-sm leading-relaxed">
-                                            {card.description}
-                                        </p>
-                                    </div>
-
-                                    <div className="mt-6 pt-6 border-t border-white/5 flex justify-between items-center">
-                                        <span className="text-[10px] font-bold uppercase tracking-widest text-cosmic-ethereal/40 group-hover:text-cosmic-gold/60 transition-colors">
-                                            Disponible
-                                        </span>
-                                        <button className="flex items-center gap-2 text-cosmic-gold text-xs font-bold uppercase tracking-widest group/btn">
-                                            Accéder
-                                            <ChevronRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" />
-                                        </button>
-                                    </div>
-                                </GlassCard>
+                                        <div className="mt-6 pt-6 border-t border-white/5 flex justify-between items-center">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-cosmic-ethereal/40 group-hover:text-cosmic-gold/60 transition-colors">
+                                                Disponible
+                                            </span>
+                                            <span className="flex items-center gap-2 text-cosmic-gold text-xs font-bold uppercase tracking-widest group/btn">
+                                                Accéder
+                                                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                                            </span>
+                                        </div>
+                                    </GlassCard>
+                                </Link>
                             </motion.div>
                         );
                     })}

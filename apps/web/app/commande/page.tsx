@@ -1,261 +1,333 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ChevronLeft, CheckCircle2, Loader2 } from 'lucide-react';
-import { Button } from '@packages/ui';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
+import { Loader2 } from 'lucide-react';
+import { CheckoutHeader, ProductSummary, CheckoutForm, CheckoutFormData, StripePayment, FreeOrderButton } from '../../components/checkout';
 import api from '../../lib/api';
 
-const formSchema = z.object({
-    firstName: z.string().min(2, 'Prénom requis'),
-    lastName: z.string().min(2, 'Nom requis'),
-    email: z.string().email('Email invalide'),
-    birthDate: z.string().optional(),
-    birthTime: z.string().optional(),
-    birthPlace: z.string().optional(),
-    specificQuestion: z.string().optional(),
-});
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-type FormData = z.infer<typeof formSchema>;
+interface Product {
+    id: string;
+    name: string;
+    description: string;
+    amountCents: number;
+    level: string;
+    features: string[];
+    limitedOffer?: string | null;
+}
 
-export default function CommandePage() {
-    const [step, setStep] = useState(1);
-    const [loading, setLoading] = useState(false);
-    const [order, setOrder] = useState<{ id: string; totalAmount: number; firstName: string; lastName: string; email: string } | null>(null);
+function CheckoutContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const productLevel = searchParams.get('product') || 'initie';
+
+    const [product, setProduct] = useState<Product | null>(null);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [formData, setFormData] = useState<CheckoutFormData | null>(null);
+    const [isFormValid, setIsFormValid] = useState(false);
+    const [clientSecret, setClientSecret] = useState<string | null>(null);
+    const [paymentError, setPaymentError] = useState<string | null>(null);
 
-    const stripe = useStripe();
-    const elements = useElements();
-
-    const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-        resolver: zodResolver(formSchema),
-    });
-
-    const nextStep = () => setStep(s => s + 1);
-    const prevStep = () => setStep(s => s - 1);
-
-    const onInfoSubmit = async (data: FormData) => {
-        setLoading(true);
-        setError(null);
-        try {
-            // 1. Create Order on Backend
-            const response = await api.post('/orders', {
-                ...data,
-                totalAmount: 49, // Example fixed price
-                type: 'INITIE'
-            });
-            setOrder(response.data);
-            nextStep();
-        } catch (err: unknown) {
-            const errorResponse = err as { response?: { data?: { message?: string } } };
-            const message = errorResponse.response?.data?.message;
-            setError(message || 'Une erreur est survenue lors de la création de la commande.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const onPaymentSubmit = async () => {
-        if (!stripe || !elements || !order) return;
-
-        setLoading(true);
-        setError(null);
-
-        try {
-            // 2. Create Payment Intent
-            const { data: { clientSecret } } = await api.post('/payments/create-intent', {
-                orderId: order.id,
-                amount: order.totalAmount * 100, // Stripe expects cents
-            });
-
-            // 3. Confirm Payment with Stripe
-            const cardElement = elements.getElement(CardElement);
-            if (!cardElement) return;
-
-            const result = await stripe.confirmCardPayment(clientSecret, {
-                payment_method: {
-                    card: cardElement,
-                    billing_details: {
-                        name: `${order.firstName} ${order.lastName}`,
-                        email: order.email,
+    // Fetch product on mount
+    useEffect(() => {
+        const fetchProduct = async () => {
+            try {
+                const response = await api.get(`/products/${productLevel}`);
+                setProduct(response.data);
+            } catch (err) {
+                // Fallback product data if API fails
+                const fallbackProducts: Record<string, Product> = {
+                    initie: {
+                        id: 'initie',
+                        name: 'Initié',
+                        description: 'Accès découverte',
+                        amountCents: 0,
+                        level: 'INITIE',
+                        features: ['PDF lecture personnalisée', 'Accès au Sanctuaire'],
+                        limitedOffer: null,
                     },
-                },
+                    mystique: {
+                        id: 'mystique',
+                        name: 'Mystique',
+                        description: 'Expérience audio',
+                        amountCents: 4700,
+                        level: 'MYSTIQUE',
+                        features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Accès au Sanctuaire'],
+                        limitedOffer: 'Valable pour les 100 premiers clients',
+                    },
+                    profond: {
+                        id: 'profond',
+                        name: 'Profond',
+                        description: 'Expérience complète',
+                        amountCents: 6700,
+                        level: 'PROFOND',
+                        features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Mandala HD personnalisé', 'Accès au Sanctuaire'],
+                        limitedOffer: 'Valable pour les 100 premiers clients',
+                    },
+                    integrale: {
+                        id: 'integrale',
+                        name: 'Intégral',
+                        description: 'Immersion totale',
+                        amountCents: 9700,
+                        level: 'INTEGRALE',
+                        features: ['Tout du niveau Profond', 'Rituels personnalisés', 'Suivi 30 jours', 'Accès prioritaire'],
+                        limitedOffer: 'Valable pour les 50 premiers clients',
+                    },
+                };
+                setProduct(fallbackProducts[productLevel] || fallbackProducts.initie);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProduct();
+    }, [productLevel]);
+
+    // Create checkout intent when form becomes valid (for paid products)
+    useEffect(() => {
+        if (!isFormValid || !formData || !product || product.amountCents === 0) return;
+
+        const createIntent = async () => {
+            try {
+                const response = await api.post('/payments/checkout-intent', {
+                    email: formData.email,
+                    firstName: formData.firstName,
+                    lastName: formData.lastName,
+                    phone: formData.phone || '',
+                    productLevel: product.level,
+                    amountCents: product.amountCents,
+                });
+                setClientSecret(response.data.clientSecret);
+            } catch (err) {
+                setPaymentError('Impossible de préparer le paiement. Veuillez réessayer.');
+            }
+        };
+
+        createIntent();
+    }, [isFormValid, formData, product]);
+
+    const handleFormValid = useCallback((data: CheckoutFormData) => {
+        setFormData(data);
+        setIsFormValid(true);
+    }, []);
+
+    const handleFormInvalid = useCallback(() => {
+        setIsFormValid(false);
+        setClientSecret(null);
+    }, []);
+
+    const handlePaymentSuccess = () => {
+        router.push(`/payment-success?email=${encodeURIComponent(formData?.email || '')}`);
+    };
+
+    const handlePaymentError = (error: string) => {
+        setPaymentError(error);
+    };
+
+    const handleFreeOrderSubmit = async () => {
+        if (!formData || !product) return;
+
+        try {
+            // Create user and order directly for free products
+            await api.post('/orders', {
+                email: formData.email,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                totalAmount: 0,
+                type: product.level,
             });
 
-            if (result.error) {
-                setError(result.error.message || 'Paiement échoué');
-            } else if (result.paymentIntent?.status === 'succeeded') {
-                nextStep();
-            }
-        } catch (err: unknown) {
-            const errorResponse = err as { response?: { data?: { message?: string } } };
-            const message = errorResponse.response?.data?.message;
-            setError(message || 'Erreur de paiement');
-        } finally {
-            setLoading(false);
+            router.push(`/sanctuaire?email=${encodeURIComponent(formData.email)}`);
+        } catch (err) {
+            setPaymentError('Impossible de créer votre compte. Veuillez réessayer.');
         }
     };
+
+    const isFree = product?.amountCents === 0;
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                >
+                    <Loader2 className="w-12 h-12 text-cosmic-gold" />
+                </motion.div>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-cosmic-void py-12 px-4 sm:px-6 lg:px-8 starfield">
-            <div className="max-w-3xl mx-auto">
-                {/* Progress Bar */}
-                <div className="mb-12">
-                    <div className="flex justify-between items-center relative">
-                        {[1, 2, 3].map((s) => (
-                            <div key={s} className="flex flex-col items-center z-10">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${step >= s ? 'bg-cosmic-gold border-cosmic-gold text-cosmic-void shadow-stellar' : 'bg-cosmic-deep border-white/20 text-cosmic-stardust'}`}>
-                                    {step > s ? <CheckCircle2 className="w-6 h-6" /> : s}
-                                </div>
-                                <span className={`mt-2 text-xs font-medium uppercase tracking-wider ${step >= s ? 'text-cosmic-gold' : 'text-cosmic-stardust'}`}>
-                                    {s === 1 ? 'Informations' : s === 2 ? 'Paiement' : 'Confirmation'}
-                                </span>
-                            </div>
-                        ))}
-                        <div className="absolute top-5 left-0 w-full h-0.5 bg-white/10 -z-0">
-                            <motion.div
-                                className="h-full bg-cosmic-gold shadow-stellar"
-                                initial={{ width: '0%' }}
-                                animate={{ width: `${((step - 1) / 2) * 100}%` }}
-                                transition={{ duration: 0.5 }}
-                            />
+        <div className="min-h-screen relative overflow-hidden">
+            {/* Cosmic Background */}
+            <div className="fixed inset-0 bg-gradient-to-b from-[#0A0514] via-[#1a0b2e] to-[#0A0514]" />
+
+            {/* Floating Blobs */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <motion.div
+                    animate={{
+                        x: [0, 50, 0],
+                        y: [0, -30, 0],
+                        scale: [1, 1.1, 1],
+                    }}
+                    transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute top-1/4 -left-32 w-96 h-96 bg-purple-600/20 rounded-full blur-[100px]"
+                />
+                <motion.div
+                    animate={{
+                        x: [0, -30, 0],
+                        y: [0, 40, 0],
+                        scale: [1, 1.15, 1],
+                    }}
+                    transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute bottom-1/4 -right-32 w-80 h-80 bg-cosmic-gold/10 rounded-full blur-[80px]"
+                />
+                <motion.div
+                    animate={{
+                        x: [0, 20, 0],
+                        y: [0, -20, 0],
+                    }}
+                    transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-900/10 rounded-full blur-[120px]"
+                />
+            </div>
+
+            {/* Starfield overlay */}
+            <div className="fixed inset-0 starfield pointer-events-none" />
+
+            {/* Content */}
+            <div className="relative z-10">
+                <CheckoutHeader />
+
+                <main className="max-w-4xl mx-auto px-6 pb-20">
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                        {/* Product Summary - Left Column */}
+                        <div className="lg:col-span-2">
+                            {product && <ProductSummary product={product} />}
                         </div>
-                    </div>
-                </div>
 
-                {/* Form Container - Glass Card Gold */}
-                <div className="bg-gradient-to-br from-amber-400/10 to-cosmic-gold/5 backdrop-blur-xl border border-cosmic-gold/30 rounded-3xl p-8 shadow-stellar overflow-hidden min-h-[500px]">
-                    <AnimatePresence mode="wait">
-                        {step === 1 && (
+                        {/* Form & Payment - Right Column */}
+                        <div className="lg:col-span-3 space-y-6">
+                            {/* Glass Container */}
                             <motion.div
-                                key="step1"
-                                initial={{ x: 20, opacity: 0 }}
-                                animate={{ x: 0, opacity: 1 }}
-                                exit={{ x: -20, opacity: 0 }}
-                                transition={{ duration: 0.3 }}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5 }}
+                                className="bg-white/[0.02] backdrop-blur-xl border border-cosmic-gold/20 rounded-2xl p-6 shadow-cosmic"
                             >
-                                <h2 className="text-3xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-                                    Préparez votre lecture
+                                <h2 className="text-xl font-playfair italic text-cosmic-divine mb-6">
+                                    Vos informations
                                 </h2>
-                                <form onSubmit={handleSubmit(onInfoSubmit)} className="space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-400 ml-1">Prénom</label>
-                                            <input {...register('firstName')} className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none" />
-                                            {errors.firstName && <p className="text-rose-500 text-xs mt-1 ml-1">{errors.firstName.message as string}</p>}
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-400 ml-1">Nom</label>
-                                            <input {...register('lastName')} className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none" />
-                                            {errors.lastName && <p className="text-rose-500 text-xs mt-1 ml-1">{errors.lastName.message as string}</p>}
-                                        </div>
-                                    </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-slate-400 ml-1">Email</label>
-                                        <input {...register('email')} className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none" placeholder="pour recevoir votre lecture" />
-                                        {errors.email && <p className="text-rose-500 text-xs mt-1 ml-1">{errors.email.message as string}</p>}
-                                    </div>
-
-                                    <div className="space-y-2 pt-4">
-                                        <label className="text-sm font-medium text-slate-400 ml-1">Votre question (optionnel)</label>
-                                        <textarea {...register('specificQuestion')} rows={4} className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none resize-none" placeholder="Y a-t-il un domaine particulier que vous souhaitez explorer ?" />
-                                    </div>
-
-                                    {error && <p className="text-rose-500 text-sm">{error}</p>}
-
-                                    <div className="pt-6 flex justify-end">
-                                        <Button type="submit" disabled={loading} className="px-8 py-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg shadow-[0_0_20px_rgba(79,70,229,0.3)] flex items-center gap-2 group">
-                                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Continuer'}
-                                            {!loading && <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
-                                        </Button>
-                                    </div>
-                                </form>
+                                <CheckoutForm
+                                    onFormValid={handleFormValid}
+                                    onFormInvalid={handleFormInvalid}
+                                />
                             </motion.div>
-                        )}
 
-                        {step === 2 && (
-                            <motion.div
-                                key="step2"
-                                initial={{ x: 20, opacity: 0 }}
-                                animate={{ x: 0, opacity: 1 }}
-                                exit={{ x: -20, opacity: 0 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                <h2 className="text-3xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-                                    Finalisez votre commande
-                                </h2>
-                                <div className="p-6 bg-indigo-600/5 border border-indigo-500/20 rounded-2xl mb-8">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="text-slate-400 text-sm">Lecture Sélectionnée</p>
-                                            <p className="text-xl font-bold">Niveau Initié</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-2xl font-black text-indigo-400">{order?.totalAmount || 49} €</p>
-                                        </div>
-                                    </div>
-                                </div>
+                            {/* Payment Section */}
+                            <AnimatePresence mode="wait">
+                                {paymentError && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-rose-300 text-sm"
+                                    >
+                                        {paymentError}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
-                                <div className="space-y-6">
-                                    <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl">
-                                        <CardElement
+                            {/* Conditional Payment UI */}
+                            {isFree ? (
+                                <FreeOrderButton
+                                    onSubmit={handleFreeOrderSubmit}
+                                    disabled={!isFormValid}
+                                />
+                            ) : (
+                                <>
+                                    {clientSecret ? (
+                                        <Elements
+                                            stripe={stripePromise}
                                             options={{
-                                                style: {
-                                                    base: {
-                                                        fontSize: '16px',
-                                                        color: '#fff',
-                                                        '::placeholder': { color: '#64748b' },
+                                                clientSecret,
+                                                appearance: {
+                                                    theme: 'night',
+                                                    variables: {
+                                                        colorPrimary: '#D4AF37',
+                                                        colorBackground: '#1a0b2e',
+                                                        colorText: '#F0E6FF',
+                                                        colorDanger: '#f43f5e',
+                                                        fontFamily: 'Inter, system-ui, sans-serif',
+                                                        borderRadius: '12px',
                                                     },
-                                                    invalid: { color: '#f43f5e' },
+                                                    rules: {
+                                                        '.Input': {
+                                                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                            backgroundColor: 'rgba(26, 11, 46, 0.6)',
+                                                        },
+                                                        '.Input:focus': {
+                                                            border: '1px solid rgba(212, 175, 55, 0.5)',
+                                                            boxShadow: '0 0 0 2px rgba(212, 175, 55, 0.2)',
+                                                        },
+                                                    },
                                                 },
                                             }}
-                                        />
-                                    </div>
-
-                                    {error && <p className="text-rose-500 text-sm">{error}</p>}
-
-                                    <div className="flex justify-between">
-                                        <Button onClick={prevStep} variant="secondary" disabled={loading} className="px-6 py-4 rounded-xl flex items-center gap-2">
-                                            <ChevronLeft className="w-4 h-4" />
-                                            Retour
-                                        </Button>
-                                        <Button onClick={onPaymentSubmit} disabled={loading || !stripe} className="px-8 py-4 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold flex items-center gap-2">
-                                            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                            {loading ? 'Traitement...' : 'Confirmer le paiement'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {step === 3 && (
-                            <motion.div
-                                key="step3"
-                                initial={{ scale: 0.9, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                transition={{ type: 'spring', damping: 15 }}
-                                className="text-center py-12"
-                            >
-                                <div className="w-24 h-24 bg-green-500/20 border border-green-500/40 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_30px_rgba(34,197,94,0.2)]">
-                                    <CheckCircle2 className="w-12 h-12 text-green-500" />
-                                </div>
-                                <h2 className="text-4xl font-black mb-4 tracking-tight">C&apos;est fait !</h2>
-                                <p className="text-slate-400 text-lg mb-12 max-w-sm mx-auto">
-                                    Votre lecture est en cours de préparation. Vous recevrez une notification par email dès qu&apos;elle sera disponible dans votre sanctuaire.
-                                </p>
-                                <Button onClick={() => window.location.href = '/sanctuaire'} className="w-full py-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg shadow-[0_0_20px_rgba(79,70,229,0.3)]">
-                                    Accéder au Sanctuaire
-                                </Button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+                                        >
+                                            <StripePayment
+                                                amount={product?.amountCents || 0}
+                                                onPaymentSuccess={handlePaymentSuccess}
+                                                onPaymentError={handlePaymentError}
+                                                disabled={!isFormValid}
+                                            />
+                                        </Elements>
+                                    ) : isFormValid ? (
+                                        <div className="flex items-center justify-center py-8">
+                                            <Loader2 className="w-8 h-8 text-cosmic-gold animate-spin" />
+                                            <span className="ml-3 text-cosmic-stardust">Préparation du paiement...</span>
+                                        </div>
+                                    ) : (
+                                        <motion.div
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            className="bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-2xl p-6 text-center"
+                                        >
+                                            <p className="text-cosmic-stardust">
+                                                Remplissez vos informations pour accéder au paiement
+                                            </p>
+                                        </motion.div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </main>
             </div>
         </div>
+    );
+}
+
+export default function CommandePage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0A0514] via-[#1a0b2e] to-[#0A0514]">
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                >
+                    <Loader2 className="w-12 h-12 text-cosmic-gold" />
+                </motion.div>
+            </div>
+        }>
+            <CheckoutContent />
+        </Suspense>
     );
 }

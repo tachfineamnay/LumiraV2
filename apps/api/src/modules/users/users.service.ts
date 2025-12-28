@@ -1,6 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { User, Expert, UserProfile } from '@prisma/client';
+import {
+  aggregateCapabilities,
+  getHighestLevel,
+  getLevelMetadata,
+  getLevelNameFromLevel,
+  EntitlementsResponse,
+} from '@packages/shared';
 
 @Injectable()
 export class UsersService {
@@ -19,30 +26,57 @@ export class UsersService {
     });
   }
 
-  async getEntitlements(userId: string): Promise<{ maxLevel: number; capabilities: string[] }> {
+  /**
+   * Get full entitlements for a user based on their paid/completed orders
+   */
+  async getEntitlements(userId: string): Promise<EntitlementsResponse> {
+    // Fetch all paid/completed orders for the user
     const orders = await this.prisma.order.findMany({
-      where: { userId, status: 'COMPLETED' },
+      where: {
+        userId,
+        status: { in: ['PAID', 'COMPLETED'] }
+      },
       select: { level: true },
     });
 
-    const maxLevel = Math.max(0, ...orders.map((o) => o.level));
+    // Extract levels from orders
+    const levels = orders.map((o) => o.level);
+
+    // Calculate highest level and aggregate capabilities
+    const highestLevel = getHighestLevel(levels);
+    const capabilities = aggregateCapabilities(levels);
+    const levelMetadata = getLevelMetadata(highestLevel);
+
+    // Get product IDs the user has purchased
+    const products = [...new Set(levels.map(l => getLevelNameFromLevel(l)))];
 
     return {
-      maxLevel,
-      capabilities: this.getCapabilitiesByLevel(maxLevel),
+      capabilities,
+      products,
+      highestLevel,
+      levelMetadata,
+      orderCount: orders.length,
     };
   }
 
-  private getCapabilitiesByLevel(level: number) {
-    const capabilities = [];
-    if (level >= 1) capabilities.push('BASIC_READING');
-    if (level >= 2) capabilities.push('AUDIO_GUIDANCE');
-    if (level >= 3) capabilities.push('MANDALA_ACCESS');
-    if (level >= 4) capabilities.push('RITUALS_ACCESS');
-    return capabilities;
+  /**
+   * Get basic entitlements (maxLevel + capabilities) - legacy format
+   */
+  async getBasicEntitlements(userId: string): Promise<{ maxLevel: number; capabilities: string[] }> {
+    const { highestLevel, capabilities } = await this.getEntitlements(userId);
+    return {
+      maxLevel: highestLevel,
+      capabilities,
+    };
   }
 
   findAll(): Promise<User[]> {
     return this.prisma.user.findMany();
+  }
+
+  async findById(id: string): Promise<User | null> {
+    return this.prisma.user.findUnique({
+      where: { id },
+    });
   }
 }

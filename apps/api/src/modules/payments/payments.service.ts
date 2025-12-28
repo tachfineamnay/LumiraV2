@@ -7,6 +7,15 @@ import { Prisma } from '@prisma/client';
 
 import { NotificationsService } from '../notifications/notifications.service';
 
+export interface CheckoutIntentDto {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    productLevel: string;
+    amountCents: number;
+}
+
 @Injectable()
 export class PaymentsService {
     private stripe: Stripe;
@@ -38,6 +47,31 @@ export class PaymentsService {
         return {
             clientSecret: paymentIntent.client_secret,
             paymentIntentId: paymentIntent.id
+        };
+    }
+
+    /**
+     * Creates a PaymentIntent with customer data in metadata.
+     * User and Order are created on webhook success.
+     */
+    async createCheckoutIntent(dto: CheckoutIntentDto) {
+        const paymentIntent = await this.stripe.paymentIntents.create({
+            amount: dto.amountCents,
+            currency: 'eur',
+            automatic_payment_methods: { enabled: true },
+            metadata: {
+                email: dto.email,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                phone: dto.phone || '',
+                productLevel: dto.productLevel,
+                checkoutFlow: 'true', // Flag to identify checkout vs legacy flow
+            },
+        });
+
+        return {
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id,
         };
     }
 
@@ -83,7 +117,9 @@ export class PaymentsService {
     }
 
     private async handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-        const orderId = paymentIntent.metadata.orderId;
+        const { orderId, checkoutFlow, email, firstName, lastName, phone, productLevel } = paymentIntent.metadata;
+
+        // Legacy flow: orderId already exists
         if (orderId) {
             const order = await this.prisma.order.update({
                 where: { id: orderId },
@@ -95,11 +131,82 @@ export class PaymentsService {
             });
             this.logger.log(`Order ${orderId} marked as PAID`);
 
-            // Send order confirmation email
             await this.notificationsService.sendOrderConfirmation(order, order.user);
+            await this.notificationsService.sendExpertAlert(order);
+            return;
+        }
 
-            // Send expert alert
+        // New checkout flow: create User and Order from metadata
+        if (checkoutFlow === 'true' && email) {
+            // 1. Upsert User
+            const user = await this.prisma.user.upsert({
+                where: { email },
+                update: {
+                    totalOrders: { increment: 1 },
+                    lastOrderAt: new Date(),
+                },
+                create: {
+                    email,
+                    firstName: firstName || '',
+                    lastName: lastName || '',
+                    phone: phone || null,
+                    totalOrders: 1,
+                    lastOrderAt: new Date(),
+                },
+            });
+
+            // 2. Map level
+            const levelMap: Record<string, number> = {
+                'INITIE': 1,
+                'MYSTIQUE': 2,
+                'PROFOND': 3,
+                'INTEGRALE': 4,
+            };
+            const level = levelMap[productLevel?.toUpperCase()] || 1;
+
+            // 3. Generate order number
+            const orderNumber = await this.generateOrderNumber();
+
+            // 4. Create Order
+            const order = await this.prisma.order.create({
+                data: {
+                    orderNumber,
+                    userId: user.id,
+                    userEmail: email,
+                    userName: `${firstName} ${lastName}`.trim(),
+                    level,
+                    amount: paymentIntent.amount,
+                    currency: paymentIntent.currency,
+                    status: 'PAID',
+                    paidAt: new Date(),
+                    paymentIntentId: paymentIntent.id,
+                    formData: { phone } as Prisma.JsonObject,
+                },
+                include: { user: true },
+            });
+
+            this.logger.log(`Checkout flow: Created User ${user.id} and Order ${order.id}`);
+
+            await this.notificationsService.sendOrderConfirmation(order, order.user);
             await this.notificationsService.sendExpertAlert(order);
         }
     }
+
+    private async generateOrderNumber(): Promise<string> {
+        const date = new Date();
+        const year = date.getFullYear().toString().slice(-2);
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const datePrefix = `LU${year}${month}${day}`;
+
+        const count = await this.prisma.order.count({
+            where: {
+                orderNumber: { startsWith: datePrefix },
+            },
+        });
+
+        const sequence = (count + 1).toString().padStart(3, '0');
+        return `${datePrefix}${sequence}`;
+    }
 }
+

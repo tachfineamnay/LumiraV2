@@ -1,17 +1,18 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, HTMLMotionProps } from "framer-motion";
 import { cn } from "@/lib/utils";
 import React from "react";
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
     variant?: "primary" | "secondary" | "ghost" | "gold" | "stardust";
     size?: "sm" | "md" | "lg";
     isLoading?: boolean;
+    children?: React.ReactNode;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant = "primary", size = "md", isLoading, children, ...props }, ref) => {
+    ({ className, variant = "primary", size = "md", isLoading, children, disabled, ...props }, ref) => {
         // 2026 Styles
         const baseStyles = "relative inline-flex items-center justify-center rounded-lg font-medium tracking-wide transition-all duration-300 focus:outline-none focus:ring-1 focus:ring-gold/30 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden group";
 
@@ -34,7 +35,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 whileTap={{ scale: 0.98 }}
                 className={cn(baseStyles, variants[variant], sizes[size], className)}
-                disabled={isLoading || props.disabled}
+                disabled={isLoading || disabled}
                 {...props}
             >
                 {/* Shimmer Effect for Gold/Stardust */}
@@ -57,3 +58,4 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 
 Button.displayName = "Button";
+

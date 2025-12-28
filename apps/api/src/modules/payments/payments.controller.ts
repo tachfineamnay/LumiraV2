@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Headers, Request, RawBodyRequest } from '@nestjs/common';
-import { PaymentsService } from './payments.service';
+import { PaymentsService, CheckoutIntentDto } from './payments.service';
 import { Request as ExpressRequest } from 'express';
 
 @Controller('payments')
@@ -11,6 +11,11 @@ export class PaymentsController {
         return this.paymentsService.createPaymentIntent(body.orderId, body.amount, body.currency);
     }
 
+    @Post('checkout-intent')
+    async createCheckoutIntent(@Body() body: CheckoutIntentDto) {
+        return this.paymentsService.createCheckoutIntent(body);
+    }
+
     @Post('webhook')
     async webhook(
         @Headers('stripe-signature') signature: string,
@@ -19,3 +24,4 @@ export class PaymentsController {
         return this.paymentsService.handleWebhook(signature, req.rawBody);
     }
 }
+
