@@ -29,6 +29,9 @@ COPY --from=pruner /app/out/full/ .
 # Generate Prisma Client (Explicitly)
 RUN pnpm turbo run db:generate --filter=@packages/database
 
+# Ensure public directory exists (even if empty) to avoid COPY errors
+RUN mkdir -p /app/apps/web/public
+
 # Build Web
 RUN pnpm turbo run build --filter=web...
 
@@ -47,6 +50,7 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 # Copy public assets (images, fonts, favicon)
 COPY --from=builder /app/apps/web/public ./apps/web/public
+
 
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
