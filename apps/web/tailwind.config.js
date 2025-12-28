@@ -12,9 +12,9 @@ module.exports = {
         extend: {
             colors: {
                 cosmic: {
-                    void: "#0B0B1A",
-                    deep: "#1A1B3A",
-                    nebula: "#2D2B5A",
+                    void: "#1A1F3A",
+                    deep: "#2A3A5A",
+                    nebula: "#3D4E7A",
                     galaxy: "#4A4B7A",
                     stardust: "#6B6B9A",
                     aurora: "#8B7BD8",
@@ -29,8 +29,8 @@ module.exports = {
                     magenta: "#D946EF",
                 },
                 // Shorthand aliases
-                void: "#0B0B1A",
-                deep: "#1A1B3A",
+                void: "#1A1F3A",
+                deep: "#2A3A5A",
                 gold: "#FFD700",
                 "gold-light": "#FFC947",
                 divine: "#F0E6FF",
