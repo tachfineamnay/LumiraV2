@@ -16,11 +16,9 @@
         "test": "echo 'No tests yet'"
     },
     "dependencies": {
-        "@prisma/client": "^5.7.0",
-        "bcrypt": "^5.1.1"
+        "@prisma/client": "^5.7.0"
     },
     "devDependencies": {
-        "@types/bcrypt": "^5.0.2",
         "@types/node": "^20.10.0",
         "esbuild": "^0.27.2",
         "prisma": "^5.7.0",
