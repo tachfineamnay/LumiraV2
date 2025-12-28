@@ -1,5 +1,5 @@
 # 1. Stage Pruner
-FROM node:20-alpine AS pruner
+FROM node:20-alpine3.18 AS pruner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 RUN npm install -g turbo
@@ -7,7 +7,7 @@ COPY . .
 RUN turbo prune --scope=api --docker
 
 # 2. Stage Builder
-FROM node:20-alpine AS builder
+FROM node:20-alpine3.18 AS builder
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN pnpm turbo run db:generate --filter=@packages/database
 RUN pnpm turbo run build --filter=api...
 
 # 3. Stage Runner
-FROM node:20-alpine AS runner
+FROM node:20-alpine3.18 AS runner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
