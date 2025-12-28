@@ -12,7 +12,7 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 # Installation de pnpm et des dépendances
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 # Désactiver Husky pour le build
@@ -36,7 +36,7 @@ ENV PORT=3001
 ENV HUSKY=0
 
 # Installation des dépendances de prod uniquement
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --prod --no-frozen-lockfile --ignore-scripts
