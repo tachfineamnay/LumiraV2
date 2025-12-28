@@ -11,24 +11,36 @@ import {
     LogOut,
     Wand2,
     Bell,
-    LayoutDashboard
+    LayoutDashboard,
+    Loader2
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "../../context/AuthContext";
+import { motion } from "framer-motion";
+import { ExpertAuthProvider, useExpertAuth } from "../../context/ExpertAuthContext";
 
-export default function AdminLayout({
+function AdminLayoutInner({
     children,
 }: {
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
-    const router = useRouter();
-    const { user, logout } = useAuth();
+    const { expert, logout, isLoading, isAuthenticated } = useExpertAuth();
 
     // Don't apply layout to login page
     if (pathname === "/admin/login") {
         return <>{children}</>;
+    }
+
+    // Show loading state while checking auth
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 text-amber-400 animate-spin mx-auto mb-4" />
+                    <p className="text-slate-400 text-sm">Chargement...</p>
+                </div>
+            </div>
+        );
     }
 
     const menuItems = [
@@ -40,11 +52,16 @@ export default function AdminLayout({
     ];
 
     const handleLogout = () => {
-        localStorage.removeItem("expert_token");
-        localStorage.removeItem("expert_refresh_token");
-        localStorage.removeItem("expert_user");
-        if (logout) logout();
-        router.push("/admin/login");
+        logout();
+    };
+
+    // Get expert role display name
+    const getRoleDisplay = (role?: string) => {
+        switch (role) {
+            case 'ADMIN': return 'Grand Maître';
+            case 'EXPERT': return 'Expert Oracle';
+            default: return 'Expert';
+        }
     };
 
     return (
@@ -127,11 +144,11 @@ export default function AdminLayout({
                         {/* Profile Info */}
                         <div className="flex items-center gap-3">
                             <div className="text-right hidden sm:block">
-                                <p className="text-sm font-bold text-white leading-none mb-1">{user?.name || "Expert"}</p>
-                                <p className="text-[10px] text-amber-400 uppercase tracking-widest leading-none">Grand Maître</p>
+                                <p className="text-sm font-bold text-white leading-none mb-1">{expert?.name || "Expert"}</p>
+                                <p className="text-[10px] text-amber-400 uppercase tracking-widest leading-none">{getRoleDisplay(expert?.role)}</p>
                             </div>
                             <div className="w-10 h-10 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center font-bold text-amber-400 shadow-xl overflow-hidden">
-                                {user?.name?.[0] || "A"}
+                                {expert?.name?.[0] || "E"}
                             </div>
                         </div>
                     </div>
@@ -145,3 +162,16 @@ export default function AdminLayout({
         </div>
     );
 }
+
+export default function AdminLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    return (
+        <ExpertAuthProvider>
+            <AdminLayoutInner>{children}</AdminLayoutInner>
+        </ExpertAuthProvider>
+    );
+}
+
