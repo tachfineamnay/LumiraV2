@@ -75,54 +75,47 @@ export const Mandala = () => {
                 </svg>
             </motion.div>
 
-            {/* Vitruvian Man Core (Static Center) */}
+            {/* Vitruvian Man Core (Static Center) - Artistic Integration */}
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 2, delay: 0.5 }}
-                className="absolute w-[400px] h-[400px] flex items-center justify-center opacity-40 pointer-events-none mix-blend-screen"
+                className="absolute w-[400px] h-[400px] flex items-center justify-center pointer-events-none mix-blend-screen"
             >
                 <svg
                     viewBox="0 0 100 100"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
-                    className="w-full h-full stroke-gold drop-shadow-[0_0_15px_rgba(255,215,0,0.3)]"
+                    className="w-full h-full stroke-gold/50 drop-shadow-[0_0_10px_rgba(255,215,0,0.1)]"
                 >
-                    {/* Circle Container */}
-                    <circle cx="50" cy="50" r="45" strokeWidth="0.3" className="opacity-50" />
+                    {/* Circle Container - Very subtle */}
+                    <circle cx="50" cy="50" r="45" strokeWidth="0.1" className="opacity-20" />
 
-                    {/* Square Container */}
-                    <rect x="15" y="15" width="70" height="70" strokeWidth="0.3" className="opacity-50" />
+                    {/* Square Container - Very subtle */}
+                    <rect x="15" y="15" width="70" height="70" strokeWidth="0.1" className="opacity-20" />
 
-                    {/* The Man - Abstract Geometric Lines */}
+                    {/* The Man - Artistic Single Pose */}
+                    <g className="opacity-60">
+                        {/* Head - continuous line style */}
+                        <path d="M47 28 C47 26 48.5 24 50 24 C51.5 24 53 26 53 28 C53 30 51.5 32 50 32 C48.5 32 47 30 47 28" strokeWidth="0.3" />
 
-                    {/* Head */}
-                    <circle cx="50" cy="28" r="6" strokeWidth="0.6" />
+                        {/* Torso & Spine - Fluid curve */}
+                        <path d="M50 32 Q50 38 50 48 Q50 58 50 65" strokeWidth="0.3" />
 
-                    {/* Torso Line */}
-                    <path d="M50 34 L50 70" strokeWidth="0.6" />
+                        {/* Arms - Single outcast gesture (welcoming/universal) */}
+                        {/* Shoulders to Arms flow */}
+                        <path d="M50 35 Q65 35 78 30" strokeWidth="0.2" />
+                        <path d="M50 35 Q35 35 22 30" strokeWidth="0.2" />
 
-                    {/* Arms - Horizontal */}
-                    <path d="M22 45 L78 45" strokeWidth="0.5" />
+                        {/* Legs - Standing grounded */}
+                        <path d="M50 65 Q45 78 42 92" strokeWidth="0.2" />
+                        <path d="M50 65 Q55 78 58 92" strokeWidth="0.2" />
 
-                    {/* Arms - Angled (Vitruvian variants) */}
-                    <path d="M24 38 L76 38" strokeWidth="0.3" opacity="0.7" />
-                    <path d="M50 38 L24 25" strokeWidth="0.3" opacity="0.0" /> {/* Hidden guide, just visualizing */}
-
-                    {/* Legs - Standing */}
-                    <path d="M50 70 L40 92" strokeWidth="0.5" />
-                    <path d="M50 70 L60 92" strokeWidth="0.5" />
-
-                    {/* Legs - Spread (Vitruvian variants) */}
-                    <path d="M50 70 L30 85" strokeWidth="0.3" opacity="0.7" />
-                    <path d="M50 70 L70 85" strokeWidth="0.3" opacity="0.7" />
-
-                    {/* Connecting Energy Lines (Chakras hint) */}
-                    <circle cx="50" cy="45" r="1" fill="#FFD700" className="animate-pulse" /> {/* Heart */}
-                    <circle cx="50" cy="38" r="0.5" fill="#FFFFFF" /> {/* Throat */}
-                    <circle cx="50" cy="28" r="0.5" fill="#FFFFFF" /> {/* Third Eye */}
-                    <circle cx="50" cy="55" r="0.5" fill="#FFFFFF" /> {/* Solar Plexus */}
-
+                        {/* Geometric Construct Lines - The "Blueprint" look */}
+                        <line x1="50" y1="24" x2="50" y2="92" strokeWidth="0.05" className="opacity-30" /> {/* Center axis */}
+                        <line x1="22" y1="30" x2="78" y2="30" strokeWidth="0.05" className="opacity-30" /> {/* Arm axis */}
+                        <circle cx="50" cy="48" r="25" strokeWidth="0.05" className="opacity-10" /> {/* Center energy field */}
+                    </g>
                 </svg>
             </motion.div>
         </div>
