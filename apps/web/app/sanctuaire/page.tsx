@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
 import { GlassCard } from "../../components/ui/GlassCard";
-import { LockedCard } from "../../components/ui/LockedCard";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 import {
     User,
@@ -22,7 +21,7 @@ import {
 } from "lucide-react";
 
 // =============================================================================
-// DASHBOARD CARDS CONFIG
+// DASHBOARD CARDS
 // =============================================================================
 
 interface DashboardCard {
@@ -32,7 +31,6 @@ interface DashboardCard {
     route: string;
     requiredLevel: number;
     requiredCapability: string;
-    accentColor: string;
 }
 
 const dashboardCards: DashboardCard[] = [
@@ -41,9 +39,8 @@ const dashboardCards: DashboardCard[] = [
         description: "Gestion de votre identité spirituelle",
         icon: User,
         route: "/sanctuaire/profile",
-        requiredLevel: 0, // Always accessible
+        requiredLevel: 0,
         requiredCapability: "sanctuaire.sphere.profile",
-        accentColor: "from-dawn-gold/20 to-dawn-amber/10",
     },
     {
         title: "Mes Lectures",
@@ -52,7 +49,6 @@ const dashboardCards: DashboardCard[] = [
         route: "/sanctuaire/draws",
         requiredLevel: 1,
         requiredCapability: "sanctuaire.sphere.readings",
-        accentColor: "from-cosmos-teal/20 to-cosmos-cyan/10",
     },
     {
         title: "Rituels Sacrés",
@@ -61,7 +57,6 @@ const dashboardCards: DashboardCard[] = [
         route: "/sanctuaire/rituals",
         requiredLevel: 2,
         requiredCapability: "sanctuaire.sphere.rituals",
-        accentColor: "from-purple-500/20 to-violet-500/10",
     },
     {
         title: "Mandala Personnel",
@@ -70,7 +65,6 @@ const dashboardCards: DashboardCard[] = [
         route: "/sanctuaire/mandala",
         requiredLevel: 3,
         requiredCapability: "sanctuaire.sphere.mandala",
-        accentColor: "from-dawn-amber/20 to-dawn-orange/10",
     },
     {
         title: "Synthèse Profonde",
@@ -79,7 +73,6 @@ const dashboardCards: DashboardCard[] = [
         route: "/sanctuaire/synthesis",
         requiredLevel: 3,
         requiredCapability: "sanctuaire.sphere.synthesis",
-        accentColor: "from-cosmos-cyan/20 to-cosmos-mist/10",
     },
     {
         title: "Guidance Sacrée",
@@ -88,13 +81,8 @@ const dashboardCards: DashboardCard[] = [
         route: "/sanctuaire/chat",
         requiredLevel: 4,
         requiredCapability: "sanctuaire.sphere.guidance",
-        accentColor: "from-dawn-gold/20 to-dawn-glow/10",
     },
 ];
-
-// =============================================================================
-// LEVEL MAPPING
-// =============================================================================
 
 const getLevelInfo = (level: number): { name: "Initié" | "Mystique" | "Profond" | "Intégral"; productId: "initie" | "mystique" | "profond" | "integrale" } => {
     switch (level) {
@@ -116,8 +104,8 @@ export default function SanctuaireDashboard() {
         return (
             <div className="flex-1 flex items-center justify-center min-h-[60vh]">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-12 h-12 text-dawn-gold animate-spin" />
-                    <p className="text-star-dim text-sm tracking-widest uppercase">
+                    <Loader2 className="w-12 h-12 text-horizon-400 animate-spin" />
+                    <p className="text-stellar-500 text-sm tracking-widest uppercase">
                         Chargement de votre sanctuaire...
                     </p>
                 </div>
@@ -128,14 +116,14 @@ export default function SanctuaireDashboard() {
     const hasOrders = orderCount > 0;
 
     return (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col items-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col items-center">
 
-            {/* 🏛️ WELCOME MESSAGE */}
-            <div className="text-center mb-6 relative z-10">
+            {/* 🏛️ WELCOME */}
+            <div className="text-center mb-8 relative z-10">
                 <motion.h1
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-3xl md:text-5xl font-playfair italic text-gradient-dawn mb-4"
+                    className="text-3xl md:text-5xl font-playfair italic text-gradient-gold mb-4"
                 >
                     Votre Sanctuaire Personnel
                 </motion.h1>
@@ -143,24 +131,24 @@ export default function SanctuaireDashboard() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 }}
-                    className="text-star-dim tracking-[0.15em] uppercase text-xs font-medium"
+                    className="text-stellar-500 tracking-[0.15em] uppercase text-xs font-medium"
                 >
                     Explorez votre univers intérieur à travers le mandala sacré
                 </motion.p>
             </div>
 
-            {/* 🪐 MANDALA NAVIGATION - Desktop */}
-            <section className="relative w-full hidden lg:flex justify-center items-center py-4 mb-6">
+            {/* 🪐 MANDALA NAVIGATION */}
+            <section className="relative w-full hidden lg:flex justify-center items-center py-8 mb-8">
                 <MandalaNav />
             </section>
 
-            {/* 🔔 ORDER STATUS NOTIFICATION */}
+            {/* 🔔 ORDER STATUS */}
             {hasOrders && (
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 }}
-                    className="w-full max-w-3xl mx-auto mb-10 relative z-20"
+                    className="w-full max-w-3xl mx-auto mb-12 relative z-20"
                 >
                     <CosmicNotification
                         title="Votre demande a été transmise avec succès"
@@ -175,15 +163,13 @@ export default function SanctuaireDashboard() {
                 </motion.div>
             )}
 
-            {/* 🧩 DASHBOARD CARDS - GRID */}
+            {/* 🧩 DASHBOARD CARDS */}
             <div className="w-full relative z-10">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
                     {dashboardCards.map((card, i) => {
                         const Icon = card.icon;
                         const levelInfo = getLevelInfo(card.requiredLevel);
                         const isIntegral = card.requiredLevel === 4;
-
-                        // Profile is always accessible
                         const hasAccess = card.requiredLevel === 0 ||
                             (hasCapability(card.requiredCapability) && highestLevel >= card.requiredLevel);
 
@@ -195,39 +181,36 @@ export default function SanctuaireDashboard() {
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.4 + i * 0.08 }}
                                 >
-                                    <div className="h-full min-h-[180px] rounded-2xl bg-cosmos-twilight/30 backdrop-blur-sm border border-white/5 p-5 flex flex-col justify-between relative overflow-hidden">
-                                        {/* Locked overlay */}
-                                        <div className="absolute inset-0 bg-cosmos-deep/40 backdrop-blur-[2px] z-10" />
+                                    <div className="h-full min-h-[180px] rounded-2xl bg-abyss-500/30 border border-white/[0.04] p-5 flex flex-col justify-between relative overflow-hidden">
+                                        <div className="absolute inset-0 bg-abyss-600/40 backdrop-blur-[2px] z-10" />
 
                                         <div className="relative z-20">
                                             <div className="flex justify-between items-start mb-4">
-                                                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
-                                                    <Icon className="w-6 h-6 text-star-dim" />
+                                                <div className="w-12 h-12 rounded-xl bg-white/[0.03] flex items-center justify-center border border-white/[0.06]">
+                                                    <Icon className="w-6 h-6 text-stellar-500" />
                                                 </div>
-                                                <Lock className="w-5 h-5 text-dawn-gold/60" />
+                                                <Lock className="w-5 h-5 text-horizon-400/50" />
                                             </div>
 
-                                            <h3 className="text-lg font-playfair italic text-star-silver mb-1">
+                                            <h3 className="text-lg font-playfair italic text-stellar-300 mb-1">
                                                 {card.title}
                                             </h3>
-                                            <p className="text-star-dim/60 text-sm">
+                                            <p className="text-stellar-600 text-sm">
                                                 {card.description}
                                             </p>
                                         </div>
 
-                                        <div className="relative z-20 mt-4 pt-4 border-t border-white/5">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Sparkles className="w-3 h-3 text-dawn-gold/60" />
-                                                    <span className="text-[10px] text-dawn-gold/80 uppercase tracking-wider">
-                                                        Requiert niveau {levelInfo.name}
-                                                    </span>
-                                                    <Sparkles className="w-3 h-3 text-dawn-gold/60" />
-                                                </div>
+                                        <div className="relative z-20 mt-4 pt-4 border-t border-white/[0.04]">
+                                            <div className="flex items-center justify-center gap-2 mb-3">
+                                                <Sparkles className="w-3 h-3 text-horizon-400/50" />
+                                                <span className="text-[10px] text-horizon-400/80 uppercase tracking-wider">
+                                                    Requiert niveau {levelInfo.name}
+                                                </span>
+                                                <Sparkles className="w-3 h-3 text-horizon-400/50" />
                                             </div>
                                             <Link href={`/commande?product=${levelInfo.productId}`}>
-                                                <button className="w-full mt-3 py-2.5 rounded-xl bg-gradient-to-r from-dawn-gold to-dawn-amber text-cosmos-deep text-sm font-semibold hover:shadow-dawn-glow transition-all duration-300">
-                                                    {isIntegral ? "Niveau Intégral" : `Débloquer`}
+                                                <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-800 text-sm font-semibold hover:shadow-gold-glow transition-all">
+                                                    {isIntegral ? "Niveau Intégral" : "Débloquer"}
                                                 </button>
                                             </Link>
                                         </div>
@@ -244,24 +227,24 @@ export default function SanctuaireDashboard() {
                                 transition={{ delay: 0.4 + i * 0.08 }}
                             >
                                 <Link href={card.route}>
-                                    <div className={`h-full min-h-[180px] rounded-2xl bg-gradient-to-br ${card.accentColor} backdrop-blur-sm border border-white/10 p-5 flex flex-col justify-between group hover:border-dawn-gold/30 transition-all duration-500 cursor-pointer hover:shadow-lg hover:shadow-dawn-gold/5`}>
+                                    <div className="h-full min-h-[180px] rounded-2xl bg-abyss-500/20 border border-white/[0.06] p-5 flex flex-col justify-between group hover:border-horizon-400/20 transition-all duration-500 cursor-pointer hover:bg-abyss-400/30">
                                         <div>
                                             <div className="flex justify-between items-start mb-4">
-                                                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 border border-white/10 group-hover:border-dawn-gold/30">
-                                                    <Icon className="w-6 h-6 text-dawn-gold" />
+                                                <div className="w-12 h-12 rounded-xl bg-horizon-400/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 border border-horizon-400/20">
+                                                    <Icon className="w-6 h-6 text-horizon-400" />
                                                 </div>
                                             </div>
 
-                                            <h3 className="text-lg font-playfair italic text-star-white mb-1 group-hover:text-dawn-amber transition-colors">
+                                            <h3 className="text-lg font-playfair italic text-stellar-100 mb-1 group-hover:text-horizon-300 transition-colors">
                                                 {card.title}
                                             </h3>
-                                            <p className="text-star-dim text-sm">
+                                            <p className="text-stellar-500 text-sm">
                                                 {card.description}
                                             </p>
                                         </div>
 
-                                        <div className="mt-4 pt-4 border-t border-white/5 flex justify-end items-center">
-                                            <span className="flex items-center gap-2 text-dawn-gold text-xs font-bold uppercase tracking-widest">
+                                        <div className="mt-4 pt-4 border-t border-white/[0.04] flex justify-end items-center">
+                                            <span className="flex items-center gap-2 text-horizon-400 text-xs font-bold uppercase tracking-widest">
                                                 Accéder
                                                 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                                             </span>
