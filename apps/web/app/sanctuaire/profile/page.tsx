@@ -1,141 +1,315 @@
 "use client";
 
-import React from "react";
-import { motion } from "framer-motion";
-import { User, Mail, Calendar, MapPin, Star, Moon, Sun, Award } from "lucide-react";
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+    User,
+    Mail,
+    Phone,
+    Calendar,
+    Clock,
+    MapPin,
+    Target,
+    Info,
+    Camera,
+    Hand,
+    Edit3,
+    Save,
+    X,
+    Check,
+    Upload
+} from "lucide-react";
 import { GlassCard } from "../../../components/ui/GlassCard";
 import { LevelBadge } from "../../../components/ui/LevelBadge";
+import { useSanctuaire } from "../../../context/SanctuaireContext";
+import { useAuth } from "../../../context/AuthContext";
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface ProfileData {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    birthDate: string;
+    birthTime: string;
+    birthPlace: string;
+    spiritualObjective: string;
+    additionalInfo: string;
+    facePhoto?: string;
+    palmPhoto?: string;
+}
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
 
 export default function ProfilePage() {
-    // Mock user data
-    const user = {
-        name: "Sophie L.",
-        email: "sophie.l@example.com",
-        level: 1,
-        joinDate: "Décembre 2024",
-        zodiacSign: "Verseau",
-        ascendant: "Gémeaux",
-        moonSign: "Scorpion",
-    };
+    const { levelMetadata, isLoading } = useSanctuaire();
+    const { user } = useAuth();
+    const [isEditing, setIsEditing] = useState(false);
+    const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1,
-            },
-        },
-    };
+    // Mock profile data
+    const [profile, setProfile] = useState<ProfileData>({
+        firstName: user?.name?.split(" ")[0] || "Prénom",
+        lastName: user?.name?.split(" ").slice(1).join(" ") || "Nom",
+        email: user?.email || "email@example.com",
+        phone: "Non renseigné",
+        birthDate: "11/11/1983",
+        birthTime: "11:11",
+        birthPlace: "Paris, France",
+        spiritualObjective: "Découvrir ma mission de vie",
+        additionalInfo: "Je suis en quête de sens et de guidance spirituelle.",
+        facePhoto: undefined,
+        palmPhoto: undefined,
+    });
 
-    const itemVariants = {
-        hidden: { opacity: 0, y: 20 },
-        visible: { opacity: 1, y: 0 },
-    };
+    const displayLevel = (levelMetadata?.level || 1) as 1 | 2 | 3 | 4;
+    const profileComplete = profile.birthDate && profile.birthTime;
 
     return (
-        <div className="max-w-7xl mx-auto px-6 py-12 min-h-screen">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+            {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mb-12 text-center"
+                className="mb-8"
             >
-                <h1 className="text-4xl md:text-5xl font-playfair italic text-white mb-4">
-                    Mon Profil Spirituel
-                </h1>
-                <p className="text-cosmic-ethereal/60 uppercase tracking-widest text-sm">
-                    Votre identité dans le cosmos
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl md:text-4xl font-playfair italic text-gradient-dawn mb-2">
+                            Mon Profil Spirituel
+                        </h1>
+                        <div className="flex items-center gap-3 text-star-dim text-sm">
+                            <Check className={`w-4 h-4 ${profileComplete ? "text-emerald-400" : "text-dawn-gold"}`} />
+                            <span>{profileComplete ? "Profil complété" : "Profil incomplet"}</span>
+                            <span className="text-star-dim/40">•</span>
+                            <span>Soumis le 21/10/2025</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setIsEditing(!isEditing)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 ${isEditing
+                                ? "bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30"
+                                : "bg-dawn-gold/20 text-dawn-gold border border-dawn-gold/30 hover:bg-dawn-gold/30"
+                            }`}
+                    >
+                        {isEditing ? <X className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                        {isEditing ? "Annuler" : "Modifier"}
+                    </button>
+                </div>
             </motion.div>
 
-            <motion.div
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                className="grid grid-cols-1 md:grid-cols-3 gap-8"
-            >
-                {/* 🧙‍♂️ Main Identity Card */}
-                <motion.div variants={itemVariants} className="md:col-span-1">
-                    <GlassCard className="h-full flex flex-col items-center text-center p-8 border-white/10 bg-gradient-to-b from-white/5 to-transparent">
-                        <div className="relative mb-6 group">
-                            <div className="absolute inset-0 bg-cosmic-gold/20 rounded-full blur-xl group-hover:blur-2xl transition-all duration-500" />
-                            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-amber-800/40 to-black border-2 border-cosmic-gold/50 flex items-center justify-center relative z-10 overflow-hidden">
-                                <User className="w-16 h-16 text-cosmic-gold/80" />
-                            </div>
-                            <div className="absolute bottom-0 right-0 z-20">
-                                <LevelBadge level={user.level as 1} />
-                            </div>
-                        </div>
+            {/* Content Grid */}
+            <div className="space-y-6">
+                {/* Personal Information */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                >
+                    <GlassCard className="p-6">
+                        <h2 className="text-lg font-playfair italic text-dawn-amber mb-6 flex items-center gap-2">
+                            <User className="w-5 h-5" />
+                            Informations Personnelles
+                        </h2>
 
-                        <h2 className="text-2xl font-playfair text-white mb-1">{user.name}</h2>
-                        <p className="text-sm text-white/50 mb-6 flex items-center gap-2 justify-center">
-                            <Mail className="w-3 h-3" /> {user.email}
-                        </p>
-
-                        <div className="w-full h-px bg-white/10 mb-6" />
-
-                        <div className="flex flex-col gap-3 w-full text-left">
-                            <div className="flex items-center gap-3 text-sm text-cosmic-ethereal/80 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                                <Calendar className="w-4 h-4 text-cosmic-gold" />
-                                <span>Membre depuis {user.joinDate}</span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Prénom */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <User className="w-3 h-3" /> Prénom
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-silver">
+                                    {profile.firstName}
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3 text-sm text-cosmic-ethereal/80 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                                <Award className="w-4 h-4 text-emerald-400" />
-                                <span>Statut: Initié</span>
+
+                            {/* Nom */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <User className="w-3 h-3" /> Nom
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-silver">
+                                    {profile.lastName}
+                                </div>
+                            </div>
+
+                            {/* Email */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <Mail className="w-3 h-3" /> Email
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-silver">
+                                    {profile.email}
+                                </div>
+                            </div>
+
+                            {/* Téléphone */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <Phone className="w-3 h-3" /> Téléphone
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-dim">
+                                    {profile.phone}
+                                </div>
+                            </div>
+
+                            {/* Date de naissance */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <Calendar className="w-3 h-3" /> Date de naissance
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-silver">
+                                    {profile.birthDate}
+                                </div>
+                            </div>
+
+                            {/* Heure de naissance */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <Clock className="w-3 h-3" /> Heure de naissance
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-silver">
+                                    {profile.birthTime}
+                                </div>
+                            </div>
+
+                            {/* Objectif spirituel */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <Target className="w-3 h-3" /> Objectif spirituel
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-silver">
+                                    {profile.spiritualObjective}
+                                </div>
+                            </div>
+
+                            {/* Informations complémentaires */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-2">
+                                    <Info className="w-3 h-3" /> Informations complémentaires
+                                </label>
+                                <div className="p-3 rounded-xl bg-cosmos-twilight/50 border border-white/5 text-star-silver">
+                                    {profile.additionalInfo}
+                                </div>
                             </div>
                         </div>
                     </GlassCard>
                 </motion.div>
 
-                {/* 🌌 Astral Chart Card */}
-                <motion.div variants={itemVariants} className="md:col-span-2">
-                    <GlassCard className="h-full p-8 border-white/10 relative overflow-hidden">
-                        {/* Background Decoration */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-900/10 rounded-full blur-[80px]" />
+                {/* Photos Section */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                >
+                    <GlassCard className="p-6">
+                        <h2 className="text-lg font-playfair italic text-dawn-amber mb-6 flex items-center gap-2">
+                            <Camera className="w-5 h-5" />
+                            Photos Uploadées
+                        </h2>
 
-                        <h3 className="text-2xl font-playfair italic text-indigo-200 mb-8 flex items-center gap-3">
-                            <Star className="w-6 h-6 text-indigo-400" />
-                            Thème Astral Simplifié
-                        </h3>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                            {/* Sun Sign */}
-                            <div className="p-6 rounded-2xl bg-gradient-to-br from-amber-900/20 to-transparent border border-amber-500/20 text-center hover:scale-105 transition-transform duration-300">
-                                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-amber-500/10 flex items-center justify-center">
-                                    <Sun className="w-6 h-6 text-amber-300" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Photo de visage */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-3">
+                                    <Camera className="w-3 h-3" /> Photo de visage
+                                </label>
+                                <div
+                                    className="aspect-[4/3] rounded-xl bg-cosmos-twilight/50 border border-dashed border-dawn-gold/30 flex flex-col items-center justify-center cursor-pointer hover:bg-cosmos-twilight/70 transition-colors"
+                                    onClick={() => profile.facePhoto && setLightboxImage(profile.facePhoto)}
+                                >
+                                    <Camera className="w-10 h-10 text-dawn-gold/50 mb-3" />
+                                    <span className="text-sm text-dawn-gold/80">Photo de visage</span>
+                                    <span className="text-xs text-star-dim mt-1">Uploadée avec succès</span>
                                 </div>
-                                <div className="text-xs uppercase tracking-widest text-amber-500/60 mb-1">Signe Solaire</div>
-                                <div className="text-xl font-playfair text-amber-100">{user.zodiacSign}</div>
                             </div>
 
-                            {/* Ascendant */}
-                            <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-900/20 to-transparent border border-purple-500/20 text-center hover:scale-105 transition-transform duration-300">
-                                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-purple-500/10 flex items-center justify-center">
-                                    <MapPin className="w-6 h-6 text-purple-300" />
+                            {/* Photo de paume */}
+                            <div>
+                                <label className="flex items-center gap-2 text-xs text-star-dim uppercase tracking-wider mb-3">
+                                    <Hand className="w-3 h-3" /> Photo de paume
+                                </label>
+                                <div
+                                    className="aspect-[4/3] rounded-xl bg-cosmos-twilight/50 border border-dashed border-cosmos-cyan/30 flex flex-col items-center justify-center cursor-pointer hover:bg-cosmos-twilight/70 transition-colors"
+                                >
+                                    <Hand className="w-10 h-10 text-cosmos-cyan/50 mb-3" />
+                                    <span className="text-sm text-cosmos-cyan/80">Photo de paume</span>
+                                    <span className="text-xs text-star-dim mt-1">Uploadée avec succès</span>
                                 </div>
-                                <div className="text-xs uppercase tracking-widest text-purple-500/60 mb-1">Ascendant</div>
-                                <div className="text-xl font-playfair text-purple-100">{user.ascendant}</div>
                             </div>
-
-                            {/* Moon Sign */}
-                            <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-900/20 to-transparent border border-indigo-500/20 text-center hover:scale-105 transition-transform duration-300">
-                                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-indigo-500/10 flex items-center justify-center">
-                                    <Moon className="w-6 h-6 text-indigo-300" />
-                                </div>
-                                <div className="text-xs uppercase tracking-widest text-indigo-500/60 mb-1">Signe Lunaire</div>
-                                <div className="text-xl font-playfair text-indigo-100">{user.moonSign}</div>
-                            </div>
-                        </div>
-
-                        <div className="mt-8 p-6 rounded-xl bg-white/5 border border-white/5">
-                            <h4 className="text-sm font-bold uppercase tracking-widest text-white/40 mb-3">Votre prochaine étape</h4>
-                            <p className="text-cosmic-ethereal/80 leading-relaxed italic">
-                                "Le chemin des étoiles s'ouvre à vous. Votre signe solaire en {user.zodiacSign} indique une période propice à l'introspection..."
-                            </p>
                         </div>
                     </GlassCard>
                 </motion.div>
-            </motion.div>
+
+                {/* Quick Actions */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                >
+                    <GlassCard className="p-6">
+                        <h2 className="text-lg font-playfair italic text-dawn-amber mb-6 flex items-center gap-2">
+                            <Target className="w-5 h-5" />
+                            Actions Rapides
+                        </h2>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <button className="p-4 rounded-xl bg-cosmos-twilight/50 border border-white/5 hover:border-dawn-gold/20 hover:bg-cosmos-twilight/70 transition-all text-left group">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-8 h-8 rounded-lg bg-cosmos-cyan/20 flex items-center justify-center">
+                                        <User className="w-4 h-4 text-cosmos-cyan" />
+                                    </div>
+                                    <span className="text-star-white font-medium group-hover:text-dawn-gold transition-colors">Mes Lectures</span>
+                                </div>
+                                <span className="text-xs text-star-dim">Consulter l'historique</span>
+                            </button>
+
+                            <button className="p-4 rounded-xl bg-gradient-to-r from-dawn-gold/20 to-dawn-amber/10 border border-dawn-gold/20 hover:border-dawn-gold/40 transition-all text-left group">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-8 h-8 rounded-lg bg-dawn-gold/20 flex items-center justify-center">
+                                        <Upload className="w-4 h-4 text-dawn-gold" />
+                                    </div>
+                                    <span className="text-dawn-gold font-medium">Nouvelle Lecture</span>
+                                </div>
+                                <span className="text-xs text-dawn-gold/60">Commander maintenant</span>
+                            </button>
+
+                            <button className="p-4 rounded-xl bg-cosmos-twilight/50 border border-white/5 hover:border-dawn-gold/20 hover:bg-cosmos-twilight/70 transition-all text-left group">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                        <MapPin className="w-4 h-4 text-purple-400" />
+                                    </div>
+                                    <span className="text-star-white font-medium group-hover:text-dawn-gold transition-colors">Retour Accueil</span>
+                                </div>
+                                <span className="text-xs text-star-dim">Tableau de bord</span>
+                            </button>
+                        </div>
+                    </GlassCard>
+                </motion.div>
+            </div>
+
+            {/* Lightbox */}
+            <AnimatePresence>
+                {lightboxImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+                        onClick={() => setLightboxImage(null)}
+                    >
+                        <button className="absolute top-4 right-4 text-white/60 hover:text-white">
+                            <X className="w-8 h-8" />
+                        </button>
+                        <img src={lightboxImage} alt="Photo" className="max-w-full max-h-full rounded-lg" />
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
