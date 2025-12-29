@@ -92,80 +92,10 @@ export function TestimonialsCarousel() {
                         </div>
                     </div>
 
-                    {/* Right: Thinking Woman Figure */}
-                    <div className="hidden lg:flex relative h-full min-h-[500px] items-center justify-center">
-                        {/* Background glow */}
-                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent rounded-full blur-[100px] opacity-20 animate-pulse"></div>
-
-                        {/* Thinking Woman SVG */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 1.5, delay: 0.3 }}
-                            className="relative w-[300px] h-[400px] opacity-30"
-                        >
-                            <svg
-                                viewBox="0 0 100 140"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="w-full h-full stroke-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-                            >
-                                {/* Base/Pedestal */}
-                                <rect x="30" y="125" width="40" height="3" strokeWidth="0.3" className="opacity-40" />
-                                <rect x="35" y="120" width="30" height="5" strokeWidth="0.3" className="opacity-40" />
-
-                                {/* Sitting pose - body mass */}
-                                <ellipse cx="50" cy="110" rx="18" ry="12" strokeWidth="0.5" className="opacity-60" />
-
-                                {/* Legs - folded position */}
-                                {/* Left leg */}
-                                <path d="M38 110 L35 120" strokeWidth="0.6" strokeLinecap="round" />
-                                <path d="M35 120 L32 125" strokeWidth="0.6" strokeLinecap="round" />
-
-                                {/* Right leg */}
-                                <path d="M62 110 L65 120" strokeWidth="0.6" strokeLinecap="round" />
-                                <path d="M65 120 L68 125" strokeWidth="0.6" strokeLinecap="round" />
-
-                                {/* Torso - curved, leaning forward */}
-                                <path d="M50 110 Q48 95 50 75" strokeWidth="0.7" strokeLinecap="round" />
-
-                                {/* Right arm - supporting elbow on knee */}
-                                <path d="M55 85 L62 95" strokeWidth="0.6" strokeLinecap="round" />
-                                <path d="M62 95 L65 105" strokeWidth="0.5" strokeLinecap="round" />
-
-                                {/* Left arm - hand to face (thinking pose) */}
-                                <path d="M45 80 L38 75" strokeWidth="0.6" strokeLinecap="round" />
-                                <path d="M38 75 L35 65" strokeWidth="0.6" strokeLinecap="round" />
-                                <path d="M35 65 L42 58" strokeWidth="0.5" strokeLinecap="round" />
-
-                                {/* Head - tilted down in contemplation */}
-                                <circle cx="48" cy="55" r="8" strokeWidth="0.6" />
-
-                                {/* Hair flow - feminine touch */}
-                                <path d="M40 52 Q35 50 38 45" strokeWidth="0.3" className="opacity-70" />
-                                <path d="M42 50 Q37 48 39 43" strokeWidth="0.3" className="opacity-70" />
-                                <path d="M54 52 Q58 50 56 46" strokeWidth="0.3" className="opacity-70" />
-
-                                {/* Shoulders */}
-                                <path d="M44 75 L56 75" strokeWidth="0.4" strokeLinecap="round" className="opacity-80" />
-
-                                {/* Energy points - subtle chakra hints */}
-                                <motion.circle
-                                    animate={{ opacity: [0.3, 0.8, 0.3] }}
-                                    transition={{ duration: 3, repeat: Infinity, delay: 0 }}
-                                    cx="48" cy="55" r="0.8" fill="#FFFFFF"
-                                /> {/* Third eye - thinking */}
-                                <motion.circle
-                                    animate={{ opacity: [0.3, 0.8, 0.3] }}
-                                    transition={{ duration: 3, repeat: Infinity, delay: 1 }}
-                                    cx="50" cy="85" r="0.6" fill="#FFFFFF"
-                                /> {/* Heart */}
-
-                                {/* Geometric container - subtle frame */}
-                                <circle cx="50" cy="80" r="55" strokeWidth="0.2" className="opacity-20" strokeDasharray="2,4" />
-                            </svg>
-                        </motion.div>
+                    {/* Right: Visual Abstract - Optional Decorative Element */}
+                    <div className="hidden lg:block relative h-full min-h-[500px]">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-cosmic-gold/10 to-transparent rounded-full blur-[100px] opacity-20 animate-pulse delay-700"></div>
+                        {/* This could be a 3D spline or another Mandala in the future */}
                     </div>
                 </div>
             </div>
