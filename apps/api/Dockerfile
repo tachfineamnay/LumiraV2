@@ -53,6 +53,10 @@ COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
+# SCRIPT DE SEEDING
+RUN npm install -g tsx
+COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
+
 EXPOSE 3001
 
 CMD ["node", "apps/api/dist/main.js"]
