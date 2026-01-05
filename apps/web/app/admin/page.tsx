@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-    TrendingUp,
-    Users,
     ShoppingBag,
     Clock,
     AlertCircle,
@@ -29,12 +27,12 @@ export default function AdminDashboard() {
         todayOrders: 0,
     });
 
-    const [recentActivity, setRecentActivity] = useState([
+    const recentActivity = [
         { id: 1, type: "order", text: "Nouvelle commande #LUM-892 par Elena S.", time: "il y a 2 min", status: "pending" },
         { id: 2, type: "validation", text: "Validation requise pour #LUM-887", time: "il y a 15 min", status: "warning" },
         { id: 3, type: "completion", text: "Lecture livrée à Thomas M.", time: "il y a 1h", status: "success" },
         { id: 4, type: "system", text: "Maintenance système effectuée", time: "il y a 4h", status: "info" },
-    ]);
+    ];
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -70,6 +68,14 @@ export default function AdminDashboard() {
     useEffect(() => {
         fetchStats();
     }, [fetchStats]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-10">

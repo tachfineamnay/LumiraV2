@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { Lock, Loader2, CreditCard } from 'lucide-react';
+import { Lock, Loader2 } from 'lucide-react';
 
 interface StripePaymentProps {
     amount: number;
@@ -41,7 +41,7 @@ export function StripePayment({ amount, onPaymentSuccess, onPaymentError, disabl
                 // Payment requires redirect or additional action
                 setIsProcessing(false);
             }
-        } catch (err) {
+        } catch {
             onPaymentError('Une erreur inattendue est survenue');
             setIsProcessing(false);
         }

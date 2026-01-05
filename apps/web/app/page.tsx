@@ -2,9 +2,8 @@
 
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Mandala } from "../components/ui/Mandala";
-import { RoyalButton } from "../components/ui/RoyalButton";
 import { useRef } from "react";
-import { Star, Sparkles, Clock, ArrowDown, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
 import { LevelCardPremium, Level } from "../components/landing/LevelCardPremium";

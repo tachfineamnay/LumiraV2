@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, Star, User, Bot, Loader2 } from "lucide-react";
+import { Send, Sparkles, User, Bot, Loader2 } from "lucide-react";
 import { GlassCard } from "../../../components/ui/GlassCard";
 
 interface Message {

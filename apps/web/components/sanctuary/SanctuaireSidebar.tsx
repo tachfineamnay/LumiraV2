@@ -6,17 +6,14 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     Home,
-    User,
     Compass,
     BookOpen,
     MessageCircle,
     Layers,
-    Crown,
     Star,
     ChevronRight,
     Sparkles
 } from "lucide-react";
-import { useSanctuaire } from "../../context/SanctuaireContext";
 
 // =============================================================================
 // NAV ITEMS
@@ -44,8 +41,6 @@ const navItems: NavItem[] = [
 
 export function SanctuaireSidebar() {
     const pathname = usePathname();
-    const { levelMetadata, isLoading } = useSanctuaire();
-    const displayLevel = (levelMetadata?.level || 1) as 1 | 2 | 3 | 4;
 
     return (
         <aside className="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 glass-sidebar z-40">

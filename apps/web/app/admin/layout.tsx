@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
     ClipboardList,
     CheckCircle2,
@@ -24,7 +24,7 @@ function AdminLayoutInner({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
-    const { expert, logout, isLoading, isAuthenticated } = useExpertAuth();
+    const { expert, logout, isLoading } = useExpertAuth();
 
     // Don't apply layout to login page
     if (pathname === "/admin/login") {

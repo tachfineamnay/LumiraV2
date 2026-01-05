@@ -17,7 +17,7 @@ export function FreeOrderButton({ onSubmit, disabled }: FreeOrderButtonProps) {
         setIsSubmitting(true);
         try {
             await onSubmit();
-        } catch (error) {
+        } catch {
             setIsSubmitting(false);
         }
     };

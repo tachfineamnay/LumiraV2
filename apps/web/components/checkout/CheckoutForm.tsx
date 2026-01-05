@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,7 +22,7 @@ interface CheckoutFormProps {
 }
 
 export function CheckoutForm({ onFormValid, onFormInvalid }: CheckoutFormProps) {
-    const { register, watch, formState: { errors, isValid }, trigger } = useForm<CheckoutFormData>({
+    const { register, watch, formState: { errors, isValid } } = useForm<CheckoutFormData>({
         resolver: zodResolver(formSchema),
         mode: 'onChange',
     });

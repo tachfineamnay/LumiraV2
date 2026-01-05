@@ -16,7 +16,6 @@ import {
     Check,
     Loader2,
     Lock,
-    ChevronRight,
     Plus
 } from "lucide-react";
 import { GlassCard } from "../../../components/ui/GlassCard";
@@ -171,8 +170,13 @@ function AssetTab({
             disabled={status === "locked"}
         >
             {status === "locked" ? <Lock className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
-            {label}
+            <span>{label}</span>
             {status === "generating" && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
+            {status === "locked" && requiredLevel != null && (
+                <span className="ml-auto text-[10px] text-star-dim/50 uppercase tracking-widest">
+                    Niv. {requiredLevel}+
+                </span>
+            )}
         </button>
     );
 }
@@ -198,7 +202,7 @@ function UpgradeCard({
         <div className={`p-5 rounded-2xl border ${isComingSoon ? "bg-white/5 border-white/10" : "bg-gradient-to-br from-dawn-gold/10 to-dawn-amber/5 border-dawn-gold/20"}`}>
             <div className="flex items-center justify-between mb-3">
                 <span className={`text-sm font-bold ${isComingSoon ? "text-star-dim" : "text-dawn-gold"}`}>
-                    Niveau {name}
+                    Niveau {level} — {name}
                 </span>
                 <span className={`text-lg font-bold ${isComingSoon ? "text-star-dim" : "text-star-white"}`}>
                     {price}

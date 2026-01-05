@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Clock, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
+import { Clock, Sparkles } from "lucide-react";
 
 interface CosmicNotificationProps {
     type?: "success" | "info" | "warning";

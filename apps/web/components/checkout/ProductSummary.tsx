@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Sparkles, Crown, Clock } from 'lucide-react';
+import { Sparkles, Clock } from 'lucide-react';
 
 interface Product {
     id: string;

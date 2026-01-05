@@ -37,7 +37,7 @@ export const SanctuarySolarSystem = () => {
             <div className="absolute inset-0 bg-cosmic-gold/5 blur-[100px] rounded-full" />
 
             {/* Solar Orbits */}
-            {[110, 180, 260].map((radius, i) => (
+            {[110, 180, 260].map((radius) => (
                 <div
                     key={radius}
                     className="absolute rounded-full border border-white/5"
@@ -69,7 +69,7 @@ export const SanctuarySolarSystem = () => {
             </motion.div>
 
             {/* 🪐 Orbiting Planets */}
-            {PLANETS.map((planet, index) => {
+            {PLANETS.map((planet) => {
                 const isActive = pathname?.startsWith(planet.route);
                 const isHovered = hoveredPlanet === planet.key;
                 const colors = colorMap[planet.color];

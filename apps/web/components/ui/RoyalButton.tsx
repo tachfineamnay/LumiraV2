@@ -54,7 +54,9 @@ export const RoyalButton = ({
             <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 blur-2xl bg-gold/30 transition-opacity duration-500 -z-10" />
 
             {/* Subtle Shine */}
-            <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+            {showShimmer && (
+                <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+            )}
         </motion.button>
     );
 };

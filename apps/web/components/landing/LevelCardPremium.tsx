@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Check, Star, ArrowRight, Sparkles, Crown, Eye, Infinity } from 'lucide-react'
+import { Check, Star, Sparkles, Crown, Eye, Infinity } from 'lucide-react'
 
 export interface Level {
     id: number

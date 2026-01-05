@@ -28,7 +28,6 @@ function CheckoutContent() {
 
     const [product, setProduct] = useState<Product | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState<CheckoutFormData | null>(null);
     const [isFormValid, setIsFormValid] = useState(false);
     const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -40,7 +39,7 @@ function CheckoutContent() {
             try {
                 const response = await api.get(`/products/${productLevel}`);
                 setProduct(response.data);
-            } catch (err) {
+            } catch {
                 // Fallback product data if API fails
                 const fallbackProducts: Record<string, Product> = {
                     initie: {
@@ -104,7 +103,7 @@ function CheckoutContent() {
                     amountCents: product.amountCents,
                 });
                 setClientSecret(response.data.clientSecret);
-            } catch (err) {
+            } catch {
                 setPaymentError('Impossible de préparer le paiement. Veuillez réessayer.');
             }
         };
@@ -144,7 +143,7 @@ function CheckoutContent() {
             });
 
             router.push(`/sanctuaire?email=${encodeURIComponent(formData.email)}`);
-        } catch (err) {
+        } catch {
             setPaymentError('Impossible de créer votre compte. Veuillez réessayer.');
         }
     };

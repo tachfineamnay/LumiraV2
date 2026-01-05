@@ -1,7 +1,7 @@
 'use client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Quote } from 'lucide-react'
+import { Quote } from 'lucide-react'
 
 const TESTIMONIALS = [
     {

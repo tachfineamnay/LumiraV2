@@ -5,7 +5,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
-import { GlassCard } from "../../components/ui/GlassCard";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 import {
     User,

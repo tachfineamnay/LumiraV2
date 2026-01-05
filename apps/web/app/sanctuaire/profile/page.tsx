@@ -14,7 +14,6 @@ import {
     Camera,
     Hand,
     Edit3,
-    Save,
     X,
     Check,
     Upload
@@ -47,13 +46,13 @@ interface ProfileData {
 // =============================================================================
 
 export default function ProfilePage() {
-    const { levelMetadata, isLoading } = useSanctuaire();
+    const { levelMetadata } = useSanctuaire();
     const { user } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
     // Mock profile data
-    const [profile, setProfile] = useState<ProfileData>({
+    const profile: ProfileData = {
         firstName: user?.name?.split(" ")[0] || "Prénom",
         lastName: user?.name?.split(" ").slice(1).join(" ") || "Nom",
         email: user?.email || "email@example.com",
@@ -65,7 +64,7 @@ export default function ProfilePage() {
         additionalInfo: "Je suis en quête de sens et de guidance spirituelle.",
         facePhoto: undefined,
         palmPhoto: undefined,
-    });
+    };
 
     const displayLevel = (levelMetadata?.level || 1) as 1 | 2 | 3 | 4;
     const profileComplete = profile.birthDate && profile.birthTime;
@@ -84,6 +83,7 @@ export default function ProfilePage() {
                             Mon Profil Spirituel
                         </h1>
                         <div className="flex items-center gap-3 text-star-dim text-sm">
+                            <LevelBadge level={displayLevel} />
                             <Check className={`w-4 h-4 ${profileComplete ? "text-emerald-400" : "text-dawn-gold"}`} />
                             <span>{profileComplete ? "Profil complété" : "Profil incomplet"}</span>
                             <span className="text-star-dim/40">•</span>

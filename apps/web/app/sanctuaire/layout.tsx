@@ -2,7 +2,6 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { SanctuaireProvider, useSanctuaire } from "../../context/SanctuaireContext";
 import { SanctuaireSidebar } from "../../components/sanctuary/SanctuaireSidebar";
