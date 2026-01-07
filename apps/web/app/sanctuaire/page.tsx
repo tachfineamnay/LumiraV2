@@ -1,11 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
+import { OnboardingForm } from "../../components/sanctuary/OnboardingForm";
 import { useSanctuaire } from "../../context/SanctuaireContext";
+import { useSanctuaireAuth, isFirstVisitToken, setFirstVisitFlag, clearFirstVisitFlag } from "../../context/SanctuaireAuthContext";
 import {
     User,
     Eye,
@@ -16,7 +19,8 @@ import {
     Loader2,
     Star,
     Lock,
-    Sparkles
+    Sparkles,
+    AlertCircle
 } from "lucide-react";
 
 // =============================================================================
@@ -93,10 +97,149 @@ const getLevelInfo = (level: number): { name: "Initié" | "Mystique" | "Profond"
 };
 
 // =============================================================================
-// COMPONENT
+// AUTO-LOGIN HANDLER
 // =============================================================================
 
-export default function SanctuaireDashboard() {
+function AutoLoginHandler() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const { authenticateWithEmail, isAuthenticated, isLoading: authLoading } = useSanctuaireAuth();
+
+    const [autoLoginState, setAutoLoginState] = useState<'idle' | 'authenticating' | 'success' | 'error'>('idle');
+    const [autoLoginError, setAutoLoginError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+
+    const email = searchParams.get('email');
+    const token = searchParams.get('token');
+    const isFirstVisit = isFirstVisitToken(token);
+
+    // Handle auto-login from URL params
+    useEffect(() => {
+        if (!email || authLoading || isAuthenticated) return;
+        if (autoLoginState !== 'idle') return;
+
+        const performAutoLogin = async () => {
+            setAutoLoginState('authenticating');
+
+            // Set first visit flag if applicable
+            if (isFirstVisit) {
+                setFirstVisitFlag(true);
+            }
+
+            const result = await authenticateWithEmail(email);
+
+            if (result.success) {
+                setAutoLoginState('success');
+                // Show onboarding for first visit
+                if (result.isFirstVisit) {
+                    setShowOnboarding(true);
+                }
+                // Clean URL params
+                router.replace('/sanctuaire');
+            } else {
+                // Retry with exponential backoff (2s, 4s, 8s)
+                if (retryCount < 3 && !result.isRateLimited) {
+                    const delay = Math.pow(2, retryCount + 1) * 1000;
+                    setRetryCount(prev => prev + 1);
+                    setTimeout(() => {
+                        setAutoLoginState('idle');
+                    }, delay);
+                } else {
+                    setAutoLoginState('error');
+                    setAutoLoginError(result.error);
+                    // Redirect to login after 3 failed attempts
+                    setTimeout(() => {
+                        router.push(`/sanctuaire/login?email=${encodeURIComponent(email)}`);
+                    }, 3000);
+                }
+            }
+        };
+
+        performAutoLogin();
+    }, [email, token, authLoading, isAuthenticated, autoLoginState, authenticateWithEmail, retryCount, router, isFirstVisit]);
+
+    // Show loading during auto-login
+    if (autoLoginState === 'authenticating') {
+        return (
+            <div className="fixed inset-0 bg-abyss-700/95 backdrop-blur-xl z-50 flex items-center justify-center">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center gap-6 text-center px-4"
+                >
+                    <div className="relative w-20 h-20">
+                        <div className="absolute inset-0 bg-horizon-400/20 rounded-full blur-xl animate-pulse" />
+                        <div className="relative w-full h-full bg-gradient-to-br from-horizon-400 to-horizon-500 rounded-full flex items-center justify-center">
+                            <Loader2 className="w-10 h-10 text-abyss-800 animate-spin" />
+                        </div>
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-playfair italic text-stellar-200 mb-2">
+                            Préparation de votre Sanctuaire...
+                        </h2>
+                        <p className="text-stellar-500 text-sm">
+                            {retryCount > 0 ? `Tentative ${retryCount + 1}/3...` : 'Authentification en cours...'}
+                        </p>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
+
+    // Show error during auto-login failure
+    if (autoLoginState === 'error') {
+        return (
+            <div className="fixed inset-0 bg-abyss-700/95 backdrop-blur-xl z-50 flex items-center justify-center">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center gap-6 text-center px-4 max-w-md"
+                >
+                    <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center border border-rose-500/20">
+                        <AlertCircle className="w-8 h-8 text-rose-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-playfair italic text-stellar-200 mb-2">
+                            Erreur d&apos;authentification
+                        </h2>
+                        <p className="text-rose-300 text-sm mb-4">
+                            {autoLoginError}
+                        </p>
+                        <p className="text-stellar-500 text-xs">
+                            Redirection vers la page de connexion...
+                        </p>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
+
+    // Onboarding modal
+    if (showOnboarding) {
+        return (
+            <OnboardingForm
+                isOpen={showOnboarding}
+                onClose={() => {
+                    setShowOnboarding(false);
+                    clearFirstVisitFlag();
+                }}
+                onComplete={() => {
+                    setShowOnboarding(false);
+                    clearFirstVisitFlag();
+                }}
+            />
+        );
+    }
+
+    return null;
+}
+
+// =============================================================================
+// DASHBOARD CONTENT
+// =============================================================================
+
+function DashboardContent() {
     const { highestLevel, hasCapability, isLoading, orderCount } = useSanctuaire();
 
     if (isLoading) {
@@ -256,5 +399,27 @@ export default function SanctuaireDashboard() {
                 </div>
             </div>
         </div>
+    );
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
+export default function SanctuaireDashboard() {
+    return (
+        <Suspense fallback={
+            <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-12 h-12 text-horizon-400 animate-spin" />
+                    <p className="text-stellar-500 text-sm tracking-widest uppercase">
+                        Chargement...
+                    </p>
+                </div>
+            </div>
+        }>
+            <AutoLoginHandler />
+            <DashboardContent />
+        </Suspense>
     );
 }

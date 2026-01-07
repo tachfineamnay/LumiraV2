@@ -23,14 +23,18 @@ function PaymentSuccessContent() {
 
     useEffect(() => {
         if (status === 'confirmed') {
+            // Generate a unique first visit token
+            const firstVisitToken = `fv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
             // Auto-redirect to sanctuaire after animation
             const redirectTimer = setTimeout(() => {
-                router.push(`/sanctuaire?email=${encodeURIComponent(email)}`);
+                router.push(`/sanctuaire?email=${encodeURIComponent(email)}&token=${firstVisitToken}`);
             }, 2000);
 
             return () => clearTimeout(redirectTimer);
         }
     }, [status, router, email]);
+
 
     return (
         <div className="min-h-screen relative overflow-hidden flex items-center justify-center">

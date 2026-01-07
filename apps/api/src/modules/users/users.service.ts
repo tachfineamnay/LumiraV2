@@ -85,4 +85,95 @@ export class UsersService {
       where: { id },
     });
   }
+
+  /**
+   * Find a user by email only if they have at least one paid/valid order.
+   * Used for Sanctuaire passwordless authentication.
+   */
+  async findUserWithPaidOrder(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
+    // First find the user
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      include: { profile: true },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    // Check if user has at least one paid/valid order
+    const paidOrder = await this.prisma.order.findFirst({
+      where: {
+        userId: user.id,
+        OR: [
+          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED'] } },
+          { status: 'PENDING', amount: 0 }, // Free orders
+        ],
+      },
+    });
+
+    if (!paidOrder) {
+      return null;
+    }
+
+    return user;
+  }
+
+  /**
+   * Get complete user profile data for Sanctuaire
+   */
+  async getUserProfile(userId: string): Promise<{
+    user: User;
+    profile: UserProfile | null;
+    stats: { totalOrders: number; completedOrders: number };
+  } | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    // Get order stats
+    const [totalOrders, completedOrders] = await Promise.all([
+      this.prisma.order.count({ where: { userId } }),
+      this.prisma.order.count({ where: { userId, status: 'COMPLETED' } }),
+    ]);
+
+    return {
+      user,
+      profile: user.profile,
+      stats: { totalOrders, completedOrders },
+    };
+  }
+
+  /**
+   * Get user's completed/delivered orders for Sanctuaire
+   */
+  async getCompletedOrders(userId: string): Promise<Array<{
+    id: string;
+    orderNumber: string;
+    level: number;
+    status: string;
+    deliveredAt: Date | null;
+    createdAt: Date;
+  }>> {
+    return this.prisma.order.findMany({
+      where: {
+        userId,
+        status: { in: ['COMPLETED', 'AWAITING_VALIDATION', 'PROCESSING', 'PAID'] },
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        level: true,
+        status: true,
+        deliveredAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
