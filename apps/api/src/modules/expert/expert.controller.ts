@@ -79,6 +79,11 @@ export class ExpertController {
         return this.expertService.getPendingOrders(query);
     }
 
+    @Get('orders/processing')
+    async getProcessingOrders(@Query() query: PaginationDto) {
+        return this.expertService.getProcessingOrders(query);
+    }
+
     @Get('orders/validation')
     async getValidationQueue(@Query() query: PaginationDto) {
         return this.expertService.getValidationQueue(query);

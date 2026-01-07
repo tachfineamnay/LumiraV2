@@ -10,6 +10,7 @@ import { Order } from '../../../lib/types';
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);
+    const [processingOrders, setProcessingOrders] = useState<Order[]>([]);
     const [stats, setStats] = useState({
         pendingOrders: 0,
         processingOrders: 0,
@@ -30,8 +31,11 @@ export default function OrdersPage() {
         if (!token) return;
 
         try {
-            const [ordersRes, statsRes] = await Promise.all([
+            const [ordersRes, processingRes, statsRes] = await Promise.all([
                 fetch(`${apiUrl}/api/expert/orders/pending`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+                fetch(`${apiUrl}/api/expert/orders/processing`, {
                     headers: { Authorization: `Bearer ${token}` },
                 }),
                 fetch(`${apiUrl}/api/expert/stats`, {
@@ -42,6 +46,10 @@ export default function OrdersPage() {
             if (ordersRes.ok) {
                 const data = await ordersRes.json();
                 setOrders(data.data || []);
+            }
+            if (processingRes.ok) {
+                const data = await processingRes.json();
+                setProcessingOrders(data.data || []);
             }
             if (statsRes.ok) {
                 const data = await statsRes.json();
@@ -135,16 +143,27 @@ export default function OrdersPage() {
 
             {/* Main Content */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                <OrderQueue
-                    orders={orders}
-                    title="File d'attente"
-                    loading={loading}
-                    onRefresh={fetchData}
-                    onView={handleViewOrder}
-                    onTake={handleTakeOrder}
-                    showTake={true}
-                    emptyMessage="Aucune commande en attente"
-                />
+                <div className="space-y-8">
+                    <OrderQueue
+                        orders={orders}
+                        title="File d'attente"
+                        loading={loading}
+                        onRefresh={fetchData}
+                        onView={handleViewOrder}
+                        onTake={handleTakeOrder}
+                        showTake={true}
+                        emptyMessage="Aucune commande en attente"
+                    />
+                    <OrderQueue
+                        orders={processingOrders}
+                        title="En cours de traitement"
+                        loading={loading}
+                        onRefresh={fetchData}
+                        onView={handleViewOrder}
+                        showTake={false}
+                        emptyMessage="Aucune commande en cours"
+                    />
+                </div>
                 <ContentGenerator
                     selectedOrder={selectedOrder}
                     onProcess={handleProcessOrder}

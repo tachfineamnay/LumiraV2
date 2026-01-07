@@ -30,11 +30,17 @@ export class UsersService {
    * Get full entitlements for a user based on their paid/completed orders
    */
   async getEntitlements(userId: string): Promise<EntitlementsResponse> {
-    // Fetch all paid/completed orders for the user
+    // Fetch all orders that should grant entitlements.
+    // Note: an order can move from PAID -> PROCESSING -> AWAITING_VALIDATION -> COMPLETED,
+    // and should continue granting access across the whole lifecycle.
     const orders = await this.prisma.order.findMany({
       where: {
         userId,
-        status: { in: ['PAID', 'COMPLETED'] }
+        OR: [
+          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED'] } },
+          // Free orders (amount=0) are valid even without a payment step.
+          { status: 'PENDING', amount: 0 },
+        ],
       },
       select: { level: true },
     });

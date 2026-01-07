@@ -227,6 +227,42 @@ export class ExpertService {
         };
     }
 
+    async getProcessingOrders(dto: PaginationDto): Promise<PaginatedResult<Order>> {
+        const { page = 1, limit = 20, search } = dto;
+        const skip = (page - 1) * limit;
+
+        const where: Record<string, unknown> = {
+            status: 'PROCESSING',
+        };
+
+        if (search) {
+            where.OR = [
+                { orderNumber: { contains: search, mode: 'insensitive' } },
+                { userEmail: { contains: search, mode: 'insensitive' } },
+                { userName: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        const [orders, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                orderBy: { updatedAt: 'desc' },
+                skip,
+                take: limit,
+                include: { user: true, files: true },
+            }),
+            this.prisma.order.count({ where }),
+        ]);
+
+        return {
+            data: orders,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
     async getValidationQueue(dto: PaginationDto): Promise<PaginatedResult<Order>> {
         const { page = 1, limit = 20, search } = dto;
         const skip = (page - 1) * limit;
