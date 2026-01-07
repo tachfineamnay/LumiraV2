@@ -6,9 +6,10 @@ import { useRef } from "react";
 import { ChevronDown } from "lucide-react";
 import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
-import { LevelCardPremium, Level } from "../components/landing/LevelCardPremium";
+import { LevelCardPremium } from "../components/landing/LevelCardPremium";
 import { TestimonialsCarousel } from "../components/landing/TestimonialsCarousel";
 import { HowItWorks } from "../components/landing/HowItWorks";
+import { PRODUCTS } from "../lib/products";
 import Link from "next/link";
 
 export default function Home() {
@@ -21,49 +22,7 @@ export default function Home() {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
 
-  const levels: Level[] = [
-    {
-      id: 1,
-      name: "Éveil du Lotus",
-      subtitle: "Initié",
-      price: 111,
-      originalPrice: 149,
-      icon: "🪷",
-      color: "blue",
-      features: ["Cartographie vibratoire de base", "Analyse des centres d'énergie", "Protocole d'alignement audio", "Support email 7 jours"],
-    },
-    {
-      id: 2,
-      name: "Dimension Stellaire",
-      subtitle: "Mystique",
-      price: 222,
-      originalPrice: 299,
-      icon: "✨",
-      color: "purple",
-      popular: true,
-      features: ["Cartographie complète HD", "Lecture fractale Alpha", "Soin quantique fréquentiel", "Mandala dynamique personnalisé", "Accès Espace Oral (1 mois)"],
-    },
-    {
-      id: 3,
-      name: "Vortex Ascensionnel",
-      subtitle: "Profond",
-      price: 444,
-      originalPrice: 599,
-      icon: "🌀",
-      color: "amber",
-      features: ["Tout le niveau II", "Projection temporelle 2026", "Session de guidance expert (1h)", "Séquence sonore 528Hz unique", "Support prioritaire 24/7"],
-    },
-    {
-      id: 4,
-      name: "Oracle Absolu",
-      subtitle: "Intégral",
-      price: 888,
-      originalPrice: 1111,
-      icon: "👑",
-      color: "emerald",
-      features: ["Immersion totale & Archivage", "Consultation illimitée (1 an)", "Réajustement mensuel", "L'Arche Lumira (Espace Privé)", "Accès VIP événements"],
-    },
-  ];
+  // Products are now imported from lib/products.ts
 
   return (
     <main ref={containerRef} className="relative bg-cosmic-void min-h-screen overflow-x-hidden starfield">
@@ -192,26 +151,26 @@ export default function Home() {
             className="text-center mb-20"
           >
             <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">
-              Choisissez votre Profondeur
+              Votre Parcours Spirituel
             </span>
             <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-6xl text-cosmic-divine mt-4 mb-6">
-              Vecteurs de Transformation
+              Choisissez Votre Niveau d'Initiation
             </h2>
             <p className="text-cosmic-ethereal max-w-2xl mx-auto text-lg leading-relaxed font-light">
-              Du simple éveil à l'immersion absolue, trouvez la clé qui ouvrira les portes de votre architecture vibratoire.
+              Chaque niveau débloque des révélations plus profondes sur votre chemin spirituel.
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {levels.map((level, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+            {PRODUCTS.map((product, i) => (
               <motion.div
-                key={level.id}
+                key={product.id}
                 initial={{ opacity: 0, y: 50 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
                 viewport={{ once: true }}
               >
-                <LevelCardPremium level={level} />
+                <LevelCardPremium product={product} />
               </motion.div>
             ))}
           </div>
