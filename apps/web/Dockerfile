@@ -37,9 +37,11 @@ RUN pnpm turbo run build --filter=web...
 
 # 3. Production Runner
 FROM base AS runner
+RUN apk add --no-cache curl
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 # Optimization: Don't install dependencies in runner.
 # Use Next.js standalone output which includes necessary node_modules.

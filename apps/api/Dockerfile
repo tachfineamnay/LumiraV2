@@ -28,7 +28,7 @@ RUN pnpm turbo run build --filter=api...
 
 # 3. Stage Runner
 FROM node:20-alpine3.18 AS runner
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat curl
 WORKDIR /app
 
 ENV NODE_ENV=production

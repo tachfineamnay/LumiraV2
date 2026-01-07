@@ -23,6 +23,12 @@ async function bootstrap() {
   });
   app.setGlobalPrefix("api");
 
+  // Root endpoint for Coolify healthcheck (outside /api prefix)
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get("/", (req: unknown, res: { status: (code: number) => { json: (data: unknown) => void } }) => {
+    res.status(200).json({ status: "ok", service: "lumira-api" });
+  });
+
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`API en route sur http://localhost:${port}/api`);
