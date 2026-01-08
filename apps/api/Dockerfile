@@ -57,8 +57,8 @@ COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/clie
 RUN npm install -g tsx
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 
-# Scripts de maintenance (seed prod, etc.)
-COPY --from=builder /app/scripts ./scripts
+# Scripts de maintenance (seed prod, etc.) - copie depuis pruner car turbo prune n'inclut pas /scripts
+COPY --from=pruner /app/scripts ./scripts
 
 EXPOSE 3001
 
