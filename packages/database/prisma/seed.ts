@@ -73,68 +73,67 @@ async function main() {
             id: 'initie',
             level: ProductLevel.INITIE,
             name: 'Initié',
-            description: 'Analyse de base de votre thème astral.',
-            amountCents: 4900, // 49€
+            description: 'Accès Master - Offre Unique',
+            amountCents: 900, // 9 EUR
             features: [
-                'Thème astral de base',
-                'Interprétation personnalisée',
-                'PDF 4 pages',
+                'Accès complet au Sanctuaire',
+                'Lectures audio & PDF',
+                'Mandala HD personnalisé',
+                'Rituels sacrés',
+                'Analyses karmiques & missions'
             ],
-            isActive: true,
+            isActive: true, // Only one active
         },
         {
             id: 'mystique',
             level: ProductLevel.MYSTIQUE,
             name: 'Mystique',
-            description: 'Plongée profonde dans vos alignements stellaires.',
-            amountCents: 9900, // 99€
-            features: [
-                'Analyse des alignements stellaires',
-                'Profil de l\'âme complet',
-                'Audio 10 minutes',
-                'PDF 8 pages détaillé',
-            ],
-            isActive: true,
+            description: 'Expérience audio (Obsolète)',
+            amountCents: 4700,
+            features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Accès au Sanctuaire'],
+            isActive: false,
         },
         {
             id: 'profond',
             level: ProductLevel.PROFOND,
             name: 'Profond',
-            description: 'Rapport complet incluant les transits planétaires annuels.',
-            amountCents: 14900, // 149€
-            features: [
-                'Transits planétaires annuels',
-                'Analyse des blocages énergétiques',
-                'Méditation guidée audio 20 minutes',
-                'PDF 12 pages avec prévisions',
-            ],
-            isActive: true,
+            description: 'Expérience complète (Obsolète)',
+            amountCents: 6700,
+            features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Mandala HD personnalisé', 'Accès au Sanctuaire'],
+            isActive: false,
         },
         {
             id: 'integrale',
             level: ProductLevel.INTEGRALE,
             name: 'Intégrale',
-            description: 'L\'expérience Lumira totale : Destinée, Karma et Guidance.',
-            amountCents: 19900, // 199€
-            features: [
-                'Cartographie complète du chemin de vie',
-                'Analyse karmique approfondie',
-                'Guidance personnalisée',
-                'Mandala personnel HD',
-                'Audio complet 30 minutes',
-                'PDF 20 pages + Mandala à imprimer',
-            ],
-            isActive: true,
+            description: 'Immersion totale (Obsolète)',
+            amountCents: 9700,
+            features: ['Tout du niveau Profond', 'Rituels personnalisés', 'Suivi 30 jours', 'Accès prioritaire'],
+            isActive: false,
         },
     ];
 
     for (const product of products) {
         await prisma.product.upsert({
             where: { id: product.id },
-            update: product,
-            create: product,
+            update: {
+                name: product.name,
+                description: product.description,
+                amountCents: product.amountCents,
+                features: product.features,
+                isActive: product.isActive,
+            },
+            create: {
+                id: product.id,
+                level: product.level,
+                name: product.name,
+                description: product.description,
+                amountCents: product.amountCents,
+                features: product.features,
+                isActive: product.isActive,
+            },
         });
-        console.log(`   ✅ ${product.name} - ${product.amountCents / 100}€`);
+        console.log(`   ✅ ${product.name} - ${product.amountCents / 100}€ (Active: ${product.isActive})`);
     }
 
     // ========================================

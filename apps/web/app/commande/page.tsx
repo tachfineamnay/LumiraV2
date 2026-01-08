@@ -45,16 +45,16 @@ function CheckoutContent() {
                     initie: {
                         id: 'initie',
                         name: 'Initié',
-                        description: 'Accès découverte',
-                        amountCents: 0,
+                        description: 'Accès Master - Offre Unique',
+                        amountCents: 900,
                         level: 'INITIE',
-                        features: ['PDF lecture personnalisée', 'Accès au Sanctuaire'],
+                        features: ['Accès complet au Sanctuaire', 'Lectures audio & PDF', 'Rituels sacrés', 'Analyses karmiques'],
                         limitedOffer: null,
                     },
                     mystique: {
                         id: 'mystique',
                         name: 'Mystique',
-                        description: 'Expérience audio',
+                        description: 'Expérience audio (Obsolète)',
                         amountCents: 4700,
                         level: 'MYSTIQUE',
                         features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Accès au Sanctuaire'],
@@ -63,7 +63,7 @@ function CheckoutContent() {
                     profond: {
                         id: 'profond',
                         name: 'Profond',
-                        description: 'Expérience complète',
+                        description: 'Expérience complète (Obsolète)',
                         amountCents: 6700,
                         level: 'PROFOND',
                         features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Mandala HD personnalisé', 'Accès au Sanctuaire'],
@@ -72,7 +72,7 @@ function CheckoutContent() {
                     integrale: {
                         id: 'integrale',
                         name: 'Intégral',
-                        description: 'Immersion totale',
+                        description: 'Immersion totale (Obsolète)',
                         amountCents: 9700,
                         level: 'INTEGRALE',
                         features: ['Tout du niveau Profond', 'Rituels personnalisés', 'Suivi 30 jours', 'Accès prioritaire'],
