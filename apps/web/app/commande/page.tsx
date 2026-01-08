@@ -89,8 +89,10 @@ function CheckoutContent() {
     }, [productLevel]);
 
     // Create checkout intent when form becomes valid (for paid products)
+    // Only run ONCE per valid form to prevent infinite loops
     useEffect(() => {
-        if (!isFormValid || !formData || !product || product.amountCents === 0) return;
+        // Guard: skip if not valid, no form data, no product, free product, or already have clientSecret
+        if (!isFormValid || !formData || !product || product.amountCents === 0 || clientSecret) return;
 
         const createIntent = async () => {
             try {
@@ -109,7 +111,8 @@ function CheckoutContent() {
         };
 
         createIntent();
-    }, [isFormValid, formData, product]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isFormValid, product?.id, clientSecret]);
 
     const handleFormValid = useCallback((data: CheckoutFormData) => {
         setFormData(data);
