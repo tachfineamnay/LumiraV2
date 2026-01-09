@@ -51,22 +51,76 @@ export class PaymentsService {
     }
 
     /**
-     * Creates a PaymentIntent with customer data in metadata.
-     * User and Order are created on webhook success.
+     * Creates a PaymentIntent and pre-creates User/Order with PENDING status.
+     * This ensures the user can authenticate immediately after frontend payment confirmation.
+     * The webhook will update the order status from PENDING to PAID.
      */
     async createCheckoutIntent(dto: CheckoutIntentDto) {
+        // 1. Upsert User immediately
+        const user = await this.prisma.user.upsert({
+            where: { email: dto.email.toLowerCase().trim() },
+            update: {
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                phone: dto.phone || null,
+            },
+            create: {
+                email: dto.email.toLowerCase().trim(),
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                phone: dto.phone || null,
+                totalOrders: 0,
+            },
+        });
+
+        // 2. Map level
+        const levelMap: Record<string, number> = {
+            'INITIE': 1,
+            'MYSTIQUE': 2,
+            'PROFOND': 3,
+            'INTEGRALE': 4,
+        };
+        const level = levelMap[dto.productLevel?.toUpperCase()] || 1;
+
+        // 3. Generate order number
+        const orderNumber = await this.generateOrderNumber();
+
+        // 4. Create Order with PENDING status (will be updated to PAID by webhook)
+        const order = await this.prisma.order.create({
+            data: {
+                orderNumber,
+                userId: user.id,
+                userEmail: dto.email.toLowerCase().trim(),
+                userName: `${dto.firstName} ${dto.lastName}`.trim(),
+                level,
+                amount: dto.amountCents,
+                currency: 'eur',
+                status: 'PENDING',
+                formData: { phone: dto.phone || '' } as Prisma.JsonObject,
+            },
+        });
+
+        this.logger.log(`Checkout flow: Created User ${user.id} and Order ${order.id}`);
+
+        // 5. Create PaymentIntent with orderId in metadata
         const paymentIntent = await this.stripe.paymentIntents.create({
             amount: dto.amountCents,
             currency: 'eur',
             automatic_payment_methods: { enabled: true },
             metadata: {
+                orderId: order.id, // Now we have an orderId for the legacy flow
                 email: dto.email,
                 firstName: dto.firstName,
                 lastName: dto.lastName,
                 phone: dto.phone || '',
                 productLevel: dto.productLevel,
-                checkoutFlow: 'true', // Flag to identify checkout vs legacy flow
             },
+        });
+
+        // 6. Link PaymentIntent to Order
+        await this.prisma.order.update({
+            where: { id: order.id },
+            data: { paymentIntentId: paymentIntent.id },
         });
 
         return {

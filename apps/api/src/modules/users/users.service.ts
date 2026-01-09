@@ -89,6 +89,7 @@ export class UsersService {
   /**
    * Find a user by email only if they have at least one paid/valid order.
    * Used for Sanctuaire passwordless authentication.
+   * Also accepts PENDING orders for paid products (awaiting webhook confirmation).
    */
   async findUserWithPaidOrder(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
     // First find the user
@@ -102,12 +103,14 @@ export class UsersService {
     }
 
     // Check if user has at least one paid/valid order
+    // Include PENDING orders for paid products (they will be updated to PAID by webhook)
     const paidOrder = await this.prisma.order.findFirst({
       where: {
         userId: user.id,
         OR: [
           { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED'] } },
           { status: 'PENDING', amount: 0 }, // Free orders
+          { status: 'PENDING', amount: { gt: 0 } }, // Paid orders awaiting webhook confirmation
         ],
       },
     });
