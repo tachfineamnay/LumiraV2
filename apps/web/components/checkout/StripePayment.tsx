@@ -24,6 +24,7 @@ export function StripePayment({ amount, onPaymentSuccess, onPaymentError, disabl
         setIsProcessing(true);
 
         try {
+            console.log('[StripePayment] Confirming payment...');
             const { error, paymentIntent } = await stripe.confirmPayment({
                 elements,
                 confirmParams: {
@@ -32,16 +33,22 @@ export function StripePayment({ amount, onPaymentSuccess, onPaymentError, disabl
                 redirect: 'if_required',
             });
 
+            console.log('[StripePayment] Result:', { error, paymentIntent });
+
             if (error) {
+                console.error('[StripePayment] Error:', error);
                 onPaymentError(error.message || 'Une erreur est survenue lors du paiement');
                 setIsProcessing(false);
             } else if (paymentIntent?.status === 'succeeded') {
+                console.log('[StripePayment] Payment succeeded!');
                 onPaymentSuccess();
             } else {
                 // Payment requires redirect or additional action
+                console.log('[StripePayment] Payment status:', paymentIntent?.status);
                 setIsProcessing(false);
             }
-        } catch {
+        } catch (err) {
+            console.error('[StripePayment] Unexpected error:', err);
             onPaymentError('Une erreur inattendue est survenue');
             setIsProcessing(false);
         }
