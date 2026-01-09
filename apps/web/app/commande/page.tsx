@@ -125,7 +125,10 @@ function CheckoutContent() {
     }, []);
 
     const handlePaymentSuccess = () => {
-        router.push(`/payment-success?email=${encodeURIComponent(formData?.email || '')}`);
+        const successUrl = `/payment-success?email=${encodeURIComponent(formData?.email || '')}`;
+        console.log('[Checkout] Payment success, redirecting to:', successUrl);
+        // Use window.location for more reliable navigation after Stripe payment
+        window.location.href = successUrl;
     };
 
     const handlePaymentError = (error: string) => {
