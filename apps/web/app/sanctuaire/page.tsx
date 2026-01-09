@@ -134,9 +134,11 @@ function AutoLoginHandler() {
                 // Show onboarding for first visit
                 if (result.isFirstVisit) {
                     setShowOnboarding(true);
+                    // Don't clean URL yet - will be done when onboarding completes
+                } else {
+                    // Clean URL params only if not showing onboarding
+                    router.replace('/sanctuaire');
                 }
-                // Clean URL params
-                router.replace('/sanctuaire');
             } else {
                 // Retry with exponential backoff (2s, 4s, 8s)
                 if (retryCount < 3 && !result.isRateLimited) {
@@ -223,10 +225,12 @@ function AutoLoginHandler() {
                 onClose={() => {
                     setShowOnboarding(false);
                     clearFirstVisitFlag();
+                    router.replace('/sanctuaire');
                 }}
                 onComplete={() => {
                     setShowOnboarding(false);
                     clearFirstVisitFlag();
+                    router.replace('/sanctuaire');
                 }}
             />
         );
