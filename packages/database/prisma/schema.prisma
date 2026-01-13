@@ -223,3 +223,34 @@ model Product {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
+
+// =============================================================================
+// INSIGHTS - AI-Generated Spiritual Insights
+// =============================================================================
+
+enum InsightCategory {
+  SPIRITUEL
+  RELATIONS
+  MISSION
+  CREATIVITE
+  EMOTIONS
+  TRAVAIL
+  SANTE
+  FINANCE
+}
+
+model Insight {
+  id          String          @id @default(cuid())
+  userId      String
+  orderId     String?
+  category    InsightCategory
+  short       String          @db.Text    // Résumé court (2-3 phrases)
+  full        String          @db.Text    // Texte complet (1-2 paragraphes)
+  viewedAt    DateTime?                   // Null = "Nouveau" badge
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([userId, category])  // Un seul insight par catégorie par user
+  @@index([userId])
+  @@index([orderId])
+}

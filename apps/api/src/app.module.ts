@@ -15,6 +15,7 @@ import { WebhooksModule } from "./modules/webhooks/webhooks.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { ExpertModule } from "./modules/expert/expert.module";
 import { ProductsModule } from "./modules/products/products.module";
+import { InsightsModule } from "./modules/insights/insights.module";
 
 @Module({
   imports: [
@@ -36,7 +37,8 @@ import { ProductsModule } from "./modules/products/products.module";
     WebhooksModule,
     NotificationsModule,
     ExpertModule,
-    ProductsModule
+    ProductsModule,
+    InsightsModule,
   ],
   controllers: [AppController],
   providers: [
