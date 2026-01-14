@@ -94,10 +94,10 @@ export function OrderCard({ order, onView, onTake, onDelete, showTake = true, sh
                         <button
                             onClick={handleOpenWorkspace}
                             className="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-400 text-xs font-medium flex items-center gap-1.5 transition-all border border-amber-500/30"
-                            title="Ouvrir Soul Cockpit"
+                            title="Ouvrir Le Garage"
                         >
                             <Sparkles className="w-3.5 h-3.5" />
-                            Soul Cockpit
+                            Le Garage
                         </button>
                     )}
                     {onView && (

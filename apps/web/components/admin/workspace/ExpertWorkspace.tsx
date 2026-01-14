@@ -136,7 +136,7 @@ export function ExpertWorkspace({
                     <div>
                         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
                             <span className="text-amber-400">🔮</span>
-                            Soul Cockpit
+                            Le Garage
                         </h1>
                         <p className="text-slate-400 text-sm mt-1">
                             Commande {order.orderNumber} • {order.user.firstName} {order.user.lastName}

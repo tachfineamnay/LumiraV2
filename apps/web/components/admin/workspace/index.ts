@@ -1,6 +1,6 @@
 /**
  * @fileoverview Workspace components barrel export.
- * Soul Cockpit components for Expert AI-powered reading generation.
+ * Le Garage components for Expert AI-powered reading generation.
  */
 
 export { ExpertWorkspace } from './ExpertWorkspace';
