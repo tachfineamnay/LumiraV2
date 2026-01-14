@@ -289,7 +289,7 @@ function DashboardContent() {
             </div>
 
             {/* 🪐 MANDALA NAVIGATION or ORACLE ONBOARDING */}
-            <section className="relative w-full flex justify-center items-center py-8 mb-8">
+            <section className="relative w-full flex justify-center items-center py-8 mb-8 z-30">
                 {isOnboardingComplete ? (
                     <div className="hidden lg:block">
                         <MandalaNav />

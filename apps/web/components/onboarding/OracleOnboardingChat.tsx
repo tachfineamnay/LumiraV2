@@ -593,7 +593,7 @@ export const OracleOnboardingChat = ({ onComplete }: OracleOnboardingChatProps) 
                 className="relative bg-abyss-600/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-stellar"
             >
                 {/* Decorative glow */}
-                <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-32 bg-horizon-400/5 blur-3xl rounded-full pointer-events-none" />
+                <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-32 bg-horizon-400/5 blur-3xl rounded-full pointer-events-none z-0" />
 
                 {/* Progress indicator */}
                 <div className="flex items-center justify-center gap-2 mb-6">
@@ -601,46 +601,48 @@ export const OracleOnboardingChat = ({ onComplete }: OracleOnboardingChatProps) 
                         <div
                             key={step.id}
                             className={`w-2 h-2 rounded-full transition-all duration-300 ${currentStep === step.id
-                                    ? "w-6 bg-horizon-400"
-                                    : currentStep > step.id
-                                        ? "bg-emerald-400"
-                                        : "bg-white/20"
+                                ? "w-6 bg-horizon-400"
+                                : currentStep > step.id
+                                    ? "bg-emerald-400"
+                                    : "bg-white/20"
                                 }`}
                         />
                     ))}
                 </div>
 
                 {/* Step content */}
-                <AnimatePresence mode="wait">
-                    {currentStep === 0 && <StepIntro key="intro" onNext={goNext} />}
-                    {currentStep === 1 && (
-                        <StepBirthData
-                            key="birth"
-                            onNext={goNext}
-                            onBack={goBack}
-                            onSave={saveBirthData}
-                        />
-                    )}
-                    {currentStep === 2 && (
-                        <StepIntention
-                            key="intention"
-                            onNext={goNext}
-                            onBack={goBack}
-                            onSave={saveIntention}
-                        />
-                    )}
-                    {currentStep === 3 && (
-                        <StepPhotos
-                            key="photos"
-                            onNext={goNext}
-                            onBack={goBack}
-                            onSave={savePhotos}
-                        />
-                    )}
-                    {currentStep === 4 && (
-                        <StepCompletion key="complete" onComplete={handleComplete} />
-                    )}
-                </AnimatePresence>
+                <div className="relative z-10">
+                    <AnimatePresence mode="wait">
+                        {currentStep === 0 && <StepIntro key="intro" onNext={goNext} />}
+                        {currentStep === 1 && (
+                            <StepBirthData
+                                key="birth"
+                                onNext={goNext}
+                                onBack={goBack}
+                                onSave={saveBirthData}
+                            />
+                        )}
+                        {currentStep === 2 && (
+                            <StepIntention
+                                key="intention"
+                                onNext={goNext}
+                                onBack={goBack}
+                                onSave={saveIntention}
+                            />
+                        )}
+                        {currentStep === 3 && (
+                            <StepPhotos
+                                key="photos"
+                                onNext={goNext}
+                                onBack={goBack}
+                                onSave={savePhotos}
+                            />
+                        )}
+                        {currentStep === 4 && (
+                            <StepCompletion key="complete" onComplete={handleComplete} />
+                        )}
+                    </AnimatePresence>
+                </div>
             </motion.div>
         </div>
     );
