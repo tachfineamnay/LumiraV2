@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
 import { OnboardingForm } from "../../components/sanctuary/OnboardingForm";
+import { OracleOnboardingChat } from "../../components/onboarding/OracleOnboardingChat";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 import { useSanctuaireAuth, isFirstVisitToken, setFirstVisitFlag, clearFirstVisitFlag } from "../../context/SanctuaireAuthContext";
 import {
@@ -245,6 +246,10 @@ function AutoLoginHandler() {
 
 function DashboardContent() {
     const { highestLevel, hasCapability, isLoading, orderCount } = useSanctuaire();
+    const { profile, refetchData } = useSanctuaireAuth();
+
+    // Check if onboarding is complete
+    const isOnboardingComplete = !!(profile?.birthDate && (profile?.facePhotoUrl || profile?.palmPhotoUrl || profile?.profileCompleted));
 
     if (isLoading) {
         return (
@@ -283,9 +288,15 @@ function DashboardContent() {
                 </motion.p>
             </div>
 
-            {/* 🪐 MANDALA NAVIGATION */}
-            <section className="relative w-full hidden lg:flex justify-center items-center py-8 mb-8">
-                <MandalaNav />
+            {/* 🪐 MANDALA NAVIGATION or ORACLE ONBOARDING */}
+            <section className="relative w-full flex justify-center items-center py-8 mb-8">
+                {isOnboardingComplete ? (
+                    <div className="hidden lg:block">
+                        <MandalaNav />
+                    </div>
+                ) : (
+                    <OracleOnboardingChat onComplete={refetchData} />
+                )}
             </section>
 
             {/* 🔔 ORDER STATUS */}
@@ -310,7 +321,7 @@ function DashboardContent() {
             )}
 
             {/* 🧩 DASHBOARD CARDS */}
-            <div className="w-full relative z-10">
+            <div className={`w-full relative z-10 transition-all duration-500 ${!isOnboardingComplete ? "blur-sm opacity-50 pointer-events-none select-none" : ""}`}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
                     {dashboardCards.map((card, i) => {
                         const Icon = card.icon;
