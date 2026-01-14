@@ -1,4 +1,4 @@
-import { Controller, Get, Request, UseGuards, NotFoundException } from "@nestjs/common";
+import { Controller, Get, Patch, Body, Request, UseGuards, NotFoundException } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 
@@ -69,5 +69,27 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   async getCompletedOrders(@Request() req: { user: { userId: string } }) {
     return this.usersService.getCompletedOrders(req.user.userId);
+  }
+
+  /**
+   * PATCH /api/users/profile
+   * Updates the authenticated user's profile data.
+   */
+  @Patch("profile")
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(
+    @Request() req: { user: { userId: string } },
+    @Body() updateData: {
+      birthDate?: string;
+      birthTime?: string;
+      birthPlace?: string;
+      specificQuestion?: string;
+      objective?: string;
+      facePhotoUrl?: string;
+      palmPhotoUrl?: string;
+      profileCompleted?: boolean;
+    }
+  ) {
+    return this.usersService.updateProfile(req.user.userId, updateData);
   }
 }

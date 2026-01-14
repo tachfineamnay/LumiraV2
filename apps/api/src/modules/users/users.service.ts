@@ -179,4 +179,46 @@ export class UsersService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  /**
+   * Update or create user profile data
+   */
+  async updateProfile(userId: string, data: {
+    birthDate?: string;
+    birthTime?: string;
+    birthPlace?: string;
+    specificQuestion?: string;
+    objective?: string;
+    facePhotoUrl?: string;
+    palmPhotoUrl?: string;
+    profileCompleted?: boolean;
+  }): Promise<{ success: boolean; profile: UserProfile }> {
+    // Upsert the profile (create if not exists, update if exists)
+    const profile = await this.prisma.userProfile.upsert({
+      where: { userId },
+      create: {
+        userId,
+        birthDate: data.birthDate || null,
+        birthTime: data.birthTime || null,
+        birthPlace: data.birthPlace || null,
+        specificQuestion: data.specificQuestion || null,
+        objective: data.objective || null,
+        facePhotoUrl: data.facePhotoUrl || null,
+        palmPhotoUrl: data.palmPhotoUrl || null,
+        profileCompleted: data.profileCompleted || false,
+      },
+      update: {
+        ...(data.birthDate !== undefined && { birthDate: data.birthDate }),
+        ...(data.birthTime !== undefined && { birthTime: data.birthTime }),
+        ...(data.birthPlace !== undefined && { birthPlace: data.birthPlace }),
+        ...(data.specificQuestion !== undefined && { specificQuestion: data.specificQuestion }),
+        ...(data.objective !== undefined && { objective: data.objective }),
+        ...(data.facePhotoUrl !== undefined && { facePhotoUrl: data.facePhotoUrl }),
+        ...(data.palmPhotoUrl !== undefined && { palmPhotoUrl: data.palmPhotoUrl }),
+        ...(data.profileCompleted !== undefined && { profileCompleted: data.profileCompleted }),
+      },
+    });
+
+    return { success: true, profile };
+  }
 }
