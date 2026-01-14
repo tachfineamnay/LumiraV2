@@ -17,6 +17,7 @@ interface OrderQueueProps {
     onDelete?: (order: Order) => void;
     showTake?: boolean;
     showDelete?: boolean;
+    showWorkspace?: boolean;
     emptyMessage?: string;
 }
 
@@ -30,6 +31,7 @@ export function OrderQueue({
     onDelete,
     showTake = true,
     showDelete = false,
+    showWorkspace = false,
     emptyMessage = 'Aucune commande',
 }: OrderQueueProps) {
     return (
@@ -87,6 +89,7 @@ export function OrderQueue({
                                 onDelete={onDelete}
                                 showTake={showTake}
                                 showDelete={showDelete}
+                                showWorkspace={showWorkspace}
                             />
                         </motion.div>
                     ))

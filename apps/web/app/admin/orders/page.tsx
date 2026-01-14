@@ -161,6 +161,7 @@ export default function OrdersPage() {
                         onRefresh={fetchData}
                         onView={handleViewOrder}
                         showTake={false}
+                        showWorkspace={true}
                         emptyMessage="Aucune commande en cours"
                     />
                 </div>
