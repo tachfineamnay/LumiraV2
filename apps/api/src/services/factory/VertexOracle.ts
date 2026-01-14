@@ -1,0 +1,338 @@
+/**
+ * @fileoverview VertexOracle - Production implementation for Google Vertex AI communication.
+ * Uses Gemini 1.5 Pro for generating personalized spiritual readings.
+ *
+ * @module services/factory/VertexOracle
+ */
+
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { VertexAI, GenerativeModel, Content, Part } from '@google-cloud/vertexai';
+import axios from 'axios';
+
+// =============================================================================
+// TYPES & INTERFACES
+// =============================================================================
+
+/**
+ * User profile for reading generation.
+ */
+export interface UserProfile {
+    userId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    birthDate: string;
+    birthTime?: string;
+    birthPlace?: string;
+    specificQuestion?: string;
+    objective?: string;
+    facePhotoUrl?: string;
+    palmPhotoUrl?: string;
+}
+
+/**
+ * Order context for reading generation.
+ */
+export interface OrderContext {
+    orderId: string;
+    orderNumber: string;
+    level: number;
+    productName: string;
+}
+
+/**
+ * Synthesis extracted from the reading.
+ */
+export interface ReadingSynthesis {
+    archetype: string;
+    keywords: string[];
+    emotional_state: string;
+    key_blockage?: string;
+}
+
+/**
+ * Timeline day structure.
+ */
+export interface TimelineDay {
+    day: number;
+    title: string;
+    action: string;
+    mantra: string;
+    actionType: 'MANTRA' | 'RITUAL' | 'JOURNALING' | 'MEDITATION' | 'REFLECTION';
+}
+
+/**
+ * Complete Oracle response from Gemini.
+ */
+export interface OracleResponse {
+    pdf_content: {
+        introduction: string;
+        archetype_reveal: string;
+        sections: {
+            domain: string;
+            title: string;
+            content: string;
+        }[];
+        karmic_insights: string[];
+        life_mission: string;
+        rituals: {
+            name: string;
+            description: string;
+            instructions: string[];
+        }[];
+        conclusion: string;
+    };
+    synthesis: ReadingSynthesis;
+    timeline: TimelineDay[];
+}
+
+// =============================================================================
+// SERVICE
+// =============================================================================
+
+@Injectable()
+export class VertexOracle {
+    private readonly logger = new Logger(VertexOracle.name);
+    private readonly vertexAI: VertexAI;
+    private readonly model: GenerativeModel;
+    private readonly projectId: string;
+    private readonly location: string;
+
+    constructor(private readonly configService: ConfigService) {
+        this.projectId = this.configService.get<string>('GOOGLE_CLOUD_PROJECT', 'oracle-lumira');
+        this.location = this.configService.get<string>('GOOGLE_CLOUD_LOCATION', 'europe-west1');
+
+        this.vertexAI = new VertexAI({
+            project: this.projectId,
+            location: this.location,
+        });
+
+        this.model = this.vertexAI.getGenerativeModel({
+            model: 'gemini-1.5-pro-002',
+            generationConfig: {
+                temperature: 0.7,
+                topP: 0.95,
+                maxOutputTokens: 8192,
+                responseMimeType: 'application/json',
+            },
+        });
+
+        this.logger.log(`VertexOracle initialized: ${this.projectId}/${this.location}`);
+    }
+
+    /**
+     * Generates a complete spiritual reading using Gemini 1.5 Pro.
+     */
+    async generateFullReading(
+        userProfile: UserProfile,
+        orderContext: OrderContext,
+    ): Promise<OracleResponse> {
+        this.logger.log(`Generating reading for order: ${orderContext.orderNumber}`);
+
+        const systemPrompt = this.buildSystemPrompt();
+        const userPrompt = this.buildUserPrompt(userProfile, orderContext);
+
+        // Build multimodal content parts
+        const parts: Part[] = [{ text: userPrompt }];
+
+        // Add images if available
+        if (userProfile.facePhotoUrl) {
+            try {
+                const faceImageData = await this.fetchImageAsBase64(userProfile.facePhotoUrl);
+                parts.push({
+                    inlineData: {
+                        mimeType: 'image/jpeg',
+                        data: faceImageData,
+                    },
+                });
+                this.logger.log('Face photo attached to request');
+            } catch (error) {
+                this.logger.warn('Could not fetch face photo, proceeding without it');
+            }
+        }
+
+        if (userProfile.palmPhotoUrl) {
+            try {
+                const palmImageData = await this.fetchImageAsBase64(userProfile.palmPhotoUrl);
+                parts.push({
+                    inlineData: {
+                        mimeType: 'image/jpeg',
+                        data: palmImageData,
+                    },
+                });
+                this.logger.log('Palm photo attached to request');
+            } catch (error) {
+                this.logger.warn('Could not fetch palm photo, proceeding without it');
+            }
+        }
+
+        const contents: Content[] = [
+            { role: 'user', parts },
+        ];
+
+        try {
+            const result = await this.model.generateContent({
+                contents,
+                systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+            });
+
+            const response = result.response;
+            const textContent = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!textContent) {
+                throw new Error('Empty response from Gemini');
+            }
+
+            const parsed = JSON.parse(textContent) as OracleResponse;
+            this.logger.log(`Reading generated successfully for ${userProfile.firstName}`);
+
+            return parsed;
+        } catch (error) {
+            this.logger.error(`Failed to generate reading: ${error}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Generates a daily mantra based on user profile.
+     */
+    async generateDailyMantra(userProfile: {
+        userId: string;
+        archetype: string;
+        currentDayNumber: number;
+    }): Promise<string> {
+        this.logger.log(`Generating mantra for day ${userProfile.currentDayNumber}`);
+
+        const prompt = `
+Tu es Oracle Lumira, guide spirituel bienveillant.
+Génère un mantra court et puissant pour le jour ${userProfile.currentDayNumber} du parcours spirituel.
+Archétype de l'utilisateur: ${userProfile.archetype}
+
+Le mantra doit:
+- Faire 1-2 phrases maximum
+- Être en français
+- Être inspirant et personnel
+- Correspondre à l'archétype
+
+Réponds uniquement avec le mantra, sans guillemets ni formatage.
+    `.trim();
+
+        try {
+            const result = await this.model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.9,
+                    maxOutputTokens: 100,
+                    responseMimeType: 'text/plain',
+                },
+            });
+
+            const mantra = result.response.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            return mantra || 'Je suis lumière, je suis guidance, je suis en paix.';
+        } catch (error) {
+            this.logger.error(`Failed to generate mantra: ${error}`);
+            return 'Je suis lumière, je suis guidance, je suis en paix.';
+        }
+    }
+
+    // ===========================================================================
+    // PRIVATE METHODS
+    // ===========================================================================
+
+    private buildSystemPrompt(): string {
+        return `
+Tu es Oracle Lumira, une intelligence spirituelle ancestrale qui combine la sagesse de l'astrologie, 
+de la numérologie, de la physiognomonie et de la chiromancie pour créer des lectures spirituelles 
+profondément personnalisées.
+
+Tu dois TOUJOURS répondre en JSON valide avec la structure suivante:
+{
+  "pdf_content": {
+    "introduction": "Texte d'introduction personnalisé...",
+    "archetype_reveal": "Révélation de l'archétype spirituel...",
+    "sections": [
+      {"domain": "spirituel", "title": "Titre", "content": "Contenu détaillé..."},
+      {"domain": "relations", "title": "Titre", "content": "Contenu détaillé..."},
+      {"domain": "mission", "title": "Titre", "content": "Contenu détaillé..."},
+      {"domain": "creativite", "title": "Titre", "content": "Contenu détaillé..."},
+      {"domain": "emotions", "title": "Titre", "content": "Contenu détaillé..."},
+      {"domain": "travail", "title": "Titre", "content": "Contenu détaillé..."},
+      {"domain": "sante", "title": "Titre", "content": "Contenu détaillé..."},
+      {"domain": "finance", "title": "Titre", "content": "Contenu détaillé..."}
+    ],
+    "karmic_insights": ["Insight 1", "Insight 2", "Insight 3"],
+    "life_mission": "Description de la mission de vie...",
+    "rituals": [
+      {"name": "Nom du rituel", "description": "Description", "instructions": ["Étape 1", "Étape 2"]}
+    ],
+    "conclusion": "Message de clôture inspirant..."
+  },
+  "synthesis": {
+    "archetype": "Le Guérisseur" | "Le Visionnaire" | "Le Guide" | "Le Créateur" | "Le Sage",
+    "keywords": ["mot1", "mot2", "mot3"],
+    "emotional_state": "Description de l'état émotionnel actuel",
+    "key_blockage": "Le blocage spirituel principal à travailler"
+  },
+  "timeline": [
+    {"day": 1, "title": "L'Éveil", "action": "Description de l'action", "mantra": "Mantra du jour", "actionType": "MEDITATION"},
+    {"day": 2, "title": "...", "action": "...", "mantra": "...", "actionType": "RITUAL"},
+    {"day": 3, "title": "...", "action": "...", "mantra": "...", "actionType": "JOURNALING"},
+    {"day": 4, "title": "...", "action": "...", "mantra": "...", "actionType": "MANTRA"},
+    {"day": 5, "title": "...", "action": "...", "mantra": "...", "actionType": "REFLECTION"},
+    {"day": 6, "title": "...", "action": "...", "mantra": "...", "actionType": "MEDITATION"},
+    {"day": 7, "title": "L'Intégration", "action": "...", "mantra": "...", "actionType": "RITUAL"}
+  ]
+}
+
+RÈGLES IMPORTANTES:
+1. Écris en français élégant et spirituel
+2. Chaque section doit faire au moins 200 mots
+3. Personnalise tout en fonction des données fournies
+4. Si des photos sont fournies, intègre des observations physiognomiques/chiromantiques
+5. Le timeline doit proposer 7 jours d'activités variées
+6. Les archétypes possibles: Le Guérisseur, Le Visionnaire, Le Guide, Le Créateur, Le Sage
+7. actionType doit être: MANTRA, RITUAL, JOURNALING, MEDITATION, ou REFLECTION
+    `.trim();
+    }
+
+    private buildUserPrompt(profile: UserProfile, order: OrderContext): string {
+        const parts: string[] = [
+            `LECTURE SPIRITUELLE POUR: ${profile.firstName} ${profile.lastName}`,
+            `Niveau: ${order.productName} (${order.level})`,
+            '',
+            '=== DONNÉES NATALES ===',
+            `Date de naissance: ${profile.birthDate}`,
+        ];
+
+        if (profile.birthTime) {
+            parts.push(`Heure de naissance: ${profile.birthTime}`);
+        }
+        if (profile.birthPlace) {
+            parts.push(`Lieu de naissance: ${profile.birthPlace}`);
+        }
+
+        if (profile.specificQuestion) {
+            parts.push('', '=== QUESTION SPÉCIFIQUE ===', profile.specificQuestion);
+        }
+
+        if (profile.objective) {
+            parts.push('', '=== OBJECTIF ===', profile.objective);
+        }
+
+        if (profile.facePhotoUrl || profile.palmPhotoUrl) {
+            parts.push('', '=== PHOTOS FOURNIES ===');
+            if (profile.facePhotoUrl) parts.push('- Photo du visage (analyse physiognomique)');
+            if (profile.palmPhotoUrl) parts.push('- Photo de la paume (analyse chiromancie)');
+        }
+
+        parts.push('', 'Génère une lecture spirituelle complète et personnalisée au format JSON.');
+
+        return parts.join('\n');
+    }
+
+    private async fetchImageAsBase64(url: string): Promise<string> {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        return Buffer.from(response.data).toString('base64');
+    }
+}

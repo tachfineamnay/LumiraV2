@@ -619,6 +619,58 @@ export class ExpertService {
         return order;
     }
 
+    /**
+     * Triggers AI-powered reading generation using the new Internal Factory.
+     * Uses DigitalSoulService to orchestrate: Vertex AI → Database → PDF → S3.
+     * This replaces the n8n workflow for new orders.
+     */
+    async generateReading(orderId: string, expert: ExpertEntity): Promise<{
+        success: boolean;
+        orderId: string;
+        orderNumber: string;
+        pdfUrl: string;
+        archetype: string;
+        stepsCreated: number;
+    }> {
+        this.logger.log(`🚀 Starting AI reading generation for order: ${orderId}`);
+
+        // Import the DigitalSoulService dynamically to avoid circular dependencies
+        // In production, this should be properly injected
+        const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
+        const { VertexOracle } = await import('../../services/factory/VertexOracle');
+        const { PdfFactory } = await import('../../services/factory/PdfFactory');
+
+        // Create service instances (in production, use proper DI)
+        const vertexOracle = new VertexOracle(this.configService);
+        const pdfFactory = new PdfFactory(this.configService);
+        await pdfFactory.onModuleInit();
+
+        const digitalSoulService = new DigitalSoulService(
+            this.configService,
+            this.prisma,
+            vertexOracle,
+            pdfFactory,
+        );
+
+        try {
+            const result = await digitalSoulService.processOrderGeneration(orderId);
+
+            this.logger.log(`✅ AI reading generation completed: ${result.orderNumber} - ${result.archetype}`);
+
+            return {
+                success: true,
+                orderId: result.orderId,
+                orderNumber: result.orderNumber,
+                pdfUrl: result.pdfUrl,
+                archetype: result.archetype,
+                stepsCreated: result.stepsCreated,
+            };
+        } catch (error) {
+            this.logger.error(`❌ AI reading generation failed: ${error}`);
+            throw error;
+        }
+    }
+
     // ========================
     // CLIENTS
     // ========================

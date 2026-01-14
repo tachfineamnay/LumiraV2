@@ -71,6 +71,14 @@ enum ProductLevel {
   INTEGRALE
 }
 
+enum PathActionType {
+  MANTRA
+  RITUAL
+  JOURNALING
+  MEDITATION
+  REFLECTION
+}
+
 model User {
   id                 String             @id @default(cuid())
   email              String             @unique
@@ -85,8 +93,10 @@ model User {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  profile UserProfile?
-  orders  Order[]
+  profile       UserProfile?
+  orders        Order[]
+  spiritualPath SpiritualPath?
+  chatSessions  ChatSession[]
 
   @@index([email])
   @@index([createdAt(sort: Desc)])
@@ -110,34 +120,37 @@ model UserProfile {
 }
 
 model Order {
-  id                String      @id @default(cuid())
-  orderNumber       String      @unique
-  userId            String
-  user              User        @relation(fields: [userId], references: [id])
-  userEmail         String
-  userName          String?
-  level             Int
-  amount            Int
-  currency          String      @default("eur")
-  status            OrderStatus @default(PENDING)
-  paymentIntentId   String?
-  stripeSessionId   String?
-  paidAt            DateTime?
-  formData          Json
-  clientInputs      Json?
-  expertPrompt      String?     @db.Text
-  expertInstructions String?    @db.Text
-  generatedContent  Json?
-  errorLog          String?     @db.Text
-  expertReview      Json?
-  expertValidation  Json?
-  revisionCount     Int         @default(0)
-  deliveredAt       DateTime?
-  deliveryMethod    DeliveryFormat?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                 String         @id @default(cuid())
+  orderNumber        String         @unique
+  userId             String
+  user               User           @relation(fields: [userId], references: [id])
+  userEmail          String
+  userName           String?
+  level              Int
+  amount             Int
+  currency           String         @default("eur")
+  status             OrderStatus    @default(PENDING)
+  paymentIntentId    String?
+  stripeSessionId    String?
+  paidAt             DateTime?
+  formData           Json
+  clientInputs       Json?
+  expertPrompt       String?        @db.Text
+  expertInstructions String?        @db.Text
+  generatedContent   Json?
+  errorLog           String?        @db.Text
+  expertReview       Json?
+  expertValidation   Json?
+  revisionCount      Int            @default(0)
+  deliveredAt        DateTime?
+  deliveryMethod     DeliveryFormat?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
-  files OrderFile[]
+  // Relations for interconnected ecosystem
+  files          OrderFile[]
+  generatedSteps PathStep[]     // Steps generated from this reading
+  chatContexts   ChatSession[]  // Chat sessions related to this order
 
   @@index([userId])
   @@index([userEmail])
@@ -253,4 +266,77 @@ model Insight {
   @@unique([userId, category])  // Un seul insight par catégorie par user
   @@index([userId])
   @@index([orderId])
+}
+
+// =============================================================================
+// DIGITAL SOUL - Spiritual Path & Journey
+// =============================================================================
+
+model SpiritualPath {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  archetype   String                    // e.g., "Le Guérisseur", "Le Visionnaire"
+  synthesis   String    @db.Text        // AI-generated synthesis of the user's spiritual journey
+  keyBlockage String?                   // Primary spiritual blockage identified
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  steps       PathStep[]
+
+  @@index([userId])
+  @@index([archetype])
+}
+
+model PathStep {
+  id              String         @id @default(cuid())
+  spiritualPathId String
+  spiritualPath   SpiritualPath  @relation(fields: [spiritualPathId], references: [id], onDelete: Cascade)
+  dayNumber       Int                        // Day in the journey (1-30, etc.)
+  title           String                     // Step title
+  description     String         @db.Text    // Detailed description of this step
+  synthesis       String         @db.Text    // AI-generated content for this step
+  archetype       String                     // Archetype theme for this step
+  actionType      PathActionType @default(REFLECTION) // Type of action required
+  ritualPrompt    String?        @db.Text    // Optional ritual/meditation prompt
+  isCompleted     Boolean        @default(false)
+  completedAt     DateTime?
+  unlockedAt      DateTime?                  // When this step became available
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Link back to the reading that generated this step
+  originReadingId String?
+  originReading   Order?         @relation(fields: [originReadingId], references: [id], onDelete: SetNull)
+
+  @@unique([spiritualPathId, dayNumber])
+  @@index([spiritualPathId])
+  @@index([dayNumber])
+  @@index([isCompleted])
+  @@index([originReadingId])
+}
+
+// =============================================================================
+// CHAT - Conversational AI Sessions
+// =============================================================================
+
+model ChatSession {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedOrderId String?                  // Optional link to a specific reading
+  relatedOrder   Order?    @relation(fields: [relatedOrderId], references: [id], onDelete: SetNull)
+  title          String?                  // Auto-generated session title
+  messages       Json      @default("[]") // Array of {role, content, timestamp}
+  isActive       Boolean   @default(true)
+  lastMessageAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([relatedOrderId])
+  @@index([isActive])
+  @@index([lastMessageAt(sort: Desc)])
 }

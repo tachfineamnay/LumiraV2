@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}} - Oracle Lumira</title>
+    <style>
+        /* ============================================
+         * Oracle Lumira PDF Base Styles
+         * ============================================
+         * 
+         * TODO: Customize these styles for your brand
+         * - Colors should match Oracle Lumira branding
+         * - Fonts should be web-safe for PDF rendering
+         * - All styles are inlined for Gotenberg compatibility
+         */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            color: #2d3748;
+            background: linear-gradient(135deg, #f8f5f0 0%, #e8e0d5 100%);
+            padding: 40px 50px;
+        }
+
+        /* Header styling */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #c9a962;
+        }
+
+        .header h1 {
+            font-size: 28pt;
+            color: #1a202c;
+            font-weight: 400;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            font-size: 14pt;
+            color: #718096;
+            font-style: italic;
+        }
+
+        /* Main content area */
+        .content {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Section styling */
+        .section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+
+        .section h2 {
+            font-size: 16pt;
+            color: #c9a962;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #e2d9c8;
+        }
+
+        .section p {
+            text-align: justify;
+            margin-bottom: 12px;
+        }
+
+        /* Archetype box */
+        .archetype-box {
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            color: #f8f5f0;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .archetype-box h3 {
+            font-size: 14pt;
+            color: #c9a962;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .archetype-box .archetype-name {
+            font-size: 24pt;
+            font-weight: 400;
+            margin-bottom: 15px;
+        }
+
+        /* Ritual boxes */
+        .ritual {
+            background: #fff;
+            border-left: 4px solid #c9a962;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .ritual h4 {
+            color: #1a202c;
+            margin-bottom: 10px;
+        }
+
+        .ritual ul {
+            margin-left: 20px;
+        }
+
+        .ritual li {
+            margin-bottom: 5px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #e2d9c8;
+            font-size: 10pt;
+            color: #718096;
+        }
+
+        /* Page break utility */
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Oracle Lumira</h1>
+        <p class="subtitle">{{subtitle}}</p>
+    </header>
+
+    <main class="content">
+        {{{body}}}
+    </main>
+
+    <footer class="footer">
+        <p>© {{year}} Oracle Lumira - Lecture Spirituelle Personnalisée</p>
+        <p>Ce document est confidentiel et destiné uniquement à {{userName}}</p>
+    </footer>
+</body>
+</html>

@@ -130,6 +130,15 @@ export class ExpertController {
         return this.expertService.regenerateLecture(orderId, expert);
     }
 
+    /**
+     * Triggers AI-powered reading generation for an order.
+     * Uses DigitalSoulService to orchestrate: AI → Database → PDF → S3.
+     */
+    @Post('orders/:id/generate')
+    async generateReading(@Param('id') orderId: string, @CurrentExpert() expert: Expert) {
+        return this.expertService.generateReading(orderId, expert);
+    }
+
     // ========================
     // CLIENTS
     // ========================

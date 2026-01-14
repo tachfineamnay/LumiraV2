@@ -16,8 +16,11 @@
     "type-check": "npx tsc --noEmit"
   },
   "dependencies": {
+    "@google-cloud/vertexai": "^1.9.2",
     "@aws-sdk/client-s3": "^3.957.0",
     "@aws-sdk/s3-request-presigner": "^3.957.0",
+    "axios": "^1.7.9",
+    "form-data": "^4.0.1",
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/common": "^10.3.0",
     "@nestjs/config": "^3.1.1",
