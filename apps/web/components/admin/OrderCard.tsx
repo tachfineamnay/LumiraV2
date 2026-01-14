@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Calendar, Euro, Eye, Trash2, ArrowRight } from 'lucide-react';
+import { User, Calendar, Euro, Eye, Trash2, ArrowRight, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 import { Order } from '../../lib/types';
 
@@ -13,6 +14,7 @@ interface OrderCardProps {
     onDelete?: (order: Order) => void;
     showTake?: boolean;
     showDelete?: boolean;
+    showWorkspace?: boolean;
 }
 
 const levelNames: Record<number, { name: string; color: string }> = {
@@ -31,7 +33,8 @@ const statusColors: Record<string, string> = {
     FAILED: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
 };
 
-export function OrderCard({ order, onView, onTake, onDelete, showTake = true, showDelete = false }: OrderCardProps) {
+export function OrderCard({ order, onView, onTake, onDelete, showTake = true, showDelete = false, showWorkspace = false }: OrderCardProps) {
+    const router = useRouter();
     const level = levelNames[order.level] || levelNames[1];
     const statusClass = statusColors[order.status] || statusColors.PENDING;
 
@@ -43,6 +46,10 @@ export function OrderCard({ order, onView, onTake, onDelete, showTake = true, sh
             hour: '2-digit',
             minute: '2-digit',
         });
+    };
+
+    const handleOpenWorkspace = () => {
+        router.push(`/admin/workspace/${order.id}`);
     };
 
     return (
@@ -83,6 +90,16 @@ export function OrderCard({ order, onView, onTake, onDelete, showTake = true, sh
                 </div>
 
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {showWorkspace && (
+                        <button
+                            onClick={handleOpenWorkspace}
+                            className="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-400 text-xs font-medium flex items-center gap-1.5 transition-all border border-amber-500/30"
+                            title="Ouvrir Soul Cockpit"
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Soul Cockpit
+                        </button>
+                    )}
                     {onView && (
                         <button
                             onClick={() => onView(order)}
@@ -115,3 +132,4 @@ export function OrderCard({ order, onView, onTake, onDelete, showTake = true, sh
         </motion.div>
     );
 }
+
