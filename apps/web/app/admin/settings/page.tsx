@@ -37,7 +37,7 @@ export default function SettingsPage() {
     const fetchStatus = async () => {
         try {
             const token = localStorage.getItem("expert_token");
-            const res = await fetch(`${API_URL}/expert/settings/status`, {
+            const res = await fetch(`${API_URL}/api/expert/settings/status`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -72,7 +72,7 @@ export default function SettingsPage() {
 
         try {
             const token = localStorage.getItem("expert_token");
-            const res = await fetch(`${API_URL}/expert/settings/vertex-key`, {
+            const res = await fetch(`${API_URL}/api/expert/settings/vertex-key`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
