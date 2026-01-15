@@ -209,7 +209,6 @@ export class ExpertController {
     }
 
     @Put('settings/vertex-key')
-    @Roles('ADMIN')
     async setVertexKey(@Body('credentials') credentials: string) {
         return this.adminSettingsService.setVertexCredentials(credentials);
     }
