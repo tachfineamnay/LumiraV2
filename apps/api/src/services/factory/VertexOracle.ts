@@ -5,10 +5,11 @@
  * @module services/factory/VertexOracle
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { VertexAI, GenerativeModel, Content, Part } from '@google-cloud/vertexai';
 import axios from 'axios';
+import { PrismaService } from '../../prisma/prisma.service';
 
 // =============================================================================
 // TYPES & INTERFACES
@@ -94,31 +95,90 @@ export interface OracleResponse {
 @Injectable()
 export class VertexOracle {
     private readonly logger = new Logger(VertexOracle.name);
-    private readonly vertexAI: VertexAI;
-    private readonly model: GenerativeModel;
-    private readonly projectId: string;
-    private readonly location: string;
+    private vertexAI: VertexAI | null = null;
+    private model: GenerativeModel | null = null;
+    private projectId: string = '';
+    private location: string = '';
+    private initialized = false;
+    private lastCredentialsCheck = 0;
+    private readonly CREDENTIALS_CACHE_MS = 60000; // Re-check DB every 60s
 
-    constructor(private readonly configService: ConfigService) {
-        this.projectId = this.configService.get<string>('GOOGLE_CLOUD_PROJECT', 'oracle-lumira');
+    constructor(
+        private readonly configService: ConfigService,
+        @Inject(forwardRef(() => PrismaService))
+        private readonly prisma: PrismaService,
+    ) {
         this.location = this.configService.get<string>('GOOGLE_CLOUD_LOCATION', 'europe-west1');
+        this.projectId = this.configService.get<string>('GOOGLE_CLOUD_PROJECT', 'oracle-lumira');
+    }
 
-        this.vertexAI = new VertexAI({
-            project: this.projectId,
-            location: this.location,
-        });
+    /**
+     * Ensures VertexAI is initialized with credentials.
+     * Checks DB first, then falls back to environment variables.
+     */
+    private async ensureInitialized(): Promise<void> {
+        const now = Date.now();
 
-        this.model = this.vertexAI.getGenerativeModel({
-            model: 'gemini-1.5-pro-002',
-            generationConfig: {
-                temperature: 0.7,
-                topP: 0.95,
-                maxOutputTokens: 8192,
-                responseMimeType: 'application/json',
-            },
-        });
+        // Skip re-initialization if recently checked
+        if (this.initialized && (now - this.lastCredentialsCheck) < this.CREDENTIALS_CACHE_MS) {
+            return;
+        }
 
-        this.logger.log(`VertexOracle initialized: ${this.projectId}/${this.location}`);
+        this.lastCredentialsCheck = now;
+
+        try {
+            // Try to get credentials from database first
+            const setting = await this.prisma.systemSetting.findUnique({
+                where: { key: 'VERTEX_CREDENTIALS_JSON' },
+            });
+
+            if (setting?.value) {
+                const credentials = JSON.parse(setting.value);
+                this.projectId = credentials.project_id || this.projectId;
+
+                // Initialize with service account credentials from DB
+                this.vertexAI = new VertexAI({
+                    project: this.projectId,
+                    location: this.location,
+                    googleAuthOptions: {
+                        credentials: credentials,
+                    },
+                });
+                this.logger.log('VertexOracle initialized with DB credentials');
+            } else {
+                // Fall back to environment-based authentication
+                this.vertexAI = new VertexAI({
+                    project: this.projectId,
+                    location: this.location,
+                });
+                this.logger.log('VertexOracle initialized with environment credentials');
+            }
+
+            this.model = this.vertexAI.getGenerativeModel({
+                model: 'gemini-1.5-pro-002',
+                generationConfig: {
+                    temperature: 0.7,
+                    topP: 0.95,
+                    maxOutputTokens: 8192,
+                    responseMimeType: 'application/json',
+                },
+            });
+
+            this.initialized = true;
+            this.logger.log(`VertexOracle ready: ${this.projectId}/${this.location}`);
+        } catch (error) {
+            this.logger.error(`Failed to initialize VertexOracle: ${error}`);
+            throw new Error('VertexOracle initialization failed. Please check credentials.');
+        }
+    }
+
+    /**
+     * Forces re-initialization on next call (useful after credentials update).
+     */
+    invalidateCache(): void {
+        this.initialized = false;
+        this.lastCredentialsCheck = 0;
+        this.logger.log('VertexOracle cache invalidated');
     }
 
     /**
@@ -128,6 +188,7 @@ export class VertexOracle {
         userProfile: UserProfile,
         orderContext: OrderContext,
     ): Promise<OracleResponse> {
+        await this.ensureInitialized();
         this.logger.log(`Generating reading for order: ${orderContext.orderNumber}`);
 
         const systemPrompt = this.buildSystemPrompt();
@@ -172,7 +233,7 @@ export class VertexOracle {
         ];
 
         try {
-            const result = await this.model.generateContent({
+            const result = await this.model!.generateContent({
                 contents,
                 systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
             });
@@ -202,6 +263,7 @@ export class VertexOracle {
         archetype: string;
         currentDayNumber: number;
     }): Promise<string> {
+        await this.ensureInitialized();
         this.logger.log(`Generating mantra for day ${userProfile.currentDayNumber}`);
 
         const prompt = `
@@ -219,7 +281,7 @@ Réponds uniquement avec le mantra, sans guillemets ni formatage.
     `.trim();
 
         try {
-            const result = await this.model.generateContent({
+            const result = await this.model!.generateContent({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
                     temperature: 0.9,

@@ -2,6 +2,7 @@ import {
     Controller,
     Get,
     Post,
+    Put,
     Patch,
     Delete,
     Body,
@@ -13,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
+import { AdminSettingsService } from './admin-settings.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
@@ -28,7 +30,10 @@ import {
 @Controller('expert')
 @UseGuards(ExpertAuthGuard, RolesGuard)
 export class ExpertController {
-    constructor(private readonly expertService: ExpertService) { }
+    constructor(
+        private readonly expertService: ExpertService,
+        private readonly adminSettingsService: AdminSettingsService,
+    ) { }
 
     // ========================
     // AUTHENTICATION
@@ -192,5 +197,20 @@ export class ExpertController {
     @Get('stats')
     async getStats() {
         return this.expertService.getStats();
+    }
+
+    // ========================
+    // ADMIN SETTINGS
+    // ========================
+
+    @Get('settings/status')
+    async getSettingsStatus() {
+        return this.adminSettingsService.getConfigStatus();
+    }
+
+    @Put('settings/vertex-key')
+    @Roles('ADMIN')
+    async setVertexKey(@Body('credentials') credentials: string) {
+        return this.adminSettingsService.setVertexCredentials(credentials);
     }
 }

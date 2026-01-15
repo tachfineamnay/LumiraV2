@@ -12,7 +12,8 @@ import {
     Wand2,
     Bell,
     LayoutDashboard,
-    Loader2
+    Loader2,
+    Settings
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { motion } from "framer-motion";
@@ -49,6 +50,7 @@ function AdminLayoutInner({
         { name: "Validations", href: "/admin/validations", icon: CheckCircle2 },
         { name: "Historique", href: "/admin/history", icon: History },
         { name: "Clients", href: "/admin/clients", icon: Users },
+        { name: "Paramètres", href: "/admin/settings", icon: Settings },
     ];
 
     const handleLogout = () => {

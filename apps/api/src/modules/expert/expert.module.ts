@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ExpertController } from './expert.controller';
 import { ExpertService } from './expert.service';
+import { AdminSettingsService } from './admin-settings.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -33,6 +34,7 @@ import { PrismaService } from '../../prisma/prisma.service';
     controllers: [ExpertController],
     providers: [
         ExpertService,
+        AdminSettingsService,
         ExpertAuthGuard,
         RolesGuard,
         PrismaService,

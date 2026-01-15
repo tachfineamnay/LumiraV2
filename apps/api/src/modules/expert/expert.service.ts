@@ -641,7 +641,7 @@ export class ExpertService {
         const { PdfFactory } = await import('../../services/factory/PdfFactory');
 
         // Create service instances (in production, use proper DI)
-        const vertexOracle = new VertexOracle(this.configService);
+        const vertexOracle = new VertexOracle(this.configService, this.prisma);
         const pdfFactory = new PdfFactory(this.configService);
         await pdfFactory.onModuleInit();
 

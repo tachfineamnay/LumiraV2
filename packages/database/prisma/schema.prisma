@@ -340,3 +340,15 @@ model ChatSession {
   @@index([isActive])
   @@index([lastMessageAt(sort: Desc)])
 }
+
+// =============================================================================
+// SYSTEM SETTINGS - Dynamic Configuration
+// =============================================================================
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text
+  isEncrypted Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+}
