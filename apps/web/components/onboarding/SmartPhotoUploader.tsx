@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Upload, Camera, Smartphone, X, Check, Loader2, RefreshCw } from "lucide-react";
+import imageCompression from "browser-image-compression";
 
 // =============================================================================
 // TYPES
@@ -42,7 +43,7 @@ export const SmartPhotoUploader = ({
     // FILE UPLOAD
     // =========================================================================
 
-    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -51,19 +52,27 @@ export const SmartPhotoUploader = ({
             return;
         }
 
-        if (file.size > 10 * 1024 * 1024) {
-            setError("L'image ne doit pas dépasser 10 Mo");
-            return;
-        }
+        try {
+            const options = {
+                maxSizeMB: 1,
+                maxWidthOrHeight: 800,
+                useWebWorker: true
+            };
 
-        const reader = new FileReader();
-        reader.onload = () => {
-            onChange(reader.result as string);
-            setMode("idle");
-            setError(null);
-        };
-        reader.onerror = () => setError("Erreur lors de la lecture du fichier");
-        reader.readAsDataURL(file);
+            const compressedFile = await imageCompression(file, options);
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                onChange(reader.result as string);
+                setMode("idle");
+                setError(null);
+            };
+            reader.onerror = () => setError("Erreur lors de la lecture du fichier");
+            reader.readAsDataURL(compressedFile);
+        } catch (error) {
+            console.error(error);
+            setError("Erreur lors de la compression de l'image");
+        }
     }, [onChange]);
 
     // =========================================================================
@@ -89,7 +98,14 @@ export const SmartPhotoUploader = ({
         }
     }, []);
 
-    const capturePhoto = useCallback(() => {
+    const stopWebcam = useCallback(() => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+    }, []);
+
+    const capturePhoto = useCallback(async () => {
         if (!videoRef.current || !canvasRef.current) return;
 
         setIsCapturing(true);
@@ -101,22 +117,49 @@ export const SmartPhotoUploader = ({
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-            onChange(dataUrl);
-        }
 
-        // Cleanup
-        stopWebcam();
-        setIsCapturing(false);
-        setMode("idle");
-    }, [onChange]);
+            canvas.toBlob(async (blob) => {
+                if (blob) {
+                    try {
+                        const file = new File([blob], "webcam-capture.jpg", { type: "image/jpeg" });
+                        const options = {
+                            maxSizeMB: 1,
+                            maxWidthOrHeight: 800,
+                            useWebWorker: true
+                        };
+                        const compressedFile = await imageCompression(file, options);
 
-    const stopWebcam = useCallback(() => {
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            onChange(reader.result as string);
+                            // Cleanup after successful read
+                            stopWebcam();
+                            setIsCapturing(false);
+                            setMode("idle");
+                        };
+                        reader.onerror = () => {
+                            setError("Erreur lors de la lecture du fichier capturé");
+                            setIsCapturing(false);
+                            setMode("idle");
+                            stopWebcam();
+                        };
+                        reader.readAsDataURL(compressedFile);
+                    } catch (err) {
+                        console.error(err);
+                        setError("Erreur compression webcam");
+                        setIsCapturing(false);
+                        setMode("idle");
+                        stopWebcam();
+                    }
+                } else {
+                    setError("Erreur lors de la création du blob d'image");
+                    setIsCapturing(false);
+                    setMode("idle");
+                    stopWebcam();
+                }
+            }, "image/jpeg", 0.9);
         }
-    }, []);
+    }, [onChange, stopWebcam]);
 
     // =========================================================================
     // REMOVE PHOTO
