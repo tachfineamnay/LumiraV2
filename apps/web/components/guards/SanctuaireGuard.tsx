@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Lock } from 'lucide-react';
@@ -18,11 +18,14 @@ interface SanctuaireGuardProps {
  */
 export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fallback }) => {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { isAuthenticated, isLoading } = useSanctuaireAuth();
     const [shouldRedirect, setShouldRedirect] = useState(false);
 
+    const hasAutoLoginParams = searchParams.get('email') && searchParams.get('token');
+
     useEffect(() => {
-        if (!isLoading && !isAuthenticated) {
+        if (!isLoading && !isAuthenticated && !hasAutoLoginParams) {
             setShouldRedirect(true);
             // Small delay to show feedback before redirect
             const timer = setTimeout(() => {
@@ -30,7 +33,12 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [isLoading, isAuthenticated, router]);
+    }, [isLoading, isAuthenticated, router, hasAutoLoginParams]);
+
+    // Authenticated or Auto-login allowed to proceed to children
+    if (isAuthenticated || hasAutoLoginParams) {
+        return <>{children}</>;
+    }
 
     // Loading state
     if (isLoading) {
@@ -75,7 +83,7 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
         );
     }
 
-    // Authenticated - render children
+    // Authenticated or Auto-login allowed to proceed to children
     return <>{children}</>;
 };
 
