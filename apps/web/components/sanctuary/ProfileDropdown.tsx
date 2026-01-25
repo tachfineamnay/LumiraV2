@@ -17,7 +17,7 @@ export const ProfileDropdown = ({ userLevel = 1 }: ProfileDropdownProps) => {
     const { user, logout } = useAuth();
 
     const menuItems = [
-        { label: "Mon Profil", icon: User, route: "/sanctuaire/profile" },
+        { label: "Mon Dossier", icon: User, route: "/sanctuaire/settings/general" },
         { label: "Mes Lectures", icon: BookOpen, route: "/sanctuaire/draws" },
         { label: "Nouvelle Commande", icon: Plus, route: "/commande" },
     ];

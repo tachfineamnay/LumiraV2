@@ -4,10 +4,10 @@ import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import axios from "axios";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
-import { OnboardingForm } from "../../components/sanctuary/OnboardingForm";
-import { OracleOnboardingChat } from "../../components/onboarding/OracleOnboardingChat";
+import { HolisticWizard } from "../../components/onboarding/HolisticWizard";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 import { useSanctuaireAuth, isFirstVisitToken, setFirstVisitFlag, clearFirstVisitFlag } from "../../context/SanctuaireAuthContext";
 import {
@@ -39,10 +39,10 @@ interface DashboardCard {
 
 const dashboardCards: DashboardCard[] = [
     {
-        title: "Mon Profil",
-        description: "Gestion de votre identité spirituelle",
+        title: "Mon Dossier",
+        description: "Gestion de votre identité et diagnostic",
         icon: User,
-        route: "/sanctuaire/profile",
+        route: "/sanctuaire/settings/general",
         requiredLevel: 0,
         requiredCapability: "sanctuaire.sphere.profile",
     },
@@ -104,7 +104,7 @@ const getLevelInfo = (level: number): { name: "Initié" | "Mystique" | "Profond"
 function AutoLoginHandler() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { authenticateWithEmail, isAuthenticated, isLoading: authLoading } = useSanctuaireAuth();
+    const { authenticateWithEmail, isAuthenticated, isLoading: authLoading, refetchData } = useSanctuaireAuth();
 
     const [autoLoginState, setAutoLoginState] = useState<'idle' | 'authenticating' | 'success' | 'error'>('idle');
     const [autoLoginError, setAutoLoginError] = useState<string | null>(null);
@@ -221,19 +221,34 @@ function AutoLoginHandler() {
     // Onboarding modal
     if (showOnboarding) {
         return (
-            <OnboardingForm
-                isOpen={showOnboarding}
-                onClose={() => {
-                    setShowOnboarding(false);
-                    clearFirstVisitFlag();
-                    router.replace('/sanctuaire');
-                }}
-                onComplete={() => {
-                    setShowOnboarding(false);
-                    clearFirstVisitFlag();
-                    router.replace('/sanctuaire');
-                }}
-            />
+            <div className="fixed inset-0 z-[100] bg-void">
+                <HolisticWizard
+                    onComplete={async (data) => {
+                        try {
+                            const token = localStorage.getItem("sanctuaire_token");
+                            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+                            
+                            if (token) {
+                                await axios.patch(
+                                    `${API_URL}/api/users/profile`,
+                                    { 
+                                        ...data,
+                                        profileCompleted: true 
+                                    },
+                                    { headers: { Authorization: `Bearer ${token}` } }
+                                );
+                            }
+                        } catch (error) {
+                            console.error("Failed to save holistic diagnostic:", error);
+                        } finally {
+                            setShowOnboarding(false);
+                            clearFirstVisitFlag();
+                            await refetchData();
+                            router.replace('/sanctuaire');
+                        }
+                    }}
+                />
+            </div>
         );
     }
 
@@ -249,7 +264,7 @@ function DashboardContent() {
     const { profile, refetchData } = useSanctuaireAuth();
 
     // Check if onboarding is complete
-    const isOnboardingComplete = !!(profile?.birthDate && (profile?.facePhotoUrl || profile?.palmPhotoUrl || profile?.profileCompleted));
+    const isOnboardingComplete = !!(profile?.birthDate && profile?.profileCompleted);
 
     if (isLoading) {
         return (
@@ -288,14 +303,40 @@ function DashboardContent() {
                 </motion.p>
             </div>
 
-            {/* 🪐 MANDALA NAVIGATION or ORACLE ONBOARDING */}
+            {/* 🪐 MANDALA NAVIGATION or HOLISTIC WIZARD */}
             <section className="relative w-full flex justify-center items-center py-8 mb-8 z-30">
                 {isOnboardingComplete ? (
                     <div className="hidden lg:block">
                         <MandalaNav />
                     </div>
                 ) : (
-                    <OracleOnboardingChat onComplete={refetchData} />
+                    <div className="w-full max-w-4xl">
+                        <HolisticWizard
+                            onComplete={async (data) => {
+                                try {
+                                    const token = localStorage.getItem("sanctuaire_token");
+                                    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+                                    
+                                    if (token) {
+                                        // Save the holistic diagnostic data and mark profile as completed
+                                        await axios.patch(
+                                            `${API_URL}/api/users/profile`,
+                                            { 
+                                                ...data,
+                                                profileCompleted: true 
+                                            },
+                                            { headers: { Authorization: `Bearer ${token}` } }
+                                        );
+                                    }
+                                    await refetchData();
+                                } catch (error) {
+                                    console.error("Failed to save holistic diagnostic:", error);
+                                    // Fallback to just refetching
+                                    await refetchData();
+                                }
+                            }}
+                        />
+                    </div>
                 )}
             </section>
 
