@@ -60,6 +60,10 @@ COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 # Scripts de maintenance (seed prod, etc.) - copie depuis pruner car turbo prune n'inclut pas /scripts
 COPY --from=pruner /app/scripts ./scripts
 
+# Install global prisma for runtime migrations
+RUN npm install -g prisma
+
 EXPOSE 3001
 
-CMD ["node", "apps/api/dist/main.js"]
+# Run db:push before starting to sync schema
+CMD ["/bin/sh", "-c", "prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate && node apps/api/dist/main.js"]
