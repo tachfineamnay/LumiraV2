@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@packages/config": "workspace:*",
+    "@playwright/test": "^1.57.0",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.11.16",
     "@types/react": "^18.2.55",
