@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { TimelineConstellation } from '../../../components/sanctuary/TimelineConstellation';
