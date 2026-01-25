@@ -113,6 +113,11 @@ export class DigitalSoulService {
             objective: profile?.objective || undefined,
             facePhotoUrl: profile?.facePhotoUrl || undefined,
             palmPhotoUrl: profile?.palmPhotoUrl || undefined,
+            highs: profile?.highs || undefined,
+            lows: profile?.lows || undefined,
+            strongSide: profile?.strongSide || undefined,
+            fears: profile?.fears || undefined,
+            rituals: profile?.rituals || undefined,
         };
 
         // Build order context

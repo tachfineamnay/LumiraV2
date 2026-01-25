@@ -30,6 +30,11 @@ export interface UserProfile {
     objective?: string;
     facePhotoUrl?: string;
     palmPhotoUrl?: string;
+    highs?: string[];
+    lows?: string[];
+    strongSide?: string;
+    fears?: string;
+    rituals?: string;
 }
 
 /**
@@ -380,6 +385,26 @@ RÈGLES IMPORTANTES:
 
         if (profile.objective) {
             parts.push('', '=== OBJECTIF ===', profile.objective);
+        }
+
+        if (profile.highs && profile.highs.length > 0) {
+            parts.push('', '=== POINTS FORTS / MOMENTS DE GRÂCE ===', profile.highs.join(', '));
+        }
+
+        if (profile.lows && profile.lows.length > 0) {
+            parts.push('', '=== DÉFIS / POINTS BAS ===', profile.lows.join(', '));
+        }
+
+        if (profile.strongSide) {
+            parts.push('', '=== CÔTÉ LUMIÈRE / TALENTS ===', profile.strongSide);
+        }
+
+        if (profile.fears) {
+            parts.push('', '=== PEURS / BLOQUAGES ===', profile.fears);
+        }
+
+        if (profile.rituals) {
+            parts.push('', '=== RITUELS ACTUELS / ASPIRATIONS ===', profile.rituals);
         }
 
         if (profile.facePhotoUrl || profile.palmPhotoUrl) {

@@ -191,6 +191,11 @@ export class UsersService {
     objective?: string;
     facePhotoUrl?: string;
     palmPhotoUrl?: string;
+    highs?: string[];
+    lows?: string[];
+    strongSide?: string;
+    fears?: string;
+    rituals?: string;
     profileCompleted?: boolean;
   }): Promise<{ success: boolean; profile: UserProfile }> {
     // Upsert the profile (create if not exists, update if exists)
@@ -205,6 +210,11 @@ export class UsersService {
         objective: data.objective || null,
         facePhotoUrl: data.facePhotoUrl || null,
         palmPhotoUrl: data.palmPhotoUrl || null,
+        highs: data.highs || [],
+        lows: data.lows || [],
+        strongSide: data.strongSide || null,
+        fears: data.fears || null,
+        rituals: data.rituals || null,
         profileCompleted: data.profileCompleted || false,
       },
       update: {
@@ -215,6 +225,11 @@ export class UsersService {
         ...(data.objective !== undefined && { objective: data.objective }),
         ...(data.facePhotoUrl !== undefined && { facePhotoUrl: data.facePhotoUrl }),
         ...(data.palmPhotoUrl !== undefined && { palmPhotoUrl: data.palmPhotoUrl }),
+        ...(data.highs !== undefined && { highs: data.highs }),
+        ...(data.lows !== undefined && { lows: data.lows }),
+        ...(data.strongSide !== undefined && { strongSide: data.strongSide }),
+        ...(data.fears !== undefined && { fears: data.fears }),
+        ...(data.rituals !== undefined && { rituals: data.rituals }),
         ...(data.profileCompleted !== undefined && { profileCompleted: data.profileCompleted }),
       },
     });

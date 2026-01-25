@@ -55,6 +55,11 @@ export class UsersController {
         objective: data.profile.objective,
         facePhotoUrl: data.profile.facePhotoUrl,
         palmPhotoUrl: data.profile.palmPhotoUrl,
+        highs: data.profile.highs,
+        lows: data.profile.lows,
+        strongSide: data.profile.strongSide,
+        fears: data.profile.fears,
+        rituals: data.profile.rituals,
         profileCompleted: data.profile.profileCompleted,
       } : null,
       stats: data.stats,
@@ -87,6 +92,11 @@ export class UsersController {
       objective?: string;
       facePhotoUrl?: string;
       palmPhotoUrl?: string;
+      highs?: string[];
+      lows?: string[];
+      strongSide?: string;
+      fears?: string;
+      rituals?: string;
       profileCompleted?: boolean;
     }
   ) {

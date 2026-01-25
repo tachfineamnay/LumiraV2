@@ -113,6 +113,11 @@ model UserProfile {
   objective        String?   @db.Text
   facePhotoUrl     String?
   palmPhotoUrl     String?
+  highs            String[]
+  lows             String[]
+  strongSide       String?   @db.Text
+  fears            String?   @db.Text
+  rituals          String?   @db.Text
   profileCompleted Boolean   @default(false)
   submittedAt      DateTime?
   createdAt        DateTime  @default(now())
