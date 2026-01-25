@@ -1,5 +1,5 @@
 # 1. Stage Pruner
-FROM node:20-alpine3.18 AS pruner
+FROM node:20-alpine AS pruner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 RUN npm install -g turbo
@@ -7,7 +7,7 @@ COPY . .
 RUN turbo prune --scope=api --docker
 
 # 2. Stage Builder
-FROM node:20-alpine3.18 AS builder
+FROM node:20-alpine AS builder
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN pnpm turbo run db:generate --filter=@packages/database
 RUN pnpm turbo run build --filter=api...
 
 # 3. Stage Runner
-FROM node:20-alpine3.18 AS runner
+FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat curl
 WORKDIR /app
 
@@ -61,7 +61,7 @@ COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=pruner /app/scripts ./scripts
 
 # Install global prisma for runtime migrations
-RUN npm install -g prisma
+RUN npm install -g prisma@5.22.0
 
 EXPOSE 3001
 
