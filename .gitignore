@@ -31,3 +31,10 @@ build/
 
 # turbo
 .turbo
+
+# Playwright
+playwright-report/
+test-results/
+
+# Logs
+error_log*.txt
