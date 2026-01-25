@@ -3,8 +3,25 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 
+import { json, urlencoded } from 'express';
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  app.use(json({
+    limit: '50mb',
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
+
+  app.use(urlencoded({
+    limit: '50mb',
+    extended: true,
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
   const configService = app.get(ConfigService);
 
   const port = Number(configService.get<string>("PORT") ?? 3001);
