@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EmailService } from './email.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Order, User } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import {
     OrderConfirmationContext,
     ExpertAlertContext,
@@ -14,6 +15,7 @@ export class NotificationsService {
     constructor(
         private readonly emailService: EmailService,
         private readonly prisma: PrismaService,
+        private readonly configService: ConfigService,
     ) { }
 
     private getLevelName(level: number): string {
@@ -48,12 +50,16 @@ export class NotificationsService {
             where: { isActive: true },
         });
 
+        const frontendUrl = this.configService.get('FRONTEND_URL') || process.env.FRONTEND_URL || 'http://localhost:3000';
+        const adminUrl = `${frontendUrl}/expert`;
+
         for (const expert of experts) {
             const context: ExpertAlertContext = {
                 orderNumber: order.orderNumber,
                 clientName: order.userName || 'Client',
                 level: this.getLevelName(order.level),
                 createdAt: new Date(order.createdAt).toLocaleString('fr-FR'),
+                adminUrl,
             };
 
             await this.emailService.send({
