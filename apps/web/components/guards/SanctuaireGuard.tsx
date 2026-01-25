@@ -35,7 +35,8 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
         }
     }, [isLoading, isAuthenticated, router, hasAutoLoginParams]);
 
-    // Authenticated or Auto-login allowed to proceed to children
+    // Fast path: if authenticated or contains auto-login tokens, allow rendering
+    // This prevents the "Protected Access" screen from flickering during redirect
     if (isAuthenticated || hasAutoLoginParams) {
         return <>{children}</>;
     }
@@ -83,7 +84,7 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
         );
     }
 
-    // Authenticated or Auto-login allowed to proceed to children
+    // Authenticated - render children
     return <>{children}</>;
 };
 
