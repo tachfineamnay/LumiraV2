@@ -185,8 +185,12 @@ export class PaymentsService {
             });
             this.logger.log(`Order ${orderId} marked as PAID`);
 
-            await this.notificationsService.sendOrderConfirmation(order, order.user);
-            await this.notificationsService.sendExpertAlert(order);
+            try {
+                await this.notificationsService.sendOrderConfirmation(order, order.user);
+                await this.notificationsService.sendExpertAlert(order);
+            } catch (error) {
+                this.logger.error(`Failed to send order notifications (Legacy): ${error instanceof Error ? error.message : String(error)}`);
+            }
             return;
         }
 
@@ -241,8 +245,13 @@ export class PaymentsService {
 
             this.logger.log(`Checkout flow: Created User ${user.id} and Order ${order.id}`);
 
-            await this.notificationsService.sendOrderConfirmation(order, order.user);
-            await this.notificationsService.sendExpertAlert(order);
+            try {
+                await this.notificationsService.sendOrderConfirmation(order, order.user);
+                await this.notificationsService.sendExpertAlert(order);
+            } catch (error) {
+                this.logger.error(`Failed to send order notifications: ${error instanceof Error ? error.message : String(error)}`);
+                // Ensure the payment flow continues even if emails fail
+            }
         }
     }
 
