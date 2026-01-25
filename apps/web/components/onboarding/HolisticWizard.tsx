@@ -74,7 +74,10 @@ export const HolisticWizard = ({ onComplete, initialData }: HolisticWizardProps)
     // Auto-save draft
     const formData = watch();
     useEffect(() => {
-        localStorage.setItem("holistic_wizard_draft", JSON.stringify(formData));
+        // Exclude large files (photos) from localStorage to avoid QuotaExceededError
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { facePhoto, palmPhoto, ...safeData } = formData;
+        localStorage.setItem("holistic_wizard_draft", JSON.stringify(safeData));
     }, [formData]);
 
     // Navigation Logic
