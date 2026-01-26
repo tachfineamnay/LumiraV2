@@ -24,7 +24,19 @@ interface UserProfile {
     objective: string | null;
     facePhotoUrl: string | null;
     palmPhotoUrl: string | null;
+    highs: string | null;
+    lows: string | null;
+    strongSide: string | null;
+    weakSide: string | null;
+    strongZone: string | null;
+    weakZone: string | null;
+    deliveryStyle: string | null;
+    pace: number | null;
+    ailments: string | null;
+    fears: string | null;
+    rituals: string | null;
     profileCompleted: boolean;
+    submittedAt: string | null;
 }
 
 interface CompletedOrder {
