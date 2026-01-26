@@ -25,7 +25,7 @@ const navItems: NavItem[] = [
     { key: "tirages", label: "Tirages", sublabel: "bruts", icon: BookOpen, route: "/sanctuaire/draws", angle: 0, progress: 25 },
     { key: "synthese", label: "Synthèse", icon: Layers, route: "/sanctuaire/synthesis", angle: 72, progress: 0 },
     { key: "oracle", label: "Conversations", icon: MessageCircle, route: "/sanctuaire/chat", angle: 144, progress: 0 },
-    { key: "profil", label: "Profil", icon: User, route: "/sanctuaire/settings/general", angle: 216, progress: 75 },
+    { key: "profil", label: "Profil", icon: User, route: "/sanctuaire/profile", angle: 216, progress: 75 },
 ];
 
 // =============================================================================

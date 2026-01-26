@@ -41,10 +41,10 @@ interface DashboardCard {
 
 const dashboardCards: DashboardCard[] = [
     {
-        title: "Mon Dossier",
-        description: "Gestion de votre identité et diagnostic",
+        title: "Mon Profil",
+        description: "Votre identité et diagnostic holistique",
         icon: User,
-        route: "/sanctuaire/settings/general",
+        route: "/sanctuaire/profile",
         requiredLevel: 0,
         requiredCapability: "sanctuaire.sphere.profile",
     },
