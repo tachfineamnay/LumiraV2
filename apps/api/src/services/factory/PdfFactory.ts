@@ -138,6 +138,9 @@ export class PdfFactory implements OnModuleInit {
      * Converts HTML to PDF via Gotenberg.
      */
     async convertToPdf(html: string, options: PdfOptions = {}): Promise<Buffer> {
+        this.logger.log(`📄 Starting PDF conversion via Gotenberg at ${this.gotenbergUrl}`);
+        const startTime = Date.now();
+
         const formData = new FormData();
 
         // Add the HTML file
@@ -156,22 +159,52 @@ export class PdfFactory implements OnModuleInit {
         formData.append('printBackground', 'true');
         formData.append('preferCssPageSize', 'false');
 
-        try {
-            const response = await axios.post(
-                `${this.gotenbergUrl}/forms/chromium/convert/html`,
-                formData,
-                {
-                    headers: formData.getHeaders(),
-                    responseType: 'arraybuffer',
-                    timeout: 60000, // 60 seconds timeout
-                },
-            );
+        const GOTENBERG_TIMEOUT = 45000; // 45 seconds timeout
+        const MAX_RETRIES = 2;
+        let lastError: Error | null = null;
 
-            return Buffer.from(response.data);
-        } catch (error) {
-            this.logger.error(`Gotenberg conversion failed: ${error}`);
-            throw new Error(`PDF conversion failed: ${error}`);
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                this.logger.log(`📄 Gotenberg attempt ${attempt}/${MAX_RETRIES}...`);
+
+                const response = await axios.post(
+                    `${this.gotenbergUrl}/forms/chromium/convert/html`,
+                    formData,
+                    {
+                        headers: formData.getHeaders(),
+                        responseType: 'arraybuffer',
+                        timeout: GOTENBERG_TIMEOUT,
+                    },
+                );
+
+                const elapsed = Date.now() - startTime;
+                const pdfBuffer = Buffer.from(response.data);
+                this.logger.log(`✅ PDF generated in ${elapsed}ms (${pdfBuffer.length} bytes)`);
+
+                return pdfBuffer;
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                
+                // Log detailed error info
+                if (axios.isAxiosError(error)) {
+                    this.logger.error(`❌ Gotenberg error: ${error.code} - ${error.message}`);
+                    if (error.response) {
+                        this.logger.error(`   Status: ${error.response.status}`);
+                        this.logger.error(`   Data: ${Buffer.from(error.response.data || '').toString().substring(0, 200)}`);
+                    }
+                } else {
+                    this.logger.error(`❌ Gotenberg conversion failed: ${lastError.message}`);
+                }
+
+                if (attempt < MAX_RETRIES) {
+                    const delay = attempt * 1500;
+                    this.logger.log(`⏳ Retrying Gotenberg in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
         }
+
+        throw new Error(`PDF conversion failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
     }
 
     // ===========================================================================

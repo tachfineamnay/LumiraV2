@@ -243,27 +243,78 @@ export class VertexOracle {
             { role: 'user', parts },
         ];
 
-        try {
-            const result = await this.model!.generateContent({
-                contents,
-                systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
-            });
+        // Retry configuration
+        const MAX_RETRIES = 2;
+        const TIMEOUT_MS = 90000; // 90 seconds timeout for Gemini
+        let lastError: Error | null = null;
 
-            const response = result.response;
-            const textContent = response.candidates?.[0]?.content?.parts?.[0]?.text;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                this.logger.log(`🔮 Vertex AI call attempt ${attempt}/${MAX_RETRIES}...`);
+                const startTime = Date.now();
 
-            if (!textContent) {
-                throw new Error('Empty response from Gemini');
+                // Create a timeout promise
+                const timeoutPromise = new Promise<never>((_, reject) => {
+                    setTimeout(() => reject(new Error(`Vertex AI timeout after ${TIMEOUT_MS}ms`)), TIMEOUT_MS);
+                });
+
+                // Race between the API call and timeout
+                const result = await Promise.race([
+                    this.model!.generateContent({
+                        contents,
+                        systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+                    }),
+                    timeoutPromise,
+                ]);
+
+                const elapsed = Date.now() - startTime;
+                this.logger.log(`⏱️ Vertex AI response received in ${elapsed}ms`);
+
+                const response = result.response;
+                const textContent = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!textContent) {
+                    throw new Error('Empty response from Gemini - no text content in candidates');
+                }
+
+                this.logger.log(`📝 Raw response length: ${textContent.length} chars`);
+
+                // Parse and validate JSON
+                let parsed: OracleResponse;
+                try {
+                    parsed = JSON.parse(textContent) as OracleResponse;
+                } catch (parseError) {
+                    this.logger.error(`❌ JSON parse failed: ${parseError}`);
+                    this.logger.error(`Raw text (first 500 chars): ${textContent.substring(0, 500)}`);
+                    throw new Error(`Invalid JSON from Gemini: ${parseError}`);
+                }
+
+                // Validate required fields
+                if (!parsed.pdf_content || !parsed.synthesis || !parsed.timeline) {
+                    throw new Error('Incomplete response: missing pdf_content, synthesis, or timeline');
+                }
+
+                this.logger.log(`✅ Reading generated successfully for ${userProfile.firstName}`);
+                this.logger.log(`   Archetype: ${parsed.synthesis.archetype}`);
+                this.logger.log(`   Sections: ${parsed.pdf_content.sections?.length || 0}`);
+                this.logger.log(`   Timeline days: ${parsed.timeline?.length || 0}`);
+
+                return parsed;
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                this.logger.error(`❌ Attempt ${attempt} failed: ${lastError.message}`);
+
+                if (attempt < MAX_RETRIES) {
+                    const delay = attempt * 2000; // Exponential backoff: 2s, 4s
+                    this.logger.log(`⏳ Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
-
-            const parsed = JSON.parse(textContent) as OracleResponse;
-            this.logger.log(`Reading generated successfully for ${userProfile.firstName}`);
-
-            return parsed;
-        } catch (error) {
-            this.logger.error(`Failed to generate reading: ${error}`);
-            throw error;
         }
+
+        // All retries exhausted
+        this.logger.error(`❌ All ${MAX_RETRIES} attempts failed for reading generation`);
+        throw lastError || new Error('Unknown error in Vertex AI generation');
     }
 
     /**
@@ -449,7 +500,13 @@ RÈGLES IMPORTANTES:
     }
 
     private async fetchImageAsBase64(url: string): Promise<string> {
-        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        this.logger.log(`📷 Fetching image from: ${url.substring(0, 50)}...`);
+        const response = await axios.get(url, { 
+            responseType: 'arraybuffer',
+            timeout: 30000, // 30 second timeout for image fetch
+        });
+        const size = Buffer.from(response.data).length;
+        this.logger.log(`📷 Image fetched: ${Math.round(size / 1024)}KB`);
         return Buffer.from(response.data).toString('base64');
     }
 }
