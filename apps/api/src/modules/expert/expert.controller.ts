@@ -27,6 +27,7 @@ import {
     PaginationDto,
     CreateClientDto,
     UpdateClientStatusDto,
+    RefineContentDto,
 } from './dto';
 
 @Controller('expert')
@@ -144,6 +145,32 @@ export class ExpertController {
     @Post('orders/:id/generate')
     async generateReading(@Param('id') orderId: string, @CurrentExpert() expert: Expert) {
         return this.expertService.generateReading(orderId, expert);
+    }
+
+    /**
+     * Refine content using AI based on expert prompt.
+     * Used in the Co-Creation Studio for content adjustments.
+     */
+    @Post('orders/:id/refine')
+    async refineContent(
+        @Param('id') orderId: string,
+        @Body() dto: RefineContentDto,
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.refineContent(orderId, dto, expert);
+    }
+
+    /**
+     * Validate and seal an order from the Studio.
+     * Generates final PDF and marks order as complete.
+     */
+    @Post('orders/:id/validate')
+    async validateOrder(
+        @Param('id') orderId: string,
+        @Body() body: { content: string; approval: string },
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.validateFromStudio(orderId, body.content, body.approval, expert);
     }
 
     // ========================

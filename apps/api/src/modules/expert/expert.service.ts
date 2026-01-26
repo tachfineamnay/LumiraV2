@@ -24,6 +24,7 @@ import {
     PaginationDto,
     CreateClientDto,
     UpdateClientStatusDto,
+    RefineContentDto,
 } from './dto';
 
 interface ExpertEntity {
@@ -769,6 +770,156 @@ export class ExpertService {
     // ========================
     // CLIENTS
     // ========================
+
+    /**
+     * Refine content using AI based on expert prompt.
+     * Used in the Co-Creation Studio for content adjustments.
+     */
+    async refineContent(
+        orderId: string,
+        dto: RefineContentDto,
+        expert: ExpertEntity,
+    ): Promise<{ message: string; updatedContent?: string }> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { user: { include: { profile: true } } },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        this.logger.log(`🎨 Refining content for order ${order.orderNumber} with prompt: "${dto.prompt}"`);
+
+        try {
+            // Import VertexOracle for AI refinement
+            const { VertexOracle } = await import('../../services/factory/VertexOracle');
+            const vertexOracle = new VertexOracle(this.configService, this.prisma);
+
+            // Build the refinement prompt
+            const systemPrompt = `Tu es Oracle Lumira, un guide spirituel expert en lectures karmiques et astrologiques.
+Tu dois affiner le contenu suivant selon les instructions de l'expert.
+IMPORTANT: Préserve le format Markdown, le ton mystique et la structure globale.
+Retourne UNIQUEMENT le contenu modifié, sans explications.`;
+
+            const userPrompt = `## Instructions de l'expert:
+${dto.prompt}
+
+## Contenu actuel à modifier:
+${dto.currentContent}
+
+## Contenu modifié:`;
+
+            const refinedContent = await vertexOracle.refineText(userPrompt, {
+                systemPrompt,
+                maxTokens: 4096,
+                temperature: 0.7,
+            });
+
+            // Update order with refined content
+            const currentGenerated = order.generatedContent as Record<string, unknown> || {};
+            await this.prisma.order.update({
+                where: { id: orderId },
+                data: {
+                    generatedContent: {
+                        ...currentGenerated,
+                        lecture: refinedContent,
+                        lastRefinedAt: new Date().toISOString(),
+                        refinedBy: expert.id,
+                    },
+                },
+            });
+
+            this.logger.log(`✅ Content refined for order ${order.orderNumber}`);
+
+            return {
+                message: `Le contenu a été affiné selon vos instructions.`,
+                updatedContent: refinedContent,
+            };
+        } catch (error) {
+            this.logger.error(`❌ Content refinement failed: ${error}`);
+            throw new BadRequestException(`Échec du raffinement: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Validate and seal an order from the Co-Creation Studio.
+     * Saves the final content and generates the PDF.
+     */
+    async validateFromStudio(
+        orderId: string,
+        finalContent: string,
+        approval: string,
+        expert: ExpertEntity,
+    ): Promise<Order> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        this.logger.log(`📋 Validating order ${order.orderNumber} from Studio`);
+
+        // Save the final content
+        const currentGenerated = order.generatedContent as Record<string, unknown> || {};
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                generatedContent: {
+                    ...currentGenerated,
+                    lecture: finalContent,
+                    sealedAt: new Date().toISOString(),
+                    sealedBy: expert.id,
+                },
+                status: 'AWAITING_VALIDATION',
+            },
+        });
+
+        if (approval === 'APPROVED') {
+            // Generate PDF and finalize
+            try {
+                const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
+                const { VertexOracle } = await import('../../services/factory/VertexOracle');
+                const { PdfFactory } = await import('../../services/factory/PdfFactory');
+
+                const vertexOracle = new VertexOracle(this.configService, this.prisma);
+                const pdfFactory = new PdfFactory(this.configService);
+                await pdfFactory.onModuleInit();
+
+                const digitalSoulService = new DigitalSoulService(
+                    this.configService,
+                    this.prisma,
+                    vertexOracle,
+                    pdfFactory,
+                );
+
+                const result = await digitalSoulService.finalizeWithPdf(orderId);
+
+                const updatedOrder = await this.prisma.order.update({
+                    where: { id: orderId },
+                    data: {
+                        expertValidation: {
+                            action: 'approve',
+                            validatedBy: expert.id,
+                            validatedAt: new Date().toISOString(),
+                            pdfUrl: result.pdfUrl,
+                            source: 'studio',
+                        },
+                    },
+                });
+
+                this.logger.log(`✅ Order ${order.orderNumber} sealed and PDF delivered from Studio`);
+                return updatedOrder;
+            } catch (error) {
+                this.logger.error(`❌ Failed to finalize order ${order.orderNumber}: ${error}`);
+                throw new BadRequestException(`Échec de la génération PDF: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        return this.prisma.order.findUnique({ where: { id: orderId } }) as Promise<Order>;
+    }
 
     async getClients(dto: PaginationDto): Promise<PaginatedResult<User>> {
         const { page = 1, limit = 20, search } = dto;

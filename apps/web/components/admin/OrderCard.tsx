@@ -49,7 +49,7 @@ export function OrderCard({ order, onView, onTake, onDelete, showTake = true, sh
     };
 
     const handleOpenWorkspace = () => {
-        router.push(`/admin/workspace/${order.id}`);
+        router.push(`/admin/orders/${order.id}`);
     };
 
     return (
@@ -93,11 +93,11 @@ export function OrderCard({ order, onView, onTake, onDelete, showTake = true, sh
                     {showWorkspace && (
                         <button
                             onClick={handleOpenWorkspace}
-                            className="px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-400 text-xs font-medium flex items-center gap-1.5 transition-all border border-amber-500/30"
-                            title="Ouvrir Le Garage"
+                            className="px-3 py-2 rounded-lg bg-gradient-to-r from-gold/20 to-amber-600/20 hover:from-gold/30 hover:to-amber-600/30 text-gold text-xs font-medium flex items-center gap-1.5 transition-all border border-gold/30"
+                            title="Ouvrir le Studio"
                         >
                             <Sparkles className="w-3.5 h-3.5" />
-                            Le Garage
+                            Studio
                         </button>
                     )}
                     {onView && (

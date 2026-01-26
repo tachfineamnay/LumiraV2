@@ -360,6 +360,48 @@ Réponds uniquement avec le mantra, sans guillemets ni formatage.
         }
     }
 
+    /**
+     * Refines content based on expert instructions.
+     * Used in the Co-Creation Studio for content adjustments.
+     */
+    async refineText(
+        userPrompt: string,
+        options?: {
+            systemPrompt?: string;
+            maxTokens?: number;
+            temperature?: number;
+        },
+    ): Promise<string> {
+        await this.ensureInitialized();
+        this.logger.log('Refining text content...');
+
+        const systemInstruction = options?.systemPrompt || `Tu es Oracle Lumira, un guide spirituel expert. 
+Affine le contenu selon les instructions données. Préserve le ton mystique et la structure Markdown.`;
+
+        try {
+            const result = await this.model!.generateContent({
+                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                systemInstruction: { role: 'system', parts: [{ text: systemInstruction }] },
+                generationConfig: {
+                    temperature: options?.temperature ?? 0.7,
+                    maxOutputTokens: options?.maxTokens ?? 4096,
+                    responseMimeType: 'text/plain',
+                },
+            });
+
+            const refined = result.response.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (!refined) {
+                throw new Error('Empty response from AI refinement');
+            }
+
+            this.logger.log(`✅ Text refined successfully (${refined.length} chars)`);
+            return refined;
+        } catch (error) {
+            this.logger.error(`Failed to refine text: ${error}`);
+            throw error;
+        }
+    }
+
     // ===========================================================================
     // PRIVATE METHODS
     // ===========================================================================
