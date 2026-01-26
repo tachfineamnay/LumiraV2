@@ -323,14 +323,15 @@ function DashboardContent() {
             </div>
 
             {/* 🪐 MANDALA NAVIGATION or HOLISTIC WIZARD */}
-            <section className="relative w-full flex justify-center items-center py-8 mb-8 z-30">
+            <section className="relative w-full flex justify-center items-start py-8 mb-8 z-30">
                 {isOnboardingComplete ? (
                     <div className="hidden lg:block">
                         <MandalaNav />
                     </div>
                 ) : (
-                    <div className="w-full max-w-4xl">
+                    <div className="w-full max-w-4xl min-h-[700px]">
                         <HolisticWizard
+                            userEmail={email || user?.email}
                             onComplete={async (data) => {
                                 try {
                                     const token = localStorage.getItem("sanctuaire_token");

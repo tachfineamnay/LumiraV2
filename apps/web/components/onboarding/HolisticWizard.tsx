@@ -178,15 +178,15 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
     );
 
     return (
-        <div className="min-h-screen relative overflow-hidden">
+        <div className="min-h-full w-full relative overflow-y-auto overflow-x-hidden">
             {/* ═══════════════════════════════════════════════════════════════
-                COSMIC BACKGROUND
+                COSMIC BACKGROUND (relative to container)
             ═══════════════════════════════════════════════════════════════ */}
-            <div className="fixed inset-0 bg-abyss-900" />
-            <div className="fixed inset-0 wizard-cosmic-gradient" />
+            <div className="absolute inset-0 bg-abyss-900" />
+            <div className="absolute inset-0 wizard-cosmic-gradient" />
             
             {/* Animated Blobs */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <motion.div
                     animate={{ 
                         scale: [1, 1.2, 1],
@@ -208,12 +208,12 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
             </div>
             
             {/* Starfield */}
-            <div className="fixed inset-0 starfield pointer-events-none" />
+            <div className="absolute inset-0 starfield pointer-events-none" />
 
             {/* ═══════════════════════════════════════════════════════════════
                 MAIN CONTENT
             ═══════════════════════════════════════════════════════════════ */}
-            <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8 md:py-12">
+            <div className="relative z-10 min-h-full flex flex-col items-center justify-center px-4 py-8 md:py-12">
                 
                 {/* Brand Header */}
                 <motion.div 
