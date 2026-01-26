@@ -236,38 +236,51 @@ function AutoLoginHandler() {
     // Onboarding modal
     if (showOnboarding && !profile?.profileCompleted) {
         return (
-            <div className="fixed inset-0 z-[100] bg-void">
-                <HolisticWizard
-                    userEmail={email || user?.email}
-                    onComplete={async (data) => {
-                        try {
-                            const token = localStorage.getItem("sanctuaire_token");
-                            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+            <HolisticWizard
+                userEmail={email || user?.email}
+                onComplete={async (data) => {
+                    try {
+                        const authToken = localStorage.getItem("sanctuaire_token");
+                        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+                        
+                        if (authToken) {
+                            // Map wizard fields to API expected fields
+                            const profileData = {
+                                birthDate: data.birthDate,
+                                birthTime: data.birthTime || null,
+                                birthPlace: data.birthPlace,
+                                facePhotoUrl: data.facePhoto || null,
+                                palmPhotoUrl: data.palmPhoto || null,
+                                highs: data.highs,
+                                lows: data.lows,
+                                strongSide: data.strongSide,
+                                weakSide: data.weakSide,
+                                strongZone: data.strongZone,
+                                weakZone: data.weakZone,
+                                deliveryStyle: data.deliveryStyle,
+                                pace: data.pace,
+                                ailments: data.ailments || null,
+                                profileCompleted: true,
+                            };
                             
-                            if (token) {
-                                await axios.patch(
-                                    `${API_URL}/api/users/profile`,
-                                    { 
-                                        ...data,
-                                        profileCompleted: true 
-                                    },
-                                    { headers: { Authorization: `Bearer ${token}` } }
-                                );
-                            }
-                        } catch (error) {
-                            console.error("Failed to save holistic diagnostic:", error);
-                        } finally {
-                            setShowOnboarding(false);
-                            clearFirstVisitFlag();
-                            // Clear the draft after successful submission
-                            localStorage.removeItem('holistic_wizard_draft');
-                            localStorage.removeItem('holistic_wizard_email');
-                            await refetchData();
-                            router.replace('/sanctuaire');
+                            await axios.patch(
+                                `${API_URL}/api/users/profile`,
+                                profileData,
+                                { headers: { Authorization: `Bearer ${authToken}` } }
+                            );
                         }
-                    }}
-                />
-            </div>
+                    } catch (error) {
+                        console.error("Failed to save holistic diagnostic:", error);
+                    } finally {
+                        setShowOnboarding(false);
+                        clearFirstVisitFlag();
+                        localStorage.removeItem('holistic_wizard_draft');
+                        localStorage.removeItem('holistic_wizard_email');
+                        await refetchData();
+                        router.replace('/sanctuaire');
+                    }
+                }}
+            />
         );
     }
 
@@ -281,6 +294,7 @@ function AutoLoginHandler() {
 function DashboardContent() {
     const { highestLevel, hasCapability, isLoading, orderCount } = useSanctuaire();
     const { profile, refetchData, user } = useSanctuaireAuth();
+    const [showWizard, setShowWizard] = useState(false);
 
     // Check if onboarding is complete
     const isOnboardingComplete = !!(profile?.birthDate && profile?.profileCompleted);
@@ -300,8 +314,62 @@ function DashboardContent() {
 
     const hasOrders = orderCount > 0;
 
+    // Handle wizard completion
+    const handleWizardComplete = async (data: any) => {
+        try {
+            const token = localStorage.getItem("sanctuaire_token");
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+            
+            if (token) {
+                const profileData = {
+                    birthDate: data.birthDate,
+                    birthTime: data.birthTime || null,
+                    birthPlace: data.birthPlace,
+                    facePhotoUrl: data.facePhoto || null,
+                    palmPhotoUrl: data.palmPhoto || null,
+                    highs: data.highs,
+                    lows: data.lows,
+                    strongSide: data.strongSide,
+                    weakSide: data.weakSide,
+                    strongZone: data.strongZone,
+                    weakZone: data.weakZone,
+                    deliveryStyle: data.deliveryStyle,
+                    pace: data.pace,
+                    ailments: data.ailments || null,
+                    profileCompleted: true,
+                };
+                
+                await axios.patch(
+                    `${API_URL}/api/users/profile`,
+                    profileData,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            }
+            
+            localStorage.removeItem('holistic_wizard_draft');
+            localStorage.removeItem('holistic_wizard_email');
+            
+            await refetchData();
+        } catch (error) {
+            console.error("Failed to save holistic diagnostic:", error);
+            await refetchData();
+        } finally {
+            setShowWizard(false);
+        }
+    };
+
     return (
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col items-center">
+        <>
+            {/* Wizard Modal */}
+            {showWizard && (
+                <HolisticWizard
+                    userEmail={user?.email}
+                    onComplete={handleWizardComplete}
+                    onClose={() => setShowWizard(false)}
+                />
+            )}
+
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col items-center">
 
             {/* 🏛️ WELCOME */}
             <div className="text-center mb-8 relative z-10">
@@ -322,64 +390,37 @@ function DashboardContent() {
                 </motion.p>
             </div>
 
-            {/* 🪐 MANDALA NAVIGATION or HOLISTIC WIZARD */}
+            {/* 🪐 MANDALA NAVIGATION or ONBOARDING CTA */}
             <section className="relative w-full flex justify-center items-start py-8 mb-8 z-30">
                 {isOnboardingComplete ? (
                     <div className="hidden lg:block">
                         <MandalaNav />
                     </div>
                 ) : (
-                    <div className="w-full max-w-4xl min-h-[700px]">
-                        <HolisticWizard
-                            userEmail={user?.email}
-                            onComplete={async (data) => {
-                                try {
-                                    const token = localStorage.getItem("sanctuaire_token");
-                                    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-                                    
-                                    if (token) {
-                                        // Map wizard fields to API expected fields
-                                        const profileData = {
-                                            birthDate: data.birthDate,
-                                            birthTime: data.birthTime || null,
-                                            birthPlace: data.birthPlace,
-                                            facePhotoUrl: data.facePhoto || null,
-                                            palmPhotoUrl: data.palmPhoto || null,
-                                            highs: data.highs,
-                                            lows: data.lows,
-                                            strongSide: data.strongSide,
-                                            weakSide: data.weakSide,
-                                            strongZone: data.strongZone,
-                                            weakZone: data.weakZone,
-                                            deliveryStyle: data.deliveryStyle,
-                                            pace: data.pace,
-                                            ailments: data.ailments || null,
-                                            profileCompleted: true,
-                                        };
-                                        
-                                        console.log("[Sanctuaire] Saving profile data:", profileData);
-                                        
-                                        // Save the holistic diagnostic data and mark profile as completed
-                                        await axios.patch(
-                                            `${API_URL}/api/users/profile`,
-                                            profileData,
-                                            { headers: { Authorization: `Bearer ${token}` } }
-                                        );
-                                    }
-                                    
-                                    // Clear wizard draft
-                                    localStorage.removeItem('holistic_wizard_draft');
-                                    localStorage.removeItem('holistic_wizard_email');
-                                    
-                                    await refetchData();
-                                } catch (error) {
-                                    console.error("Failed to save holistic diagnostic:", error);
-                                    // Fallback to just refetching
-                                    await refetchData();
-                                }
-                            }}
-                        />
-                    </div>
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="w-full max-w-lg text-center"
+                    >
+                        <div className="glass-card p-8 rounded-2xl border border-horizon-400/20">
+                            <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-horizon-400/20 to-serenity-400/20 flex items-center justify-center mb-6 border border-horizon-400/30">
+                                <Sparkles className="w-8 h-8 text-horizon-400" />
+                            </div>
+                            <h3 className="text-xl font-playfair italic text-stellar-100 mb-3">
+                                Complétez votre Diagnostic Vibratoire
+                            </h3>
+                            <p className="text-stellar-500 text-sm mb-6">
+                                Partagez vos énergies, votre corps et vos préférences pour une expérience Oracle personnalisée.
+                            </p>
+                            <button
+                                onClick={() => setShowWizard(true)}
+                                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-900 font-semibold hover:shadow-lg hover:shadow-horizon-400/25 transition-all"
+                            >
+                                <Sparkles className="w-5 h-5" />
+                                Commencer le Diagnostic
+                            </button>
+                        </div>
+                    </motion.div>
                 )}
             </section>
 
@@ -498,6 +539,7 @@ function DashboardContent() {
                 </div>
             </div>
         </div>
+        </>
     );
 }
 
