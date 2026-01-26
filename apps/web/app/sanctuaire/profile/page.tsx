@@ -12,16 +12,19 @@ import {
     Calendar,
     Clock,
     MapPin,
-    Target,
-    Info,
     Camera,
     Hand,
     Edit3,
     X,
-    Check,
-    Upload,
-    Loader2,
     Save,
+    Loader2,
+    Brain,
+    Activity,
+    Heart,
+    Sparkles,
+    Target,
+    Shield,
+    Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { GlassCard } from "../../../components/ui/GlassCard";
@@ -29,6 +32,7 @@ import { LevelBadge } from "../../../components/ui/LevelBadge";
 import { SmartPhotoUploader } from "../../../components/onboarding/SmartPhotoUploader";
 import { useSanctuaire } from "../../../context/SanctuaireContext";
 import { useSanctuaireAuth } from "../../../context/SanctuaireAuthContext";
+import { DELIVERY_STYLES } from "../../../lib/holisticSchema";
 
 // =============================================================================
 // COMPONENT
@@ -38,7 +42,7 @@ export default function ProfilePage() {
     const { levelMetadata } = useSanctuaire();
     const { user, profile, refetchData } = useSanctuaireAuth();
 
-    const [isEditing, setIsEditing] = useState(false);
+    const [isEditingPhotos, setIsEditingPhotos] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
@@ -81,7 +85,7 @@ export default function ProfilePage() {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             await refetchData();
-            setIsEditing(false);
+            setIsEditingPhotos(false);
             setPhotosChanged(false);
         } catch (error) {
             console.error("Failed to save photos:", error);
@@ -94,7 +98,7 @@ export default function ProfilePage() {
     const handleCancelEdit = () => {
         setFacePhoto(profile?.facePhotoUrl || null);
         setPalmPhoto(profile?.palmPhotoUrl || null);
-        setIsEditing(false);
+        setIsEditingPhotos(false);
         setPhotosChanged(false);
     };
 
@@ -124,8 +128,26 @@ export default function ProfilePage() {
         }
     };
 
+    // Get delivery style info
+    const getDeliveryStyleInfo = (style: string | null | undefined) => {
+        if (!style || !(style in DELIVERY_STYLES)) {
+            return { icon: "🎯", title: "Non défini", subtitle: "Pas encore configuré" };
+        }
+        return DELIVERY_STYLES[style as keyof typeof DELIVERY_STYLES];
+    };
+
+    // Get pace label
+    const getPaceLabel = (pace: number | null | undefined): string => {
+        if (pace === null || pace === undefined) return "Non défini";
+        if (pace <= 25) return "Très lent";
+        if (pace <= 50) return "Modéré";
+        if (pace <= 75) return "Dynamique";
+        return "Rapide";
+    };
+
     const displayLevel = (levelMetadata?.level || 1) as 1 | 2 | 3 | 4;
-    const profileComplete = !!(profile?.birthDate && (profile?.facePhotoUrl || profile?.palmPhotoUrl || profile?.profileCompleted));
+    const profileComplete = profile?.profileCompleted ?? false;
+    const deliveryStyle = getDeliveryStyleInfo(profile?.deliveryStyle);
 
     return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -142,50 +164,32 @@ export default function ProfilePage() {
                         </h1>
                         <div className="flex items-center gap-3 text-stellar-500 text-sm">
                             <LevelBadge level={displayLevel} />
-                            <Check className={`w-4 h-4 ${profileComplete ? "text-emerald-400" : "text-horizon-400"}`} />
-                            <span>{profileComplete ? "Profil complété" : "Profil incomplet"}</span>
+                            <div className={`flex items-center gap-1.5 ${profileComplete ? "text-emerald-400" : "text-amber-400"}`}>
+                                {profileComplete ? (
+                                    <Shield className="w-4 h-4" />
+                                ) : (
+                                    <Zap className="w-4 h-4" />
+                                )}
+                                <span>{profileComplete ? "Profil complété" : "Diagnostic en attente"}</span>
+                            </div>
                         </div>
                     </div>
 
-                    {isEditing ? (
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleCancelEdit}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-all"
-                            >
-                                <X className="w-4 h-4" />
-                                Annuler
-                            </button>
-                            {photosChanged && (
-                                <button
-                                    onClick={handleSavePhotos}
-                                    disabled={isSaving}
-                                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all disabled:opacity-50"
-                                >
-                                    {isSaving ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <Save className="w-4 h-4" />
-                                    )}
-                                    Enregistrer
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <button
-                            onClick={() => setIsEditing(true)}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-horizon-400/20 text-horizon-300 border border-horizon-400/30 hover:bg-horizon-400/30 transition-all"
-                        >
-                            <Edit3 className="w-4 h-4" />
-                            Modifier les photos
+                    <Link href="/sanctuaire/settings/history">
+                        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 text-stellar-300 border border-white/10 hover:bg-white/10 transition-all">
+                            <Target className="w-4 h-4" />
+                            Réglages
                         </button>
-                    )}
+                    </Link>
                 </div>
             </motion.div>
 
             {/* Content Grid */}
             <div className="space-y-6">
-                {/* Personal Information */}
+                
+                {/* ============================================ */}
+                {/* SECTION 1: INFORMATIONS PERSONNELLES */}
+                {/* ============================================ */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -198,7 +202,6 @@ export default function ProfilePage() {
                         </h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Prénom */}
                             <div>
                                 <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
                                     <User className="w-3 h-3" /> Prénom
@@ -208,7 +211,6 @@ export default function ProfilePage() {
                                 </div>
                             </div>
 
-                            {/* Nom */}
                             <div>
                                 <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
                                     <User className="w-3 h-3" /> Nom
@@ -218,7 +220,6 @@ export default function ProfilePage() {
                                 </div>
                             </div>
 
-                            {/* Email */}
                             <div>
                                 <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
                                     <Mail className="w-3 h-3" /> Email
@@ -228,7 +229,6 @@ export default function ProfilePage() {
                                 </div>
                             </div>
 
-                            {/* Téléphone */}
                             <div>
                                 <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
                                     <Phone className="w-3 h-3" /> Téléphone
@@ -238,7 +238,6 @@ export default function ProfilePage() {
                                 </div>
                             </div>
 
-                            {/* Date de naissance */}
                             <div>
                                 <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
                                     <Calendar className="w-3 h-3" /> Date de naissance
@@ -248,7 +247,6 @@ export default function ProfilePage() {
                                 </div>
                             </div>
 
-                            {/* Heure de naissance */}
                             <div>
                                 <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
                                     <Clock className="w-3 h-3" /> Heure de naissance
@@ -258,8 +256,7 @@ export default function ProfilePage() {
                                 </div>
                             </div>
 
-                            {/* Lieu de naissance */}
-                            <div>
+                            <div className="md:col-span-2">
                                 <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
                                     <MapPin className="w-3 h-3" /> Lieu de naissance
                                 </label>
@@ -267,36 +264,198 @@ export default function ProfilePage() {
                                     {profile?.birthPlace || "Non renseigné"}
                                 </div>
                             </div>
-
-                            {/* Question spirituelle */}
-                            <div>
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
-                                    <Target className="w-3 h-3" /> Question spirituelle
-                                </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200">
-                                    {profile?.specificQuestion || "Non renseigné"}
-                                </div>
-                            </div>
                         </div>
                     </GlassCard>
                 </motion.div>
 
-                {/* Photos Section */}
+                {/* ============================================ */}
+                {/* SECTION 2: DIAGNOSTIC HOLISTIQUE */}
+                {/* ============================================ */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
                 >
                     <GlassCard className="p-6">
-                        <h2 className="text-lg font-playfair italic text-horizon-300 mb-6 flex items-center gap-2">
-                            <Camera className="w-5 h-5" />
-                            Photos Uploadées
-                            {isEditing && (
-                                <span className="ml-2 text-xs text-stellar-500 font-normal">
-                                    (Mode édition)
+                        <h2 className="text-lg font-playfair italic text-purple-400 mb-6 flex items-center gap-2">
+                            <Brain className="w-5 h-5" />
+                            Diagnostic Holistique
+                            {!profileComplete && (
+                                <span className="ml-auto text-xs text-amber-400/80 bg-amber-400/10 px-3 py-1 rounded-full">
+                                    En attente du diagnostic
                                 </span>
                             )}
                         </h2>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* État Vibratoire */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-sm text-stellar-400 mb-2">
+                                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                                    État Vibratoire
+                                </div>
+                                
+                                <div>
+                                    <label className="text-xs text-emerald-400 uppercase tracking-wider mb-2 block">
+                                        Ce qui vous porte
+                                    </label>
+                                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-stellar-200 min-h-[80px]">
+                                        {profile?.highs || "Non renseigné"}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs text-rose-400 uppercase tracking-wider mb-2 block">
+                                        Ce qui pèse
+                                    </label>
+                                    <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-stellar-200 min-h-[80px]">
+                                        {profile?.lows || "Non renseigné"}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Profil Somatique */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-sm text-stellar-400 mb-2">
+                                    <Activity className="w-4 h-4 text-serenity-400" />
+                                    Profil Somatique
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-stellar-500 uppercase tracking-wider mb-2 block">
+                                            Côté fort
+                                        </label>
+                                        <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200 text-center">
+                                            {profile?.strongSide || "—"}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-stellar-500 uppercase tracking-wider mb-2 block">
+                                            Côté faible
+                                        </label>
+                                        <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200 text-center">
+                                            {profile?.weakSide || "—"}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-emerald-400 uppercase tracking-wider mb-2 block">
+                                            Zone de force
+                                        </label>
+                                        <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-stellar-200 text-center">
+                                            {profile?.strongZone || "Non défini"}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-rose-400 uppercase tracking-wider mb-2 block">
+                                            Zone fragile
+                                        </label>
+                                        <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-stellar-200 text-center">
+                                            {profile?.weakZone || "Non défini"}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {profile?.ailments && (
+                                    <div>
+                                        <label className="text-xs text-amber-400 uppercase tracking-wider mb-2 block">
+                                            Maux physiques
+                                        </label>
+                                        <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-stellar-200">
+                                            {profile.ailments}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Rythme & Style */}
+                        <div className="mt-6 pt-6 border-t border-white/5">
+                            <div className="flex items-center gap-2 text-sm text-stellar-400 mb-4">
+                                <Heart className="w-4 h-4 text-horizon-400" />
+                                Préférences de Guidance
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-4 rounded-xl bg-gradient-to-br from-horizon-400/10 to-transparent border border-horizon-400/20">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl">{deliveryStyle.icon}</span>
+                                        <div>
+                                            <div className="text-stellar-200 font-medium">{deliveryStyle.title}</div>
+                                            <div className="text-xs text-stellar-500">{deliveryStyle.subtitle}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 rounded-xl bg-abyss-500/30 border border-white/5">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs text-stellar-500 uppercase tracking-wider">Rythme</span>
+                                        <span className="text-stellar-200 font-medium">{getPaceLabel(profile?.pace)}</span>
+                                    </div>
+                                    <div className="h-2 bg-abyss-600 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-serenity-400 to-horizon-400 rounded-full transition-all"
+                                            style={{ width: `${profile?.pace ?? 50}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </GlassCard>
+                </motion.div>
+
+                {/* ============================================ */}
+                {/* SECTION 3: PHOTOS */}
+                {/* ============================================ */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                >
+                    <GlassCard className="p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-lg font-playfair italic text-serenity-300 flex items-center gap-2">
+                                <Camera className="w-5 h-5" />
+                                Photos Uploadées
+                            </h2>
+
+                            {isEditingPhotos ? (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleCancelEdit}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-all text-sm"
+                                    >
+                                        <X className="w-4 h-4" />
+                                        Annuler
+                                    </button>
+                                    {photosChanged && (
+                                        <button
+                                            onClick={handleSavePhotos}
+                                            disabled={isSaving}
+                                            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all disabled:opacity-50 text-sm"
+                                        >
+                                            {isSaving ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <Save className="w-4 h-4" />
+                                            )}
+                                            Enregistrer
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setIsEditingPhotos(true)}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-horizon-400/20 text-horizon-300 border border-horizon-400/30 hover:bg-horizon-400/30 transition-all text-sm"
+                                >
+                                    <Edit3 className="w-4 h-4" />
+                                    Modifier
+                                </button>
+                            )}
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Photo de visage */}
@@ -305,7 +464,7 @@ export default function ProfilePage() {
                                     <Camera className="w-3 h-3" /> Photo de visage
                                 </label>
 
-                                {isEditing ? (
+                                {isEditingPhotos ? (
                                     <SmartPhotoUploader
                                         label="Photo de visage"
                                         description="Pour la lecture physiognomonique"
@@ -330,9 +489,6 @@ export default function ProfilePage() {
                                     <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-dashed border-horizon-400/30 flex flex-col items-center justify-center">
                                         <Camera className="w-10 h-10 text-horizon-400/50 mb-3" />
                                         <span className="text-sm text-stellar-500">Aucune photo</span>
-                                        <span className="text-xs text-stellar-600 mt-1">
-                                            Cliquez sur &quot;Modifier&quot; pour ajouter
-                                        </span>
                                     </div>
                                 )}
                             </div>
@@ -343,7 +499,7 @@ export default function ProfilePage() {
                                     <Hand className="w-3 h-3" /> Photo de paume
                                 </label>
 
-                                {isEditing ? (
+                                {isEditingPhotos ? (
                                     <SmartPhotoUploader
                                         label="Photo de paume"
                                         description="Pour la lecture palmaire"
@@ -368,64 +524,9 @@ export default function ProfilePage() {
                                     <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-dashed border-serenity-400/30 flex flex-col items-center justify-center">
                                         <Hand className="w-10 h-10 text-serenity-400/50 mb-3" />
                                         <span className="text-sm text-stellar-500">Aucune photo</span>
-                                        <span className="text-xs text-stellar-600 mt-1">
-                                            Cliquez sur &quot;Modifier&quot; pour ajouter
-                                        </span>
                                     </div>
                                 )}
                             </div>
-                        </div>
-                    </GlassCard>
-                </motion.div>
-
-                {/* Quick Actions */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                >
-                    <GlassCard className="p-6">
-                        <h2 className="text-lg font-playfair italic text-horizon-300 mb-6 flex items-center gap-2">
-                            <Target className="w-5 h-5" />
-                            Actions Rapides
-                        </h2>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <Link href="/sanctuaire/draws">
-                                <button className="w-full p-4 rounded-xl bg-abyss-500/30 border border-white/5 hover:border-horizon-400/20 hover:bg-abyss-400/30 transition-all text-left group">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className="w-8 h-8 rounded-lg bg-serenity-400/20 flex items-center justify-center">
-                                            <User className="w-4 h-4 text-serenity-300" />
-                                        </div>
-                                        <span className="text-stellar-200 font-medium group-hover:text-horizon-300 transition-colors">Mes Lectures</span>
-                                    </div>
-                                    <span className="text-xs text-stellar-500">Consulter l&apos;historique</span>
-                                </button>
-                            </Link>
-
-                            <Link href="/commande">
-                                <button className="w-full p-4 rounded-xl bg-gradient-to-r from-horizon-400/20 to-horizon-500/10 border border-horizon-400/20 hover:border-horizon-400/40 transition-all text-left group">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className="w-8 h-8 rounded-lg bg-horizon-400/20 flex items-center justify-center">
-                                            <Upload className="w-4 h-4 text-horizon-300" />
-                                        </div>
-                                        <span className="text-horizon-300 font-medium">Nouvelle Lecture</span>
-                                    </div>
-                                    <span className="text-xs text-horizon-400/60">Commander maintenant</span>
-                                </button>
-                            </Link>
-
-                            <Link href="/sanctuaire">
-                                <button className="w-full p-4 rounded-xl bg-abyss-500/30 border border-white/5 hover:border-horizon-400/20 hover:bg-abyss-400/30 transition-all text-left group">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                                            <MapPin className="w-4 h-4 text-purple-400" />
-                                        </div>
-                                        <span className="text-stellar-200 font-medium group-hover:text-horizon-300 transition-colors">Retour Accueil</span>
-                                    </div>
-                                    <span className="text-xs text-stellar-500">Tableau de bord</span>
-                                </button>
-                            </Link>
                         </div>
                     </GlassCard>
                 </motion.div>

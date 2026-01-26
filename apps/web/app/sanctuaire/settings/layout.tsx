@@ -5,12 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-    User,
-    Activity,
+    Settings,
     Scroll,
     CreditCard,
     Shield,
-    ChevronRight
+    ArrowLeft,
 } from "lucide-react";
 
 export default function SettingsLayout({
@@ -21,18 +20,6 @@ export default function SettingsLayout({
     const pathname = usePathname();
 
     const tabs = [
-        {
-            label: "Mon Dossier",
-            icon: User,
-            href: "/sanctuaire/settings/general",
-            color: "text-horizon-400"
-        },
-        {
-            label: "Diagnostic",
-            icon: Activity,
-            href: "/sanctuaire/settings/diagnostic",
-            color: "text-emerald-400"
-        },
         {
             label: "Historique",
             icon: Scroll,
@@ -61,14 +48,22 @@ export default function SettingsLayout({
                 <div className="mb-8 px-4">
                     <h1 className="text-xl font-playfair italic text-white flex items-center gap-2">
                         <span className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                            ⚙️
+                            <Settings className="w-4 h-4" />
                         </span>
-                        Paramètres
+                        Réglages
                     </h1>
                     <p className="text-xs text-stellar-500 mt-2 pl-10">
-                        Gérez votre expérience spirituelle.
+                        Gérez vos paramètres et préférences.
                     </p>
                 </div>
+
+                {/* Back to Profile Link */}
+                <Link href="/sanctuaire/profile" className="mb-4 px-4">
+                    <div className="flex items-center gap-2 text-stellar-400 hover:text-horizon-300 transition-colors text-sm">
+                        <ArrowLeft className="w-4 h-4" />
+                        Retour au profil
+                    </div>
+                </Link>
 
                 <nav className="space-y-2">
                     {tabs.map((tab) => {
@@ -93,34 +88,45 @@ export default function SettingsLayout({
                 </nav>
             </aside>
 
+            {/* MOBILE HEADER */}
+            <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-abyss-800/95 backdrop-blur-xl border-b border-white/5 px-4 py-3">
+                <div className="flex items-center justify-between mb-3">
+                    <Link href="/sanctuaire/profile" className="flex items-center gap-2 text-stellar-400 text-sm">
+                        <ArrowLeft className="w-4 h-4" />
+                        Profil
+                    </Link>
+                    <h1 className="text-lg font-playfair italic text-white flex items-center gap-2">
+                        <Settings className="w-4 h-4" />
+                        Réglages
+                    </h1>
+                    <div className="w-16" /> {/* Spacer */}
+                </div>
+
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
+                    {tabs.map((tab) => {
+                        const isActive = pathname === tab.href;
+                        return (
+                            <Link key={tab.href} href={tab.href}>
+                                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm transition-all ${isActive
+                                        ? "bg-white/10 text-white border border-white/10"
+                                        : "text-stellar-400 hover:bg-white/5"
+                                    }`}>
+                                    <tab.icon className={`w-4 h-4 ${isActive ? tab.color : ""}`} />
+                                    <span>{tab.label}</span>
+                                </div>
+                            </Link>
+                        );
+                    })}
+                </div>
+            </div>
+
             {/* MAIN CONTENT WRAPPER */}
             <main className="flex-1 md:pl-72 w-full max-w-5xl mx-auto">
                 {/* Scrollable Container */}
-                <div className="p-4 md:p-8 pt-24 md:pt-8 min-h-screen pb-24 md:pb-8">
+                <div className="p-4 md:p-8 pt-32 md:pt-8 min-h-screen pb-24 md:pb-8">
                     {children}
                 </div>
             </main>
-
-            {/* MOBILE TAB BAR (Fixed Bottom) */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-abyss-800/90 backdrop-blur-xl border-t border-white/10 z-50 px-4 py-2 flex items-center justify-between overflow-x-auto no-scrollbar pb-safe-area">
-                {tabs.map((tab) => {
-                    const isActive = pathname === tab.href;
-                    return (
-                        <Link key={tab.href} href={tab.href} className="flex-1 min-w-[70px]">
-                            <div className={`flex flex-col items-center gap-1 py-1 px-1 rounded-lg transition-colors ${isActive ? "text-white" : "text-stellar-600"
-                                }`}>
-                                <div className={`p-1.5 rounded-full ${isActive ? "bg-white/10" : ""}`}>
-                                    <tab.icon className={`w-5 h-5 ${isActive ? tab.color : "opacity-50"}`} />
-                                </div>
-                                <span className="text-[10px] font-medium truncate w-full text-center">
-                                    {tab.label}
-                                </span>
-                            </div>
-                        </Link>
-                    );
-                })}
-            </nav>
-
         </div>
     );
 }

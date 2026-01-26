@@ -7,7 +7,8 @@ export default function SettingsRootPage() {
     const router = useRouter();
 
     useEffect(() => {
-        router.push('/sanctuaire/settings/general');
+        // Redirect to history as the first settings tab
+        router.push('/sanctuaire/settings/history');
     }, [router]);
 
     return null;
