@@ -248,9 +248,10 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
                             {step === 0 && (
                                 <motion.div
                                     key="step0"
-                                    initial={{ opacity: 0, x: 20 }}
+                                    initial={{ opacity: 0, x: 30 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
+                                    exit={{ opacity: 0, x: -30 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     className="space-y-4"
                                 >
                                     <p className="text-center text-stellar-400 text-sm italic">
@@ -291,9 +292,10 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
                             {step === 1 && (
                                 <motion.div
                                     key="step1"
-                                    initial={{ opacity: 0, x: 20 }}
+                                    initial={{ opacity: 0, x: 30 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
+                                    exit={{ opacity: 0, x: -30 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     className="space-y-4"
                                 >
                                     <p className="text-center text-stellar-400 text-sm italic">
@@ -351,9 +353,10 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
                             {step === 2 && (
                                 <motion.div
                                     key="step2"
-                                    initial={{ opacity: 0, x: 20 }}
+                                    initial={{ opacity: 0, x: 30 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
+                                    exit={{ opacity: 0, x: -30 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     className="space-y-3"
                                 >
                                     <p className="text-center text-stellar-400 text-sm italic">
@@ -397,9 +400,10 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
                             {step === 3 && (
                                 <motion.div
                                     key="step3"
-                                    initial={{ opacity: 0, x: 20 }}
+                                    initial={{ opacity: 0, x: 30 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
+                                    exit={{ opacity: 0, x: -30 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     className="space-y-4"
                                 >
                                     <p className="text-center text-stellar-400 text-sm italic">
@@ -465,9 +469,10 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
                             {step === 4 && (
                                 <motion.div
                                     key="step4"
-                                    initial={{ opacity: 0, x: 20 }}
+                                    initial={{ opacity: 0, x: 30 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
+                                    exit={{ opacity: 0, x: -30 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     className="space-y-6"
                                 >
                                     <div className="text-center py-4">

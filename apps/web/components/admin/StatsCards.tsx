@@ -8,45 +8,74 @@ interface StatCardProps {
     title: string;
     value: number | string;
     icon: LucideIcon;
-    color: 'amber' | 'blue' | 'purple' | 'green' | 'rose';
+    color: 'horizon' | 'serenity' | 'violet' | 'emerald' | 'rose';
     subtitle?: string;
 }
 
 const colorClasses = {
-    amber: 'from-amber-500 to-amber-600 shadow-amber-500/30',
-    blue: 'from-blue-500 to-blue-600 shadow-blue-500/30',
-    purple: 'from-purple-500 to-purple-600 shadow-purple-500/30',
-    green: 'from-emerald-500 to-emerald-600 shadow-emerald-500/30',
-    rose: 'from-rose-500 to-rose-600 shadow-rose-500/30',
+    horizon: {
+        gradient: 'from-horizon-400 to-horizon-500',
+        shadow: 'shadow-[0_0_30px_rgba(251,191,36,0.2)]',
+        glow: 'bg-horizon-400/20',
+        text: 'text-horizon-400'
+    },
+    serenity: {
+        gradient: 'from-serenity-400 to-serenity-500',
+        shadow: 'shadow-[0_0_30px_rgba(74,222,128,0.2)]',
+        glow: 'bg-serenity-400/20',
+        text: 'text-serenity-400'
+    },
+    violet: {
+        gradient: 'from-violet-400 to-violet-500',
+        shadow: 'shadow-[0_0_30px_rgba(167,139,250,0.2)]',
+        glow: 'bg-violet-400/20',
+        text: 'text-violet-400'
+    },
+    emerald: {
+        gradient: 'from-emerald-400 to-emerald-500',
+        shadow: 'shadow-[0_0_30px_rgba(52,211,153,0.2)]',
+        glow: 'bg-emerald-400/20',
+        text: 'text-emerald-400'
+    },
+    rose: {
+        gradient: 'from-rose-400 to-rose-500',
+        shadow: 'shadow-[0_0_30px_rgba(251,113,133,0.2)]',
+        glow: 'bg-rose-400/20',
+        text: 'text-rose-400'
+    },
 };
 
 export function StatCard({ title, value, icon: Icon, color, subtitle }: StatCardProps) {
+    const colors = colorClasses[color];
+    
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            whileHover={{ y: -5, transition: { duration: 0.2 } }}
-            className="bg-slate-800/40 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden group hover:border-white/10 transition-all duration-300"
+            whileHover={{ y: -5, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className="glass-desk rounded-2xl p-6 relative overflow-hidden group transition-all duration-300"
         >
             <div className="flex items-start justify-between relative z-10">
                 <div>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</p>
-                    <p className="text-3xl font-serif italic text-white mt-2 drop-shadow-md">{value}</p>
+                    <p className="text-stellar-400 text-xs font-bold uppercase tracking-widest">{title}</p>
+                    <p className="text-3xl font-playfair italic text-stellar-100 mt-2 drop-shadow-md">{value}</p>
                     {subtitle && (
-                        <p className="text-slate-500 text-[10px] mt-1 font-medium">{subtitle}</p>
+                        <p className="text-stellar-500 text-[10px] mt-1 font-medium">{subtitle}</p>
                     )}
                 </div>
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colorClasses[color]} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500`}>
-                    <Icon className="w-6 h-6 text-white" />
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colors.gradient} flex items-center justify-center ${colors.shadow} group-hover:scale-110 transition-transform duration-500`}>
+                    <Icon className="w-6 h-6 text-abyss-900" />
                 </div>
             </div>
 
             {/* Subtle Gradient Overlay */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${colorClasses[color]} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
+            <div className={`absolute inset-0 bg-gradient-to-br ${colors.gradient} opacity-0 group-hover:opacity-[0.03] transition-opacity duration-500`} />
 
             {/* Glow effect */}
-            <div className={`absolute -bottom-12 -right-12 w-32 h-32 bg-gradient-to-br ${colorClasses[color]} rounded-full opacity-10 blur-3xl group-hover:opacity-20 transition-opacity duration-500`} />
+            <div className={`absolute -bottom-12 -right-12 w-32 h-32 ${colors.glow} rounded-full blur-3xl group-hover:opacity-100 opacity-50 transition-opacity duration-500`} />
         </motion.div>
     );
 }
@@ -69,28 +98,28 @@ export function StatsCards({ stats }: StatsCardsProps) {
             title: 'En Attente',
             value: stats.pendingOrders,
             icon: ClipboardList,
-            color: 'amber',
+            color: 'horizon',
             subtitle: 'Commandes à traiter',
         },
         {
             title: 'En Cours',
             value: stats.processingOrders,
             icon: Loader2,
-            color: 'blue',
+            color: 'serenity',
             subtitle: 'Génération en cours',
         },
         {
             title: 'À Valider',
             value: stats.awaitingValidation,
             icon: CheckCircle2,
-            color: 'purple',
+            color: 'violet',
             subtitle: 'Contenu à vérifier',
         },
         {
             title: 'Complétées',
             value: stats.completedOrders,
             icon: Trophy,
-            color: 'green',
+            color: 'emerald',
             subtitle: 'Lectures livrées',
         },
         {

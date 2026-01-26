@@ -463,35 +463,35 @@ function DashboardContent() {
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.4 + i * 0.08 }}
                                 >
-                                    <div className="h-full min-h-[180px] rounded-2xl bg-abyss-500/30 border border-white/[0.04] p-5 flex flex-col justify-between relative overflow-hidden">
-                                        <div className="absolute inset-0 bg-abyss-600/40 backdrop-blur-[2px] z-10" />
+                                    <div className="h-full min-h-[180px] rounded-2xl bg-abyss-600/30 border border-white/[0.06] p-6 flex flex-col justify-between relative overflow-hidden">
+                                        <div className="absolute inset-0 bg-abyss-700/60 backdrop-blur-[2px] z-10" />
 
                                         <div className="relative z-20">
                                             <div className="flex justify-between items-start mb-4">
                                                 <div className="w-12 h-12 rounded-xl bg-white/[0.03] flex items-center justify-center border border-white/[0.06]">
                                                     <Icon className="w-6 h-6 text-stellar-500" />
                                                 </div>
-                                                <Lock className="w-5 h-5 text-horizon-400/50" />
+                                                <Lock className="w-5 h-5 text-horizon-400/60" />
                                             </div>
 
-                                            <h3 className="text-lg font-playfair italic text-stellar-300 mb-1">
+                                            <h3 className="text-lg font-playfair italic text-stellar-400 mb-2">
                                                 {card.title}
                                             </h3>
-                                            <p className="text-stellar-600 text-sm">
+                                            <p className="text-stellar-500 text-sm leading-relaxed">
                                                 {card.description}
                                             </p>
                                         </div>
 
-                                        <div className="relative z-20 mt-4 pt-4 border-t border-white/[0.04]">
+                                        <div className="relative z-20 mt-4 pt-4 border-t border-white/[0.06]">
                                             <div className="flex items-center justify-center gap-2 mb-3">
-                                                <Sparkles className="w-3 h-3 text-horizon-400/50" />
-                                                <span className="text-[10px] text-horizon-400/80 uppercase tracking-wider">
+                                                <Sparkles className="w-3 h-3 text-horizon-400/60" />
+                                                <span className="text-[10px] text-horizon-400 uppercase tracking-wider font-medium">
                                                     Requiert niveau {levelInfo.name}
                                                 </span>
-                                                <Sparkles className="w-3 h-3 text-horizon-400/50" />
+                                                <Sparkles className="w-3 h-3 text-horizon-400/60" />
                                             </div>
                                             <Link href={`/commande?product=${levelInfo.productId}`}>
-                                                <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-800 text-sm font-semibold hover:shadow-gold-glow transition-all">
+                                                <button className="w-full py-3 rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-900 text-sm font-semibold hover:shadow-gold-glow hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">
                                                     {isIntegral ? "Niveau Intégral" : "Débloquer"}
                                                 </button>
                                             </Link>
@@ -509,24 +509,24 @@ function DashboardContent() {
                                 transition={{ delay: 0.4 + i * 0.08 }}
                             >
                                 <Link href={card.route}>
-                                    <div className="h-full min-h-[180px] rounded-2xl bg-abyss-500/20 border border-white/[0.06] p-5 flex flex-col justify-between group hover:border-horizon-400/20 transition-all duration-500 cursor-pointer hover:bg-abyss-400/30">
+                                    <div className="h-full min-h-[180px] rounded-2xl glass-card p-6 flex flex-col justify-between group hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 cursor-pointer">
                                         <div>
                                             <div className="flex justify-between items-start mb-4">
-                                                <div className="w-12 h-12 rounded-xl bg-horizon-400/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 border border-horizon-400/20">
+                                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-horizon-400/20 to-horizon-400/5 flex items-center justify-center group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(232,168,56,0.2)] transition-all duration-500 border border-horizon-400/20">
                                                     <Icon className="w-6 h-6 text-horizon-400" />
                                                 </div>
                                             </div>
 
-                                            <h3 className="text-lg font-playfair italic text-stellar-100 mb-1 group-hover:text-horizon-300 transition-colors">
+                                            <h3 className="text-lg font-playfair italic text-stellar-100 mb-2 group-hover:text-horizon-300 transition-colors">
                                                 {card.title}
                                             </h3>
-                                            <p className="text-stellar-500 text-sm">
+                                            <p className="text-stellar-400 text-sm leading-relaxed">
                                                 {card.description}
                                             </p>
                                         </div>
 
-                                        <div className="mt-4 pt-4 border-t border-white/[0.04] flex justify-end items-center">
-                                            <span className="flex items-center gap-2 text-horizon-400 text-xs font-bold uppercase tracking-widest">
+                                        <div className="mt-4 pt-4 border-t border-white/[0.06] flex justify-end items-center">
+                                            <span className="flex items-center gap-2 text-horizon-400 text-xs font-bold uppercase tracking-widest group-hover:text-horizon-300">
                                                 Accéder
                                                 <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                                             </span>

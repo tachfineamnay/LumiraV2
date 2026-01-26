@@ -30,12 +30,12 @@ export function ArchetypeCard({
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="h-full rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 p-6 flex flex-col"
+            className="h-full rounded-2xl bg-abyss-600/40 border border-white/[0.06] p-6 flex flex-col backdrop-blur-sm"
         >
             {/* Header */}
             <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="w-5 h-5 text-amber-400" />
-                <span className="text-xs uppercase tracking-widest text-slate-400">
+                <Sparkles className="w-5 h-5 text-horizon-400" />
+                <span className="text-xs uppercase tracking-widest text-stellar-400">
                     Votre Archétype
                 </span>
             </div>
@@ -45,15 +45,15 @@ export function ArchetypeCard({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="text-3xl md:text-4xl font-playfair italic text-amber-400 mb-4"
+                className="text-3xl md:text-4xl font-playfair italic text-gradient-gold mb-4"
             >
                 {archetype}
             </motion.h2>
 
             {/* Emotional State */}
             {emotionalState && (
-                <p className="text-slate-300 text-sm mb-4">
-                    État actuel : <span className="text-amber-300">{emotionalState}</span>
+                <p className="text-stellar-300 text-sm mb-4">
+                    État actuel : <span className="text-horizon-300">{emotionalState}</span>
                 </p>
             )}
 
@@ -66,7 +66,7 @@ export function ArchetypeCard({
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 0.4 + index * 0.1 }}
-                            className="px-3 py-1 text-xs font-medium rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                            className="px-3 py-1 text-xs font-medium rounded-full bg-horizon-400/10 text-horizon-300 border border-horizon-400/20"
                         >
                             {keyword}
                         </motion.span>

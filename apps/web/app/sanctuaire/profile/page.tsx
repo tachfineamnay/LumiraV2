@@ -149,38 +149,66 @@ export default function ProfilePage() {
     const profileComplete = profile?.profileCompleted ?? false;
     const deliveryStyle = getDeliveryStyleInfo(profile?.deliveryStyle);
 
+    // Get user initials for avatar
+    const getInitials = () => {
+        const first = user?.firstName?.[0] || '';
+        const last = user?.lastName?.[0] || '';
+        return (first + last).toUpperCase() || '?';
+    };
+
     return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-            {/* Header */}
+            {/* Premium Identity Card Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mb-8"
             >
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl md:text-4xl font-playfair italic text-gradient-gold mb-2">
-                            Mon Profil Spirituel
-                        </h1>
-                        <div className="flex items-center gap-3 text-stellar-500 text-sm">
-                            <LevelBadge level={displayLevel} />
-                            <div className={`flex items-center gap-1.5 ${profileComplete ? "text-emerald-400" : "text-amber-400"}`}>
+                <div className="card-premium p-6 md:p-8">
+                    <div className="flex flex-col md:flex-row md:items-center gap-6">
+                        {/* Avatar with Glow */}
+                        <div className="relative">
+                            <div className="w-24 h-24 md:w-28 md:h-28 rounded-full bg-gradient-to-br from-horizon-400 to-horizon-600 flex items-center justify-center avatar-glow">
+                                <span className="text-3xl md:text-4xl font-playfair italic text-abyss-900 font-bold">
+                                    {getInitials()}
+                                </span>
+                            </div>
+                            {/* Status indicator */}
+                            <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-2 border-abyss-700 flex items-center justify-center ${profileComplete ? 'bg-emerald-500' : 'bg-amber-500'}`}>
                                 {profileComplete ? (
-                                    <Shield className="w-4 h-4" />
+                                    <Shield className="w-3 h-3 text-white" />
                                 ) : (
-                                    <Zap className="w-4 h-4" />
+                                    <Zap className="w-3 h-3 text-white" />
                                 )}
-                                <span>{profileComplete ? "Profil complété" : "Diagnostic en attente"}</span>
                             </div>
                         </div>
-                    </div>
 
-                    <Link href="/sanctuaire/settings/history">
-                        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 text-stellar-300 border border-white/10 hover:bg-white/10 transition-all">
-                            <Target className="w-4 h-4" />
-                            Réglages
-                        </button>
-                    </Link>
+                        {/* User Info */}
+                        <div className="flex-1">
+                            <h1 className="text-2xl md:text-3xl font-playfair italic text-gradient-gold mb-2">
+                                {user?.firstName} {user?.lastName}
+                            </h1>
+                            <p className="text-stellar-400 text-sm mb-3">{user?.email}</p>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <LevelBadge level={displayLevel} />
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${profileComplete ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                                    {profileComplete ? (
+                                        <><Shield className="w-3 h-3" /> Profil complété</>
+                                    ) : (
+                                        <><Zap className="w-3 h-3" /> Diagnostic en attente</>
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <Link href="/sanctuaire/settings/history">
+                            <button className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/5 text-stellar-300 border border-white/10 hover:bg-white/10 hover:border-horizon-400/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
+                                <Target className="w-4 h-4" />
+                                Réglages
+                            </button>
+                        </Link>
+                    </div>
                 </div>
             </motion.div>
 
@@ -195,72 +223,72 @@ export default function ProfilePage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
                 >
-                    <GlassCard className="p-6">
+                    <GlassCard className="p-6 md:p-8">
                         <h2 className="text-lg font-playfair italic text-horizon-300 mb-6 flex items-center gap-2">
                             <User className="w-5 h-5" />
                             Informations Personnelles
                         </h2>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
+                                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
                                     <User className="w-3 h-3" /> Prénom
                                 </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200">
+                                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
                                     {user?.firstName || "Non renseigné"}
                                 </div>
                             </div>
 
                             <div>
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
+                                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
                                     <User className="w-3 h-3" /> Nom
                                 </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200">
+                                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
                                     {user?.lastName || "Non renseigné"}
                                 </div>
                             </div>
 
                             <div>
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
+                                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
                                     <Mail className="w-3 h-3" /> Email
                                 </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200">
+                                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
                                     {user?.email || "Non renseigné"}
                                 </div>
                             </div>
 
                             <div>
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
+                                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
                                     <Phone className="w-3 h-3" /> Téléphone
                                 </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-400">
+                                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-400">
                                     {user?.phone || "Non renseigné"}
                                 </div>
                             </div>
 
                             <div>
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
+                                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
                                     <Calendar className="w-3 h-3" /> Date de naissance
                                 </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200">
+                                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
                                     {formatDate(profile?.birthDate)}
                                 </div>
                             </div>
 
                             <div>
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
+                                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
                                     <Clock className="w-3 h-3" /> Heure de naissance
                                 </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200">
+                                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
                                     {profile?.birthTime || "Non renseigné"}
                                 </div>
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-2">
+                                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
                                     <MapPin className="w-3 h-3" /> Lieu de naissance
                                 </label>
-                                <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200">
+                                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
                                     {profile?.birthPlace || "Non renseigné"}
                                 </div>
                             </div>

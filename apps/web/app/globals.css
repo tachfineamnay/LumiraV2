@@ -166,4 +166,117 @@
   .safe-area-pb {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
+  /* === AVATAR GLOW === */
+  .avatar-glow {
+    box-shadow: 
+      0 0 20px rgba(232, 168, 56, 0.3),
+      0 0 40px rgba(232, 168, 56, 0.15),
+      inset 0 0 20px rgba(232, 168, 56, 0.1);
+  }
+
+  .avatar-glow-serenity {
+    box-shadow: 
+      0 0 20px rgba(45, 138, 160, 0.3),
+      0 0 40px rgba(45, 138, 160, 0.15),
+      inset 0 0 20px rgba(45, 138, 160, 0.1);
+  }
+
+  /* === PREMIUM CARD ENHANCEMENTS === */
+  .card-premium {
+    @apply rounded-2xl backdrop-blur-xl transition-all duration-500;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 
+      0 8px 32px rgba(4, 6, 16, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .card-premium:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border-color: rgba(232, 168, 56, 0.2);
+    box-shadow: 
+      0 16px 48px rgba(4, 6, 16, 0.6),
+      0 0 40px rgba(232, 168, 56, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+  }
+
+  /* === INTERACTIVE MICRO-ANIMATIONS === */
+  .interactive-card {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .interactive-card:hover {
+    @apply scale-[1.02];
+  }
+
+  .interactive-card:active {
+    @apply scale-[0.98];
+  }
+
+  /* === BUTTON PULSE EFFECT === */
+  .btn-pulse {
+    animation: btnPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes btnPulse {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(232, 168, 56, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(232, 168, 56, 0.5), 0 0 60px rgba(232, 168, 56, 0.2);
+    }
+  }
+
+  /* === FOCUS STATES === */
+  .focus-gold:focus {
+    @apply outline-none ring-2 ring-horizon-400/50 ring-offset-2 ring-offset-abyss-700;
+  }
+
+  .focus-gold:focus-visible {
+    @apply outline-none ring-2 ring-horizon-400/50 ring-offset-2 ring-offset-abyss-700;
+  }
+
+  /* === IMPROVED TEXT READABILITY === */
+  .text-body {
+    @apply text-stellar-300 leading-relaxed;
+  }
+
+  .text-body-muted {
+    @apply text-stellar-400 leading-relaxed;
+  }
+
+  /* Ensure muted text is readable on dark backgrounds */
+  .text-muted-readable {
+    @apply text-stellar-400;
+  }
+
+  /* === CONSISTENT SPACING === */
+  .section-padding {
+    @apply p-6 md:p-8;
+  }
+
+  .card-padding {
+    @apply p-5 md:p-6;
+  }
+
+  /* === GRID CONSISTENCY === */
+  .bento-grid {
+    @apply grid gap-4 md:gap-6;
+  }
+
+  /* === GLASS DESK (Expert Desk specific) === */
+  .glass-desk {
+    @apply backdrop-blur-xl rounded-xl transition-all duration-300;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0.6) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-desk:hover {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 0.7) 100%);
+    border-color: rgba(251, 191, 36, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(251, 191, 36, 0.1);
+  }
 }

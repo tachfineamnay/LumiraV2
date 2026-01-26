@@ -31,7 +31,7 @@ export const TabNavigation = ({
     onTabChange,
 }: TabNavigationProps) => {
     return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 p-1.5 bg-abyss-600/30 rounded-xl border border-white/[0.04]">
             {tabs.map((tab) => {
                 const isActive = activeTab === tab.key;
                 const Icon = tab.icon;
@@ -43,19 +43,21 @@ export const TabNavigation = ({
                         whileTap={{ scale: 0.98 }}
                         onClick={() => onTabChange(tab.key)}
                         className={cn(
-                            "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all",
+                            "relative flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-300",
                             isActive
-                                ? "bg-amber-400 text-slate-900"
-                                : "bg-white/10 text-white hover:bg-white/20"
+                                ? "bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-900 shadow-gold-glow"
+                                : "text-stellar-300 hover:text-stellar-100 hover:bg-white/[0.04]"
                         )}
                     >
-                        <Icon className="w-4 h-4" />
-                        <span className="text-sm">{tab.label}</span>
+                        <Icon className={cn("w-4 h-4", isActive && "drop-shadow-sm")} />
+                        <span className="text-sm font-semibold">{tab.label}</span>
                         {tab.count !== undefined && (
                             <span
                                 className={cn(
-                                    "text-xs px-2 py-0.5 rounded-full",
-                                    isActive ? "bg-slate-900/20" : "bg-white/10"
+                                    "text-xs px-2 py-0.5 rounded-full font-bold",
+                                    isActive 
+                                        ? "bg-abyss-900/20 text-abyss-900" 
+                                        : "bg-white/[0.06] text-stellar-400"
                                 )}
                             >
                                 {tab.count}
