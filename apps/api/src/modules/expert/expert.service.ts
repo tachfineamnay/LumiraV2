@@ -404,7 +404,7 @@ export class ExpertService {
     // ORDER PROCESSING
     // ========================
 
-    async processOrder(dto: ProcessOrderDto, expert: ExpertEntity): Promise<Order> {
+    async processOrder(dto: ProcessOrderDto, expert: ExpertEntity): Promise<Order & { generationResult?: { pdfUrl: string; archetype: string; stepsCreated: number } }> {
         const order = await this.prisma.order.findUnique({
             where: { id: dto.orderId },
             include: { user: { include: { profile: true } }, files: true },
@@ -414,14 +414,16 @@ export class ExpertService {
             throw new NotFoundException('Commande non trouvée');
         }
 
-        if (order.status !== 'PROCESSING') {
-            throw new BadRequestException('Cette commande n\'est pas en cours de traitement');
+        // Accept both PAID and PROCESSING statuses for generation
+        if (order.status !== 'PROCESSING' && order.status !== 'PAID') {
+            throw new BadRequestException('Cette commande n\'est pas prête pour la génération');
         }
 
-        // Update order with expert prompt
+        // Update order with expert prompt and set to PROCESSING
         const updatedOrder = await this.prisma.order.update({
             where: { id: dto.orderId },
             data: {
+                status: 'PROCESSING',
                 expertPrompt: dto.expertPrompt,
                 expertInstructions: dto.expertInstructions,
                 expertReview: {
@@ -432,33 +434,66 @@ export class ExpertService {
             },
         });
 
-        // Prepare n8n payload
-        const n8nPayload = {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            level: order.level,
-            expertPrompt: dto.expertPrompt,
-            expertInstructions: dto.expertInstructions,
-            client: {
-                email: order.userEmail,
-                name: order.userName,
-                ...(order.user?.profile || {}),
-            },
-            formData: order.formData,
-            expert: {
-                id: expert.id,
-                name: expert.name,
-            },
-        };
+        // Use internal DigitalSoulService instead of n8n webhook
+        this.logger.log(`🚀 Starting internal generation for order ${order.orderNumber}`);
 
-        // Send to n8n with retry
-        await this.sendToN8n(n8nPayload);
+        try {
+            // Dynamic import to avoid circular dependencies
+            const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
+            const { VertexOracle } = await import('../../services/factory/VertexOracle');
+            const { PdfFactory } = await import('../../services/factory/PdfFactory');
 
-        this.logger.log(`🚀 Order ${order.orderNumber} sent to n8n for generation`);
+            // Create service instances
+            const vertexOracle = new VertexOracle(this.configService, this.prisma);
+            const pdfFactory = new PdfFactory(this.configService);
+            await pdfFactory.onModuleInit();
+            
+            const digitalSoulService = new DigitalSoulService(
+                this.configService,
+                this.prisma,
+                vertexOracle,
+                pdfFactory,
+            );
 
-        return updatedOrder;
+            // Generate the reading using internal factory
+            const result = await digitalSoulService.processOrderGeneration(dto.orderId);
+
+            this.logger.log(`✅ Order ${order.orderNumber} generated successfully - Archetype: ${result.archetype}`);
+
+            // Fetch the updated order with generated content
+            const finalOrder = await this.prisma.order.findUnique({
+                where: { id: dto.orderId },
+                include: { user: { include: { profile: true } }, files: true },
+            });
+
+            return {
+                ...(finalOrder || updatedOrder),
+                generationResult: {
+                    pdfUrl: result.pdfUrl,
+                    archetype: result.archetype,
+                    stepsCreated: result.stepsCreated,
+                },
+            };
+        } catch (error) {
+            this.logger.error(`❌ Generation failed for order ${order.orderNumber}: ${error}`);
+
+            // Update order status to FAILED
+            await this.prisma.order.update({
+                where: { id: dto.orderId },
+                data: {
+                    status: 'FAILED',
+                    errorLog: `Generation failed: ${error instanceof Error ? error.message : String(error)}`,
+                },
+            });
+
+            throw new BadRequestException(`Échec de la génération: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
+    /**
+     * @deprecated This method is no longer used - order generation now uses internal DigitalSoulService.
+     * Kept for reference and potential future external integration needs.
+     */
     private async sendToN8n(payload: Record<string, unknown>, retries = 3): Promise<void> {
         const webhookUrl = this.configService.get('N8N_WEBHOOK_URL');
         const secret = this.configService.get('N8N_CALLBACK_SECRET');
@@ -568,7 +603,7 @@ export class ExpertService {
         }
     }
 
-    async regenerateLecture(orderId: string, expert: ExpertEntity): Promise<Order> {
+    async regenerateLecture(orderId: string, expert: ExpertEntity): Promise<Order & { generationResult?: { pdfUrl: string; archetype: string; stepsCreated: number } }> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: { user: { include: { profile: true } } },
@@ -582,7 +617,7 @@ export class ExpertService {
             throw new BadRequestException('Aucun prompt expert enregistré pour cette commande');
         }
 
-        // Reset status and resend
+        // Reset status and increment revision count
         await this.prisma.order.update({
             where: { id: orderId },
             data: {
@@ -592,31 +627,60 @@ export class ExpertService {
             },
         });
 
-        // Resend to n8n
-        const n8nPayload = {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            level: order.level,
-            expertPrompt: order.expertPrompt,
-            expertInstructions: order.expertInstructions,
-            client: {
-                email: order.userEmail,
-                name: order.userName,
-                ...(order.user?.profile || {}),
-            },
-            formData: order.formData,
-            expert: {
-                id: expert.id,
-                name: expert.name,
-            },
-            isRegeneration: true,
-        };
+        // Use internal DigitalSoulService instead of n8n webhook
+        this.logger.log(`🔄 Starting regeneration for order ${order.orderNumber}`);
 
-        await this.sendToN8n(n8nPayload);
+        try {
+            // Dynamic import to avoid circular dependencies
+            const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
+            const { VertexOracle } = await import('../../services/factory/VertexOracle');
+            const { PdfFactory } = await import('../../services/factory/PdfFactory');
 
-        this.logger.log(`🔄 Order ${order.orderNumber} regeneration triggered`);
+            // Create service instances
+            const vertexOracle = new VertexOracle(this.configService, this.prisma);
+            const pdfFactory = new PdfFactory(this.configService);
+            await pdfFactory.onModuleInit();
+            
+            const digitalSoulService = new DigitalSoulService(
+                this.configService,
+                this.prisma,
+                vertexOracle,
+                pdfFactory,
+            );
 
-        return order;
+            // Regenerate using internal factory
+            const result = await digitalSoulService.processOrderGeneration(orderId);
+
+            this.logger.log(`✅ Order ${order.orderNumber} regenerated successfully - Archetype: ${result.archetype}`);
+
+            // Fetch the updated order
+            const updatedOrder = await this.prisma.order.findUnique({
+                where: { id: orderId },
+                include: { user: { include: { profile: true } } },
+            });
+
+            return {
+                ...(updatedOrder || order),
+                generationResult: {
+                    pdfUrl: result.pdfUrl,
+                    archetype: result.archetype,
+                    stepsCreated: result.stepsCreated,
+                },
+            };
+        } catch (error) {
+            this.logger.error(`❌ Regeneration failed for order ${order.orderNumber}: ${error}`);
+
+            // Update order status to FAILED
+            await this.prisma.order.update({
+                where: { id: orderId },
+                data: {
+                    status: 'FAILED',
+                    errorLog: `Regeneration failed: ${error instanceof Error ? error.message : String(error)}`,
+                },
+            });
+
+            throw new BadRequestException(`Échec de la régénération: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**
