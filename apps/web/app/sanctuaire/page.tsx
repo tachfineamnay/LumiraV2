@@ -280,7 +280,7 @@ function AutoLoginHandler() {
 
 function DashboardContent() {
     const { highestLevel, hasCapability, isLoading, orderCount } = useSanctuaire();
-    const { profile, refetchData } = useSanctuaireAuth();
+    const { profile, refetchData, user } = useSanctuaireAuth();
 
     // Check if onboarding is complete
     const isOnboardingComplete = !!(profile?.birthDate && profile?.profileCompleted);
@@ -331,7 +331,7 @@ function DashboardContent() {
                 ) : (
                     <div className="w-full max-w-4xl min-h-[700px]">
                         <HolisticWizard
-                            userEmail={email || user?.email}
+                            userEmail={user?.email}
                             onComplete={async (data) => {
                                 try {
                                     const token = localStorage.getItem("sanctuaire_token");
