@@ -322,6 +322,9 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
         localStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(EMAIL_SESSION_KEY);
         sessionStorage.removeItem(FIRST_VISIT_KEY);
+        // 🧹 Clear onboarding draft on logout to prevent data leakage between users
+        localStorage.removeItem('holistic_wizard_draft');
+        localStorage.removeItem('holistic_wizard_email');
         setToken(null);
         setUser(null);
         setIsAuthenticated(false);

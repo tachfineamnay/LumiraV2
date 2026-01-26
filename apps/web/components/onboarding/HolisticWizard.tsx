@@ -29,6 +29,7 @@ import {
 interface HolisticWizardProps {
     onComplete?: (data: HolisticDiagnosticData) => Promise<void>;
     initialData?: Partial<HolisticDiagnosticData>;
+    userEmail?: string; // Used to invalidate cache when email changes
 }
 
 // =============================================================================
@@ -47,14 +48,31 @@ const STEPS = [
 // COMPONENT
 // =============================================================================
 
-export const HolisticWizard = ({ onComplete, initialData }: HolisticWizardProps) => {
+export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticWizardProps) => {
     const [step, setStep] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Load draft from localStorage on mount
+    // Load draft from localStorage on mount - with email-based cache invalidation
     const loadDraft = () => {
         if (typeof window === "undefined") return {};
+        
+        // Check if the cached draft belongs to the current user
+        const cachedEmail = localStorage.getItem("holistic_wizard_email");
         const saved = localStorage.getItem("holistic_wizard_draft");
+        
+        // If userEmail is provided and doesn't match cached email, clear the cache
+        if (userEmail && cachedEmail && cachedEmail !== userEmail) {
+            console.log("[HolisticWizard] Email mismatch - clearing cached draft");
+            localStorage.removeItem("holistic_wizard_draft");
+            localStorage.removeItem("holistic_wizard_email");
+            return {};
+        }
+        
+        // Store current email for future cache validation
+        if (userEmail) {
+            localStorage.setItem("holistic_wizard_email", userEmail);
+        }
+        
         return saved ? JSON.parse(saved) : {};
     };
 

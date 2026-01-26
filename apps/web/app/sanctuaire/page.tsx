@@ -106,7 +106,7 @@ const getLevelInfo = (level: number): { name: "Initié" | "Mystique" | "Profond"
 function AutoLoginHandler() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { authenticateWithEmail, isAuthenticated, isLoading: authLoading, refetchData } = useSanctuaireAuth();
+    const { authenticateWithEmail, isAuthenticated, isLoading: authLoading, refetchData, profile, user } = useSanctuaireAuth();
 
     const [autoLoginState, setAutoLoginState] = useState<'idle' | 'authenticating' | 'success' | 'error'>('idle');
     const [autoLoginError, setAutoLoginError] = useState<string | null>(null);
@@ -134,7 +134,8 @@ function AutoLoginHandler() {
 
             if (result.success) {
                 setAutoLoginState('success');
-                // Show onboarding for first visit
+                // Show onboarding for first visit ONLY if profile is NOT completed
+                // This prevents re-showing onboarding if user has already completed it
                 if (result.isFirstVisit) {
                     setShowOnboarding(true);
                     // Don't clean URL yet - will be done when onboarding completes
@@ -163,6 +164,18 @@ function AutoLoginHandler() {
 
         performAutoLogin();
     }, [email, token, authLoading, isAuthenticated, autoLoginState, authenticateWithEmail, retryCount, router, isFirstVisit]);
+
+    // 🔄 Check if we should show onboarding after authentication completes
+    // This handles the case where isFirstVisit was set but profile data wasn't loaded yet
+    useEffect(() => {
+        if (showOnboarding && profile?.profileCompleted) {
+            // Profile is already completed, skip onboarding
+            console.log("[AutoLoginHandler] Profile already completed, skipping onboarding");
+            setShowOnboarding(false);
+            clearFirstVisitFlag();
+            router.replace('/sanctuaire');
+        }
+    }, [showOnboarding, profile, router]);
 
     // Show loading during auto-login
     if (autoLoginState === 'authenticating') {
@@ -221,10 +234,11 @@ function AutoLoginHandler() {
     }
 
     // Onboarding modal
-    if (showOnboarding) {
+    if (showOnboarding && !profile?.profileCompleted) {
         return (
             <div className="fixed inset-0 z-[100] bg-void">
                 <HolisticWizard
+                    userEmail={email || user?.email}
                     onComplete={async (data) => {
                         try {
                             const token = localStorage.getItem("sanctuaire_token");
@@ -245,6 +259,9 @@ function AutoLoginHandler() {
                         } finally {
                             setShowOnboarding(false);
                             clearFirstVisitFlag();
+                            // Clear the draft after successful submission
+                            localStorage.removeItem('holistic_wizard_draft');
+                            localStorage.removeItem('holistic_wizard_email');
                             await refetchData();
                             router.replace('/sanctuaire');
                         }

@@ -26,6 +26,10 @@ function PaymentSuccessContent() {
             // Generate a unique first visit token
             const firstVisitToken = `fv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
+            // 🧹 Clear any previous onboarding draft to ensure fresh start for new user
+            localStorage.removeItem('holistic_wizard_draft');
+            localStorage.removeItem('holistic_wizard_email');
+            
             // Auto-redirect to sanctuaire after animation
             const redirectTimer = setTimeout(() => {
                 router.push(`/sanctuaire?email=${encodeURIComponent(email)}&token=${firstVisitToken}`);
