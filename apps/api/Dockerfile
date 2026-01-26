@@ -65,5 +65,5 @@ RUN npm install -g prisma@5.22.0
 
 EXPOSE 3001
 
-# Run db:push before starting to sync schema
-CMD ["/bin/sh", "-c", "prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate && node apps/api/dist/main.js"]
+# Run db:push before starting to sync schema (--accept-data-loss for schema changes like unique constraints)
+CMD ["/bin/sh", "-c", "prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate --accept-data-loss && node apps/api/dist/main.js"]
