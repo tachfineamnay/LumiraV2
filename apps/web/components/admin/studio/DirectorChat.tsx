@@ -251,6 +251,8 @@ export function DirectorChat({
                     <button
                         type="submit"
                         disabled={!inputValue.trim() || isProcessing}
+                        aria-label="Envoyer le message"
+                        title="Envoyer"
                         className="flex-shrink-0 p-2.5 rounded-xl bg-gradient-to-r from-gold to-amber-500 
                             text-void font-medium transition-all duration-200
                             hover:shadow-lg hover:shadow-gold/25 hover:scale-105

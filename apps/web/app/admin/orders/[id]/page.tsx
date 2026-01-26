@@ -264,6 +264,8 @@ export default function OrderStudioPage() {
                             <button
                                 onClick={() => router.push('/admin/orders')}
                                 className="p-2 rounded-lg text-divine/60 hover:text-divine hover:bg-gold/10 transition-colors"
+                                aria-label="Retour aux commandes"
+                                title="Retour aux commandes"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                             </button>
