@@ -92,9 +92,15 @@ export class UsersController {
       objective?: string;
       facePhotoUrl?: string;
       palmPhotoUrl?: string;
-      highs?: string[];
-      lows?: string[];
+      highs?: string;
+      lows?: string;
       strongSide?: string;
+      weakSide?: string;
+      strongZone?: string;
+      weakZone?: string;
+      deliveryStyle?: string;
+      pace?: number;
+      ailments?: string;
       fears?: string;
       rituals?: string;
       profileCompleted?: boolean;

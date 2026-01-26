@@ -30,9 +30,15 @@ export interface UserProfile {
     objective?: string;
     facePhotoUrl?: string;
     palmPhotoUrl?: string;
-    highs?: string[];
-    lows?: string[];
+    highs?: string;
+    lows?: string;
     strongSide?: string;
+    weakSide?: string;
+    strongZone?: string;
+    weakZone?: string;
+    deliveryStyle?: string;
+    pace?: number;
+    ailments?: string;
     fears?: string;
     rituals?: string;
 }
@@ -387,16 +393,32 @@ RÈGLES IMPORTANTES:
             parts.push('', '=== OBJECTIF ===', profile.objective);
         }
 
-        if (profile.highs && profile.highs.length > 0) {
-            parts.push('', '=== POINTS FORTS / MOMENTS DE GRÂCE ===', profile.highs.join(', '));
+        if (profile.highs) {
+            parts.push('', '=== POINTS FORTS / MOMENTS DE GRÂCE ===', profile.highs);
         }
 
-        if (profile.lows && profile.lows.length > 0) {
-            parts.push('', '=== DÉFIS / POINTS BAS ===', profile.lows.join(', '));
+        if (profile.lows) {
+            parts.push('', '=== DÉFIS / POINTS BAS ===', profile.lows);
         }
 
         if (profile.strongSide) {
             parts.push('', '=== CÔTÉ LUMIÈRE / TALENTS ===', profile.strongSide);
+        }
+
+        if (profile.weakSide) {
+            parts.push('', '=== CÔTÉ OMBRE / BLOCAGES ===', profile.weakSide);
+        }
+
+        if (profile.strongZone) {
+            parts.push('', '=== ZONE CORPORELLE FORTE ===', profile.strongZone);
+        }
+
+        if (profile.weakZone) {
+            parts.push('', '=== ZONE CORPORELLE FAIBLE ===', profile.weakZone);
+        }
+
+        if (profile.ailments) {
+            parts.push('', '=== MAUX PHYSIQUES ===', profile.ailments);
         }
 
         if (profile.fears) {
@@ -405,6 +427,14 @@ RÈGLES IMPORTANTES:
 
         if (profile.rituals) {
             parts.push('', '=== RITUELS ACTUELS / ASPIRATIONS ===', profile.rituals);
+        }
+
+        if (profile.deliveryStyle) {
+            parts.push('', '=== STYLE DE GUIDANCE PRÉFÉRÉ ===', profile.deliveryStyle);
+        }
+
+        if (profile.pace !== undefined) {
+            parts.push('', '=== RYTHME D\'ACCOMPAGNEMENT ===', `${profile.pace}/100`);
         }
 
         if (profile.facePhotoUrl || profile.palmPhotoUrl) {

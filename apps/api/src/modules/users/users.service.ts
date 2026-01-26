@@ -191,9 +191,15 @@ export class UsersService {
     objective?: string;
     facePhotoUrl?: string;
     palmPhotoUrl?: string;
-    highs?: string[];
-    lows?: string[];
+    highs?: string;
+    lows?: string;
     strongSide?: string;
+    weakSide?: string;
+    strongZone?: string;
+    weakZone?: string;
+    deliveryStyle?: string;
+    pace?: number;
+    ailments?: string;
     fears?: string;
     rituals?: string;
     profileCompleted?: boolean;
@@ -210,12 +216,19 @@ export class UsersService {
         objective: data.objective || null,
         facePhotoUrl: data.facePhotoUrl || null,
         palmPhotoUrl: data.palmPhotoUrl || null,
-        highs: data.highs || [],
-        lows: data.lows || [],
+        highs: data.highs || null,
+        lows: data.lows || null,
         strongSide: data.strongSide || null,
+        weakSide: data.weakSide || null,
+        strongZone: data.strongZone || null,
+        weakZone: data.weakZone || null,
+        deliveryStyle: data.deliveryStyle || null,
+        pace: data.pace ?? null,
+        ailments: data.ailments || null,
         fears: data.fears || null,
         rituals: data.rituals || null,
         profileCompleted: data.profileCompleted || false,
+        submittedAt: data.profileCompleted ? new Date() : null,
       },
       update: {
         ...(data.birthDate !== undefined && { birthDate: data.birthDate }),
@@ -228,9 +241,18 @@ export class UsersService {
         ...(data.highs !== undefined && { highs: data.highs }),
         ...(data.lows !== undefined && { lows: data.lows }),
         ...(data.strongSide !== undefined && { strongSide: data.strongSide }),
+        ...(data.weakSide !== undefined && { weakSide: data.weakSide }),
+        ...(data.strongZone !== undefined && { strongZone: data.strongZone }),
+        ...(data.weakZone !== undefined && { weakZone: data.weakZone }),
+        ...(data.deliveryStyle !== undefined && { deliveryStyle: data.deliveryStyle }),
+        ...(data.pace !== undefined && { pace: data.pace }),
+        ...(data.ailments !== undefined && { ailments: data.ailments }),
         ...(data.fears !== undefined && { fears: data.fears }),
         ...(data.rituals !== undefined && { rituals: data.rituals }),
-        ...(data.profileCompleted !== undefined && { profileCompleted: data.profileCompleted }),
+        ...(data.profileCompleted !== undefined && { 
+          profileCompleted: data.profileCompleted,
+          ...(data.profileCompleted && { submittedAt: new Date() }),
+        }),
       },
     });
 

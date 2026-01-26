@@ -114,9 +114,15 @@ model UserProfile {
   objective        String?   @db.Text
   facePhotoUrl     String?
   palmPhotoUrl     String?
-  highs            String[]
-  lows             String[]
-  strongSide       String?   @db.Text
+  highs            String?   @db.Text
+  lows             String?   @db.Text
+  strongSide       String?
+  weakSide         String?
+  strongZone       String?
+  weakZone         String?
+  deliveryStyle    String?
+  pace             Int?
+  ailments         String?   @db.Text
   fears            String?   @db.Text
   rituals          String?   @db.Text
   profileCompleted Boolean   @default(false)

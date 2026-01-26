@@ -338,16 +338,39 @@ function DashboardContent() {
                                     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
                                     
                                     if (token) {
+                                        // Map wizard fields to API expected fields
+                                        const profileData = {
+                                            birthDate: data.birthDate,
+                                            birthTime: data.birthTime || null,
+                                            birthPlace: data.birthPlace,
+                                            facePhotoUrl: data.facePhoto || null,
+                                            palmPhotoUrl: data.palmPhoto || null,
+                                            highs: data.highs,
+                                            lows: data.lows,
+                                            strongSide: data.strongSide,
+                                            weakSide: data.weakSide,
+                                            strongZone: data.strongZone,
+                                            weakZone: data.weakZone,
+                                            deliveryStyle: data.deliveryStyle,
+                                            pace: data.pace,
+                                            ailments: data.ailments || null,
+                                            profileCompleted: true,
+                                        };
+                                        
+                                        console.log("[Sanctuaire] Saving profile data:", profileData);
+                                        
                                         // Save the holistic diagnostic data and mark profile as completed
                                         await axios.patch(
                                             `${API_URL}/api/users/profile`,
-                                            { 
-                                                ...data,
-                                                profileCompleted: true 
-                                            },
+                                            profileData,
                                             { headers: { Authorization: `Bearer ${token}` } }
                                         );
                                     }
+                                    
+                                    // Clear wizard draft
+                                    localStorage.removeItem('holistic_wizard_draft');
+                                    localStorage.removeItem('holistic_wizard_email');
+                                    
                                     await refetchData();
                                 } catch (error) {
                                     console.error("Failed to save holistic diagnostic:", error);
