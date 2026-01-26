@@ -129,6 +129,15 @@
 
 @layer utilities {
 
+  /* === WIZARD COSMIC BACKGROUND === */
+  .wizard-cosmic-gradient {
+    background: 
+      radial-gradient(ellipse 120% 60% at 50% -20%, rgba(15, 61, 80, 0.3) 0%, transparent 60%),
+      radial-gradient(ellipse 100% 40% at 50% 110%, rgba(232, 168, 56, 0.12) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(20, 82, 102, 0.15) 0%, transparent 50%),
+      linear-gradient(180deg, #040610 0%, #080C1A 25%, #0C1225 50%, #101830 100%);
+  }
+
   /* === TEXT EFFECTS === */
   .text-glow-hero {
     text-shadow: 0 0 40px rgba(232, 168, 56, 0.25), 0 0 80px rgba(232, 168, 56, 0.1);
