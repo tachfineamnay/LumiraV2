@@ -15,6 +15,7 @@ interface SmartPhotoUploaderProps {
     value?: string;
     onChange: (dataUrl: string | null) => void;
     className?: string;
+    compact?: boolean;
 }
 
 type UploadMode = "idle" | "file" | "webcam" | "mobile";
@@ -29,6 +30,7 @@ export const SmartPhotoUploader = ({
     value,
     onChange,
     className = "",
+    compact = false,
 }: SmartPhotoUploaderProps) => {
     const [mode, setMode] = useState<UploadMode>("idle");
     const [isCapturing, setIsCapturing] = useState(false);
@@ -179,21 +181,21 @@ export const SmartPhotoUploader = ({
     if (value) {
         return (
             <div className={`relative group ${className}`}>
-                <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-horizon-400/30">
+                <div className={`relative ${compact ? "aspect-square" : "aspect-[4/3]"} rounded-xl overflow-hidden border border-horizon-400/30`}>
                     <img src={value} alt={label} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="flex items-center gap-2 text-emerald-400">
-                            <Check className="w-4 h-4" />
-                            <span className="text-xs font-medium">{label}</span>
+                    <div className={`absolute ${compact ? "bottom-2 left-2 right-2" : "bottom-3 left-3 right-3"} flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity`}>
+                        <div className="flex items-center gap-1.5 text-emerald-400">
+                            <Check className={compact ? "w-3 h-3" : "w-4 h-4"} />
+                            <span className={`${compact ? "text-[10px]" : "text-xs"} font-medium`}>{label}</span>
                         </div>
                         <button
                             onClick={handleRemove}
                             aria-label="Supprimer la photo"
-                            className="p-2 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors"
+                            className={`${compact ? "p-1.5" : "p-2"} rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors`}
                         >
-                            <X className="w-4 h-4" />
+                            <X className={compact ? "w-3 h-3" : "w-4 h-4"} />
                         </button>
                     </div>
                 </div>
@@ -287,49 +289,71 @@ export const SmartPhotoUploader = ({
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mb-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm"
+                    className="mb-2 p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs"
                 >
                     {error}
                 </motion.div>
             )}
 
-            <div className="aspect-[4/3] rounded-2xl bg-abyss-500/30 border-2 border-dashed border-white/10 hover:border-horizon-400/30 transition-all overflow-hidden">
-                <div className="h-full flex flex-col items-center justify-center p-4">
-                    <div className="relative mb-4">
+            <div className={`${compact ? "aspect-square rounded-xl" : "aspect-[4/3] rounded-2xl"} bg-abyss-600/30 border-2 border-dashed border-white/10 hover:border-horizon-400/30 transition-all overflow-hidden`}>
+                <div className={`h-full flex flex-col items-center justify-center ${compact ? "p-2" : "p-4"}`}>
+                    {/* Icon */}
+                    <div className={`relative ${compact ? "mb-2" : "mb-4"}`}>
                         <div className="absolute inset-0 bg-horizon-400/20 blur-xl rounded-full" />
-                        <div className="relative w-12 h-12 rounded-full bg-abyss-600 border border-white/10 flex items-center justify-center">
-                            <Camera className="w-6 h-6 text-horizon-400" />
+                        <div className={`relative ${compact ? "w-8 h-8" : "w-12 h-12"} rounded-full bg-abyss-600 border border-white/10 flex items-center justify-center`}>
+                            <Camera className={`${compact ? "w-4 h-4" : "w-6 h-6"} text-horizon-400`} />
                         </div>
                     </div>
 
-                    <p className="text-stellar-200 font-medium mb-1">{label}</p>
-                    <p className="text-stellar-500 text-xs text-center mb-4">{description}</p>
+                    {/* Label */}
+                    <p className={`text-stellar-200 font-medium ${compact ? "text-xs mb-0.5" : "mb-1"}`}>{label}</p>
+                    {!compact && <p className="text-stellar-500 text-xs text-center mb-4">{description}</p>}
 
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 text-xs transition-colors border border-white/5"
-                        >
-                            <Upload className="w-3.5 h-3.5" />
-                            Fichier
-                        </button>
+                    {/* Buttons */}
+                    {compact ? (
+                        <div className="flex items-center gap-1.5 mt-2">
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="p-1.5 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 transition-colors border border-white/5"
+                                title="Fichier"
+                            >
+                                <Upload className="w-3 h-3" />
+                            </button>
+                            <button
+                                onClick={startWebcam}
+                                className="p-1.5 rounded-lg bg-horizon-400/10 hover:bg-horizon-400/20 text-horizon-300 transition-colors border border-horizon-400/20"
+                                title="Webcam"
+                            >
+                                <Camera className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 text-xs transition-colors border border-white/5"
+                            >
+                                <Upload className="w-3.5 h-3.5" />
+                                Fichier
+                            </button>
 
-                        <button
-                            onClick={startWebcam}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-horizon-400/10 hover:bg-horizon-400/20 text-horizon-300 text-xs transition-colors border border-horizon-400/20"
-                        >
-                            <Camera className="w-3.5 h-3.5" />
-                            Webcam
-                        </button>
+                            <button
+                                onClick={startWebcam}
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-horizon-400/10 hover:bg-horizon-400/20 text-horizon-300 text-xs transition-colors border border-horizon-400/20"
+                            >
+                                <Camera className="w-3.5 h-3.5" />
+                                Webcam
+                            </button>
 
-                        <button
-                            onClick={() => setMode("mobile")}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 text-xs transition-colors border border-white/5"
-                        >
-                            <Smartphone className="w-3.5 h-3.5" />
-                            Mobile
-                        </button>
-                    </div>
+                            <button
+                                onClick={() => setMode("mobile")}
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 text-xs transition-colors border border-white/5"
+                            >
+                                <Smartphone className="w-3.5 h-3.5" />
+                                Mobile
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
