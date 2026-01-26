@@ -74,6 +74,25 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
         return saved ? JSON.parse(saved) : {};
     };
 
+    // Default values for form
+    const defaultFormValues: Partial<HolisticDiagnosticData> = {
+        highs: "",
+        lows: "",
+        ailments: "",
+        strongSide: "Right",
+        weakSide: "Left",
+        strongZone: "",
+        weakZone: "",
+        deliveryStyle: "Gentle",
+        pace: 50,
+        birthDate: "",
+        birthTime: "",
+        birthPlace: "",
+        facePhoto: "",
+        palmPhoto: "",
+        gdprConsent: false,
+    };
+
     const {
         register,
         handleSubmit,
@@ -83,7 +102,7 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
         formState: { errors }
     } = useForm<HolisticDiagnosticData>({
         resolver: zodResolver(holisticDiagnosticSchema),
-        defaultValues: { ...loadDraft(), ...initialData },
+        defaultValues: { ...defaultFormValues, ...loadDraft(), ...initialData },
         mode: "onChange"
     });
 
@@ -98,8 +117,8 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
         let fieldsToValidate: (keyof HolisticDiagnosticData)[] = [];
 
         if (step === 0) fieldsToValidate = ["highs", "lows"];
-        if (step === 1) fieldsToValidate = ["strongSide", "strongZone"];
-        if (step === 2) fieldsToValidate = ["deliveryStyle"];
+        if (step === 1) fieldsToValidate = ["strongSide", "weakSide", "strongZone", "weakZone"];
+        if (step === 2) fieldsToValidate = ["deliveryStyle", "pace"];
         if (step === 3) fieldsToValidate = ["birthDate", "birthPlace"];
         if (step === 4) fieldsToValidate = ["gdprConsent"];
 
@@ -110,12 +129,14 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
     const prevStep = () => setStep(prev => Math.max(0, prev - 1));
 
     const onSubmit = async (data: HolisticDiagnosticData) => {
+        console.log("[HolisticWizard] Submitting data:", data);
         setIsSubmitting(true);
         try {
             await onComplete?.(data);
             localStorage.removeItem("holistic_wizard_draft");
+            localStorage.removeItem("holistic_wizard_email");
         } catch (error) {
-            console.error(error);
+            console.error("[HolisticWizard] Submit error:", error);
         } finally {
             setIsSubmitting(false);
         }
@@ -361,6 +382,7 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
                                                     className="w-full bg-abyss-600/50 border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-stellar-200 placeholder:text-stellar-600 focus:border-horizon-400/50 focus:ring-2 focus:ring-horizon-400/10 focus:outline-none transition-all"
                                                     placeholder="Ex: Bas du dos, nuque..."
                                                 />
+                                                {errors.weakZone && <span className="text-rose-400 text-xs">{errors.weakZone.message}</span>}
                                             </div>
                                             <div className="space-y-2">
                                                 <label className="text-xs uppercase tracking-wider text-stellar-500 font-medium">Zone de puissance</label>
@@ -567,13 +589,17 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail }: HolisticW
                             {step < STEPS.length - 1 ? (
                                 <button
                                     onClick={nextStep}
+                                    type="button"
                                     className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 text-stellar-100 font-medium border border-white/10 hover:bg-white/15 hover:border-white/20 transition-all"
                                 >
                                     Suivant <ArrowRight className="w-4 h-4" />
                                 </button>
                             ) : (
                                 <button
-                                    onClick={handleSubmit(onSubmit)}
+                                    onClick={handleSubmit(onSubmit, (errors) => {
+                                        console.error("[HolisticWizard] Validation errors:", errors);
+                                    })}
+                                    type="button"
                                     disabled={isSubmitting}
                                     className="relative overflow-hidden px-8 py-3.5 rounded-xl font-semibold text-abyss-900 bg-gradient-to-r from-horizon-400 via-horizon-300 to-horizon-400 bg-[length:200%_100%] hover:bg-[position:100%_0] transition-all duration-500 shadow-[0_0_30px_rgba(232,168,56,0.3)] hover:shadow-[0_0_40px_rgba(232,168,56,0.5)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
