@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
+import { ValidationPipe } from "@nestjs/common";
 import { AppModule } from "./app.module";
 
 import { json, urlencoded } from 'express';
@@ -39,6 +40,16 @@ async function bootstrap() {
     credentials: true,
   });
   app.setGlobalPrefix("api");
+
+  // Global validation pipe with transformation
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: false,
+    transformOptions: {
+      enableImplicitConversion: true,
+    },
+  }));
 
   // Root endpoint for Coolify healthcheck (outside /api prefix)
   const httpAdapter = app.getHttpAdapter();

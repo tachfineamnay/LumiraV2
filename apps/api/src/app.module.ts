@@ -16,6 +16,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
 import { ExpertModule } from "./modules/expert/expert.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { InsightsModule } from "./modules/insights/insights.module";
+import { ClientModule } from "./modules/client/client.module";
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { InsightsModule } from "./modules/insights/insights.module";
     ExpertModule,
     ProductsModule,
     InsightsModule,
+    ClientModule,
   ],
   controllers: [AppController],
   providers: [
