@@ -8,6 +8,10 @@
             {
                 "include": "modules/notifications/templates/**/*.hbs",
                 "watchAssets": true
+            },
+            {
+                "include": "templates/**/*.hbs",
+                "watchAssets": true
             }
         ]
     }

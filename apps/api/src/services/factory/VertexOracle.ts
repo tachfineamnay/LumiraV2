@@ -166,7 +166,7 @@ export class VertexOracle {
             }
 
             this.model = this.vertexAI.getGenerativeModel({
-                model: 'gemini-1.5-pro-002',
+                model: 'gemini-2.0-flash-001',
                 generationConfig: {
                     temperature: 0.7,
                     topP: 0.95,
