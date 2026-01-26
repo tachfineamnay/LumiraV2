@@ -169,17 +169,23 @@ export class ClientService {
         });
 
         return orders.map(order => {
-            const content = order.generatedContent as any;
+            const content = order.generatedContent as Record<string, unknown> | null;
             return {
                 id: order.id,
                 orderNumber: order.orderNumber,
                 level: order.level,
                 deliveredAt: order.deliveredAt,
                 createdAt: order.createdAt,
-                archetype: content?.archetype || null,
+                archetype: (content?.archetype as string) || null,
                 title: content?.archetype 
                     ? `Lecture d'Âme - ${content.archetype}`
                     : `Lecture d'Âme #${order.orderNumber}`,
+                intention: (content?.specificQuestion as string) || null,
+                keywords: (content?.keywords as string[]) || [],
+                assets: {
+                    pdf: (content?.pdfUrl as string) || null,
+                    audio: (content?.audioUrl as string) || null,
+                },
             };
         });
     }

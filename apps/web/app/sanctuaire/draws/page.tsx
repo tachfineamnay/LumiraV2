@@ -1,27 +1,30 @@
-"use client";
+'use client';
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import Link from "next/link";
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import {
-    Book,
     FileText,
-    Headphones,
-    Crown,
+    Play,
+    Pause,
+    Volume2,
     Calendar,
     Clock,
-    MapPin,
-    Target,
-    Star,
-    Check,
-    Loader2,
+    Sparkles,
     Lock,
-    Plus
-} from "lucide-react";
-import { GlassCard } from "../../../components/ui/GlassCard";
-import { useSanctuaire } from "../../../context/SanctuaireContext";
+    Loader2,
+    ChevronRight,
+    Eye,
+    Plus,
+    Hash,
+    Download,
+    Headphones
+} from 'lucide-react';
+import { useSanctuaire } from '../../../context/SanctuaireContext';
+import { useAuth } from '../../../context/AuthContext';
+import { ReadingViewerModal } from '../../../components/sanctuary/ReadingViewerModal';
 
 // =============================================================================
 // TYPES
@@ -29,205 +32,176 @@ import { useSanctuaire } from "../../../context/SanctuaireContext";
 
 interface Reading {
     id: string;
+    orderNumber: string;
+    level: number;
+    deliveredAt: string | null;
+    createdAt: string;
+    archetype: string | null;
     title: string;
-    date: string;
-    question: string;
-    objective: string;
-    birthData: { date: string; time: string; place: string };
+    intention?: string;
+    keywords?: string[];
     assets: {
-        pdf: { status: "available" | "generating" | "locked"; url?: string };
-        audio: { status: "available" | "generating" | "locked"; url?: string };
-        mandala: { status: "available" | "generating" | "locked"; url?: string };
+        pdf?: string;
+        audio?: string;
     };
-    status: "paid" | "processing" | "validation" | "delivered";
+}
+
+interface DrawType {
+    id: string;
+    name: string;
+    description: string;
+    icon: React.ReactNode;
+    available: boolean;
+    comingSoon?: boolean;
 }
 
 // =============================================================================
-// MOCK DATA
+// DRAW TYPES
 // =============================================================================
 
-const MOCK_READINGS: Reading[] = [
+const DRAW_TYPES: DrawType[] = [
     {
-        id: "1",
-        title: "Lecture Spirituelle Intégrale",
-        date: "22 Déc 2024",
-        question: "Quel est le sens profond de ma vie ?",
-        objective: "Découvrir ma mission de vie",
-        birthData: { date: "11/11/1983", time: "11:11", place: "Paris, France" },
-        assets: {
-            pdf: { status: "available", url: "#" },
-            audio: { status: "available", url: "#" },
-            mandala: { status: "locked" },
-        },
-        status: "delivered",
+        id: 'soul-reading',
+        name: 'Lecture d\'Âme',
+        description: 'Votre guidance spirituelle complète',
+        icon: <Sparkles className="w-5 h-5" />,
+        available: true,
     },
     {
-        id: "2",
-        title: "Tirage des Énergies",
-        date: "20 Déc 2024",
-        question: "Comment améliorer mes relations ?",
-        objective: "Harmoniser mes énergies relationnelles",
-        birthData: { date: "11/11/1983", time: "11:11", place: "Paris, France" },
-        assets: {
-            pdf: { status: "generating" },
-            audio: { status: "locked" },
-            mandala: { status: "locked" },
-        },
-        status: "processing",
+        id: 'energy-reading',
+        name: 'Tirage Énergétique',
+        description: 'État de vos énergies actuelles',
+        icon: <Eye className="w-5 h-5" />,
+        available: false,
+        comingSoon: true,
+    },
+    {
+        id: 'karmic-reading',
+        name: 'Analyse Karmique',
+        description: 'Exploration de vos vies passées',
+        icon: <Clock className="w-5 h-5" />,
+        available: false,
+        comingSoon: true,
+    },
+    {
+        id: 'mission-reading',
+        name: 'Mission de Vie',
+        description: 'Découvrez votre purpose',
+        icon: <Hash className="w-5 h-5" />,
+        available: false,
+        comingSoon: true,
     },
 ];
 
 // =============================================================================
-// LEVEL PROGRESS BAR
+// AUDIO PLAYER COMPONENT
 // =============================================================================
 
-function LevelProgressBar({ currentLevel }: { currentLevel: number }) {
-    const levels = [
-        { level: 1, name: "Initié", icon: Star },
-        { level: 2, name: "Mystique", icon: Star },
-        { level: 3, name: "Profond", icon: Star },
-        { level: 4, name: "Intégral", icon: Crown },
-    ];
+function AudioPlayer({ audioUrl }: { audioUrl?: string }) {
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [progress] = useState(0);
+    const [duration] = useState('12:45');
+
+    // Simulated waveform bars
+    const waveformBars = Array.from({ length: 40 }, () => Math.random() * 100);
+
+    const togglePlay = () => {
+        if (!audioUrl) return;
+        setIsPlaying(!isPlaying);
+    };
 
     return (
-        <div className="flex items-center gap-2">
-            {levels.map((l, i) => (
-                <React.Fragment key={l.level}>
-                    <div className={`flex items-center gap-1.5 ${currentLevel >= l.level ? "text-dawn-gold" : "text-star-dim/40"}`}>
-                        <l.icon className={`w-4 h-4 ${currentLevel >= l.level ? "fill-dawn-gold" : ""}`} />
-                        <span className="text-xs font-medium hidden sm:inline">{l.name}</span>
-                    </div>
-                    {i < levels.length - 1 && (
-                        <div className={`w-6 h-0.5 ${currentLevel > l.level ? "bg-dawn-gold" : "bg-star-dim/20"}`} />
-                    )}
-                </React.Fragment>
-            ))}
-        </div>
-    );
-}
-
-// =============================================================================
-// STATUS TIMELINE
-// =============================================================================
-
-function StatusTimeline({ status }: { status: Reading["status"] }) {
-    const steps = [
-        { key: "paid", label: "Payé" },
-        { key: "processing", label: "En cours" },
-        { key: "validation", label: "Validation" },
-        { key: "delivered", label: "Livré" },
-    ];
-
-    const currentIndex = steps.findIndex(s => s.key === status);
-
-    return (
-        <div className="flex items-center gap-1">
-            {steps.map((step, i) => (
-                <React.Fragment key={step.key}>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium ${i <= currentIndex
-                            ? "bg-dawn-gold/20 text-dawn-gold"
-                            : "bg-white/5 text-star-dim/40"
-                        }`}>
-                        {i < currentIndex && <Check className="w-3 h-3" />}
-                        {i === currentIndex && <Loader2 className="w-3 h-3 animate-spin" />}
-                        <span className="hidden sm:inline">{step.label}</span>
-                    </div>
-                    {i < steps.length - 1 && (
-                        <div className={`w-4 h-0.5 ${i < currentIndex ? "bg-dawn-gold" : "bg-star-dim/20"}`} />
-                    )}
-                </React.Fragment>
-            ))}
-        </div>
-    );
-}
-
-// =============================================================================
-// ASSET TAB
-// =============================================================================
-
-function AssetTab({
-    icon: Icon,
-    label,
-    status,
-    isActive,
-    onClick,
-    requiredLevel
-}: {
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    status: "available" | "generating" | "locked";
-    isActive: boolean;
-    onClick: () => void;
-    requiredLevel?: number;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${isActive
-                    ? "bg-dawn-gold/20 text-dawn-gold border border-dawn-gold/30"
-                    : status === "locked"
-                        ? "bg-white/5 text-star-dim/40 border border-white/5 cursor-not-allowed"
-                        : "bg-white/5 text-star-silver border border-white/10 hover:bg-white/10"
+        <div className="flex items-center gap-4 p-4 rounded-xl bg-abyss-800/50 border border-white/5">
+            {/* Play Button */}
+            <button
+                onClick={togglePlay}
+                disabled={!audioUrl}
+                aria-label={isPlaying ? 'Pause' : 'Lecture'}
+                className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    audioUrl
+                        ? 'bg-horizon-400 text-abyss-900 hover:bg-horizon-300 hover:scale-105'
+                        : 'bg-white/10 text-stellar-500 cursor-not-allowed'
                 }`}
-            disabled={status === "locked"}
+            >
+                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+            </button>
+
+            {/* Waveform Visualization */}
+            <div className="flex-1 flex items-end gap-[2px] h-10">
+                {waveformBars.map((height, i) => (
+                    <div
+                        key={i}
+                        className={`flex-1 rounded-full transition-all ${
+                            i < waveformBars.length * (progress / 100)
+                                ? 'bg-horizon-400'
+                                : 'bg-white/10'
+                        }`}
+                        style={{ height: `${Math.max(20, height)}%` }}
+                    />
+                ))}
+            </div>
+
+            {/* Duration */}
+            <div className="flex-shrink-0 flex items-center gap-2 text-xs text-stellar-400">
+                <Volume2 className="w-4 h-4" />
+                <span>{duration}</span>
+            </div>
+        </div>
+    );
+}
+
+// =============================================================================
+// DRAW CARD COMPONENT
+// =============================================================================
+
+function DrawCard({ draw }: { draw: DrawType }) {
+    return (
+        <motion.div
+            whileHover={draw.available ? { scale: 1.02 } : undefined}
+            className={`relative p-5 rounded-2xl border transition-all ${
+                draw.available
+                    ? 'bg-abyss-700/50 border-white/10 hover:border-horizon-400/30 cursor-pointer'
+                    : 'bg-abyss-800/30 border-white/5'
+            }`}
         >
-            {status === "locked" ? <Lock className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
-            <span>{label}</span>
-            {status === "generating" && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
-            {status === "locked" && requiredLevel != null && (
-                <span className="ml-auto text-[10px] text-star-dim/50 uppercase tracking-widest">
-                    Niv. {requiredLevel}+
+            {/* Coming Soon Badge */}
+            {draw.comingSoon && (
+                <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-serenity-500/20 text-serenity-300 text-[10px] font-medium uppercase tracking-wider">
+                    Bientôt
                 </span>
             )}
-        </button>
-    );
-}
 
-// =============================================================================
-// UPGRADE CARD
-// =============================================================================
+            <div className="flex items-start gap-4">
+                {/* Icon */}
+                <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${
+                    draw.available
+                        ? 'bg-horizon-400/20 text-horizon-400'
+                        : 'bg-white/5 text-stellar-500'
+                }`}>
+                    {draw.available ? draw.icon : <Lock className="w-5 h-5" />}
+                </div>
 
-function UpgradeCard({
-    level,
-    name,
-    price,
-    features,
-    isComingSoon
-}: {
-    level: number;
-    name: string;
-    price: string;
-    features: string[];
-    isComingSoon?: boolean;
-}) {
-    return (
-        <div className={`p-5 rounded-2xl border ${isComingSoon ? "bg-white/5 border-white/10" : "bg-gradient-to-br from-dawn-gold/10 to-dawn-amber/5 border-dawn-gold/20"}`}>
-            <div className="flex items-center justify-between mb-3">
-                <span className={`text-sm font-bold ${isComingSoon ? "text-star-dim" : "text-dawn-gold"}`}>
-                    Niveau {level} — {name}
-                </span>
-                <span className={`text-lg font-bold ${isComingSoon ? "text-star-dim" : "text-star-white"}`}>
-                    {price}
-                </span>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                    <h3 className={`font-semibold mb-1 ${draw.available ? 'text-white' : 'text-stellar-500'}`}>
+                        {draw.name}
+                    </h3>
+                    <p className="text-xs text-stellar-500 line-clamp-2">
+                        {draw.description}
+                    </p>
+                </div>
             </div>
-            <ul className="space-y-2 mb-4">
-                {features.map((f, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs text-star-dim">
-                        <Check className={`w-3 h-3 ${isComingSoon ? "text-star-dim/40" : "text-dawn-gold"}`} />
-                        {f}
-                    </li>
-                ))}
-            </ul>
-            <button
-                className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${isComingSoon
-                        ? "bg-white/5 text-star-dim cursor-not-allowed"
-                        : "bg-gradient-to-r from-dawn-gold to-dawn-amber text-cosmos-deep hover:shadow-dawn-glow"
-                    }`}
-                disabled={isComingSoon}
-            >
-                {isComingSoon ? "Bientôt disponible" : "Débloquer"}
-            </button>
-        </div>
+
+            {/* Action */}
+            {draw.available && (
+                <Link href="/commande">
+                    <button className="mt-4 w-full py-2.5 rounded-xl bg-horizon-400/10 hover:bg-horizon-400/20 text-horizon-400 text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                        Lancer
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                </Link>
+            )}
+        </motion.div>
     );
 }
 
@@ -236,197 +210,295 @@ function UpgradeCard({
 // =============================================================================
 
 export default function DrawsPage() {
-    const { highestLevel, isLoading } = useSanctuaire();
-    const [selectedReading, setSelectedReading] = useState(MOCK_READINGS[0]);
-    const [activeTab, setActiveTab] = useState<"pdf" | "audio" | "mandala">("pdf");
+    const { token } = useAuth();
+    const { highestLevel, isLoading: contextLoading } = useSanctuaire();
+    const [readings, setReadings] = useState<Reading[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [selectedPdf, setSelectedPdf] = useState<{ url: string; title: string } | null>(null);
 
-    const currentLevel = Math.max(1, highestLevel) as 1 | 2 | 3 | 4;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-    if (isLoading) {
+    // Fetch user's readings
+    const fetchReadings = useCallback(async () => {
+        if (!token) return;
+
+        try {
+            setLoading(true);
+            const res = await fetch(`${apiUrl}/api/client/readings`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setReadings(data.readings || []);
+            }
+        } catch (error) {
+            console.error('Failed to fetch readings:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [apiUrl, token]);
+
+    useEffect(() => {
+        fetchReadings();
+    }, [fetchReadings]);
+
+    const openPdfViewer = (pdfUrl: string, title: string) => {
+        setSelectedPdf({ url: pdfUrl, title });
+        setViewerOpen(true);
+    };
+
+    const closePdfViewer = () => {
+        setViewerOpen(false);
+        setSelectedPdf(null);
+    };
+
+    // Get the latest reading
+    const latestReading = readings[0];
+    const currentMonth = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+    if (contextLoading || loading) {
         return (
             <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-                <Loader2 className="w-12 h-12 text-dawn-gold animate-spin" />
+                <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-horizon-400 animate-spin mx-auto mb-3" />
+                    <p className="text-stellar-400 text-sm">Chargement de vos révélations...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-            {/* Hero Header */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+            {/* PDF Viewer Modal */}
+            {selectedPdf && (
+                <ReadingViewerModal
+                    isOpen={viewerOpen}
+                    onClose={closePdfViewer}
+                    pdfUrl={selectedPdf.url}
+                    title={selectedPdf.title}
+                />
+            )}
+
+            {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mb-8"
+                className="mb-10"
             >
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl md:text-4xl font-playfair italic text-gradient-dawn mb-2">
-                            Mes Lectures & Tirages
+                        <h1 className="text-3xl font-serif italic text-white mb-1">
+                            Mes Révélations
                         </h1>
-                        <p className="text-star-dim text-sm">
-                            Bienvenue, accédez à vos révélations personnalisées
+                        <p className="text-stellar-400 text-sm">
+                            Accédez à vos lectures et tirages personnalisés
                         </p>
                     </div>
                     <Link href="/commande">
-                        <button className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-dawn-gold to-dawn-amber text-cosmos-deep font-semibold hover:shadow-dawn-glow transition-all">
-                            <Plus className="w-5 h-5" />
-                            Nouvelle lecture
+                        <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-horizon-400 text-abyss-900 font-semibold text-sm hover:bg-horizon-300 transition-colors">
+                            <Plus className="w-4 h-4" />
+                            Nouvelle Lecture
                         </button>
                     </Link>
                 </div>
             </motion.div>
 
-            {/* Main Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Column */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Reading Selector Pills */}
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-                        <div className="flex gap-2 overflow-x-auto pb-2">
-                            {MOCK_READINGS.map((reading) => (
-                                <button
-                                    key={reading.id}
-                                    onClick={() => setSelectedReading(reading)}
-                                    className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedReading.id === reading.id
-                                            ? "bg-dawn-gold/20 text-dawn-gold border border-dawn-gold/30"
-                                            : "bg-white/5 text-star-dim border border-white/10 hover:bg-white/10"
-                                        }`}
-                                >
-                                    {reading.title}
-                                </button>
-                            ))}
+            {/* MA LECTURE - Main Reading Section */}
+            <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="mb-10"
+            >
+                <h2 className="text-xs font-bold text-stellar-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Ma Lecture
+                </h2>
+
+                {latestReading ? (
+                    <div className="p-6 rounded-2xl bg-abyss-700/30 border border-white/10 backdrop-blur-sm">
+                        {/* Top: Title & Date */}
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+                            <div>
+                                <h3 className="text-xl font-semibold text-white mb-1">
+                                    Guidance de {currentMonth}
+                                </h3>
+                                <div className="flex items-center gap-3 text-xs text-stellar-400">
+                                    <span className="flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" />
+                                        {latestReading.deliveredAt
+                                            ? new Date(latestReading.deliveredAt).toLocaleDateString('fr-FR', {
+                                                day: 'numeric',
+                                                month: 'long',
+                                                year: 'numeric'
+                                            })
+                                            : 'En cours de préparation'
+                                        }
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-full bg-horizon-400/20 text-horizon-400 font-medium">
+                                        #{latestReading.orderNumber}
+                                    </span>
+                                </div>
+                            </div>
+                            {latestReading.archetype && (
+                                <span className="px-3 py-1.5 rounded-full bg-serenity-500/20 text-serenity-300 text-xs font-medium">
+                                    {latestReading.archetype}
+                                </span>
+                            )}
                         </div>
-                    </motion.div>
 
-                    {/* Reading Context */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                        <GlassCard className="p-6">
-                            <h2 className="text-lg font-playfair italic text-dawn-amber mb-4 flex items-center gap-2">
-                                <Book className="w-5 h-5" />
-                                Contexte de la lecture
-                            </h2>
+                        {/* Middle: Intention & Keywords */}
+                        <div className="mb-6 p-4 rounded-xl bg-abyss-800/50 border border-white/5">
+                            <p className="text-stellar-300 text-sm leading-relaxed line-clamp-3">
+                                {latestReading.intention || 'Votre lecture spirituelle personnalisée est prête. Découvrez les messages de l\'Oracle concernant votre chemin de vie et votre évolution spirituelle.'}
+                            </p>
+                            {latestReading.keywords && latestReading.keywords.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                    {latestReading.keywords.map((keyword, i) => (
+                                        <span
+                                            key={i}
+                                            className="px-2 py-0.5 rounded-full bg-white/5 text-stellar-400 text-xs"
+                                        >
+                                            {keyword}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="p-4 rounded-xl bg-cosmos-twilight/50">
-                                    <label className="text-xs text-star-dim uppercase tracking-wider mb-1 block">
-                                        <Target className="w-3 h-3 inline mr-1" /> Question posée
-                                    </label>
-                                    <p className="text-star-silver text-sm">{selectedReading.question}</p>
-                                </div>
-                                <div className="p-4 rounded-xl bg-cosmos-twilight/50">
-                                    <label className="text-xs text-star-dim uppercase tracking-wider mb-1 block">
-                                        <Star className="w-3 h-3 inline mr-1" /> Objectif spirituel
-                                    </label>
-                                    <p className="text-star-silver text-sm">{selectedReading.objective}</p>
-                                </div>
-                                <div className="p-4 rounded-xl bg-cosmos-twilight/50 md:col-span-2">
-                                    <label className="text-xs text-star-dim uppercase tracking-wider mb-1 block">Données de naissance</label>
-                                    <div className="flex flex-wrap gap-4 text-sm text-star-silver">
-                                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-dawn-gold" /> {selectedReading.birthData.date}</span>
-                                        <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-dawn-gold" /> {selectedReading.birthData.time}</span>
-                                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-dawn-gold" /> {selectedReading.birthData.place}</span>
+                        {/* Bottom: Audio Player & Action */}
+                        <div className="space-y-4">
+                            {/* Audio Player */}
+                            {highestLevel >= 2 && (
+                                <AudioPlayer audioUrl={latestReading.assets.audio} />
+                            )}
+
+                            {/* Action Button */}
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                {latestReading.assets.pdf ? (
+                                    <button
+                                        onClick={() => openPdfViewer(latestReading.assets.pdf!, latestReading.title)}
+                                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-horizon-400 text-abyss-900 font-semibold hover:bg-horizon-300 transition-all hover:shadow-lg hover:shadow-horizon-400/20"
+                                    >
+                                        <Eye className="w-5 h-5" />
+                                        Ouvrir le Dossier
+                                    </button>
+                                ) : (
+                                    <div className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white/5 text-stellar-500">
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Préparation en cours...
+                                    </div>
+                                )}
+
+                                {latestReading.assets.pdf && (
+                                    <a
+                                        href={latestReading.assets.pdf}
+                                        download
+                                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-stellar-300 transition-colors"
+                                    >
+                                        <Download className="w-5 h-5" />
+                                        <span className="sm:hidden">Télécharger</span>
+                                    </a>
+                                )}
+
+                                {highestLevel >= 2 && latestReading.assets.audio && (
+                                    <a
+                                        href={latestReading.assets.audio}
+                                        download
+                                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-stellar-300 transition-colors"
+                                    >
+                                        <Headphones className="w-5 h-5" />
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="p-8 rounded-2xl bg-abyss-700/30 border border-white/10 text-center">
+                        <div className="w-16 h-16 rounded-full bg-horizon-400/10 flex items-center justify-center mx-auto mb-4">
+                            <FileText className="w-8 h-8 text-horizon-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-2">
+                            Aucune lecture disponible
+                        </h3>
+                        <p className="text-stellar-400 text-sm mb-4">
+                            Commencez votre voyage spirituel avec votre première lecture
+                        </p>
+                        <Link href="/commande">
+                            <button className="px-6 py-2.5 rounded-xl bg-horizon-400 text-abyss-900 font-semibold text-sm hover:bg-horizon-300 transition-colors">
+                                Commander ma première lecture
+                            </button>
+                        </Link>
+                    </div>
+                )}
+            </motion.section>
+
+            {/* MES TIRAGES - Draw Types Section */}
+            <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+            >
+                <h2 className="text-xs font-bold text-stellar-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Mes Tirages
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {DRAW_TYPES.map((draw) => (
+                        <DrawCard key={draw.id} draw={draw} />
+                    ))}
+                </div>
+            </motion.section>
+
+            {/* Previous Readings History */}
+            {readings.length > 1 && (
+                <motion.section
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="mt-10"
+                >
+                    <h2 className="text-xs font-bold text-stellar-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Historique
+                    </h2>
+
+                    <div className="space-y-3">
+                        {readings.slice(1).map((reading) => (
+                            <div
+                                key={reading.id}
+                                className="flex items-center justify-between p-4 rounded-xl bg-abyss-800/30 border border-white/5 hover:border-white/10 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
+                                        <FileText className="w-5 h-5 text-stellar-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-white">{reading.title}</p>
+                                        <p className="text-xs text-stellar-500">
+                                            {reading.deliveredAt
+                                                ? new Date(reading.deliveredAt).toLocaleDateString('fr-FR')
+                                                : 'En cours'
+                                            }
+                                        </p>
                                     </div>
                                 </div>
-                            </div>
-                        </GlassCard>
-                    </motion.div>
-
-                    {/* Assets Tabs */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                        <GlassCard className="p-6">
-                            <div className="flex flex-wrap gap-2 mb-6">
-                                <AssetTab
-                                    icon={FileText}
-                                    label="PDF"
-                                    status={selectedReading.assets.pdf.status}
-                                    isActive={activeTab === "pdf"}
-                                    onClick={() => setActiveTab("pdf")}
-                                />
-                                <AssetTab
-                                    icon={Headphones}
-                                    label="Audio"
-                                    status={selectedReading.assets.audio.status}
-                                    isActive={activeTab === "audio"}
-                                    onClick={() => setActiveTab("audio")}
-                                    requiredLevel={2}
-                                />
-                                <AssetTab
-                                    icon={Crown}
-                                    label="Mandala"
-                                    status={selectedReading.assets.mandala.status}
-                                    isActive={activeTab === "mandala"}
-                                    onClick={() => setActiveTab("mandala")}
-                                    requiredLevel={3}
-                                />
-                            </div>
-
-                            {/* Tab Content */}
-                            <div className="p-6 rounded-xl bg-cosmos-twilight/50 border border-white/5 min-h-[150px] flex items-center justify-center">
-                                {selectedReading.assets[activeTab].status === "available" && (
-                                    <button className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-dawn-gold to-dawn-amber text-cosmos-deep font-semibold hover:shadow-dawn-glow transition-all">
-                                        {activeTab === "pdf" && <FileText className="w-5 h-5" />}
-                                        {activeTab === "audio" && <Headphones className="w-5 h-5" />}
-                                        {activeTab === "mandala" && <Crown className="w-5 h-5" />}
-                                        {activeTab === "pdf" ? "Voir le PDF" : activeTab === "audio" ? "Écouter" : "Voir le Mandala"}
+                                {reading.assets.pdf && (
+                                    <button
+                                        onClick={() => openPdfViewer(reading.assets.pdf!, reading.title)}
+                                        className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-stellar-300 text-sm transition-colors"
+                                    >
+                                        Lire
                                     </button>
                                 )}
-                                {selectedReading.assets[activeTab].status === "generating" && (
-                                    <div className="text-center">
-                                        <Loader2 className="w-8 h-8 text-dawn-gold animate-spin mx-auto mb-3" />
-                                        <p className="text-star-dim">Génération en cours...</p>
-                                    </div>
-                                )}
-                                {selectedReading.assets[activeTab].status === "locked" && (
-                                    <div className="text-center">
-                                        <Lock className="w-8 h-8 text-star-dim/40 mx-auto mb-3" />
-                                        <p className="text-star-dim">Niveau supérieur requis</p>
-                                    </div>
-                                )}
                             </div>
-                        </GlassCard>
-                    </motion.div>
-
-                    {/* Progress & Status */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                        <GlassCard className="p-6">
-                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                                <div>
-                                    <label className="text-xs text-star-dim uppercase tracking-wider mb-2 block">Niveau actuel</label>
-                                    <LevelProgressBar currentLevel={currentLevel} />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-star-dim uppercase tracking-wider mb-2 block">Statut de la lecture</label>
-                                    <StatusTimeline status={selectedReading.status} />
-                                </div>
-                            </div>
-                        </GlassCard>
-                    </motion.div>
-                </div>
-
-                {/* Upgrade Sidebar */}
-                <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-star-dim uppercase tracking-wider">Évoluez</h3>
-                    <UpgradeCard
-                        level={2}
-                        name="Mystique"
-                        price="49€"
-                        features={["Accès Audio", "Rituels personnalisés"]}
-                    />
-                    <UpgradeCard
-                        level={3}
-                        name="Profond"
-                        price="99€"
-                        features={["Mandala HD", "Synthèse complète"]}
-                    />
-                    <UpgradeCard
-                        level={4}
-                        name="Intégral"
-                        price="199€"
-                        features={["Guidance 30 jours", "Mentorat exclusif"]}
-                        isComingSoon
-                    />
-                </div>
-            </div>
+                        ))}
+                    </div>
+                </motion.section>
+            )}
         </div>
     );
 }
