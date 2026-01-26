@@ -404,7 +404,7 @@ export class ExpertService {
     // ORDER PROCESSING
     // ========================
 
-    async processOrder(dto: ProcessOrderDto, expert: ExpertEntity): Promise<Order & { generationResult?: { pdfUrl: string; archetype: string; stepsCreated: number } }> {
+    async processOrder(dto: ProcessOrderDto, expert: ExpertEntity): Promise<Order & { generationResult?: { archetype: string; stepsCreated: number } }> {
         const order = await this.prisma.order.findUnique({
             where: { id: dto.orderId },
             include: { user: { include: { profile: true } }, files: true },
@@ -455,10 +455,11 @@ export class ExpertService {
                 pdfFactory,
             );
 
-            // Generate the reading using internal factory
-            const result = await digitalSoulService.processOrderGeneration(dto.orderId);
+            // Generate AI content only (no PDF yet) - will be validated by expert
+            const result = await digitalSoulService.generateContentOnly(dto.orderId);
 
-            this.logger.log(`✅ Order ${order.orderNumber} generated successfully - Archetype: ${result.archetype}`);
+            this.logger.log(`✅ Order ${order.orderNumber} content generated - Archetype: ${result.archetype}`);
+            this.logger.log(`📋 Order now AWAITING_VALIDATION`);
 
             // Fetch the updated order with generated content
             const finalOrder = await this.prisma.order.findUnique({
@@ -469,7 +470,6 @@ export class ExpertService {
             return {
                 ...(finalOrder || updatedOrder),
                 generationResult: {
-                    pdfUrl: result.pdfUrl,
                     archetype: result.archetype,
                     stepsCreated: result.stepsCreated,
                 },
@@ -565,22 +565,48 @@ export class ExpertService {
         }
 
         if (dto.action === 'approve') {
-            const updatedOrder = await this.prisma.order.update({
-                where: { id: dto.orderId },
-                data: {
-                    status: 'COMPLETED',
-                    deliveredAt: new Date(),
-                    expertValidation: {
-                        action: 'approve',
-                        validatedBy: expert.id,
-                        validatedAt: new Date().toISOString(),
-                        notes: dto.validationNotes,
-                    },
-                },
-            });
+            this.logger.log(`📋 Approving order ${order.orderNumber} - generating PDF...`);
 
-            this.logger.log(`✅ Order ${order.orderNumber} approved by ${expert.name}`);
-            return updatedOrder;
+            // Generate PDF and finalize order using DigitalSoulService
+            try {
+                const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
+                const { VertexOracle } = await import('../../services/factory/VertexOracle');
+                const { PdfFactory } = await import('../../services/factory/PdfFactory');
+
+                const vertexOracle = new VertexOracle(this.configService, this.prisma);
+                const pdfFactory = new PdfFactory(this.configService);
+                await pdfFactory.onModuleInit();
+
+                const digitalSoulService = new DigitalSoulService(
+                    this.configService,
+                    this.prisma,
+                    vertexOracle,
+                    pdfFactory,
+                );
+
+                // Generate PDF and finalize
+                const result = await digitalSoulService.finalizeWithPdf(dto.orderId);
+
+                // Update with expert validation info
+                const updatedOrder = await this.prisma.order.update({
+                    where: { id: dto.orderId },
+                    data: {
+                        expertValidation: {
+                            action: 'approve',
+                            validatedBy: expert.id,
+                            validatedAt: new Date().toISOString(),
+                            notes: dto.validationNotes,
+                            pdfUrl: result.pdfUrl,
+                        },
+                    },
+                });
+
+                this.logger.log(`✅ Order ${order.orderNumber} approved and PDF delivered`);
+                return updatedOrder;
+            } catch (error) {
+                this.logger.error(`❌ Failed to finalize order ${order.orderNumber}: ${error}`);
+                throw new BadRequestException(`Échec de la génération PDF: ${error instanceof Error ? error.message : String(error)}`);
+            }
         } else {
             // Reject - increment revision count and reset status
             const updatedOrder = await this.prisma.order.update({

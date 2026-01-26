@@ -45,7 +45,7 @@ export function ContentGenerator({ selectedOrder, onProcess }: ContentGeneratorP
         setLoading(true);
         try {
             await onProcess(selectedOrder.id, expertPrompt, expertInstructions || undefined);
-            toast.success('Commande envoyée à n8n !');
+            toast.success('✨ Contenu généré ! En attente de validation.');
             setExpertPrompt('');
             setExpertInstructions('');
         } catch (error: unknown) {

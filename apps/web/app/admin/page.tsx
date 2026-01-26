@@ -145,7 +145,7 @@ export default function AdminDashboard() {
                     <GlassCard className="space-y-6 border-white/5">
                         <div className="space-y-3">
                             <div className="flex justify-between text-xs">
-                                <span className="text-slate-400">Génération IA (n8n)</span>
+                                <span className="text-slate-400">Génération IA (Vertex)</span>
                                 <span className="text-emerald-400 font-bold">ACTIF</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden">
