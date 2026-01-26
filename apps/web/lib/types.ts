@@ -34,10 +34,15 @@ export interface Order {
 
 export interface Client {
     id: string;
+    refId?: string | null;  // Business ID: LUM-C-YY-XXXX
     email: string;
     firstName: string;
     lastName: string;
     phone?: string | null;
+    status?: 'ACTIVE' | 'BANNED' | 'SUSPENDED';
+    notes?: string | null;
+    tags?: string[];
+    source?: string | null;
     createdAt: string;
     _count?: { orders: number };
 }

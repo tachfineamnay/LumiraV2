@@ -8,6 +8,7 @@ import { AdminSettingsService } from './admin-settings.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { PrismaService } from '../../prisma/prisma.service';
+import { IdGenerator } from '../../utils/IdGenerator';
 
 @Module({
     imports: [
@@ -38,7 +39,8 @@ import { PrismaService } from '../../prisma/prisma.service';
         ExpertAuthGuard,
         RolesGuard,
         PrismaService,
+        IdGenerator,
     ],
-    exports: [ExpertService],
+    exports: [ExpertService, IdGenerator],
 })
 export class ExpertModule { }

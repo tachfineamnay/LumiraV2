@@ -25,6 +25,8 @@ import {
     ProcessOrderDto,
     UpdateClientDto,
     PaginationDto,
+    CreateClientDto,
+    UpdateClientStatusDto,
 } from './dto';
 
 @Controller('expert')
@@ -153,6 +155,11 @@ export class ExpertController {
         return this.expertService.getClients(query);
     }
 
+    @Post('clients')
+    async createClient(@Body() dto: CreateClientDto) {
+        return this.expertService.createClient(dto);
+    }
+
     @Get('clients/:id')
     async getClientById(@Param('id') id: string) {
         return this.expertService.getClientById(id);
@@ -173,11 +180,23 @@ export class ExpertController {
         return this.expertService.updateClient(id, dto);
     }
 
+    @Patch('clients/:id/status')
+    async updateClientStatus(@Param('id') id: string, @Body() dto: UpdateClientStatusDto) {
+        return this.expertService.updateClientStatus(id, dto);
+    }
+
     @Delete('clients/:id')
     @Roles('ADMIN')
     @HttpCode(HttpStatus.NO_CONTENT)
     async deleteClient(@Param('id') id: string) {
         await this.expertService.deleteClient(id);
+    }
+
+    @Post('clients/assign-ref-ids')
+    @Roles('ADMIN')
+    async assignMissingRefIds() {
+        const count = await this.expertService.assignMissingRefIds();
+        return { message: `Assigned refId to ${count} clients`, count };
     }
 
     // ========================

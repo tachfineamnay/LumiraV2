@@ -3,13 +3,15 @@ import {
     NotFoundException,
     BadRequestException,
     UnauthorizedException,
+    ConflictException,
     Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { IdGenerator } from '../../utils/IdGenerator';
 import * as bcrypt from 'bcryptjs';
-import { Expert, Order, User, UserProfile, OrderFile } from '@prisma/client';
+import { Expert, Order, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
 
 type ExpertWithoutPassword = Omit<Expert, 'password'>;
 
@@ -20,6 +22,8 @@ import {
     ProcessOrderDto,
     UpdateClientDto,
     PaginationDto,
+    CreateClientDto,
+    UpdateClientStatusDto,
 } from './dto';
 
 interface ExpertEntity {
@@ -64,6 +68,7 @@ export class ExpertService {
         private prisma: PrismaService,
         private jwtService: JwtService,
         private configService: ConfigService,
+        private idGenerator: IdGenerator,
     ) { }
 
     // ========================
@@ -776,6 +781,7 @@ export class ExpertService {
                 { email: { contains: search, mode: 'insensitive' } },
                 { firstName: { contains: search, mode: 'insensitive' } },
                 { lastName: { contains: search, mode: 'insensitive' } },
+                { refId: { contains: search, mode: 'insensitive' } },
             ];
         }
 
@@ -947,6 +953,93 @@ export class ExpertService {
         });
 
         this.logger.log(`🗑️ Client ${clientId} and all related data deleted`);
+    }
+
+    /**
+     * Create a new client manually (CRM functionality)
+     */
+    async createClient(dto: CreateClientDto): Promise<User> {
+        // Check if email already exists
+        const existing = await this.prisma.user.findUnique({
+            where: { email: dto.email.toLowerCase() },
+        });
+
+        if (existing) {
+            throw new ConflictException('Un client avec cet email existe déjà');
+        }
+
+        // Generate business reference ID
+        const refId = await this.idGenerator.generateClientRefId();
+
+        const client = await this.prisma.user.create({
+            data: {
+                email: dto.email.toLowerCase(),
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                phone: dto.phone,
+                notes: dto.notes,
+                tags: dto.tags || [],
+                source: dto.source || 'manual',
+                refId,
+                status: 'ACTIVE',
+            },
+        });
+
+        this.logger.log(`👤 New client created: ${refId} - ${dto.firstName} ${dto.lastName}`);
+
+        return client;
+    }
+
+    /**
+     * Update client status (Ban/Unban/Suspend)
+     */
+    async updateClientStatus(clientId: string, dto: UpdateClientStatusDto): Promise<User> {
+        const client = await this.prisma.user.findUnique({
+            where: { id: clientId },
+        });
+
+        if (!client) {
+            throw new NotFoundException('Client non trouvé');
+        }
+
+        const previousStatus = client.status;
+
+        const updatedClient = await this.prisma.user.update({
+            where: { id: clientId },
+            data: {
+                status: dto.status as UserStatus,
+                notes: dto.reason
+                    ? `${client.notes ? client.notes + '\n\n' : ''}[${new Date().toISOString()}] Status changed from ${previousStatus} to ${dto.status}: ${dto.reason}`
+                    : client.notes,
+            },
+        });
+
+        this.logger.log(`🔒 Client ${client.refId || clientId} status changed: ${previousStatus} → ${dto.status}`);
+
+        return updatedClient;
+    }
+
+    /**
+     * Assign refId to existing clients without one (migration helper)
+     */
+    async assignMissingRefIds(): Promise<number> {
+        const clientsWithoutRefId = await this.prisma.user.findMany({
+            where: { refId: null },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        let count = 0;
+        for (const client of clientsWithoutRefId) {
+            const refId = await this.idGenerator.generateClientRefId();
+            await this.prisma.user.update({
+                where: { id: client.id },
+                data: { refId },
+            });
+            count++;
+        }
+
+        this.logger.log(`📝 Assigned refId to ${count} existing clients`);
+        return count;
     }
 
     // ========================
