@@ -2,12 +2,11 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { User, MapPin, Calendar, Mail, Phone, Save, Loader2, Edit3, X } from "lucide-react";
-import { useAuth } from "../../../../context/AuthContext";
+import { useSanctuaireAuth } from "../../../../context/SanctuaireAuthContext";
 import { GlassCard } from "../../../../components/ui/GlassCard";
-import { SmartPhotoUploader } from "../../../../components/onboarding/SmartPhotoUploader";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,55 +25,91 @@ const generalSchema = z.object({
 type GeneralFormData = z.infer<typeof generalSchema>;
 
 export default function GeneralSettingsPage() {
-    const { user, updateUser } = useAuth();
+    const { user, profile, refetchData, isLoading: authLoading } = useSanctuaireAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Initial photos state
+    // Photos state - from profile
     const [photos, setPhotos] = useState({
-        face: user?.profile?.facePhotoUrl || null,
-        palm: user?.profile?.palmPhotoUrl || null
+        face: profile?.facePhotoUrl || null,
+        palm: profile?.palmPhotoUrl || null
     });
 
     const {
         register,
         handleSubmit,
+        reset,
         formState: { errors }
     } = useForm<GeneralFormData>({
         resolver: zodResolver(generalSchema),
         defaultValues: {
-            firstName: user?.firstName || "",
-            lastName: user?.lastName || "",
-            phone: user?.phone || "",
-            birthDate: user?.profile?.birthDate?.split('T')[0] || "",
-            birthTime: user?.profile?.birthTime || "",
-            birthPlace: user?.profile?.birthPlace || "",
+            firstName: "",
+            lastName: "",
+            phone: "",
+            birthDate: "",
+            birthTime: "",
+            birthPlace: "",
         }
     });
+
+    // Update form when user/profile data loads
+    useEffect(() => {
+        if (user || profile) {
+            reset({
+                firstName: user?.firstName || "",
+                lastName: user?.lastName || "",
+                phone: user?.phone || "",
+                birthDate: profile?.birthDate?.split('T')[0] || "",
+                birthTime: profile?.birthTime || "",
+                birthPlace: profile?.birthPlace || "",
+            });
+            setPhotos({
+                face: profile?.facePhotoUrl || null,
+                palm: profile?.palmPhotoUrl || null
+            });
+        }
+    }, [user, profile, reset]);
 
     const onSubmit = async (data: GeneralFormData) => {
         setIsSaving(true);
         try {
-            // Simulator API update
-            // await axios.patch("/api/users/profile", { ...data, ...photos });
-            console.log("Saving:", data, photos);
-
-            // Mock update functionality until backend ready
-            if (updateUser) {
-                // updateUser({ ...user, ...data });
+            const token = localStorage.getItem("sanctuaire_token");
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+            
+            if (token) {
+                await axios.patch(
+                    `${API_URL}/api/users/profile`,
+                    {
+                        birthDate: data.birthDate,
+                        birthTime: data.birthTime || null,
+                        birthPlace: data.birthPlace || null,
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                
+                // Refetch data to update UI
+                await refetchData();
             }
 
             setIsEditing(false);
         } catch (error) {
-            console.error(error);
+            console.error("Failed to save profile:", error);
         } finally {
             setIsSaving(false);
         }
     };
 
+    if (authLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="w-8 h-8 text-horizon-400 animate-spin" />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            {/* HERDER */}
+            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-playfair italic text-white">Mon Dossier</h2>
