@@ -256,7 +256,31 @@ export function LiveDocument({
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto relative">
+                {/* Shimmer Loading Overlay */}
+                {isProcessing && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-10 bg-void/80 backdrop-blur-sm flex flex-col items-center justify-center"
+                    >
+                        <div className="w-full max-w-md px-8 space-y-4">
+                            {/* Shimmer skeleton lines */}
+                            <div className="space-y-3">
+                                <div className="h-6 bg-gradient-to-r from-gold/10 via-gold/30 to-gold/10 rounded animate-shimmer" />
+                                <div className="h-4 bg-gradient-to-r from-gold/10 via-gold/20 to-gold/10 rounded w-3/4 animate-shimmer animation-delay-100" />
+                                <div className="h-4 bg-gradient-to-r from-gold/10 via-gold/20 to-gold/10 rounded w-5/6 animate-shimmer animation-delay-200" />
+                                <div className="h-4 bg-gradient-to-r from-gold/10 via-gold/20 to-gold/10 rounded w-2/3 animate-shimmer animation-delay-300" />
+                            </div>
+                            <div className="flex items-center justify-center gap-3 pt-4">
+                                <Loader2 className="w-5 h-5 text-gold animate-spin" />
+                                <span className="text-gold/80 text-sm font-medium">L'Oracle affine le texte sacré...</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
                 {viewMode === 'preview' ? (
                     <div className="p-6 md:p-8 max-w-3xl mx-auto">
                         <article className="prose prose-invert prose-gold">
@@ -268,8 +292,9 @@ export function LiveDocument({
                         ref={editorRef}
                         value={content}
                         onChange={(e) => handleContentChange(e.target.value)}
+                        disabled={isProcessing}
                         className="w-full h-full p-6 md:p-8 bg-transparent text-divine/90 font-mono text-sm 
-                            leading-relaxed resize-none focus:outline-none"
+                            leading-relaxed resize-none focus:outline-none disabled:opacity-50"
                         placeholder="Commencez à écrire..."
                     />
                 )}

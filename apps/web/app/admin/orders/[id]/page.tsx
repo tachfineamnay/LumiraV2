@@ -94,7 +94,7 @@ export default function OrderStudioPage() {
     }, [fetchOrder]);
 
     // Handle AI request for content refinement
-    const handleAIRequest = async (prompt: string, currentContent: string): Promise<string> => {
+    const handleAIRequest = async (instruction: string, currentContent: string): Promise<string> => {
         const token = getToken();
 
         try {
@@ -105,7 +105,7 @@ export default function OrderStudioPage() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    prompt,
+                    instruction,
                     currentContent,
                 }),
             });
@@ -128,20 +128,19 @@ export default function OrderStudioPage() {
         }
     };
 
-    // Handle sealing/validating the order
-    const handleSeal = async (content: string) => {
+    // Handle sealing/validating the order - triggers PDF generation with current content
+    const handleSeal = async (finalContent: string) => {
         const token = getToken();
 
         try {
-            const res = await fetch(`${apiUrl}/api/expert/orders/${orderId}/validate`, {
+            const res = await fetch(`${apiUrl}/api/expert/orders/${orderId}/finalize`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    content,
-                    approval: 'APPROVED',
+                    finalContent,
                 }),
             });
 

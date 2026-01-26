@@ -28,6 +28,7 @@ import {
     CreateClientDto,
     UpdateClientStatusDto,
     RefineContentDto,
+    FinalizeOrderDto,
 } from './dto';
 
 @Controller('expert')
@@ -171,6 +172,20 @@ export class ExpertController {
         @CurrentExpert() expert: Expert,
     ) {
         return this.expertService.validateFromStudio(orderId, body.content, body.approval, expert);
+    }
+
+    /**
+     * Finalize an order from the Co-Creation Studio.
+     * Seals the content and triggers PDF generation (Gotenberg).
+     * Uses the current content from the Right Panel.
+     */
+    @Post('orders/:id/finalize')
+    async finalizeOrder(
+        @Param('id') orderId: string,
+        @Body() dto: FinalizeOrderDto,
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.finalizeFromStudio(orderId, dto.finalContent, expert);
     }
 
     // ========================

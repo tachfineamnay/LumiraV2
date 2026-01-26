@@ -789,26 +789,27 @@ export class ExpertService {
             throw new NotFoundException('Commande non trouvée');
         }
 
-        this.logger.log(`🎨 Refining content for order ${order.orderNumber} with prompt: "${dto.prompt}"`);
+        this.logger.log(`🎨 Refining content for order ${order.orderNumber} with instruction: "${dto.instruction}"`);
 
         try {
             // Import VertexOracle for AI refinement
             const { VertexOracle } = await import('../../services/factory/VertexOracle');
             const vertexOracle = new VertexOracle(this.configService, this.prisma);
 
-            // Build the refinement prompt
+            // Build the refinement prompt - matching spec exactly
             const systemPrompt = `Tu es Oracle Lumira, un guide spirituel expert en lectures karmiques et astrologiques.
-Tu dois affiner le contenu suivant selon les instructions de l'expert.
-IMPORTANT: Préserve le format Markdown, le ton mystique et la structure globale.
-Retourne UNIQUEMENT le contenu modifié, sans explications.`;
+Voici un texte sacré. Voici l'instruction de l'Expert : [Instruction].
+Réécris le texte en appliquant la modification.
+Garde le même format Markdown.
+IMPORTANT: Retourne UNIQUEMENT le contenu modifié, sans explications ni commentaires.`;
 
-            const userPrompt = `## Instructions de l'expert:
-${dto.prompt}
+            const userPrompt = `## Instruction de l'Expert:
+${dto.instruction}
 
-## Contenu actuel à modifier:
+## Texte sacré à modifier:
 ${dto.currentContent}
 
-## Contenu modifié:`;
+## Texte modifié:`
 
             const refinedContent = await vertexOracle.refineText(userPrompt, {
                 systemPrompt,
@@ -919,6 +920,103 @@ ${dto.currentContent}
         }
 
         return this.prisma.order.findUnique({ where: { id: orderId } }) as Promise<Order>;
+    }
+
+    /**
+     * Finalize an order from the Co-Creation Studio.
+     * Seals the content and triggers PDF generation using Gotenberg.
+     * Uses the current content from the Right Panel (not the initial draft).
+     */
+    async finalizeFromStudio(
+        orderId: string,
+        finalContent: string,
+        expert: ExpertEntity,
+    ): Promise<{ success: boolean; orderId: string; orderNumber: string; pdfUrl: string }> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { user: { include: { profile: true } } },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        this.logger.log(`🔏 Finalizing order ${order.orderNumber} from Studio...`);
+
+        try {
+            // 1. Save the final content to the order
+            const currentGenerated = order.generatedContent as Record<string, unknown> || {};
+            await this.prisma.order.update({
+                where: { id: orderId },
+                data: {
+                    generatedContent: {
+                        ...currentGenerated,
+                        lecture: finalContent,
+                        sealedAt: new Date().toISOString(),
+                        sealedBy: expert.id,
+                        source: 'studio',
+                    },
+                    status: 'AWAITING_VALIDATION',
+                },
+            });
+
+            // 2. Generate PDF using Gotenberg via DigitalSoulService
+            const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
+            const { VertexOracle } = await import('../../services/factory/VertexOracle');
+            const { PdfFactory } = await import('../../services/factory/PdfFactory');
+
+            const vertexOracle = new VertexOracle(this.configService, this.prisma);
+            const pdfFactory = new PdfFactory(this.configService);
+            await pdfFactory.onModuleInit();
+
+            const digitalSoulService = new DigitalSoulService(
+                this.configService,
+                this.prisma,
+                vertexOracle,
+                pdfFactory,
+            );
+
+            // Finalize with PDF generation
+            const result = await digitalSoulService.finalizeWithPdf(orderId);
+
+            // 3. Update order with validation info
+            await this.prisma.order.update({
+                where: { id: orderId },
+                data: {
+                    status: 'COMPLETED',
+                    deliveredAt: new Date(),
+                    expertValidation: {
+                        action: 'finalize',
+                        finalizedBy: expert.id,
+                        finalizedAt: new Date().toISOString(),
+                        pdfUrl: result.pdfUrl,
+                        source: 'studio',
+                    },
+                },
+            });
+
+            this.logger.log(`✅ Order ${order.orderNumber} finalized - PDF: ${result.pdfUrl}`);
+
+            return {
+                success: true,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                pdfUrl: result.pdfUrl,
+            };
+        } catch (error) {
+            this.logger.error(`❌ Failed to finalize order ${order.orderNumber}: ${error}`);
+            
+            // Update order status to FAILED
+            await this.prisma.order.update({
+                where: { id: orderId },
+                data: {
+                    status: 'FAILED',
+                    errorLog: `Finalization failed: ${error instanceof Error ? error.message : String(error)}`,
+                },
+            });
+
+            throw new BadRequestException(`Échec de la finalisation: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     async getClients(dto: PaginationDto): Promise<PaginatedResult<User>> {
