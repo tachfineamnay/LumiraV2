@@ -7,10 +7,17 @@
         "assets": [
             {
                 "include": "modules/notifications/templates/**/*.hbs",
+                "outDir": "dist",
                 "watchAssets": true
             },
             {
                 "include": "templates/**/*.hbs",
+                "outDir": "dist",
+                "watchAssets": true
+            },
+            {
+                "include": "templates/**/*.css",
+                "outDir": "dist",
                 "watchAssets": true
             }
         ]
