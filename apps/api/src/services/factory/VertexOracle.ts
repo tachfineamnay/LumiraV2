@@ -338,7 +338,13 @@ export class VertexOracle {
 
             if (credentialsSetting?.value) {
                 // Parse and use DB credentials
-                const credentials = JSON.parse(credentialsSetting.value);
+                let credentials: object;
+                try {
+                    credentials = JSON.parse(credentialsSetting.value);
+                } catch (parseError) {
+                    this.logger.error(`Failed to parse VERTEX_CREDENTIALS_JSON from DB: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+                    throw new Error('Invalid VERTEX_CREDENTIALS_JSON in database. Please check SystemSetting value.');
+                }
                 this.vertexAI = new VertexAI({
                     project: this.projectId,
                     location: this.location,
@@ -468,7 +474,16 @@ export class VertexOracle {
             throw new Error('[SCRIBE] Empty response from model');
         }
 
-        const parsed = JSON.parse(textContent);
+        // Clean potential markdown code blocks from response
+        const cleanedContent = textContent.replace(/```json|```/g, '').trim();
+        
+        let parsed: { pdf_content?: PdfContent; synthesis?: ReadingSynthesis };
+        try {
+            parsed = JSON.parse(cleanedContent);
+        } catch (parseError) {
+            this.logger.error(`[SCRIBE] JSON parse failed. Raw response (first 500 chars): ${cleanedContent.substring(0, 500)}`);
+            throw new Error(`[SCRIBE] Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}. Raw text logged.`);
+        }
         
         if (!parsed.pdf_content || !parsed.synthesis) {
             throw new Error('[SCRIBE] Incomplete response: missing pdf_content or synthesis');
@@ -519,7 +534,16 @@ export class VertexOracle {
             throw new Error('[GUIDE] Empty response from model');
         }
 
-        const parsed = JSON.parse(textContent);
+        // Clean potential markdown code blocks from response
+        const cleanedContent = textContent.replace(/```json|```/g, '').trim();
+        
+        let parsed: { timeline?: TimelineDay[] };
+        try {
+            parsed = JSON.parse(cleanedContent);
+        } catch (parseError) {
+            this.logger.error(`[GUIDE] JSON parse failed. Raw response (first 500 chars): ${cleanedContent.substring(0, 500)}`);
+            throw new Error(`[GUIDE] Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}. Raw text logged.`);
+        }
         
         if (!parsed.timeline || !Array.isArray(parsed.timeline)) {
             throw new Error('[GUIDE] Invalid response: missing timeline array');
