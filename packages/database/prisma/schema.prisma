@@ -109,6 +109,7 @@ model User {
   orders        Order[]
   spiritualPath SpiritualPath?
   chatSessions  ChatSession[]
+  akashicRecord AkashicRecord?
 
   @@index([email])
   @@index([refId])
@@ -376,4 +377,43 @@ model SystemSetting {
   value       String   @db.Text
   isEncrypted Boolean  @default(false)
   updatedAt   DateTime @updatedAt
+}
+
+// =============================================================================
+// AKASHIC RECORDS - User's Spiritual Memory & Context
+// =============================================================================
+
+model AkashicRecord {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Core spiritual identity
+  archetype String?              // Primary archetype (e.g., "Le Guérisseur", "Le Visionnaire")
+  
+  // Structured spiritual data
+  domains   Json     @default("{}") // { "relations": {...}, "mission": {...}, "sante": {...}, ... }
+  
+  // Conversation & interaction history summary
+  history   Json     @default("[]") // Array of { date, topic, insights, sentiment }
+  
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([archetype])
+}
+
+// =============================================================================
+// SEQUENCE COUNTERS - For Business ID Generation
+// =============================================================================
+
+model SequenceCounter {
+  id        String   @id @default(cuid())
+  name      String   @unique  // e.g., "client_2026", "order_20260127"
+  value     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
 }

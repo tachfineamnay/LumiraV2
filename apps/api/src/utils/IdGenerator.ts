@@ -8,8 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
  * - Client: LUM-C-YY-XXXX (e.g., LUM-C-26-0001)
  * - Order:  LUM-O-YYMMDD-XXX (e.g., LUM-O-260126-001)
  * 
- * The generator queries the database to find the last ID
- * and increments the sequence accordingly.
+ * Uses atomic SequenceCounter for concurrency safety.
  */
 @Injectable()
 export class IdGenerator {
@@ -25,37 +24,12 @@ export class IdGenerator {
     async generateClientRefId(): Promise<string> {
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2); // "26"
-        const prefix = `LUM-C-${year}-`;
-
-        // Find the highest existing refId for this year
-        const lastClient = await this.prisma.user.findFirst({
-            where: {
-                refId: {
-                    startsWith: prefix,
-                },
-            },
-            orderBy: {
-                refId: 'desc',
-            },
-            select: {
-                refId: true,
-            },
-        });
-
-        let nextSequence = 1;
-
-        if (lastClient?.refId) {
-            // Extract sequence number from LUM-C-26-0042 → 42
-            const parts = lastClient.refId.split('-');
-            const lastSequence = parseInt(parts[3], 10);
-            if (!isNaN(lastSequence)) {
-                nextSequence = lastSequence + 1;
-            }
-        }
-
-        const refId = `${prefix}${nextSequence.toString().padStart(4, '0')}`;
+        const counterName = `client_${year}`;
+        
+        const nextSequence = await this.incrementCounter(counterName);
+        const refId = `LUM-C-${year}-${nextSequence.toString().padStart(4, '0')}`;
+        
         this.logger.debug(`Generated client refId: ${refId}`);
-
         return refId;
     }
 
@@ -67,38 +41,64 @@ export class IdGenerator {
     async generateOrderNumber(): Promise<string> {
         const now = new Date();
         const dateStr = this.formatDate(now); // "260126"
-        const prefix = `LUM-O-${dateStr}-`;
+        const counterName = `order_${dateStr}`;
+        
+        const nextSequence = await this.incrementCounter(counterName);
+        const orderNumber = `LUM-O-${dateStr}-${nextSequence.toString().padStart(3, '0')}`;
+        
+        this.logger.debug(`Generated orderNumber: ${orderNumber}`);
+        return orderNumber;
+    }
 
-        // Find the highest existing orderNumber for today
-        const lastOrder = await this.prisma.order.findFirst({
-            where: {
-                orderNumber: {
-                    startsWith: prefix,
-                },
-            },
-            orderBy: {
-                orderNumber: 'desc',
-            },
-            select: {
-                orderNumber: true,
-            },
+    /**
+     * Atomic counter increment using Prisma transaction
+     * Handles race conditions by using database-level atomicity
+     */
+    private async incrementCounter(name: string): Promise<number> {
+        const result = await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.sequenceCounter.findUnique({
+                where: { name },
+            });
+
+            if (existing) {
+                const updated = await tx.sequenceCounter.update({
+                    where: { name },
+                    data: { value: { increment: 1 } },
+                });
+                return updated.value;
+            } else {
+                const created = await tx.sequenceCounter.create({
+                    data: { name, value: 1 },
+                });
+                return created.value;
+            }
         });
 
-        let nextSequence = 1;
+        return result;
+    }
 
-        if (lastOrder?.orderNumber) {
-            // Extract sequence number from LUM-O-260126-003 → 3
-            const parts = lastOrder.orderNumber.split('-');
-            const lastSequence = parseInt(parts[3], 10);
-            if (!isNaN(lastSequence)) {
-                nextSequence = lastSequence + 1;
-            }
-        }
+    /**
+     * Get current counter value without incrementing
+     */
+    async getCurrentCounterValue(counterName: string): Promise<number> {
+        const counter = await this.prisma.sequenceCounter.findUnique({
+            where: { name: counterName },
+        });
+        return counter?.value ?? 0;
+    }
 
-        const orderNumber = `${prefix}${nextSequence.toString().padStart(3, '0')}`;
-        this.logger.debug(`Generated orderNumber: ${orderNumber}`);
-
-        return orderNumber;
+    /**
+     * List all sequence counters (for admin monitoring)
+     */
+    async listCounters(): Promise<{ name: string; value: number; updatedAt: Date }[]> {
+        const counters = await this.prisma.sequenceCounter.findMany({
+            orderBy: { name: 'asc' },
+        });
+        return counters.map(c => ({
+            name: c.name,
+            value: c.value,
+            updatedAt: c.updatedAt,
+        }));
     }
 
     /**
