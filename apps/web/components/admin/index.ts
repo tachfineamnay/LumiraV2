@@ -5,3 +5,4 @@ export { ContentGenerator } from './ContentGenerator';
 export { ContentValidator } from './ContentValidator';
 export { ClientsList } from './ClientsList';
 export { ClientStats } from './ClientStats';
+export { default as MissionControl } from './MissionControl';
