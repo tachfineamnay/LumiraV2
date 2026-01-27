@@ -81,6 +81,21 @@ function AdminLayoutInner({
     const stats = useQuickStats();
     const [showSearch, setShowSearch] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    
+    // Keyboard shortcut for search - MUST be before any conditional returns
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setShowSearch(true);
+            }
+            if (e.key === 'Escape') {
+                setShowSearch(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // Don't apply layout to login page
     if (pathname === "/admin/login") {
@@ -157,21 +172,6 @@ function AdminLayoutInner({
             setSearchQuery('');
         }
     };
-
-    // Keyboard shortcut for search
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-                e.preventDefault();
-                setShowSearch(true);
-            }
-            if (e.key === 'Escape') {
-                setShowSearch(false);
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
 
     return (
         <div className="flex min-h-screen bg-[#0a0d14] text-slate-50 selection:bg-amber-400/20 font-sans">
@@ -299,7 +299,7 @@ function AdminLayoutInner({
                 <nav className="flex-1 px-4 space-y-1">
                     <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider px-4 py-2">Navigation</p>
                     {menuItems.map((item) => {
-                        const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
+                        const isActive = pathname && (pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href)));
                         return (
                             <Link
                                 key={item.href}
@@ -372,7 +372,7 @@ function AdminLayoutInner({
                         <span className="text-xs text-slate-600">Expert Desk</span>
                         <ChevronRight className="w-3 h-3 text-slate-700" />
                         <span className="text-sm font-medium text-slate-300">
-                            {menuItems.find(i => pathname === i.href || (i.href !== "/admin" && pathname?.startsWith(i.href)))?.name || "Dashboard"}
+                            {pathname && menuItems.find(i => pathname === i.href || (i.href !== "/admin" && pathname.startsWith(i.href)))?.name || "Dashboard"}
                         </span>
                     </div>
 
