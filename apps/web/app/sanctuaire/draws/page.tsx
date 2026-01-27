@@ -23,7 +23,6 @@ import {
     Headphones
 } from 'lucide-react';
 import { useSanctuaire } from '../../../context/SanctuaireContext';
-import { useAuth } from '../../../context/AuthContext';
 import { ReadingViewerModal } from '../../../components/sanctuary/ReadingViewerModal';
 
 // =============================================================================
@@ -212,7 +211,6 @@ function DrawCard({ draw }: { draw: DrawType }) {
 // =============================================================================
 
 export default function DrawsPage() {
-    const { token } = useAuth();
     const { highestLevel, isLoading: contextLoading } = useSanctuaire();
     const [readings, setReadings] = useState<Reading[]>([]);
     const [pendingReadings, setPendingReadings] = useState<Reading[]>([]);
@@ -224,7 +222,11 @@ export default function DrawsPage() {
 
     // Fetch user's readings
     const fetchReadings = useCallback(async () => {
-        if (!token) return;
+        const token = localStorage.getItem('sanctuaire_token');
+        if (!token) {
+            setLoading(false);
+            return;
+        }
 
         try {
             setLoading(true);
@@ -242,7 +244,7 @@ export default function DrawsPage() {
         } finally {
             setLoading(false);
         }
-    }, [apiUrl, token]);
+    }, [apiUrl]);
 
     useEffect(() => {
         fetchReadings();

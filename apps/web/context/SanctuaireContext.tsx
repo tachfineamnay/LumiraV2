@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { useAuth } from './AuthContext';
+import { useSanctuaireAuth } from './SanctuaireAuthContext';
 
 // =============================================================================
 // TYPES
@@ -75,12 +75,13 @@ const SanctuaireContext = createContext<SanctuaireContextType>(defaultContext);
 // =============================================================================
 
 export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { token, user } = useAuth();
+    const { user, isAuthenticated } = useSanctuaireAuth();
     const [data, setData] = useState<EntitlementsData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const fetchEntitlements = useCallback(async () => {
+        const token = localStorage.getItem('sanctuaire_token');
         if (!token || !user) {
             setData(null);
             setIsLoading(false);
@@ -92,7 +93,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             setError(null);
 
             const response = await axios.get<EntitlementsData>(
-                `${process.env.NEXT_PUBLIC_API_URL}/users/entitlements`,
+                `${process.env.NEXT_PUBLIC_API_URL}/api/users/entitlements`,
                 {
                     headers: { Authorization: `Bearer ${token}` },
                 }
@@ -113,7 +114,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         } finally {
             setIsLoading(false);
         }
-    }, [token, user]);
+    }, [user]);
 
     // Fetch entitlements when auth state changes
     useEffect(() => {
