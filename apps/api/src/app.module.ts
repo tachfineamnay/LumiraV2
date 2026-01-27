@@ -17,6 +17,7 @@ import { ExpertModule } from "./modules/expert/expert.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { InsightsModule } from "./modules/insights/insights.module";
 import { ClientModule } from "./modules/client/client.module";
+import { ServicesModule } from "./services/services.module";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ClientModule } from "./modules/client/client.module";
       limit: 10,
     }]),
     PrismaModule,
+    ServicesModule,
     UsersModule,
     AuthModule,
     OrdersModule,

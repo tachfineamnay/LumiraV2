@@ -11,6 +11,9 @@ export type {
     ReadingSynthesis,
     TimelineDay,
     OracleResponse,
+    ChatContext,
+    ChatMessage,
+    AkashicDomains,
 } from './VertexOracle';
 
 // PdfFactory - Handlebars + Gotenberg PDF generation
@@ -20,6 +23,13 @@ export type {
     PdfOptions,
     ReadingPdfData,
 } from './PdfFactory';
+
+// ContextDispatcher - Context-aware request orchestration
+export { ContextDispatcher } from './ContextDispatcher';
+export type {
+    DispatchResult,
+    FinalizeResult,
+} from './ContextDispatcher';
 
 // DigitalSoul - Spiritual journey agent (skeleton)
 export { DigitalSoul } from './DigitalSoul';
