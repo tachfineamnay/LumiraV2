@@ -78,15 +78,17 @@ export class ClientController {
 
     /**
      * GET /api/client/readings
-     * Returns all completed readings for the user
+     * Returns all readings for the user (completed + in progress)
      */
     @Get('readings')
     @Throttle({ default: { limit: 30, ttl: 60000 } })
     async getReadings(@Request() req: { user: { userId: string } }) {
-        const readings = await this.clientService.getCompletedReadings(req.user.userId);
+        const result = await this.clientService.getCompletedReadings(req.user.userId);
         return {
-            readings,
-            total: readings.length,
+            readings: result.readings,
+            pending: result.pending,
+            totalCompleted: result.readings.length,
+            totalPending: result.pending.length,
         };
     }
 

@@ -149,10 +149,12 @@ export class ClientService {
     }
 
     /**
-     * Get all completed readings for a user (for the sanctuary)
+     * Get all readings for a user (for the sanctuary)
+     * Includes both completed and in-progress readings
      */
     async getCompletedReadings(userId: string) {
-        const orders = await this.prisma.order.findMany({
+        // Get completed readings
+        const completedOrders = await this.prisma.order.findMany({
             where: {
                 userId,
                 status: 'COMPLETED',
@@ -162,18 +164,39 @@ export class ClientService {
                 id: true,
                 orderNumber: true,
                 level: true,
+                status: true,
                 generatedContent: true,
                 deliveredAt: true,
                 createdAt: true,
             },
         });
 
-        return orders.map(order => {
+        // Get in-progress readings (PENDING, PROCESSING, AWAITING_VALIDATION)
+        const pendingOrders = await this.prisma.order.findMany({
+            where: {
+                userId,
+                status: { in: ['PENDING', 'PROCESSING', 'AWAITING_VALIDATION', 'PAID'] },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                orderNumber: true,
+                level: true,
+                status: true,
+                generatedContent: true,
+                deliveredAt: true,
+                createdAt: true,
+            },
+        });
+
+        // Map completed readings
+        const completedReadings = completedOrders.map(order => {
             const content = order.generatedContent as Record<string, unknown> | null;
             return {
                 id: order.id,
                 orderNumber: order.orderNumber,
                 level: order.level,
+                status: 'COMPLETED' as const,
                 deliveredAt: order.deliveredAt,
                 createdAt: order.createdAt,
                 archetype: (content?.archetype as string) || null,
@@ -188,6 +211,30 @@ export class ClientService {
                 },
             };
         });
+
+        // Map in-progress readings
+        const inProgressReadings = pendingOrders.map(order => ({
+            id: order.id,
+            orderNumber: order.orderNumber,
+            level: order.level,
+            status: order.status as 'PENDING' | 'PROCESSING' | 'AWAITING_VALIDATION' | 'PAID',
+            deliveredAt: null,
+            createdAt: order.createdAt,
+            archetype: null,
+            title: `Lecture d'Âme #${order.orderNumber}`,
+            intention: null,
+            keywords: [],
+            assets: {
+                pdf: null,
+                audio: null,
+            },
+            inProgress: true,
+        }));
+
+        return {
+            readings: completedReadings,
+            pending: inProgressReadings,
+        };
     }
 
     /**

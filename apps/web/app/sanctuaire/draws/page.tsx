@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
     FileText,
@@ -34,12 +34,14 @@ interface Reading {
     id: string;
     orderNumber: string;
     level: number;
+    status?: 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'AWAITING_VALIDATION' | 'PAID';
     deliveredAt: string | null;
     createdAt: string;
     archetype: string | null;
     title: string;
     intention?: string;
     keywords?: string[];
+    inProgress?: boolean;
     assets: {
         pdf?: string;
         audio?: string;
@@ -213,6 +215,7 @@ export default function DrawsPage() {
     const { token } = useAuth();
     const { highestLevel, isLoading: contextLoading } = useSanctuaire();
     const [readings, setReadings] = useState<Reading[]>([]);
+    const [pendingReadings, setPendingReadings] = useState<Reading[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewerOpen, setViewerOpen] = useState(false);
     const [selectedPdf, setSelectedPdf] = useState<{ url: string; title: string } | null>(null);
@@ -232,6 +235,7 @@ export default function DrawsPage() {
             if (res.ok) {
                 const data = await res.json();
                 setReadings(data.readings || []);
+                setPendingReadings(data.pending || []);
             }
         } catch (error) {
             console.error('Failed to fetch readings:', error);
@@ -254,9 +258,25 @@ export default function DrawsPage() {
         setSelectedPdf(null);
     };
 
-    // Get the latest reading
+    // Get the latest reading (completed or pending)
     const latestReading = readings[0];
+    const latestPending = pendingReadings[0];
     const currentMonth = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+    // Helper function to get status display
+    const getStatusDisplay = (status: string) => {
+        switch (status) {
+            case 'PENDING':
+            case 'PAID':
+                return { label: 'En attente de traitement', color: 'text-amber-400', bgColor: 'bg-amber-400/20' };
+            case 'PROCESSING':
+                return { label: 'Génération en cours', color: 'text-blue-400', bgColor: 'bg-blue-400/20' };
+            case 'AWAITING_VALIDATION':
+                return { label: 'Validation en cours', color: 'text-purple-400', bgColor: 'bg-purple-400/20' };
+            default:
+                return { label: 'En préparation', color: 'text-stellar-400', bgColor: 'bg-stellar-400/20' };
+        }
+    };
 
     if (contextLoading || loading) {
         return (
@@ -296,14 +316,86 @@ export default function DrawsPage() {
                             Accédez à vos lectures et tirages personnalisés
                         </p>
                     </div>
-                    <Link href="/commande">
-                        <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-horizon-400 text-abyss-900 font-semibold text-sm hover:bg-horizon-300 transition-colors">
-                            <Plus className="w-4 h-4" />
-                            Nouvelle Lecture
-                        </button>
-                    </Link>
+                    {!latestPending && (
+                        <Link href="/commande">
+                            <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-horizon-400 text-abyss-900 font-semibold text-sm hover:bg-horizon-300 transition-colors">
+                                <Plus className="w-4 h-4" />
+                                Nouvelle Lecture
+                            </button>
+                        </Link>
+                    )}
                 </div>
             </motion.div>
+
+            {/* LECTURE EN COURS - In Progress Reading Section */}
+            {latestPending && (
+                <motion.section
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 }}
+                    className="mb-10"
+                >
+                    <h2 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Lecture en cours de préparation
+                    </h2>
+
+                    <div className="p-6 rounded-2xl bg-gradient-to-r from-amber-500/10 to-purple-500/10 border border-amber-500/20 backdrop-blur-sm">
+                        {/* Status Badge */}
+                        <div className="flex items-start justify-between gap-4 mb-6">
+                            <div>
+                                <h3 className="text-xl font-semibold text-white mb-2">
+                                    Votre lecture est en cours de création
+                                </h3>
+                                <div className="flex items-center gap-3 text-sm">
+                                    <span className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${getStatusDisplay(latestPending.status || 'PENDING').bgColor} ${getStatusDisplay(latestPending.status || 'PENDING').color}`}>
+                                        <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                                        {getStatusDisplay(latestPending.status || 'PENDING').label}
+                                    </span>
+                                    <span className="px-2 py-1 rounded-full bg-white/10 text-stellar-400 text-xs font-mono">
+                                        #{latestPending.orderNumber}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center">
+                                <Sparkles className="w-8 h-8 text-amber-400 animate-pulse" />
+                            </div>
+                        </div>
+
+                        {/* Progress Steps */}
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                            <div className={`p-4 rounded-xl ${latestPending.status === 'PENDING' || latestPending.status === 'PAID' ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-white/5 border border-white/10'}`}>
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${latestPending.status === 'PENDING' || latestPending.status === 'PAID' ? 'bg-amber-400 text-abyss-900' : 'bg-emerald-400 text-abyss-900'}`}>
+                                    {latestPending.status === 'PENDING' || latestPending.status === 'PAID' ? '1' : '✓'}
+                                </div>
+                                <p className="text-sm font-medium text-white">Paiement reçu</p>
+                                <p className="text-xs text-stellar-500">Commande confirmée</p>
+                            </div>
+                            <div className={`p-4 rounded-xl ${latestPending.status === 'PROCESSING' ? 'bg-blue-500/20 border border-blue-500/30' : latestPending.status === 'AWAITING_VALIDATION' ? 'bg-white/5 border border-white/10' : 'bg-white/5 border border-white/10 opacity-50'}`}>
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${latestPending.status === 'PROCESSING' ? 'bg-blue-400 text-abyss-900' : latestPending.status === 'AWAITING_VALIDATION' ? 'bg-emerald-400 text-abyss-900' : 'bg-white/20 text-stellar-400'}`}>
+                                    {latestPending.status === 'PROCESSING' ? <Loader2 className="w-4 h-4 animate-spin" /> : latestPending.status === 'AWAITING_VALIDATION' ? '✓' : '2'}
+                                </div>
+                                <p className="text-sm font-medium text-white">Génération IA</p>
+                                <p className="text-xs text-stellar-500">Analyse en profondeur</p>
+                            </div>
+                            <div className={`p-4 rounded-xl ${latestPending.status === 'AWAITING_VALIDATION' ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-white/5 border border-white/10 opacity-50'}`}>
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${latestPending.status === 'AWAITING_VALIDATION' ? 'bg-purple-400 text-abyss-900' : 'bg-white/20 text-stellar-400'}`}>
+                                    {latestPending.status === 'AWAITING_VALIDATION' ? <Loader2 className="w-4 h-4 animate-spin" /> : '3'}
+                                </div>
+                                <p className="text-sm font-medium text-white">Validation Expert</p>
+                                <p className="text-xs text-stellar-500">Relecture humaine</p>
+                            </div>
+                        </div>
+
+                        {/* Info */}
+                        <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                            <p className="text-sm text-stellar-300">
+                                <span className="font-semibold text-white">Délai estimé :</span> Votre lecture sera disponible sous 24-48h. Nous vous enverrons un email dès qu'elle sera prête.
+                            </p>
+                        </div>
+                    </div>
+                </motion.section>
+            )}
 
             {/* MA LECTURE - Main Reading Section */}
             <motion.section
