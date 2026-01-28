@@ -164,12 +164,12 @@ function PipelineCard({
                     animate={{ opacity: 1, height: 'auto' }}
                     className="mt-3 pt-3 border-t border-white/5 flex gap-2"
                 >
-                    {order.status === 'PENDING' && (
+                    {(order.status === 'PENDING' || order.status === 'PROCESSING') && (
                         <button
-                            onClick={(e) => { e.stopPropagation(); onAction('generate', order); }}
+                            onClick={(e) => { e.stopPropagation(); handleOpenStudio(); }}
                             className="flex-1 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-[10px] font-bold hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-1"
                         >
-                            <Play className="w-3 h-3" /> Générer
+                            <Play className="w-3 h-3" /> Studio IA
                         </button>
                     )}
                     {order.status === 'AWAITING_VALIDATION' && (
@@ -177,7 +177,7 @@ function PipelineCard({
                             onClick={(e) => { e.stopPropagation(); handleOpenStudio(); }}
                             className="flex-1 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 text-[10px] font-bold hover:bg-purple-500/30 transition-colors flex items-center justify-center gap-1"
                         >
-                            <Sparkles className="w-3 h-3" /> Studio
+                            <Sparkles className="w-3 h-3" /> Valider
                         </button>
                     )}
                     {order.status === 'COMPLETED' && (
@@ -404,13 +404,13 @@ function OrderDetailPanel({
 
             {/* Actions */}
             <div className="space-y-2">
-                {order.status === 'PENDING' && (
+                {(order.status === 'PENDING' || order.status === 'PROCESSING') && (
                     <button
-                        onClick={() => onAction('generate', order)}
+                        onClick={() => router.push(`/admin/orders/${order.id}`)}
                         className="w-full py-3 rounded-xl bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
                     >
                         <Play className="w-4 h-4" />
-                        Lancer la génération
+                        Ouvrir le Studio IA
                     </button>
                 )}
                 {order.status === 'AWAITING_VALIDATION' && (
@@ -419,7 +419,7 @@ function OrderDetailPanel({
                         className="w-full py-3 rounded-xl bg-purple-500 text-white text-sm font-bold hover:bg-purple-600 transition-colors flex items-center justify-center gap-2"
                     >
                         <Sparkles className="w-4 h-4" />
-                        Ouvrir le Studio
+                        Valider la lecture
                     </button>
                 )}
                 {order.status === 'COMPLETED' && (

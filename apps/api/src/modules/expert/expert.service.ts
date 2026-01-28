@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IdGenerator } from '../../utils/IdGenerator';
+import { NotificationsService } from '../notifications/notifications.service';
 import * as bcrypt from 'bcryptjs';
 import { Expert, Order, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
 
@@ -70,6 +71,7 @@ export class ExpertService {
         private jwtService: JwtService,
         private configService: ConfigService,
         private idGenerator: IdGenerator,
+        private notificationsService: NotificationsService,
     ) { }
 
     // ========================
@@ -994,6 +996,15 @@ ${dto.currentContent}
                     },
                 },
             });
+
+            // 4. Send email notification to the client
+            try {
+                await this.notificationsService.sendContentReady(order, order.user);
+                this.logger.log(`📧 Email notification sent to ${order.user.email}`);
+            } catch (emailError) {
+                // Log but don't fail the finalization if email fails
+                this.logger.warn(`⚠️ Failed to send email notification: ${emailError}`);
+            }
 
             this.logger.log(`✅ Order ${order.orderNumber} finalized - PDF: ${result.pdfUrl}`);
 

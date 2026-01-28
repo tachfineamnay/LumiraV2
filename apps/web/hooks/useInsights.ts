@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import api from '../lib/api';
+import sanctuaireApi from '../lib/sanctuaireApi';
 
 // Types matching backend response
 export interface InsightMetadata {
@@ -65,7 +65,7 @@ export function useInsights(): UseInsightsReturn {
             setIsLoading(true);
             setError(null);
 
-            const response = await api.get<InsightsResponse>('/insights');
+            const response = await sanctuaireApi.get<InsightsResponse>('/insights');
             setCategories(response.data.categories);
             setMetadata(response.data.metadata);
         } catch (err) {
@@ -78,7 +78,7 @@ export function useInsights(): UseInsightsReturn {
 
     const markAsViewed = useCallback(async (category: InsightCategory) => {
         try {
-            await api.patch(`/insights/${category}/view`);
+            await sanctuaireApi.patch(`/insights/${category}/view`);
 
             // Update local state to remove "new" badge
             setCategories((prev) =>

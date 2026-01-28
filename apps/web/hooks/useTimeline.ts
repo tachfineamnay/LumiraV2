@@ -58,7 +58,22 @@ export function useTimeline(options: UseTimelineOptions = {}) {
             }
 
             const data = await res.json();
-            setSpiritualPath(data);
+            
+            // Handle backend response structure
+            if (data.exists === false) {
+                setSpiritualPath(null);
+                return;
+            }
+            
+            // Set the spiritual path data (exists: true is stripped)
+            setSpiritualPath({
+                id: data.id,
+                archetype: data.archetype,
+                synthesis: data.synthesis,
+                keyBlockage: data.keyBlockage,
+                startedAt: data.startedAt,
+                steps: data.steps || [],
+            });
         } catch (err) {
             const error = err instanceof Error ? err : new Error('Unknown error');
             setError(error);
@@ -76,7 +91,7 @@ export function useTimeline(options: UseTimelineOptions = {}) {
         }
 
         try {
-            const res = await fetch(`${apiUrl}/api/client/timeline/steps/${stepId}/complete`, {
+            const res = await fetch(`${apiUrl}/api/client/spiritual-path/steps/${stepId}/complete`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${token}`,
