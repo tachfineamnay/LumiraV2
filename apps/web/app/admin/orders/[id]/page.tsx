@@ -47,6 +47,45 @@ interface UserProfile {
     rituals?: string;
 }
 
+// OracleResponse types (matching backend VertexOracle.ts)
+interface PdfSection {
+    domain: string;
+    title: string;
+    content: string;
+}
+
+interface PdfContent {
+    introduction: string;
+    archetype_reveal: string;
+    sections: PdfSection[];
+    karmic_insights?: string[];
+    life_mission?: string;
+    rituals?: Array<{ name: string; description: string; frequency: string }>;
+    conclusion: string;
+}
+
+interface ReadingSynthesis {
+    archetype: string;
+    keywords?: string[];
+    emotional_state?: string;
+    key_blockage?: string;
+}
+
+interface TimelineDay {
+    day: number;
+    title: string;
+    action: string;
+    mantra?: string;
+    actionType?: string;
+}
+
+interface OracleResponse {
+    pdf_content: PdfContent;
+    synthesis: ReadingSynthesis;
+    timeline: TimelineDay[];
+    lecture?: string; // Legacy field for manual edits
+}
+
 interface OrderDetail {
     id: string;
     orderNumber: string;
@@ -57,15 +96,7 @@ interface OrderDetail {
     status: string;
     createdAt: string;
     pdfUrl?: string;
-    generatedContent?: {
-        lecture?: string;
-        synthesis?: {
-            archetype?: string;
-            keywords?: string[];
-            emotional_state?: string;
-            key_blockage?: string;
-        };
-    };
+    generatedContent?: OracleResponse;
     user?: {
         id?: string;
         refId?: string;
@@ -73,6 +104,60 @@ interface OrderDetail {
         lastName?: string;
         profile?: UserProfile;
     };
+}
+
+// Helper: Convert OracleResponse to readable text for editing/display
+function oracleResponseToText(content: OracleResponse | undefined): string {
+    if (!content) return '';
+    
+    // If there's a legacy lecture field (from manual edits), use it
+    if (content.lecture) return content.lecture;
+    
+    // Otherwise, build from pdf_content
+    if (!content.pdf_content) return '';
+    
+    const pc = content.pdf_content;
+    const parts: string[] = [];
+    
+    // Archetype reveal
+    if (pc.archetype_reveal) {
+        parts.push(`## Ton Archétype\n\n${pc.archetype_reveal}`);
+    }
+    
+    // Introduction
+    if (pc.introduction) {
+        parts.push(`## Introduction\n\n${pc.introduction}`);
+    }
+    
+    // Sections (domains)
+    if (pc.sections && pc.sections.length > 0) {
+        for (const section of pc.sections) {
+            parts.push(`## ${section.title}\n\n${section.content}`);
+        }
+    }
+    
+    // Karmic insights
+    if (pc.karmic_insights && pc.karmic_insights.length > 0) {
+        parts.push(`## Insights Karmiques\n\n${pc.karmic_insights.map(k => `- ${k}`).join('\n')}`);
+    }
+    
+    // Life mission
+    if (pc.life_mission) {
+        parts.push(`## Ta Mission de Vie\n\n${pc.life_mission}`);
+    }
+    
+    // Rituals
+    if (pc.rituals && pc.rituals.length > 0) {
+        const ritualText = pc.rituals.map(r => `### ${r.name}\n${r.description}\n*${r.frequency}*`).join('\n\n');
+        parts.push(`## Rituels Suggérés\n\n${ritualText}`);
+    }
+    
+    // Conclusion
+    if (pc.conclusion) {
+        parts.push(`## Conclusion\n\n${pc.conclusion}`);
+    }
+    
+    return parts.join('\n\n---\n\n');
 }
 
 export default function OrderStudioPage() {
@@ -112,7 +197,8 @@ export default function OrderStudioPage() {
 
             const data = await res.json();
             setOrder(data);
-            setEditedContent(data.generatedContent?.lecture || '');
+            // Extract content using helper function (handles both OracleResponse and legacy lecture)
+            setEditedContent(oracleResponseToText(data.generatedContent as OracleResponse));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erreur de chargement');
             toast.error('Impossible de charger la commande');
