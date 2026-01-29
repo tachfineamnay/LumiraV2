@@ -269,6 +269,16 @@ export class ExpertController {
         return this.adminSettingsService.getConfigStatus();
     }
 
+    @Get('settings/vertex-credentials')
+    async getVertexCredentials() {
+        return this.adminSettingsService.getVertexCredentialsForDisplay();
+    }
+
+    @Post('settings/vertex-test')
+    async testVertexConnection() {
+        return this.adminSettingsService.testVertexConnection();
+    }
+
     @Put('settings/vertex-key')
     async setVertexKey(@Body('credentials') credentials: string) {
         return this.adminSettingsService.setVertexCredentials(credentials);
