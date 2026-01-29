@@ -14,6 +14,7 @@ interface StudioLayoutProps {
     initialContent: string;
     onSeal: (content: string) => Promise<void>;
     onAIRequest: (prompt: string, currentContent: string) => Promise<string>;
+    onClose?: () => void;
 }
 
 export function StudioLayout({
@@ -24,6 +25,7 @@ export function StudioLayout({
     initialContent,
     onSeal,
     onAIRequest,
+    onClose,
 }: StudioLayoutProps) {
     const [activeTab, setActiveTab] = useState<'chat' | 'document'>('document');
     const [splitPosition, setSplitPosition] = useState(40); // percentage
