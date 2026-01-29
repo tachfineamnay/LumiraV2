@@ -12,7 +12,7 @@ import {
     HttpCode,
     HttpStatus,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
@@ -58,6 +58,7 @@ export class ExpertController {
     }
 
     @Get('verify')
+    @SkipThrottle()
     async verify(@CurrentExpert() expert: Expert) {
         return { valid: true, expert: { id: expert.id, email: expert.email, role: expert.role } };
     }
@@ -79,26 +80,31 @@ export class ExpertController {
     // ========================
 
     @Get('orders')
+    @SkipThrottle()
     async getOrders(@Query() query: PaginationDto) {
         return this.expertService.getPendingOrders(query);
     }
 
     @Get('orders/pending')
+    @SkipThrottle()
     async getPendingOrders(@Query() query: PaginationDto) {
         return this.expertService.getPendingOrders(query);
     }
 
     @Get('orders/processing')
+    @SkipThrottle()
     async getProcessingOrders(@Query() query: PaginationDto) {
         return this.expertService.getProcessingOrders(query);
     }
 
     @Get('orders/validation')
+    @SkipThrottle()
     async getValidationQueue(@Query() query: PaginationDto) {
         return this.expertService.getValidationQueue(query);
     }
 
     @Get('orders/history')
+    @SkipThrottle()
     async getOrderHistory(@Query() query: PaginationDto) {
         return this.expertService.getOrderHistory(query);
     }
@@ -256,6 +262,7 @@ export class ExpertController {
     // ========================
 
     @Get('stats')
+    @SkipThrottle()
     async getStats() {
         return this.expertService.getStats();
     }

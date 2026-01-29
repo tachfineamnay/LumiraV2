@@ -25,10 +25,10 @@ import { ServicesModule } from "./services/services.module";
       isGlobal: true,
       envFilePath: ["../../.env", ".env"]
     }),
-    // Rate limiting - default 10 requests per 60 seconds
+    // Rate limiting - 100 requests per 60 seconds (more permissive for polling)
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 10,
+      limit: 100,
     }]),
     PrismaModule,
     ServicesModule,
