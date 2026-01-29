@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const VERTEX_CREDENTIALS_KEY = 'VERTEX_CREDENTIALS_JSON';
 
@@ -22,7 +23,10 @@ export interface VertexConfigStatus {
 export class AdminSettingsService {
     private readonly logger = new Logger(AdminSettingsService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly configService: ConfigService,
+    ) { }
 
     /**
      * Save Vertex AI credentials to the database.
@@ -127,39 +131,22 @@ export class AdminSettingsService {
     }
 
     /**
-     * Test the Vertex AI connection with the stored credentials.
-     * Actually tries to initialize VertexAI to verify permissions.
+     * Test the Gemini API connection with the API key.
+     * Actually tries to call the model to verify access.
      */
     async testVertexConnection(): Promise<VertexTestResult> {
-        const setting = await this.prisma.systemSetting.findUnique({
-            where: { key: VERTEX_CREDENTIALS_KEY },
-        });
+        const apiKey = this.configService.get<string>('GEMINI_API_KEY');
 
-        if (!setting?.value) {
-            return { success: false, error: 'Aucun identifiant configuré' };
+        if (!apiKey) {
+            return { success: false, error: 'GEMINI_API_KEY non configurée dans les variables d\'environnement' };
         }
 
-        let credentials: { project_id?: string; client_email?: string };
         try {
-            credentials = JSON.parse(setting.value);
-        } catch {
-            return { success: false, error: 'JSON invalide dans la base de données' };
-        }
-
-        const projectId = credentials.project_id || 'lumira-oracle';
-
-        try {
-            this.logger.log(`🔄 Testing Vertex AI connection for project: ${projectId}`);
+            this.logger.log('🔄 Testing Gemini API connection...');
             
-            const vertexAI = new VertexAI({
-                project: projectId,
-                location: 'us-central1',
-                googleAuthOptions: { credentials },
-            });
-
-            // Try to get a model - this will fail if credentials are invalid
-            const model = vertexAI.getGenerativeModel({
-                model: 'gemini-1.5-flash-002',
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const model = genAI.getGenerativeModel({
+                model: 'gemini-2.5-flash-preview-05-20',
             });
 
             // Try a minimal generation to verify full access
@@ -168,32 +155,31 @@ export class AdminSettingsService {
             });
 
             // If we get here, it works!
-            const response = result.response;
-            this.logger.log(`✅ Vertex AI connection test successful for ${projectId}`);
+            const text = result.response.text();
+            this.logger.log(`✅ Gemini API connection test successful`);
             
             return {
                 success: true,
-                projectId,
+                projectId: 'gemini-api',
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            this.logger.error(`❌ Vertex AI connection test failed: ${errorMessage}`);
+            this.logger.error(`❌ Gemini API connection test failed: ${errorMessage}`);
             
             // Extract meaningful error
             let friendlyError = errorMessage;
-            if (errorMessage.includes('403')) {
-                friendlyError = 'Permission refusée (403). Vérifiez que le compte de service a les rôles Vertex AI User.';
+            if (errorMessage.includes('API_KEY_INVALID')) {
+                friendlyError = 'Clé API invalide. Vérifiez votre GEMINI_API_KEY.';
+            } else if (errorMessage.includes('403')) {
+                friendlyError = 'Permission refusée (403). La clé API n\'a pas accès au modèle.';
             } else if (errorMessage.includes('401')) {
-                friendlyError = 'Non autorisé (401). Les identifiants sont invalides.';
-            } else if (errorMessage.includes('PERMISSION_DENIED')) {
-                friendlyError = 'Permission refusée. Activez l\'API Vertex AI sur le projet Google Cloud.';
-            } else if (errorMessage.includes('CONSUMER_INVALID')) {
-                friendlyError = 'Projet invalide ou désactivé. Vérifiez que le projet existe et que la facturation est active.';
+                friendlyError = 'Non autorisé (401). La clé API est invalide.';
+            } else if (errorMessage.includes('RESOURCE_EXHAUSTED')) {
+                friendlyError = 'Quota dépassé. Attendez un moment ou augmentez vos limites.';
             }
 
             return {
                 success: false,
-                projectId,
                 error: friendlyError,
             };
         }

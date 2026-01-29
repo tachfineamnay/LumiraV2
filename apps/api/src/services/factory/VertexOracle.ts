@@ -7,12 +7,14 @@
  * - EDITOR: Refines content on expert request (heavy model)
  * - CONFIDANT: Real-time chat with user (flash model)
  * 
+ * AUTHENTICATION: Gemini API Key (GEMINI_API_KEY env var)
+ * 
  * @module services/factory/VertexOracle
  */
 
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { VertexAI, GenerativeModel, Content, Part } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI, GenerativeModel, Content, Part } from '@google/generative-ai';
 import axios from 'axios';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -277,125 +279,67 @@ FORMAT: Texte conversationnel naturel (pas JSON).
 };
 
 // =============================================================================
-// VERTEX ORACLE SERVICE - Multi-Agent Implementation
+// VERTEX ORACLE SERVICE - Multi-Agent Implementation (Gemini API)
 // =============================================================================
 
 @Injectable()
 export class VertexOracle {
     private readonly logger = new Logger(VertexOracle.name);
-    private vertexAI: VertexAI | null = null;
     
-    // Heavy model for SCRIBE, GUIDE, EDITOR
-    private heavyModel: GenerativeModel | null = null;
-    // Flash model for CONFIDANT (chat)
-    private flashModel: GenerativeModel | null = null;
+    // Gemini API client
+    private genAI: GoogleGenerativeAI | null = null;
+    
+    // Models
+    private heavyModel: GenerativeModel | null = null;  // SCRIBE, GUIDE, EDITOR
+    private flashModel: GenerativeModel | null = null;  // CONFIDANT (chat)
     
     private initialized = false;
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - Using stable Gemini 1.5 models
-    private readonly HEAVY_MODEL = 'gemini-1.5-pro-002';    // Pro model for SCRIBE, GUIDE, EDITOR
-    private readonly FLASH_MODEL = 'gemini-1.5-flash-002';  // Fast model for CONFIDANT chat
-
-    private projectId: string;
-    private location: string;
+    // Model identifiers - Using models available in your Vertex AI Studio
+    private readonly HEAVY_MODEL = 'gemini-2.5-pro-preview-05-06';    // Pro model for heavy tasks
+    private readonly FLASH_MODEL = 'gemini-2.5-flash-preview-05-20';  // Flash model for chat
 
     constructor(
         private readonly configService: ConfigService,
         @Inject(forwardRef(() => PrismaService))
         private readonly prisma: PrismaService,
-    ) {
-        this.projectId = this.configService.get<string>('GCP_PROJECT_ID') || 'lumira-oracle';
-        this.location = this.configService.get<string>('GCP_LOCATION') || 'us-central1';
-    }
-
-    /**
-     * Retrieves GCP credentials from base64-encoded environment variable.
-     * Returns undefined if not set, allowing SDK to use default authentication.
-     */
-    private getCredentials(): object | undefined {
-        const base64Credentials = this.configService.get<string>('GCP_CREDENTIALS_BASE64');
-        
-        if (!base64Credentials) {
-            this.logger.log('GCP_CREDENTIALS_BASE64 not set, using default authentication');
-            return undefined;
-        }
-
-        try {
-            const jsonString = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-            const credentials = JSON.parse(jsonString);
-            this.logger.log('✅ GCP credentials loaded from GCP_CREDENTIALS_BASE64');
-            return credentials;
-        } catch (error) {
-            this.logger.error(`❌ Failed to decode GCP_CREDENTIALS_BASE64: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            return undefined;
-        }
-    }
+    ) {}
 
     // =========================================================================
     // INITIALIZATION
     // =========================================================================
 
     /**
-     * Ensures VertexAI is initialized with fresh credentials.
-     * Checks DB for credentials first, falls back to environment.
+     * Ensures Gemini API is initialized with API key.
      */
     private async ensureInitialized(): Promise<void> {
         const now = Date.now();
         
-        // Check if we need to refresh credentials
+        // Check if we need to refresh
         if (this.initialized && (now - this.lastCredentialsCheck) < this.CREDENTIALS_TTL) {
             return;
         }
 
         try {
-            this.logger.log('🔄 Initializing VertexOracle Multi-Agent system...');
-            
-            // Try to get credentials from DB first
-            const credentialsSetting = await this.prisma.systemSetting.findUnique({
-                where: { key: 'VERTEX_CREDENTIALS_JSON' },
-            });
-
+            this.logger.log('🔄 Initializing VertexOracle Multi-Agent system (Gemini API)...');
             this.lastCredentialsCheck = now;
 
-            // Priority: 1) DB credentials, 2) Base64 env var, 3) Default auth
-            let credentials: object | undefined;
-
-            if (credentialsSetting?.value) {
-                // Parse and use DB credentials
-                try {
-                    credentials = JSON.parse(credentialsSetting.value);
-                    this.logger.log('✅ Using credentials from DB (VERTEX_CREDENTIALS_JSON)');
-                } catch (parseError) {
-                    this.logger.error(`Failed to parse VERTEX_CREDENTIALS_JSON from DB: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
-                    throw new Error('Invalid VERTEX_CREDENTIALS_JSON in database. Please check SystemSetting value.');
-                }
-            } else {
-                // Try base64 env var (Coolify production)
-                credentials = this.getCredentials();
+            // Get API Key from environment
+            const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+            
+            if (!apiKey) {
+                throw new Error('GEMINI_API_KEY not configured. Please set it in environment variables.');
             }
 
-            // Initialize VertexAI with credentials or default auth
-            this.vertexAI = new VertexAI({
-                project: this.projectId,
-                location: this.location,
-                googleAuthOptions: credentials
-                    ? {
-                          credentials,
-                          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-                      }
-                    : undefined,
-            });
+            this.logger.log('🔑 Using GEMINI_API_KEY for authentication');
 
-            if (credentials) {
-                this.logger.log('✅ VertexAI initialized with explicit credentials');
-            } else {
-                this.logger.log('✅ VertexAI initialized with default authentication');
-            }
+            // Initialize Gemini API client
+            this.genAI = new GoogleGenerativeAI(apiKey);
 
-            // Initialize HEAVY model (SCRIBE, GUIDE, EDITOR)
-            this.heavyModel = this.vertexAI.getGenerativeModel({
+            // Initialize HEAVY model (SCRIBE, GUIDE, EDITOR) with JSON response
+            this.heavyModel = this.genAI.getGenerativeModel({
                 model: this.HEAVY_MODEL,
                 generationConfig: {
                     temperature: 0.8,
@@ -405,24 +349,23 @@ export class VertexOracle {
                 },
             });
 
-            // Initialize FLASH model (CONFIDANT)
-            this.flashModel = this.vertexAI.getGenerativeModel({
+            // Initialize FLASH model (CONFIDANT) for fast chat
+            this.flashModel = this.genAI.getGenerativeModel({
                 model: this.FLASH_MODEL,
                 generationConfig: {
                     temperature: 0.9,
                     topP: 0.95,
                     maxOutputTokens: 2048,
-                    responseMimeType: 'text/plain',
                 },
             });
 
             this.initialized = true;
-            this.logger.log(`🚀 VertexOracle ready: ${this.projectId}/${this.location}`);
+            this.logger.log('🚀 VertexOracle ready (Gemini API mode)');
             this.logger.log(`   Heavy model: ${this.HEAVY_MODEL}`);
             this.logger.log(`   Flash model: ${this.FLASH_MODEL}`);
         } catch (error) {
             this.logger.error(`❌ Failed to initialize VertexOracle: ${error}`);
-            throw new Error('VertexOracle initialization failed. Check credentials.');
+            throw new Error(`VertexOracle initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
@@ -461,7 +404,7 @@ export class VertexOracle {
         const userPrompt = this.buildScribePrompt(userProfile, orderContext);
 
         // Build multimodal content parts
-        const parts: Part[] = [{ text: userPrompt }];
+        const parts: Part[] = [{ text: `${systemPrompt}\n\n---\n\nUSER REQUEST:\n${userPrompt}` }];
 
         // Attach images if available
         if (userProfile.facePhotoUrl) {
@@ -488,22 +431,19 @@ export class VertexOracle {
             }
         }
 
-        const contents: Content[] = [{ role: 'user', parts }];
-
         // Execute with retry logic
         const result = await this.executeWithRetry(
             'SCRIBE',
             async () => {
                 const response = await this.heavyModel!.generateContent({
-                    contents,
-                    systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+                    contents: [{ role: 'user', parts }],
                 });
                 return response.response;
             },
             120000, // 2 minute timeout for heavy operations
         );
 
-        const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        const textContent = result.text();
         if (!textContent) {
             throw new Error('[SCRIBE] Empty response from model');
         }
@@ -555,15 +495,14 @@ export class VertexOracle {
             'GUIDE',
             async () => {
                 const response = await this.heavyModel!.generateContent({
-                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-                    systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }] }],
                 });
                 return response.response;
             },
             90000, // 90 second timeout
         );
 
-        const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        const textContent = result.text();
         if (!textContent) {
             throw new Error('[GUIDE] Empty response from model');
         }
@@ -623,13 +562,12 @@ ${options?.preserveStructure ? 'IMPORTANT: Préserve la structure et le formatag
 Génère le contenu affiné:
 `.trim();
 
-        // Use text/plain for EDITOR since we want raw refined text
-        const editorModel = this.vertexAI!.getGenerativeModel({
+        // Use text/plain model for EDITOR since we want raw refined text
+        const editorModel = this.genAI!.getGenerativeModel({
             model: this.HEAVY_MODEL,
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
                 maxOutputTokens: options?.maxTokens ?? 8192,
-                responseMimeType: 'text/plain',
             },
         });
 
@@ -637,15 +575,14 @@ Génère le contenu affiné:
             'EDITOR',
             async () => {
                 const response = await editorModel.generateContent({
-                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-                    systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }] }],
                 });
                 return response.response;
             },
             60000, // 60 second timeout
         );
 
-        const refined = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        const refined = result.text()?.trim();
         if (!refined) {
             throw new Error('[EDITOR] Empty response from model');
         }
@@ -684,10 +621,14 @@ Génère le contenu affiné:
             });
         }
         
-        // Add current message
+        // Add current message with system context
+        const fullUserMessage = contents.length === 0 
+            ? `${systemPrompt}\n\n---\n\nUSER:\n${userMessage}`
+            : userMessage;
+        
         contents.push({
             role: 'user',
-            parts: [{ text: userMessage }],
+            parts: [{ text: fullUserMessage }],
         });
 
         const result = await this.executeWithRetry(
@@ -695,14 +636,13 @@ Génère le contenu affiné:
             async () => {
                 const response = await this.flashModel!.generateContent({
                     contents,
-                    systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
                 });
                 return response.response;
             },
             30000, // 30 second timeout for chat
         );
 
-        const reply = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        const reply = result.text()?.trim();
         if (!reply) {
             throw new Error('[CONFIDANT] Empty response from model');
         }
@@ -950,14 +890,9 @@ Réponds uniquement avec le mantra, sans guillemets.
         try {
             const result = await this.flashModel!.generateContent({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.9,
-                    maxOutputTokens: 100,
-                    responseMimeType: 'text/plain',
-                },
             });
 
-            return result.response.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+            return result.response.text()?.trim()
                 || 'Je suis lumière, je suis guidance, je suis en paix.';
         } catch (error) {
             this.logger.error(`Failed to generate mantra: ${error}`);
