@@ -33,8 +33,15 @@ interface UserProfile {
     palmPhotoUrl?: string;
     highs?: string;
     lows?: string;
-    fears?: string;
+    strongSide?: string;
+    weakSide?: string;
+    strongZone?: string;
+    weakZone?: string;
+    deliveryStyle?: string;
+    pace?: number;
     ailments?: string;
+    fears?: string;
+    rituals?: string;
 }
 
 interface OrderDetail {
@@ -384,6 +391,78 @@ export default function OrderStudioPage() {
                                                 <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Épreuves</label>
                                                 <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                                                     <p className="text-sm text-divine/80">{profile.lows}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.fears && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Peurs</label>
+                                                <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.fears}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.ailments && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Maux physiques</label>
+                                                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.ailments}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.strongSide && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Côté dominant</label>
+                                                <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.strongSide}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.weakSide && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Côté faible</label>
+                                                <div className="p-3 rounded-lg bg-slate-500/10 border border-slate-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.weakSide}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.strongZone && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Zone corporelle forte</label>
+                                                <div className="p-3 rounded-lg bg-teal-500/10 border border-teal-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.strongZone}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.weakZone && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Zone corporelle faible</label>
+                                                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.weakZone}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.rituals && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Rituels actuels</label>
+                                                <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.rituals}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.deliveryStyle && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Style préféré</label>
+                                                <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.deliveryStyle}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profile?.pace !== undefined && profile.pace !== null && (
+                                            <div>
+                                                <label className="text-xs text-divine/50 uppercase tracking-wider mb-2 block">Rythme</label>
+                                                <div className="p-3 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/20">
+                                                    <p className="text-sm text-divine/80">{profile.pace}/100</p>
                                                 </div>
                                             </div>
                                         )}

@@ -123,7 +123,7 @@ export class DigitalSoulService {
 
             this.logger.log(`👤 User: ${user.firstName} ${user.lastName}`);
 
-            // Build profiles
+            // Build profiles - Include ALL fields from UserProfile
             const userProfile: UserProfile = {
                 userId: user.id,
                 firstName: user.firstName,
@@ -139,6 +139,12 @@ export class DigitalSoulService {
                 highs: profile?.highs || undefined,
                 lows: profile?.lows || undefined,
                 strongSide: profile?.strongSide || undefined,
+                weakSide: profile?.weakSide || undefined,
+                strongZone: profile?.strongZone || undefined,
+                weakZone: profile?.weakZone || undefined,
+                deliveryStyle: profile?.deliveryStyle || undefined,
+                pace: profile?.pace || undefined,
+                ailments: profile?.ailments || undefined,
                 fears: profile?.fears || undefined,
                 rituals: profile?.rituals || undefined,
             };
@@ -492,8 +498,12 @@ export class DigitalSoulService {
             this.logger.log(`   🖼️ Face photo: ${profile?.facePhotoUrl ? 'YES' : 'NO'}`);
             this.logger.log(`   ✋ Palm photo: ${profile?.palmPhotoUrl ? 'YES' : 'NO'}`);
             this.logger.log(`   📁 Files attached: ${order.files?.length || 0}`);
+            this.logger.log(`   ❓ Specific question: ${profile?.specificQuestion ? 'YES' : 'NO'}`);
+            this.logger.log(`   🎯 Objective: ${profile?.objective ? 'YES' : 'NO'}`);
+            this.logger.log(`   ⬆️ Highs: ${profile?.highs ? 'YES' : 'NO'}`);
+            this.logger.log(`   ⬇️ Lows: ${profile?.lows ? 'YES' : 'NO'}`);
 
-            // Build user profile for AI
+            // Build user profile for AI - Include ALL fields from UserProfile
             const userProfile: UserProfile = {
                 userId: user.id,
                 firstName: user.firstName,
@@ -509,6 +519,12 @@ export class DigitalSoulService {
                 highs: profile?.highs || undefined,
                 lows: profile?.lows || undefined,
                 strongSide: profile?.strongSide || undefined,
+                weakSide: profile?.weakSide || undefined,
+                strongZone: profile?.strongZone || undefined,
+                weakZone: profile?.weakZone || undefined,
+                deliveryStyle: profile?.deliveryStyle || undefined,
+                pace: profile?.pace || undefined,
+                ailments: profile?.ailments || undefined,
                 fears: profile?.fears || undefined,
                 rituals: profile?.rituals || undefined,
             };
