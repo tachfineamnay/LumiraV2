@@ -87,8 +87,8 @@ export class ExpertController {
 
     @Get('orders/pending')
     @SkipThrottle()
-    async getPendingOrders(@Query() query: PaginationDto) {
-        return this.expertService.getPendingOrders(query);
+    async getPendingOrders(@Query() query: PaginationDto, @Query('since') since?: string) {
+        return this.expertService.getPendingOrders({ ...query, since });
     }
 
     @Get('orders/processing')

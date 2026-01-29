@@ -202,14 +202,23 @@ export class ExpertService {
     /**
      * Get orders awaiting validation (AWAITING_VALIDATION status).
      * These are orders where AI generation is complete and ready for expert review.
+     * @param dto.since - Optional ISO date string to filter orders created/updated after this date
      */
-    async getPendingOrders(dto: PaginationDto): Promise<PaginatedResult<Order>> {
-        const { page = 1, limit = 20, search } = dto;
+    async getPendingOrders(dto: PaginationDto & { since?: string }): Promise<PaginatedResult<Order>> {
+        const { page = 1, limit = 20, search, since } = dto;
         const skip = (page - 1) * limit;
 
         const where: Record<string, unknown> = {
             status: 'AWAITING_VALIDATION',
         };
+
+        // Filter by 'since' date if provided (for notification polling)
+        if (since) {
+            const sinceDate = new Date(since);
+            if (!isNaN(sinceDate.getTime())) {
+                where.updatedAt = { gte: sinceDate };
+            }
+        }
 
         if (search) {
             where.OR = [

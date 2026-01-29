@@ -35,6 +35,7 @@ export function useNotifications({
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const lastCheckRef = useRef<Date>(new Date());
+    const notifiedOrderIdsRef = useRef<Set<string>>(new Set());
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
     // Initialize audio on client side
@@ -65,9 +66,19 @@ export function useNotifications({
 
             if (response.ok) {
                 const data = await response.json();
-                const newOrders = data.data || data || [];
+                const allOrders = data.data || data || [];
+                
+                // Filter out orders we've already notified about
+                const newOrders = allOrders.filter(
+                    (order: { id: string }) => !notifiedOrderIdsRef.current.has(order.id)
+                );
                 
                 if (newOrders.length > 0) {
+                    // Mark these orders as notified
+                    newOrders.forEach((order: { id: string }) => {
+                        notifiedOrderIdsRef.current.add(order.id);
+                    });
+                    
                     // Process new orders
                     const newNotifications: Notification[] = newOrders.map((order: { id: string; orderNumber: string; userName?: string; userEmail: string }) => ({
                         id: `order-${order.id}`,
