@@ -199,12 +199,16 @@ export class ExpertService {
     // ORDERS
     // ========================
 
+    /**
+     * Get orders awaiting validation (AWAITING_VALIDATION status).
+     * These are orders where AI generation is complete and ready for expert review.
+     */
     async getPendingOrders(dto: PaginationDto): Promise<PaginatedResult<Order>> {
         const { page = 1, limit = 20, search } = dto;
         const skip = (page - 1) * limit;
 
         const where: Record<string, unknown> = {
-            status: { in: ['PENDING', 'PAID'] },
+            status: 'AWAITING_VALIDATION',
         };
 
         if (search) {
