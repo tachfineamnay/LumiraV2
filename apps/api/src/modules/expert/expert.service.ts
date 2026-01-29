@@ -730,7 +730,22 @@ export class ExpertService {
         archetype: string;
         stepsCreated: number;
     }> {
-        this.logger.log(`🚀 Starting AI reading generation for order: ${orderId}`);
+        return this.generateReadingWithPrompt(orderId, undefined, expert);
+    }
+
+    /**
+     * Triggers AI-powered reading generation with optional expert prompt.
+     * Called by /generate-full endpoint from admin panel.
+     */
+    async generateReadingWithPrompt(orderId: string, expertPrompt: string | undefined, expert: ExpertEntity): Promise<{
+        success: boolean;
+        orderId: string;
+        orderNumber: string;
+        pdfUrl: string;
+        archetype: string;
+        stepsCreated: number;
+    }> {
+        this.logger.log(`🚀 Starting AI reading generation for order: ${orderId}${expertPrompt ? ' (with expert prompt)' : ''}`);
 
         // Import the DigitalSoulService dynamically to avoid circular dependencies
         // In production, this should be properly injected

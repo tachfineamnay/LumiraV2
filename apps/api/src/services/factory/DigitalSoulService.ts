@@ -468,7 +468,9 @@ export class DigitalSoulService {
             this.logger.log(`   📦 Status: ${order.status}`);
             this.logger.log(`   💰 Level: ${order.level}`);
 
-            if (order.status !== 'PAID' && order.status !== 'PROCESSING') {
+            // Allow PAID, PENDING (admin force), PROCESSING, and FAILED (retry)
+            const validStatuses = ['PAID', 'PENDING', 'PROCESSING', 'FAILED'];
+            if (!validStatuses.includes(order.status)) {
                 throw new BadRequestException(`Order ${orderId} is not in a valid state for generation: ${order.status}`);
             }
 

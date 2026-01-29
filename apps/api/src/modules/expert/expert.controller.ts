@@ -155,6 +155,19 @@ export class ExpertController {
     }
 
     /**
+     * Full generation endpoint (alias for generate).
+     * Used by admin panel to trigger complete AI reading generation.
+     */
+    @Post('orders/:id/generate-full')
+    async generateFullReading(
+        @Param('id') orderId: string,
+        @Body() body: { expertPrompt?: string },
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.generateReadingWithPrompt(orderId, body.expertPrompt, expert);
+    }
+
+    /**
      * Refine content using AI based on expert prompt.
      * Used in the Co-Creation Studio for content adjustments.
      */
