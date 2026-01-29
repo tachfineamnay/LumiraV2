@@ -294,9 +294,9 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - Using gemini-3 models available on GCP project
-    private readonly HEAVY_MODEL = 'gemini-3-pro-preview';  // Pro model for SCRIBE, GUIDE, EDITOR
-    private readonly FLASH_MODEL = 'gemini-3-flash';        // Fast model for CONFIDANT chat
+    // Model identifiers - Using stable Gemini 1.5 models
+    private readonly HEAVY_MODEL = 'gemini-1.5-pro-002';    // Pro model for SCRIBE, GUIDE, EDITOR
+    private readonly FLASH_MODEL = 'gemini-1.5-flash-002';  // Fast model for CONFIDANT chat
 
     private projectId: string;
     private location: string;

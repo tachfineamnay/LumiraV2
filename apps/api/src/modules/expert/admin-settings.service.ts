@@ -159,7 +159,7 @@ export class AdminSettingsService {
 
             // Try to get a model - this will fail if credentials are invalid
             const model = vertexAI.getGenerativeModel({
-                model: 'gemini-3-flash',
+                model: 'gemini-1.5-flash-002',
             });
 
             // Try a minimal generation to verify full access
