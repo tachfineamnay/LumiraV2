@@ -294,9 +294,10 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers
-    private readonly HEAVY_MODEL = 'gemini-2.5-pro-preview-05-06';
-    private readonly FLASH_MODEL = 'gemini-2.0-flash-001';
+    // Model identifiers - Use stable versions (not preview)
+    // See: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions
+    private readonly HEAVY_MODEL = 'gemini-1.5-pro-002';  // Stable pro model
+    private readonly FLASH_MODEL = 'gemini-2.0-flash-001'; // Fast model for chat
 
     private projectId: string;
     private location: string;
