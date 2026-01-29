@@ -222,9 +222,6 @@ importers:
       '@tiptap/core':
         specifier: ^3.18.0
         version: 3.18.0(@tiptap/pm@3.18.0)
-      '@tiptap/extension-bubble-menu':
-        specifier: ^3
-        version: 3.18.0(@tiptap/core@3.18.0)(@tiptap/pm@3.18.0)
       '@tiptap/extension-highlight':
         specifier: ^3.18.0
         version: 3.18.0(@tiptap/core@3.18.0)
@@ -1869,6 +1866,7 @@ packages:
     dependencies:
       '@floating-ui/utils': 0.2.10
     dev: false
+    optional: true
 
   /@floating-ui/dom@1.7.5:
     resolution: {integrity: sha512-N0bD2kIPInNHUHehXhMke1rBGs1dwqvC9O9KYMyyjK7iXt7GAhnro7UlcuYcGdS/yYOlq0MAVgrow8IbWJwyqg==}
@@ -1876,11 +1874,13 @@ packages:
       '@floating-ui/core': 1.7.4
       '@floating-ui/utils': 0.2.10
     dev: false
+    optional: true
 
   /@floating-ui/utils@0.2.10:
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
     requiresBuild: true
     dev: false
+    optional: true
 
   /@google-cloud/vertexai@1.10.0:
     resolution: {integrity: sha512-HqYqoivNtkq59po8m7KI0n+lWKdz4kabENncYQXZCX/hBWJfXtKAfR/2nUQsP+TwSfHKoA7zDL2RrJYIv/j3VQ==}
@@ -3314,6 +3314,7 @@ packages:
       '@tiptap/core': 3.18.0(@tiptap/pm@3.18.0)
       '@tiptap/pm': 3.18.0
     dev: false
+    optional: true
 
   /@tiptap/extension-bullet-list@3.18.0(@tiptap/extension-list@3.18.0):
     resolution: {integrity: sha512-8sEpY0nxAGGFDYlF+WVFPKX00X2dAAjmoi0+2eWvK990PdQqwXrQsRs7pkUbpE2mDtATV8+GlDXk9KDkK/ZXhA==}
