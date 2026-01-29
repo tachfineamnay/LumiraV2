@@ -29,6 +29,7 @@ import {
     UpdateClientStatusDto,
     RefineContentDto,
     FinalizeOrderDto,
+    ChatOrderDto,
 } from './dto';
 
 @Controller('expert')
@@ -178,6 +179,19 @@ export class ExpertController {
         @CurrentExpert() expert: Expert,
     ) {
         return this.expertService.refineContent(orderId, dto, expert);
+    }
+
+    /**
+     * AI Chat endpoint for the Desk v2 AI Assistant.
+     * Uses Gemini Flash model for fast conversational responses.
+     */
+    @Post('orders/:id/chat')
+    async chatAboutOrder(
+        @Param('id') orderId: string,
+        @Body() dto: ChatOrderDto,
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.chatAboutOrder(orderId, dto, expert);
     }
 
     /**

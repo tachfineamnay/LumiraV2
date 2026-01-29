@@ -26,6 +26,7 @@ import {
     CreateClientDto,
     UpdateClientStatusDto,
     RefineContentDto,
+    ChatOrderDto,
 } from './dto';
 
 interface ExpertEntity {
@@ -870,6 +871,91 @@ ${dto.currentContent}
         } catch (error) {
             this.logger.error(`❌ Content refinement failed: ${error}`);
             throw new BadRequestException(`Échec du raffinement: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * AI Chat endpoint for the Desk v2 AI Assistant.
+     * Uses Gemini Flash model for fast conversational responses about a specific order.
+     */
+    async chatAboutOrder(
+        orderId: string,
+        dto: ChatOrderDto,
+        expert: ExpertEntity,
+    ): Promise<{ response: string }> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { 
+                user: { include: { profile: true } },
+                files: true,
+            },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        this.logger.log(`💬 AI Chat for order ${order.orderNumber} - Expert: ${expert.name}`);
+
+        try {
+            // Import VertexOracle for AI chat
+            const { VertexOracle } = await import('../../services/factory/VertexOracle');
+            const vertexOracle = new VertexOracle(this.configService, this.prisma);
+
+            const profile = order.user?.profile;
+            const currentContent = (order.generatedContent as Record<string, unknown>)?.lecture as string || '';
+
+            // Build rich context for the AI
+            // Profile fields from UserProfile schema
+            const chatContext = {
+                userId: order.userId,
+                firstName: dto.context?.firstName || (profile as { firstName?: string })?.firstName || 'Inconnu',
+                birthDate: dto.context?.birthDate || profile?.birthDate || '',
+                question: dto.context?.question || profile?.specificQuestion || '',
+                objective: dto.context?.objective || profile?.objective || '',
+                emotionalState: dto.context?.emotionalState || (profile as { emotionalState?: string })?.emotionalState || '',
+                orderLevel: order.level,
+                orderNumber: order.orderNumber,
+                hasGeneratedContent: !!currentContent,
+                existingLecture: currentContent ? currentContent.substring(0, 2000) : '', // First 2000 chars for context
+            };
+
+            // Enhanced system prompt for Desk assistant
+            const systemPrompt = `Tu es l'assistant IA d'Oracle Lumira, spécialisé dans les lectures spirituelles et karmiques.
+Tu assistes l'expert "${expert.name}" dans la création d'une lecture pour ${chatContext.firstName}.
+
+CONTEXTE DE LA COMMANDE:
+- Numéro: ${chatContext.orderNumber}
+- Niveau: ${chatContext.orderLevel}
+- Question: ${chatContext.question}
+- Objectif spirituel: ${chatContext.objective}
+- État émotionnel: ${chatContext.emotionalState}
+${chatContext.hasGeneratedContent ? `- Lecture en cours (extrait): ${chatContext.existingLecture.substring(0, 500)}...` : '- Pas encore de lecture générée'}
+
+RÈGLES:
+1. Réponds de manière concise et mystique
+2. Utilise le vocabulaire spirituel de Lumira (archétypes, chemin karmique, énergies, cycles...)
+3. Propose des insights actionnables pour l'expert
+4. Si on te demande des suggestions de contenu, reste créatif mais aligné avec le profil du client
+5. Réponds en français
+
+MESSAGE DE L'EXPERT:`;
+
+            // Use the chatWithUser method but with our custom system prompt
+            const response = await vertexOracle.refineText(
+                `${systemPrompt}\n\n${dto.message}`,
+                {
+                    maxTokens: 1024,
+                    temperature: 0.9,
+                }
+            );
+
+            this.logger.log(`✅ AI Chat response generated for order ${order.orderNumber}`);
+
+            return { response };
+        } catch (error) {
+            this.logger.error(`❌ AI Chat failed: ${error}`);
+            throw new BadRequestException(`Échec du chat IA: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
