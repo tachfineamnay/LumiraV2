@@ -1,116 +1,60 @@
 # Lumira V2 - AI Agent Instructions
 
-## Architecture Overview
+## 1. Project Context & Architecture
 
-This is a **Turborepo monorepo** with strict workspace boundaries:
+**Monorepo Strategy (Turborepo + pnpm)**
+- **Apps**: `apps/web` (Next.js 14 App Router), `apps/api` (NestJS 10).
+- **Packages**: `@packages/database` (Prisma), `@packages/ui` (Shared React components), `@packages/shared` (Types/Utils).
+- **Workspace Boundaries**: Strict separation. NEVER import relatively across apps/packages (e.g., `../../packages`). ALWAYS use workspace aliases (`@packages/*`).
 
-- **Frontend**: `apps/web` - Next.js 14 (App Router), port 3000
-- **Backend**: `apps/api` - NestJS 10, port 3001
-- **Shared packages**: `@packages/database` (Prisma client), `@packages/shared` (types/utils), `@packages/ui` (React components)
+**Core Domain**
+- **Oracle Lumira**: Spiritual guidance platform with tiered access (Initié, Mystique, Profond, Intégral).
+- **Key Flows**: Onboarding (Sanctuaire), Checkout (Stripe), AI Readings (Vertex AI), Admin Desk.
 
-The app serves **Oracle Lumira**, a spiritual guidance platform with tiered access (Initié/Mystique/Profond/Intégral) and includes admin desk, sanctuaire (user portal), and checkout flows.
+## 2. Critical Workflows
 
-## Critical Workflows
+**Development**
+- Start all: `pnpm dev` (Runs `turbo run dev`).
+- **Database**:
+  1. Modify `packages/database/prisma/schema.prisma`.
+  2. Run `pnpm db:generate` (Updates client).
+  3. Run `pnpm db:push` (Updates local DB).
+- **Testing**: `pnpm test` (Runs Playwright e2e), `pnpm --filter api test` (Jest).
 
-### Development
-```bash
-pnpm dev                    # Start both apps via Turborepo
-pnpm db:push                # Push schema changes to local PostgreSQL
-pnpm db:generate            # Regenerate Prisma client after schema edits
-docker-compose -f docker/docker-compose.yml up -d  # Start local DB
-```
+## 3. Tech Stack & Versions
 
-### Database
-- Schema: `packages/database/prisma/schema.prisma`
-- Always run `pnpm db:generate` after modifying schema
-- Generated client imported as: `import { prisma } from '@packages/database'`
-- Key enums: `OrderStatus`, `SubscriptionStatus`, `ReviewStatus`, `ValidationStatus`
+- **Frontend**: Next.js 14 (App Router), React 18, Tailwind CSS, Lucide React, Framer Motion, Zod, React Hook Form.
+- **Backend**: NestJS 10, Passport (JWT), Google Vertex AI SDK, Stripe SDK, AWS S3 Client.
+- **Database**: PostgreSQL 15+, Prisma ORM.
 
-## Project-Specific Conventions
+## 4. Coding Conventions
 
-### Backend (NestJS)
-- **Module structure**: Each feature lives in `apps/api/src/modules/{feature}/` with `.controller.ts`, `.service.ts`, `.dto.ts`, `.module.ts`
-- **Authentication**: JWT-based, guards in `modules/auth/guards/`
-- **AI services**: `services/factory/VertexOracle.ts` for Vertex AI integration
-- **Rate limiting**: Global `ThrottlerGuard` configured (10 req/60s), override with `@Throttle()` decorator
-- **Environment**: Use `ConfigService` injection, never `process.env` directly
-- **CORS**: Configured in `main.ts` with explicit allowed origins
+### Frontend (`apps/web`)
+- **API Calls**: ALWAYS use `lib/api.ts` (Axios instance with auth interceptors). NEVER use `fetch` directly for internal API.
+- **Routing**: Use App Router (`app/`). Components default to Server Components. Add `'use client'` for interactivity.
+- **Styling**: Tailwind CSS with semantic colors (`text-divine`, `bg-void`, `accent-gold`). Use `cn()` from `@packages/ui` (clsx/tailwind-merge) for class composition.
+- **Forms**: `react-hook-form` + `zod` validation.
+- **Context**: `AuthContext`, `SanctuaireContext` wrap root layouts. Check entitlements via `useSanctuaire`.
 
-Example service pattern:
-```typescript
-@Injectable()
-export class OrdersService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly configService: ConfigService
-  ) {}
-}
-```
+### Backend (`apps/api`)
+- **Structure**: Feature-based modules `src/modules/{feature}/` containing:
+  - `*.module.ts`, `*.controller.ts`, `*.service.ts`, `*.dto.ts`.
+- **Config**: NEVER use `process.env` directly. Inject `ConfigService`.
+- **Validation**: Use `class-validator` DTOs. Global validation pipe is active.
+- **AI Service**: Use `src/services/factory/VertexOracle.ts` for generation logic.
 
-### Frontend (Next.js)
-- **App Router only**: All pages in `apps/web/app/` structure
-- **Context providers**: `AuthContext`, `SanctuaireContext`, `ExpertAuthContext`, `StripeProvider` - wrap layouts, not individual pages
-- **API calls**: Use `lib/api.ts` helper, never raw `fetch` without auth headers
-- **Products**: 4 tiers defined in `lib/products.ts` (initie, mystique, profond, integrale)
-- **Capabilities**: Sanctuaire uses entitlements system - check via `SanctuaireContext.hasCapability()`
-- **Forms**: React Hook Form + Zod validation (`lib/onboardingSchema.ts` for examples)
+### Shared (`packages/*`)
+- **Database**: Import `prisma` from `@packages/database`.
+- **UI**: detailed atoms/molecules in `@packages/ui`. Prefer these over creating new ones.
 
-### UI/Styling
-- **Tailwind**: Custom classes in `tailwind.config.js` - use semantic colors like `text-divine`, `bg-void`, `accent-gold`
-- **Fonts**: Inter (sans) + Playfair Display (serif) via `--font-inter`, `--font-playfair` CSS variables
-- **Components**: Import from `@packages/ui` when possible (Button, Card, Input), local `components/ui/` for app-specific
-- **Icons**: Lucide React only
+## 5. Integration Patterns
 
-### Testing
-- **E2E**: Playwright in `tests/e2e/`, run `pnpm test` (configured with `--passWithNoTests` for CI)
-- **Base URL**: Tests expect `http://localhost:3000`
+- **Stripe**: Handled via `StripeProvider` (frontend) and `webhooks.controller.ts` (backend).
+- **Vertex AI**: configured in `VertexOracle` service. Requires `VERTEX_AI_CREDENTIALS` (JSON).
+- **Blob Storage**: AWS S3 client configured in `apps/api`.
 
-## Integration Points
-
-### Stripe
-- Configured via `StripeProvider` wrapping app
-- Webhook handler: `apps/api/src/modules/webhooks/webhooks.controller.ts`
-- Products mapped to database via `productId` field
-
-### Vertex AI
-- Service: `apps/api/src/services/factory/VertexOracle.ts`
-- Requires `VERTEX_AI_PROJECT_ID`, `VERTEX_AI_LOCATION`, `VERTEX_AI_CREDENTIALS` env vars
-- Used for generating spiritual readings (lectures, mandalas, rituals)
-
-### n8n (optional)
-- Webhook test script: `apps/api/test-n8n-webhook.js`
-- Used for workflow orchestration (not critical path)
-
-## Key Files Reference
-
-- **Product tiers**: [apps/web/lib/products.ts](../apps/web/lib/products.ts)
-- **Database schema**: [packages/database/prisma/schema.prisma](../packages/database/prisma/schema.prisma)
-- **API entry**: [apps/api/src/main.ts](../apps/api/src/main.ts)
-- **Frontend layout**: [apps/web/app/layout.tsx](../apps/web/app/layout.tsx)
-- **Auth context**: [apps/web/context/AuthContext.tsx](../apps/web/context/AuthContext.tsx)
-- **Sanctuaire entitlements**: [apps/web/context/SanctuaireContext.tsx](../apps/web/context/SanctuaireContext.tsx)
-
-## Common Patterns
-
-### Adding a new backend feature
-1. Create `apps/api/src/modules/{feature}/` directory
-2. Add `.module.ts`, `.controller.ts`, `.service.ts`, `.dto.ts`
-3. Import module in `app.module.ts`
-4. Add database models to `schema.prisma` if needed, then run `pnpm db:generate && pnpm db:push`
-
-### Adding a new frontend route
-1. Create folder in `apps/web/app/{route}/`
-2. Add `page.tsx` (server component by default) or `'use client'` directive for client component
-3. For authenticated routes, wrap with `AuthGuard` component
-4. For sanctuaire routes, check entitlements via `SanctuaireContext`
-
-### Workspace imports
-- Always use workspace aliases: `@packages/database`, `@packages/shared`, `@packages/ui`
-- Never relative imports across workspace boundaries (`../../packages/...`)
-
-## Don't Do This
-- Don't create new context providers without checking existing ones
-- Don't use `prisma` directly in controllers - always via service layer
-- Don't hardcode API URLs - use `process.env.NEXT_PUBLIC_API_URL` or lib/api.ts
-- Don't mix server/client components - be explicit with `'use client'` directive
-- Don't add dependencies to root package.json - use workspace-specific `pnpm --filter {package} add {dep}`
+## 6. Common Pitfalls to Avoid
+- **Schema**: Forgetting `db:generate` after schema changes causes type errors.
+- **Auth**: Frontend tokens are stored in localStorage `lumira_token`. API requires `Bearer {token}`.
+- **Imports**: Importing directly from `dist` or building relative paths to other workspaces.
+- **Types**: Duplicating types. Check `@packages/shared` or Prisma generated types first.

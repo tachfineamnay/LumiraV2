@@ -306,8 +306,31 @@ export class VertexOracle {
         @Inject(forwardRef(() => PrismaService))
         private readonly prisma: PrismaService,
     ) {
-        this.projectId = this.configService.get<string>('VERTEX_AI_PROJECT_ID') || 'lumira-oracle';
-        this.location = this.configService.get<string>('VERTEX_AI_LOCATION') || 'us-central1';
+        this.projectId = this.configService.get<string>('GCP_PROJECT_ID') || 'lumira-oracle';
+        this.location = this.configService.get<string>('GCP_LOCATION') || 'us-central1';
+    }
+
+    /**
+     * Retrieves GCP credentials from base64-encoded environment variable.
+     * Returns undefined if not set, allowing SDK to use default authentication.
+     */
+    private getCredentials(): object | undefined {
+        const base64Credentials = this.configService.get<string>('GCP_CREDENTIALS_BASE64');
+        
+        if (!base64Credentials) {
+            this.logger.log('GCP_CREDENTIALS_BASE64 not set, using default authentication');
+            return undefined;
+        }
+
+        try {
+            const jsonString = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+            const credentials = JSON.parse(jsonString);
+            this.logger.log('✅ GCP credentials loaded from GCP_CREDENTIALS_BASE64');
+            return credentials;
+        } catch (error) {
+            this.logger.error(`❌ Failed to decode GCP_CREDENTIALS_BASE64: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            return undefined;
+        }
     }
 
     // =========================================================================
@@ -336,28 +359,39 @@ export class VertexOracle {
 
             this.lastCredentialsCheck = now;
 
+            // Priority: 1) DB credentials, 2) Base64 env var, 3) Default auth
+            let credentials: object | undefined;
+
             if (credentialsSetting?.value) {
                 // Parse and use DB credentials
-                let credentials: object;
                 try {
                     credentials = JSON.parse(credentialsSetting.value);
+                    this.logger.log('✅ Using credentials from DB (VERTEX_CREDENTIALS_JSON)');
                 } catch (parseError) {
                     this.logger.error(`Failed to parse VERTEX_CREDENTIALS_JSON from DB: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
                     throw new Error('Invalid VERTEX_CREDENTIALS_JSON in database. Please check SystemSetting value.');
                 }
-                this.vertexAI = new VertexAI({
-                    project: this.projectId,
-                    location: this.location,
-                    googleAuthOptions: { credentials },
-                });
-                this.logger.log('✅ VertexAI initialized with DB credentials');
             } else {
-                // Fall back to environment-based authentication
-                this.vertexAI = new VertexAI({
-                    project: this.projectId,
-                    location: this.location,
-                });
-                this.logger.log('✅ VertexAI initialized with environment credentials');
+                // Try base64 env var (Coolify production)
+                credentials = this.getCredentials();
+            }
+
+            // Initialize VertexAI with credentials or default auth
+            this.vertexAI = new VertexAI({
+                project: this.projectId,
+                location: this.location,
+                googleAuthOptions: credentials
+                    ? {
+                          credentials,
+                          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+                      }
+                    : undefined,
+            });
+
+            if (credentials) {
+                this.logger.log('✅ VertexAI initialized with explicit credentials');
+            } else {
+                this.logger.log('✅ VertexAI initialized with default authentication');
             }
 
             // Initialize HEAVY model (SCRIBE, GUIDE, EDITOR)
