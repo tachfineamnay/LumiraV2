@@ -297,10 +297,11 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - Using Gemini 2.5 Pro (most powerful)
-    // Gemini 2.5 Pro: Best reasoning, 1M token context, superior quality
-    private readonly HEAVY_MODEL = 'gemini-2.5-pro';  // All agents use Gemini 2.5 Pro
-    private readonly FLASH_MODEL = 'gemini-2.5-pro';  // Same model for consistency
+    // Model identifiers - Using Gemini 2.0 Flash (API Key compatible)
+    // Note: gemini-2.5-pro requires Vertex AI OAuth, not API keys
+    // gemini-2.0-flash is the most powerful model available via GEMINI_API_KEY
+    private readonly HEAVY_MODEL = 'gemini-2.0-flash';  // All agents use Gemini 2.0 Flash
+    private readonly FLASH_MODEL = 'gemini-2.0-flash';  // Same model for consistency
 
     constructor(
         private readonly configService: ConfigService,
