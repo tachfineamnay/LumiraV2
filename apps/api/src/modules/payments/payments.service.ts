@@ -56,22 +56,27 @@ export class PaymentsService {
      * The webhook will update the order status from PENDING to PAID.
      */
     async createCheckoutIntent(dto: CheckoutIntentDto) {
+        const normalizedEmail = dto.email.toLowerCase().trim();
+        this.logger.log(`[CheckoutIntent] Starting for email: ${normalizedEmail}`);
+        
         // 1. Upsert User immediately
         const user = await this.prisma.user.upsert({
-            where: { email: dto.email.toLowerCase().trim() },
+            where: { email: normalizedEmail },
             update: {
                 firstName: dto.firstName,
                 lastName: dto.lastName,
                 phone: dto.phone || null,
             },
             create: {
-                email: dto.email.toLowerCase().trim(),
+                email: normalizedEmail,
                 firstName: dto.firstName,
                 lastName: dto.lastName,
                 phone: dto.phone || null,
                 totalOrders: 0,
             },
         });
+        
+        this.logger.log(`[CheckoutIntent] User upserted: ${user.id} for email: ${normalizedEmail}`);
 
         // 2. Map level
         const levelMap: Record<string, number> = {
@@ -90,7 +95,7 @@ export class PaymentsService {
             data: {
                 orderNumber,
                 userId: user.id,
-                userEmail: dto.email.toLowerCase().trim(),
+                userEmail: normalizedEmail,
                 userName: `${dto.firstName} ${dto.lastName}`.trim(),
                 level,
                 amount: dto.amountCents,
@@ -100,7 +105,7 @@ export class PaymentsService {
             },
         });
 
-        this.logger.log(`Checkout flow: Created User ${user.id} and Order ${order.id}`);
+        this.logger.log(`[CheckoutIntent] Order created: ${order.id}, status: ${order.status}, amount: ${order.amount}, email: ${normalizedEmail}`);
 
         // 5. Create PaymentIntent with orderId in metadata
         const paymentIntent = await this.stripe.paymentIntents.create({

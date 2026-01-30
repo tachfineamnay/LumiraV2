@@ -138,6 +138,40 @@ export class UsersService {
   }
 
   /**
+   * DEBUG: Get user and all their orders for diagnosis
+   */
+  async debugUserAndOrders(email: string): Promise<{
+    email: string;
+    user: { id: string; email: string; firstName: string; lastName: string } | null;
+    orders: { id: string; status: string; amount: number; level: number; createdAt: Date }[];
+    wouldAuth: boolean;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+
+    if (!user) {
+      return { email, user: null, orders: [], wouldAuth: false };
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where: { userId: user.id },
+      select: { id: true, status: true, amount: true, level: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Check if any order would pass auth
+    const wouldAuth = orders.some(o => 
+      ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED'].includes(o.status) ||
+      (o.status === 'PENDING' && o.amount === 0) ||
+      (o.status === 'PENDING' && o.amount > 0)
+    );
+
+    return { email, user, orders, wouldAuth };
+  }
+
+  /**
    * Get complete user profile data for Sanctuaire
    */
   async getUserProfile(userId: string): Promise<{
