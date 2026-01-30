@@ -299,7 +299,7 @@ export class ClientService {
             throw new NotFoundException('Utilisateur non trouvé');
         }
 
-        const hasAccess = user.orders.length > 0 || user.subscriptionStatus === 'active';
+        const hasAccess = user.orders.length > 0 || user.subscriptionStatus === 'ACTIVE';
         if (!hasAccess) {
             throw new ForbiddenException(
                 'Vous devez avoir complété au moins une lecture pour accéder au chat avec l\'Oracle.',
