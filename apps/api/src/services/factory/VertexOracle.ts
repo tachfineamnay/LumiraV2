@@ -297,9 +297,10 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - Using models available in your Vertex AI Studio
-    private readonly HEAVY_MODEL = 'gemini-2.5-pro-preview-05-06';    // Pro model for heavy tasks
-    private readonly FLASH_MODEL = 'gemini-2.5-flash-preview-05-20';  // Flash model for chat
+    // Model identifiers - Using stable models available with Gemini API Key
+    // Note: gemini-2.5-* preview models require Vertex AI OAuth2, not API keys
+    private readonly HEAVY_MODEL = 'gemini-1.5-pro';    // Pro model for heavy tasks (SCRIBE, GUIDE, EDITOR)
+    private readonly FLASH_MODEL = 'gemini-1.5-flash';  // Flash model for chat (CONFIDANT)
 
     constructor(
         private readonly configService: ConfigService,
