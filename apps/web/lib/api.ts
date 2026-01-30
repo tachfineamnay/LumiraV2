@@ -7,9 +7,15 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('lumira_token') : null;
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+    if (typeof window !== 'undefined') {
+        // Check for expert_token first (admin routes), then lumira_token (sanctuaire)
+        const expertToken = localStorage.getItem('expert_token');
+        const lumiraToken = localStorage.getItem('lumira_token');
+        const token = expertToken || lumiraToken;
+        
+        if (token && !config.headers.Authorization) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
     }
     return config;
 });

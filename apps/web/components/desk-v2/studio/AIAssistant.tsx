@@ -70,7 +70,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
     setIsLoading(true);
 
     try {
-      const { data } = await api.post(`/api/expert/orders/${orderId}/chat`, {
+      const { data } = await api.post(`/expert/orders/${orderId}/chat`, {
         message: content,
         context: clientContext,
       });

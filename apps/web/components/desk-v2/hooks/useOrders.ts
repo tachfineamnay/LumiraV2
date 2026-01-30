@@ -31,10 +31,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
   const fetchOrders = useCallback(async () => {
     try {
       const [paidRes, processingRes, validationRes, historyRes] = await Promise.all([
-        api.get('/api/expert/orders/pending'),
-        api.get('/api/expert/orders/processing'),
-        api.get('/api/expert/orders/validation'),
-        api.get('/api/expert/orders/history?limit=20'),
+        api.get('/expert/orders/pending'),
+        api.get('/expert/orders/processing'),
+        api.get('/expert/orders/validation'),
+        api.get('/expert/orders/history?limit=20'),
       ]);
 
       setOrders({

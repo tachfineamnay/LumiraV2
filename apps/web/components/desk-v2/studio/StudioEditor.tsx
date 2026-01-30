@@ -54,7 +54,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
   // Fetch order data
   const fetchOrder = useCallback(async () => {
     try {
-      const { data } = await api.get(`/api/expert/orders/${orderId}`);
+      const { data } = await api.get(`/expert/orders/${orderId}`);
       setOrder(data);
       
       // Convert generated content to editor format
@@ -84,7 +84,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
-      await api.post(`/api/expert/orders/${orderId}/generate`);
+      await api.post(`/expert/orders/${orderId}/generate`);
       toast.info('Génération lancée...', { 
         description: 'L\'Oracle travaille sur votre lecture' 
       });
@@ -102,7 +102,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
 
     setIsSealing(true);
     try {
-      await api.post(`/api/expert/orders/${orderId}/finalize`, {
+      await api.post(`/expert/orders/${orderId}/finalize`, {
         content: editorContent,
       });
       toast.success('Lecture scellée avec succès !');

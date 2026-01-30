@@ -98,7 +98,7 @@ export function TiptapEditor({
     setShowAIMenu(false);
 
     try {
-      const { data } = await api.post(`/api/expert/orders/${orderId}/refine`, {
+      const { data } = await api.post(`/expert/orders/${orderId}/refine`, {
         instruction: action,
         selectedText,
       });

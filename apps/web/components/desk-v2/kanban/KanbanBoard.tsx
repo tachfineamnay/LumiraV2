@@ -132,14 +132,14 @@ export function KanbanBoard() {
     try {
       // Call API to update status
       if (destColumn === 'processing') {
-        await api.post(`/api/expert/orders/${activeId}/generate`);
+        await api.post(`/expert/orders/${activeId}/generate`);
         toast.success('Génération lancée');
       } else if (destColumn === 'completed') {
-        await api.post(`/api/expert/orders/${activeId}/finalize`);
+        await api.post(`/expert/orders/${activeId}/finalize`);
         toast.success('Commande scellée');
       } else {
         // Just update status
-        await api.patch(`/api/expert/orders/${activeId}/status`, { status: newStatus });
+        await api.patch(`/expert/orders/${activeId}/status`, { status: newStatus });
       }
     } catch (error) {
       // Revert on error

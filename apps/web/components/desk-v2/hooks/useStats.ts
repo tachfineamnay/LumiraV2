@@ -27,7 +27,7 @@ export function useStats(options: UseStatsOptions = {}) {
 
   const fetchStats = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/expert/stats');
+      const { data } = await api.get('/expert/stats');
       setStats({
         pendingCount: data.pendingOrders || 0,
         processingCount: data.processingOrders || 0,

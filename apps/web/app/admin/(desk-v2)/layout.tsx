@@ -25,7 +25,9 @@ export default function DeskV2Layout({
       }
 
       try {
-        await api.get('/api/expert/verify');
+        await api.get('/expert/verify', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         setIsAuthenticated(true);
       } catch (error) {
         localStorage.removeItem('expert_token');
