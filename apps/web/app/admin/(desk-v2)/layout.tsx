@@ -29,7 +29,7 @@ export default function DeskV2Layout({
           headers: { Authorization: `Bearer ${token}` }
         });
         setIsAuthenticated(true);
-      } catch (error) {
+      } catch (_error) {
         localStorage.removeItem('expert_token');
         router.push('/admin/login');
       } finally {

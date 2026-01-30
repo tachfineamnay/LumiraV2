@@ -21,10 +21,10 @@ import { useSocket } from '../hooks/useSocket';
 import { KANBAN_COLUMNS, Order, KanbanColumnId } from '../types';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import { RefreshCw, Filter, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 export function KanbanBoard() {
-  const { orders, isLoading, fetchOrders, moveOrder, updateOrder, addOrder } = useOrders();
+  const { orders, isLoading, fetchOrders, moveOrder, addOrder } = useOrders();
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
 
@@ -36,7 +36,7 @@ export function KanbanBoard() {
         description: `${order.user.firstName} - Niveau ${order.level}`,
       });
     },
-    onStatusChange: (data) => {
+    onStatusChange: (_data) => {
       // Refresh to get updated order
       fetchOrders();
     },
@@ -78,7 +78,7 @@ export function KanbanBoard() {
   // Find which column an order is in
   const findOrderColumn = (orderId: string): KanbanColumnId | null => {
     for (const [columnId, columnOrders] of Object.entries(filteredOrders)) {
-      if (columnOrders.find(o => o.id === orderId)) {
+      if (columnOrders.find((o: Order) => o.id === orderId)) {
         return columnId as KanbanColumnId;
       }
     }
@@ -95,7 +95,7 @@ export function KanbanBoard() {
     }
   };
 
-  const handleDragOver = (event: DragOverEvent) => {
+  const handleDragOver = (_event: DragOverEvent) => {
     // Optional: Add visual feedback during drag
   };
 

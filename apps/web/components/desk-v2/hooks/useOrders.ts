@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import api from '@/lib/api';
-import type { Order, OrderStatus, KanbanColumnId, KANBAN_COLUMNS } from '../types';
+import type { Order, OrderStatus, KanbanColumnId } from '../types';
 
 interface UseOrdersOptions {
   autoFetch?: boolean;

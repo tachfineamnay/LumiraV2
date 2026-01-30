@@ -6,7 +6,7 @@ import {
   Clock,
   CheckCircle,
   TrendingUp,
-  Users,
+
   DollarSign,
 } from 'lucide-react';
 import { DeskStats } from '../types';

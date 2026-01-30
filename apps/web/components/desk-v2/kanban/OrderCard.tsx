@@ -3,8 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Clock, User, Sparkles, GripVertical, ExternalLink } from 'lucide-react';
+import { Clock, Sparkles, GripVertical, ExternalLink } from 'lucide-react';
 import { Order, LEVEL_CONFIG } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';

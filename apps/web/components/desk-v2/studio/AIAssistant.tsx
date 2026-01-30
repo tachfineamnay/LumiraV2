@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Send,
   Sparkles,
   Loader2,
   Wand2,
   MessageSquare,
-  Lightbulb,
-  RefreshCw,
   Copy,
   Check,
 } from 'lucide-react';

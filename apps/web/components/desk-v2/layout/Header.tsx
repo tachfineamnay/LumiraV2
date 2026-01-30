@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+
 import { Search, Bell, Wifi, WifiOff, Command } from 'lucide-react';
 import { useSocket } from '../hooks/useSocket';
 

@@ -88,7 +88,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
       toast.info('Génération lancée...', { 
         description: 'L\'Oracle travaille sur votre lecture' 
       });
-    } catch (err) {
+    } catch (_err) {
       toast.error('Erreur lors du lancement de la génération');
       setIsGenerating(false);
     }
@@ -107,7 +107,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
       });
       toast.success('Lecture scellée avec succès !');
       router.push('/admin/board');
-    } catch (err) {
+    } catch (_err) {
       toast.error('Erreur lors du scellement');
     } finally {
       setIsSealing(false);
