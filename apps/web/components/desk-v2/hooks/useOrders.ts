@@ -31,17 +31,18 @@ export function useOrders(options: UseOrdersOptions = {}) {
   const fetchOrders = useCallback(async () => {
     try {
       const [paidRes, processingRes, validationRes, historyRes] = await Promise.all([
-        api.get('/expert/orders/pending'),
+        api.get('/expert/orders/paid'),
         api.get('/expert/orders/processing'),
         api.get('/expert/orders/validation'),
         api.get('/expert/orders/history?limit=20'),
       ]);
 
+      // API returns { data: [...], total, page, ... } - extract the data array
       setOrders({
-        paid: paidRes.data.filter((o: Order) => o.status === 'PAID'),
-        processing: processingRes.data,
-        validation: validationRes.data,
-        completed: historyRes.data,
+        paid: paidRes.data.data || [],
+        processing: processingRes.data.data || [],
+        validation: validationRes.data.data || [],
+        completed: historyRes.data.data || [],
       });
       setError(null);
     } catch (err) {

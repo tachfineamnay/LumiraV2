@@ -201,6 +201,51 @@ export class ExpertService {
     // ========================
 
     /**
+     * Get newly paid orders (PAID status).
+     * These are orders that just completed payment and are waiting for expert to start work.
+     */
+    async getPaidOrders(dto: PaginationDto): Promise<PaginatedResult<Order>> {
+        const { page = 1, limit = 20, search } = dto;
+        const skip = (page - 1) * limit;
+
+        const where: Record<string, unknown> = {
+            status: { in: ['PAID', 'FAILED'] }, // Include FAILED for orders that need retry
+        };
+
+        if (search) {
+            where.OR = [
+                { orderNumber: { contains: search, mode: 'insensitive' } },
+                { userEmail: { contains: search, mode: 'insensitive' } },
+                { userName: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        const [orders, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+                include: { 
+                    user: {
+                        include: { profile: true }
+                    }, 
+                    files: true 
+                },
+            }),
+            this.prisma.order.count({ where }),
+        ]);
+
+        return {
+            data: orders,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    /**
      * Get orders awaiting validation (AWAITING_VALIDATION status).
      * These are orders where AI generation is complete and ready for expert review.
      * @param dto.since - Optional ISO date string to filter orders created/updated after this date

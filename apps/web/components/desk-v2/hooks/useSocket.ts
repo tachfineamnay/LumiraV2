@@ -26,7 +26,30 @@ export function useSocket(options: UseSocketOptions = {}) {
   const [onlineCount, setOnlineCount] = useState(0);
   const [latency, setLatency] = useState<number | null>(null);
 
+  // Store callbacks in refs to avoid reconnection loops
+  const callbacksRef = useRef({
+    onNewOrder,
+    onStatusChange,
+    onGenerationComplete,
+    onStatsUpdate,
+  });
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    callbacksRef.current = {
+      onNewOrder,
+      onStatusChange,
+      onGenerationComplete,
+      onStatsUpdate,
+    };
+  }, [onNewOrder, onStatusChange, onGenerationComplete, onStatsUpdate]);
+
   const connect = useCallback(() => {
+    // Prevent multiple connections
+    if (socketRef.current?.connected) {
+      return;
+    }
+
     const token = localStorage.getItem('expert_token');
     if (!token) {
       console.warn('[Socket] No expert token found');
@@ -66,21 +89,21 @@ export function useSocket(options: UseSocketOptions = {}) {
 
     socket.on('order:new', (order) => {
       console.log('[Socket] 📦 New order:', order.orderNumber);
-      onNewOrder?.(order);
+      callbacksRef.current.onNewOrder?.(order);
     });
 
     socket.on('order:status-changed', (data) => {
       console.log('[Socket] 🔄 Status changed:', data.orderNumber, data.newStatus);
-      onStatusChange?.(data);
+      callbacksRef.current.onStatusChange?.(data);
     });
 
     socket.on('order:generation-complete', (data) => {
       console.log('[Socket] 🤖 Generation complete:', data.orderNumber, data.success);
-      onGenerationComplete?.(data);
+      callbacksRef.current.onGenerationComplete?.(data);
     });
 
     socket.on('stats:update', (stats) => {
-      onStatsUpdate?.(stats);
+      callbacksRef.current.onStatsUpdate?.(stats);
     });
 
     socket.on('pong', (data: { timestamp: number }) => {
@@ -97,7 +120,7 @@ export function useSocket(options: UseSocketOptions = {}) {
     return () => {
       clearInterval(pingInterval);
     };
-  }, [onNewOrder, onStatusChange, onGenerationComplete, onStatsUpdate]);
+  }, []); // No dependencies - callbacks are accessed via ref
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
@@ -127,7 +150,7 @@ export function useSocket(options: UseSocketOptions = {}) {
         disconnect();
       };
     }
-  }, [autoConnect, connect, disconnect]);
+  }, [autoConnect]); // Removed connect/disconnect from deps - they're stable now
 
   return {
     isConnected,

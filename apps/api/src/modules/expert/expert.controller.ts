@@ -92,6 +92,12 @@ export class ExpertController {
         return this.expertService.getPendingOrders({ ...query, since });
     }
 
+    @Get('orders/paid')
+    @SkipThrottle()
+    async getPaidOrders(@Query() query: PaginationDto) {
+        return this.expertService.getPaidOrders(query);
+    }
+
     @Get('orders/processing')
     @SkipThrottle()
     async getProcessingOrders(@Query() query: PaginationDto) {
