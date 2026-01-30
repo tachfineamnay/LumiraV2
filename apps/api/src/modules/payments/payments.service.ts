@@ -196,10 +196,7 @@ export class PaymentsService {
                 this.logger.error(`Failed to send order confirmation: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            // 🚀 AUTO-GENERATE: Trigger AI generation in background
-            this.triggerAutoGeneration(orderId).catch(err => {
-                this.logger.error(`Auto-generation failed for order ${orderId}: ${err}`);
-            });
+            // NOTE: No auto-generation. Client completes onboarding first, then expert generates manually from Desk.
 
             return;
         }
@@ -261,50 +258,7 @@ export class PaymentsService {
                 this.logger.error(`Failed to send order confirmation: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            // 🚀 AUTO-GENERATE: Trigger AI generation in background
-            this.triggerAutoGeneration(order.id).catch(err => {
-                this.logger.error(`Auto-generation failed for order ${order.id}: ${err}`);
-            });
-        }
-    }
-
-    /**
-     * Triggers automatic AI generation for an order.
-     * Runs in background after payment confirmation.
-     */
-    private async triggerAutoGeneration(orderId: string): Promise<void> {
-        this.logger.log(`🚀 Starting auto-generation for order: ${orderId}`);
-        
-        try {
-            // Dynamic import to avoid circular dependencies
-            const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
-            const { VertexOracle } = await import('../../services/factory/VertexOracle');
-            const { PdfFactory } = await import('../../services/factory/PdfFactory');
-
-            const vertexOracle = new VertexOracle(this.configService, this.prisma);
-            const pdfFactory = new PdfFactory(this.configService);
-            await pdfFactory.onModuleInit();
-
-            const digitalSoulService = new DigitalSoulService(
-                this.configService,
-                this.prisma,
-                vertexOracle,
-                pdfFactory,
-            );
-
-            const result = await digitalSoulService.processOrderGeneration(orderId);
-            this.logger.log(`✅ Auto-generation completed for ${result.orderNumber} - Archetype: ${result.archetype}`);
-        } catch (error) {
-            this.logger.error(`❌ Auto-generation failed for order ${orderId}: ${error instanceof Error ? error.message : String(error)}`);
-            
-            // Mark order as FAILED so admin can see it
-            await this.prisma.order.update({
-                where: { id: orderId },
-                data: {
-                    status: 'FAILED',
-                    errorLog: `Auto-generation failed: ${error instanceof Error ? error.message : String(error)}`,
-                },
-            });
+            // NOTE: No auto-generation. Client completes onboarding first, then expert generates manually from Desk.
         }
     }
 
