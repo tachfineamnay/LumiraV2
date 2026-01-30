@@ -30,19 +30,28 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const [paidRes, processingRes, validationRes, historyRes] = await Promise.all([
+      // Fetch all order types - use Promise.allSettled to handle partial failures
+      const results = await Promise.allSettled([
         api.get('/expert/orders/paid'),
         api.get('/expert/orders/processing'),
         api.get('/expert/orders/validation'),
         api.get('/expert/orders/history?limit=20'),
       ]);
 
-      // API returns { data: [...], total, page, ... } - extract the data array
+      // Extract data safely, fallback to empty array if endpoint fails (e.g., 404)
+      const extractData = (result: PromiseSettledResult<{ data: { data?: Order[] } }>) => {
+        if (result.status === 'fulfilled') {
+          return result.value.data.data || [];
+        }
+        console.warn('[useOrders] Endpoint failed:', result.reason);
+        return [];
+      };
+
       setOrders({
-        paid: paidRes.data.data || [],
-        processing: processingRes.data.data || [],
-        validation: validationRes.data.data || [],
-        completed: historyRes.data.data || [],
+        paid: extractData(results[0] as PromiseSettledResult<{ data: { data?: Order[] } }>),
+        processing: extractData(results[1] as PromiseSettledResult<{ data: { data?: Order[] } }>),
+        validation: extractData(results[2] as PromiseSettledResult<{ data: { data?: Order[] } }>),
+        completed: extractData(results[3] as PromiseSettledResult<{ data: { data?: Order[] } }>),
       });
       setError(null);
     } catch (err) {
