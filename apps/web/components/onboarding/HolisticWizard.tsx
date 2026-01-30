@@ -15,7 +15,8 @@ import {
     Activity,
     MapPin,
     X,
-    Star
+    Star,
+    Target
 } from "lucide-react";
 import { SmartPhotoUploader } from "./SmartPhotoUploader";
 
@@ -41,7 +42,8 @@ const STEPS = [
     { id: 1, title: "Corps Mémoire", subtitle: "Écouter le corps", icon: Activity },
     { id: 2, title: "Fréquence", subtitle: "Style de guidance", icon: Heart },
     { id: 3, title: "Ancrage", subtitle: "Coordonnées cosmiques", icon: MapPin },
-    { id: 4, title: "Scellement", subtitle: "Confirmation", icon: Sparkles },
+    { id: 4, title: "Intentions", subtitle: "Vos attentes", icon: Target },
+    { id: 5, title: "Scellement", subtitle: "Confirmation", icon: Sparkles },
 ];
 
 // =============================================================================
@@ -87,6 +89,10 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
         birthPlace: "",
         facePhoto: "",
         palmPhoto: "",
+        specificQuestion: "",
+        objective: "",
+        fears: "",
+        rituals: "",
         gdprConsent: false,
     };
 
@@ -117,7 +123,8 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
         if (step === 1) fieldsToValidate = ["strongSide", "weakSide", "strongZone", "weakZone"];
         if (step === 2) fieldsToValidate = ["deliveryStyle", "pace"];
         if (step === 3) fieldsToValidate = ["birthDate", "birthPlace"];
-        if (step === 4) fieldsToValidate = ["gdprConsent"];
+        // Step 4 (Intentions) - all fields optional, no validation needed
+        if (step === 5) fieldsToValidate = ["gdprConsent"];
 
         const isStepValid = await trigger(fieldsToValidate);
         if (isStepValid) setStep(prev => prev + 1);
@@ -465,10 +472,81 @@ export const HolisticWizard = ({ onComplete, initialData, userEmail, onClose }: 
                                 </motion.div>
                             )}
 
-                            {/* STEP 5: CONSENT */}
+                            {/* STEP 5: INTENTIONS */}
                             {step === 4 && (
                                 <motion.div
-                                    key="step4"
+                                    key="step4-intentions"
+                                    initial={{ opacity: 0, x: 30 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -30 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    className="space-y-4"
+                                >
+                                    <p className="text-center text-stellar-400 text-sm italic">
+                                        "Partagez vos attentes pour guider l'Oracle dans sa lecture."
+                                    </p>
+                                    <p className="text-center text-stellar-600 text-xs">
+                                        Ces champs sont optionnels mais enrichissent la lecture.
+                                    </p>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="flex items-center gap-2 text-xs uppercase tracking-wider text-horizon-400/90 font-medium mb-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-horizon-400" />
+                                                Question spécifique
+                                            </label>
+                                            <textarea
+                                                {...register("specificQuestion")}
+                                                placeholder="Avez-vous une question précise pour l'Oracle ?"
+                                                className="w-full h-24 bg-abyss-700/50 border border-white/10 rounded-xl p-3 text-sm text-stellar-200 placeholder:text-stellar-600 focus:border-horizon-500/50 focus:ring-1 focus:ring-horizon-500/20 focus:outline-none transition-all resize-none"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="flex items-center gap-2 text-xs uppercase tracking-wider text-serenity-400/90 font-medium mb-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-serenity-400" />
+                                                Objectif de la lecture
+                                            </label>
+                                            <textarea
+                                                {...register("objective")}
+                                                placeholder="Que cherchez-vous à comprendre, transformer ou clarifier ?"
+                                                className="w-full h-24 bg-abyss-700/50 border border-white/10 rounded-xl p-3 text-sm text-stellar-200 placeholder:text-stellar-600 focus:border-serenity-500/50 focus:ring-1 focus:ring-serenity-500/20 focus:outline-none transition-all resize-none"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="flex items-center gap-2 text-xs uppercase tracking-wider text-amber-400/90 font-medium mb-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                                    Peurs à transmuter
+                                                </label>
+                                                <textarea
+                                                    {...register("fears")}
+                                                    placeholder="Ce qui vous effraie ou vous bloque..."
+                                                    className="w-full h-20 bg-abyss-700/50 border border-white/10 rounded-xl p-3 text-sm text-stellar-200 placeholder:text-stellar-600 focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 focus:outline-none transition-all resize-none"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="flex items-center gap-2 text-xs uppercase tracking-wider text-violet-400/90 font-medium mb-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                                                    Rituels actuels
+                                                </label>
+                                                <textarea
+                                                    {...register("rituals")}
+                                                    placeholder="Pratiques spirituelles, méditation..."
+                                                    className="w-full h-20 bg-abyss-700/50 border border-white/10 rounded-xl p-3 text-sm text-stellar-200 placeholder:text-stellar-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 focus:outline-none transition-all resize-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* STEP 6: CONSENT */}
+                            {step === 5 && (
+                                <motion.div
+                                    key="step5-consent"
                                     initial={{ opacity: 0, x: 30 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -30 }}

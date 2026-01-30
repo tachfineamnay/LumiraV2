@@ -260,6 +260,10 @@ function AutoLoginHandler() {
                                 deliveryStyle: data.deliveryStyle,
                                 pace: data.pace,
                                 ailments: data.ailments || null,
+                                specificQuestion: data.specificQuestion || null,
+                                objective: data.objective || null,
+                                fears: data.fears || null,
+                                rituals: data.rituals || null,
                                 profileCompleted: true,
                             };
                             
@@ -336,6 +340,10 @@ function DashboardContent() {
                     deliveryStyle: data.deliveryStyle,
                     pace: data.pace,
                     ailments: data.ailments || null,
+                    specificQuestion: data.specificQuestion || null,
+                    objective: data.objective || null,
+                    fears: data.fears || null,
+                    rituals: data.rituals || null,
                     profileCompleted: true,
                 };
                 

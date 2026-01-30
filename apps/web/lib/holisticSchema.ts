@@ -84,7 +84,36 @@ export const identitySchema = z.object({
 export type IdentityData = z.infer<typeof identitySchema>;
 
 // -----------------------------------------------------------------------------
-// STEP 5: CONSENT (Le Scellement)
+// STEP 5: INTENTIONS (Vos Attentes)
+// -----------------------------------------------------------------------------
+
+export const intentionsSchema = z.object({
+    specificQuestion: z
+        .string()
+        .max(2000, "Maximum 2000 caractères")
+        .optional()
+        .or(z.literal("")),
+    objective: z
+        .string()
+        .max(2000, "Maximum 2000 caractères")
+        .optional()
+        .or(z.literal("")),
+    fears: z
+        .string()
+        .max(2000, "Maximum 2000 caractères")
+        .optional()
+        .or(z.literal("")),
+    rituals: z
+        .string()
+        .max(1500, "Maximum 1500 caractères")
+        .optional()
+        .or(z.literal("")),
+});
+
+export type IntentionsData = z.infer<typeof intentionsSchema>;
+
+// -----------------------------------------------------------------------------
+// STEP 6: CONSENT (Le Scellement)
 // -----------------------------------------------------------------------------
 
 export const consentSchema = z.object({
@@ -103,6 +132,7 @@ export const holisticDiagnosticSchema = vibrationSchema
     .merge(somaticSchema)
     .merge(rhythmSchema)
     .merge(identitySchema)
+    .merge(intentionsSchema)
     .merge(consentSchema);
 
 export type HolisticDiagnosticData = z.infer<typeof holisticDiagnosticSchema>;
@@ -116,6 +146,7 @@ export const stepSchemas = {
     somatic: somaticSchema,
     rhythm: rhythmSchema,
     identity: identitySchema,
+    intentions: intentionsSchema,
     consent: consentSchema,
 } as const;
 
@@ -138,6 +169,10 @@ export const defaultHolisticData: Partial<HolisticDiagnosticData> = {
     birthPlace: "",
     facePhoto: "",
     palmPhoto: "",
+    specificQuestion: "",
+    objective: "",
+    fears: "",
+    rituals: "",
     gdprConsent: false,
 };
 
