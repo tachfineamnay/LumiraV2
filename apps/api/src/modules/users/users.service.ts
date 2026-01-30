@@ -92,15 +92,21 @@ export class UsersService {
    * Also accepts PENDING orders for paid products (awaiting webhook confirmation).
    */
   async findUserWithPaidOrder(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[findUserWithPaidOrder] Looking for user with email: ${normalizedEmail}`);
+    
     // First find the user
     const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: normalizedEmail },
       include: { profile: true },
     });
 
     if (!user) {
+      console.log(`[findUserWithPaidOrder] No user found with email: ${normalizedEmail}`);
       return null;
     }
+    
+    console.log(`[findUserWithPaidOrder] Found user: ${user.id}`);
 
     // Check if user has at least one paid/valid order
     // Include PENDING orders for paid products (they will be updated to PAID by webhook)
@@ -116,8 +122,17 @@ export class UsersService {
     });
 
     if (!paidOrder) {
+      console.log(`[findUserWithPaidOrder] No valid order found for user: ${user.id}`);
+      // Log all orders for debugging
+      const allOrders = await this.prisma.order.findMany({
+        where: { userId: user.id },
+        select: { id: true, status: true, amount: true, createdAt: true },
+      });
+      console.log(`[findUserWithPaidOrder] User's orders:`, JSON.stringify(allOrders));
       return null;
     }
+    
+    console.log(`[findUserWithPaidOrder] Found valid order: ${paidOrder.id} (status: ${paidOrder.status}, amount: ${paidOrder.amount})`);
 
     return user;
   }

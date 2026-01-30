@@ -76,12 +76,17 @@ export class AuthService {
             level: number;
         };
     }> {
+        console.log(`[SanctuaireAuth] Attempting auth for email: ${email.toLowerCase().trim()}`);
+        
         // Find user with at least one paid order
         const user = await this.usersService.findUserWithPaidOrder(email);
 
         if (!user) {
+            console.log(`[SanctuaireAuth] No user/order found for: ${email}`);
             throw new UnauthorizedException('Aucune commande trouvée pour cet email');
         }
+        
+        console.log(`[SanctuaireAuth] Found user ${user.id} for email: ${email}`);
 
         // Get user's entitlements to determine level
         const entitlements = await this.usersService.getEntitlements(user.id);
