@@ -15,6 +15,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { VertexOracle } from './factory/VertexOracle';
 import { PdfFactory } from './factory/PdfFactory';
 import { ContextDispatcher } from './factory/ContextDispatcher';
+import { DigitalSoulService } from './factory/DigitalSoulService';
 
 @Module({
     imports: [
@@ -25,11 +26,13 @@ import { ContextDispatcher } from './factory/ContextDispatcher';
         VertexOracle,
         PdfFactory,
         ContextDispatcher,
+        DigitalSoulService,
     ],
     exports: [
         VertexOracle,
         PdfFactory,
         ContextDispatcher,
+        DigitalSoulService,
     ],
 })
 export class ServicesModule {}

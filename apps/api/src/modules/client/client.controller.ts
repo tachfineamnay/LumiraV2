@@ -2,6 +2,7 @@ import {
     Controller,
     Get,
     Post,
+    Body,
     Param,
     Request,
     UseGuards,
@@ -103,5 +104,24 @@ export class ClientController {
         @Param('orderId') orderId: string,
     ) {
         return this.clientService.getReadingContent(req.user.userId, orderId);
+    }
+
+    /**
+     * POST /api/client/chat
+     * Chat with Oracle Lumira (CONFIDANT agent)
+     * Requires active subscription or completed reading
+     */
+    @Post('chat')
+    @HttpCode(HttpStatus.OK)
+    @Throttle({ default: { limit: 20, ttl: 60000 } })
+    async chatWithOracle(
+        @Request() req: { user: { userId: string } },
+        @Body() body: { message: string; sessionId?: string },
+    ) {
+        return this.clientService.chatWithOracle(
+            req.user.userId,
+            body.message,
+            body.sessionId,
+        );
     }
 }

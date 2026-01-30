@@ -1,11 +1,15 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ContextDispatcher } from '../../services/factory/ContextDispatcher';
 
 @Injectable()
 export class ClientService {
     private readonly logger = new Logger(ClientService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly contextDispatcher: ContextDispatcher,
+    ) { }
 
     /**
      * Get the user's spiritual path with all steps
@@ -272,5 +276,56 @@ export class ClientService {
             conclusion: content?.conclusion,
             timeline: content?.timeline,
         };
+    }
+
+    /**
+     * Chat with Oracle Lumira using the CONFIDANT agent
+     * Verifies user has access (completed reading or active subscription)
+     */
+    async chatWithOracle(userId: string, message: string, sessionId?: string) {
+        // Verify user has at least one completed reading or active subscription
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                orders: {
+                    where: { status: 'COMPLETED' },
+                    take: 1,
+                },
+                profile: true,
+            },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Utilisateur non trouvé');
+        }
+
+        const hasAccess = user.orders.length > 0 || user.subscriptionStatus === 'active';
+        if (!hasAccess) {
+            throw new ForbiddenException(
+                'Vous devez avoir complété au moins une lecture pour accéder au chat avec l\'Oracle.',
+            );
+        }
+
+        this.logger.log(`💬 Chat request from user ${userId}: "${message.substring(0, 50)}..."`);
+
+        try {
+            // Use ContextDispatcher to route to CONFIDANT agent
+            const response = await this.contextDispatcher.dispatchChatRequest(
+                userId,
+                message,
+                sessionId,
+            );
+
+            return {
+                success: true,
+                response: response.reply,
+                sessionId: response.sessionId,
+                contextUsed: response.contextUsed,
+                timestamp: new Date().toISOString(),
+            };
+        } catch (error) {
+            this.logger.error(`❌ Chat error for user ${userId}:`, error);
+            throw error;
+        }
     }
 }

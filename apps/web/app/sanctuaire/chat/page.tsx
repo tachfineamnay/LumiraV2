@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, User, Bot, Loader2 } from "lucide-react";
 import { GlassCard } from "../../../components/ui/GlassCard";
+import api from "../../../lib/api";
 
 interface Message {
     id: string;
@@ -17,6 +18,7 @@ interface Message {
 export default function OracleChatPage() {
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [sessionId, setSessionId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([
         {
             id: "1",
@@ -44,20 +46,41 @@ export default function OracleChatPage() {
         };
 
         setMessages((prev) => [...prev, userMsg]);
+        const userMessage = input;
         setInput("");
         setIsLoading(true);
 
-        // Simulate AI response
-        setTimeout(() => {
+        try {
+            // Call the real API endpoint
+            const { data } = await api.post('/client/chat', {
+                message: userMessage,
+                sessionId: sessionId,
+            });
+
+            // Update session ID for conversation continuity
+            if (data.sessionId) {
+                setSessionId(data.sessionId);
+            }
+
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: "assistant",
-                content: "Les étoiles s'alignent pour vous répondre... Votre chemin est marqué par une grande transformation. Ayez confiance en l'inconnu.",
+                content: data.response,
                 timestamp: new Date(),
             };
             setMessages((prev) => [...prev, aiMsg]);
+        } catch (error: unknown) {
+            console.error('Chat error:', error);
+            const errorMsg: Message = {
+                id: (Date.now() + 1).toString(),
+                role: "assistant",
+                content: "Les astres sont momentanément voilés... Veuillez réessayer dans quelques instants.",
+                timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, errorMsg]);
+        } finally {
             setIsLoading(false);
-        }, 2000);
+        }
     };
 
     return (
@@ -149,6 +172,8 @@ export default function OracleChatPage() {
                                 onClick={handleSend}
                                 disabled={!input.trim() || isLoading}
                                 className="p-3 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 text-white hover:shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Envoyer le message"
+                                aria-label="Envoyer le message"
                             >
                                 <Send className="w-5 h-5" />
                             </button>

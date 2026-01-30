@@ -3,12 +3,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { VertexOracle, UserProfile, OrderContext } from './VertexOracle';
 import { PrismaService } from '../../prisma/prisma.service';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Simple mock factory that just returns a Jest fn
-jest.mock('@google-cloud/vertexai', () => {
+// Mock the @google/generative-ai library (actual library used by VertexOracle)
+jest.mock('@google/generative-ai', () => {
     return {
-        VertexAI: jest.fn(),
+        GoogleGenerativeAI: jest.fn(),
     };
 });
 
@@ -59,16 +59,11 @@ describe('VertexOracle', () => {
         // 1. create the content mock function (fresh for each test)
         mockGenerateContent = jest.fn();
 
-        // 2. Configure the VertexAI mock implementation
-        (VertexAI as unknown as jest.Mock).mockImplementation(() => ({
+        // 2. Configure the GoogleGenerativeAI mock implementation
+        (GoogleGenerativeAI as unknown as jest.Mock).mockImplementation(() => ({
             getGenerativeModel: jest.fn(() => ({
                 generateContent: mockGenerateContent,
             })),
-            preview: {
-                getGenerativeModel: jest.fn(() => ({
-                    generateContent: mockGenerateContent,
-                })),
-            },
         }));
 
         const module: TestingModule = await Test.createTestingModule({
