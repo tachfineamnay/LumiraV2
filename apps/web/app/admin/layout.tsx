@@ -95,6 +95,12 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
         return <>{children}</>;
     }
 
+    // Don't apply old layout to Desk v2 routes - they have their own DeskLayout
+    if (pathname === "/admin/board" || pathname?.startsWith("/admin/board/") || 
+        (pathname?.startsWith("/admin/studio/") && pathname !== "/admin/studio")) {
+        return <>{children}</>;
+    }
+
     // Loading state
     if (isLoading) {
         return (
