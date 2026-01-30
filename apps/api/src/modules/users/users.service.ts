@@ -33,11 +33,12 @@ export class UsersService {
     // Fetch all orders that should grant entitlements.
     // Note: an order can move from PAID -> PROCESSING -> AWAITING_VALIDATION -> COMPLETED,
     // and should continue granting access across the whole lifecycle.
+    // FAILED orders are paid orders where generation failed - they should still grant access.
     const orders = await this.prisma.order.findMany({
       where: {
         userId,
         OR: [
-          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED'] } },
+          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] } },
           // Free orders (amount=0) are valid even without a payment step.
           { status: 'PENDING', amount: 0 },
         ],
@@ -110,11 +111,12 @@ export class UsersService {
 
     // Check if user has at least one paid/valid order
     // Include PENDING orders for paid products (they will be updated to PAID by webhook)
+    // Also include FAILED orders - these are paid orders where generation failed, user should still have access
     const paidOrder = await this.prisma.order.findFirst({
       where: {
         userId: user.id,
         OR: [
-          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED'] } },
+          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] } },
           { status: 'PENDING', amount: 0 }, // Free orders
           { status: 'PENDING', amount: { gt: 0 } }, // Paid orders awaiting webhook confirmation
         ],
@@ -163,7 +165,7 @@ export class UsersService {
 
     // Check if any order would pass auth
     const wouldAuth = orders.some(o => 
-      ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED'].includes(o.status) ||
+      ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'].includes(o.status) ||
       (o.status === 'PENDING' && o.amount === 0) ||
       (o.status === 'PENDING' && o.amount > 0)
     );
