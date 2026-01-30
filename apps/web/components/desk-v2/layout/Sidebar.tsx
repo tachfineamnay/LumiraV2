@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   Kanban,
-  Users,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -28,11 +27,6 @@ const NAV_ITEMS = [
     label: 'Board',
     icon: Kanban,
     badge: true,
-  },
-  {
-    href: '/admin/clients',
-    label: 'Clients',
-    icon: Users,
   },
   {
     href: '/admin/settings',

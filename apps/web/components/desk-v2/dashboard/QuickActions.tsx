@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Kanban, Users, Settings, Plus, Sparkles } from 'lucide-react';
+import { Kanban, Settings } from 'lucide-react';
 
 export function QuickActions() {
   const router = useRouter();
@@ -15,22 +15,6 @@ export function QuickActions() {
       icon: Kanban,
       color: 'amber',
       onClick: () => router.push('/admin/board'),
-    },
-    {
-      id: 'clients',
-      label: 'Clients',
-      description: 'Gestion CRM',
-      icon: Users,
-      color: 'blue',
-      onClick: () => router.push('/admin/clients'),
-    },
-    {
-      id: 'new-client',
-      label: 'Nouveau client',
-      description: 'Créer un profil',
-      icon: Plus,
-      color: 'emerald',
-      onClick: () => router.push('/admin/clients?action=new'),
     },
     {
       id: 'settings',

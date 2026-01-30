@@ -40,8 +40,8 @@ export default function AdminLoginPage() {
 
             toast.success('Connexion réussie !');
 
-            // Redirect to orders
-            router.push('/admin/orders');
+            // Redirect to board
+            router.push('/admin/board');
         } catch {
             toast.error('Erreur de connexion au serveur');
             setLoading(false);

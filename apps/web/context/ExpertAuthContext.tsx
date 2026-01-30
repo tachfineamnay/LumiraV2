@@ -107,7 +107,7 @@ export const ExpertAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setToken(data.accessToken);
         setExpert(data.expert);
 
-        router.push('/admin/orders');
+        router.push('/admin/board');
     }, [apiUrl, router]);
 
     // Initialize auth on mount

@@ -6,10 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
   Kanban,
-  Users,
   Settings,
   FileText,
-  Plus,
   Zap,
   Moon,
   ArrowRight,
@@ -57,15 +55,6 @@ export function CommandPalette() {
       category: 'navigation',
     },
     {
-      id: 'nav-clients',
-      icon: <Users className="w-4 h-4" />,
-      label: 'Clients',
-      description: 'Gestion CRM',
-      shortcut: 'G C',
-      action: () => router.push('/admin/clients'),
-      category: 'navigation',
-    },
-    {
       id: 'nav-settings',
       icon: <Settings className="w-4 h-4" />,
       label: 'Paramètres',
@@ -75,14 +64,6 @@ export function CommandPalette() {
       category: 'navigation',
     },
     // Actions
-    {
-      id: 'action-new-client',
-      icon: <Plus className="w-4 h-4" />,
-      label: 'Nouveau client',
-      description: 'Créer un client',
-      action: () => router.push('/admin/clients?action=new'),
-      category: 'actions',
-    },
     {
       id: 'action-theme',
       icon: <Moon className="w-4 h-4" />,
