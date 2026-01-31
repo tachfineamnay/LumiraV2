@@ -135,9 +135,11 @@ function AutoLoginHandler() {
 
             if (result.success) {
                 setAutoLoginState('success');
+                console.log('[AutoLoginHandler] Auth success, isFirstVisit:', result.isFirstVisit);
                 // Show onboarding for first visit ONLY if profile is NOT completed
                 // This prevents re-showing onboarding if user has already completed it
                 if (result.isFirstVisit) {
+                    console.log('[AutoLoginHandler] 🎯 Setting showOnboarding = true');
                     setShowOnboarding(true);
                     // Don't clean URL yet - will be done when onboarding completes
                 } else {
@@ -223,7 +225,9 @@ function AutoLoginHandler() {
     }
 
     // Onboarding modal - force display until profile is completed (server state as source of truth)
+    console.log('[AutoLoginHandler] Wizard check:', { showOnboarding, profileCompleted: profile?.profileCompleted, profile });
     if (showOnboarding && !profile?.profileCompleted) {
+        console.log('[AutoLoginHandler] 🎯 SHOWING WIZARD');
         return (
             <HolisticWizard
                 userEmail={email || user?.email}
