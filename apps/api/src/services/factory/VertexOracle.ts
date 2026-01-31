@@ -297,11 +297,10 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - Using Gemini 1.5 Flash (API Key compatible)
-    // Note: gemini-2.x/2.5 models require Vertex AI OAuth on some projects
-    // gemini-1.5-flash is stable and works with GEMINI_API_KEY
-    private readonly HEAVY_MODEL = 'gemini-1.5-flash';
-    private readonly FLASH_MODEL = 'gemini-1.5-flash';
+    // Model identifiers - AI Studio "Lumira Nanobanana Pro" project
+    // Using standard model aliases (no suffixes for production stability)
+    private readonly HEAVY_MODEL = 'gemini-1.5-pro';   // Intelligent model for complex tasks
+    private readonly FLASH_MODEL = 'gemini-1.5-flash'; // Fast model for quick responses
 
     constructor(
         private readonly configService: ConfigService,
