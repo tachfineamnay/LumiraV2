@@ -297,10 +297,9 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - AI Studio "Lumira Nanobanana Pro" project
-    // Using standard model aliases (no suffixes for production stability)
-    private readonly HEAVY_MODEL = 'gemini-1.5-pro';   // Intelligent model for complex tasks
-    private readonly FLASH_MODEL = 'gemini-1.5-flash'; // Fast model for quick responses
+    // Model identifiers - AI Studio with -latest suffix for auto-updates
+    private readonly HEAVY_MODEL = 'gemini-1.5-pro-latest';   // Intelligent model for complex tasks
+    private readonly FLASH_MODEL = 'gemini-1.5-flash-latest'; // Fast model for quick responses
 
     constructor(
         private readonly configService: ConfigService,
