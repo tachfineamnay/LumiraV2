@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
@@ -165,18 +166,6 @@ function AutoLoginHandler() {
         performAutoLogin();
     }, [email, token, authLoading, isAuthenticated, autoLoginState, authenticateWithEmail, retryCount, router, isFirstVisit]);
 
-    // 🔄 Check if we should show onboarding after authentication completes
-    // This handles the case where isFirstVisit was set but profile data wasn't loaded yet
-    useEffect(() => {
-        if (showOnboarding && profile?.profileCompleted) {
-            // Profile is already completed, skip onboarding
-            console.log("[AutoLoginHandler] Profile already completed, skipping onboarding");
-            setShowOnboarding(false);
-            clearFirstVisitFlag();
-            router.replace('/sanctuaire');
-        }
-    }, [showOnboarding, profile, router]);
-
     // Show loading during auto-login
     if (autoLoginState === 'authenticating') {
         return (
@@ -233,11 +222,24 @@ function AutoLoginHandler() {
         );
     }
 
-    // Onboarding modal
+    // Onboarding modal - force display until profile is completed (server state as source of truth)
     if (showOnboarding && !profile?.profileCompleted) {
         return (
             <HolisticWizard
                 userEmail={email || user?.email}
+                onClose={() => {
+                    // User closed wizard to prepare (photos, etc.) - draft is auto-saved by HolisticWizard
+                    setShowOnboarding(false);
+                    clearFirstVisitFlag();
+                    toast.info(
+                        "Votre progression est sauvegardée ✨",
+                        { 
+                            description: "Reprenez votre diagnostic quand vous êtes prêt via le bouton doré.",
+                            duration: 5000
+                        }
+                    );
+                    router.replace('/sanctuaire');
+                }}
                 onComplete={async (data) => {
                     try {
                         const authToken = localStorage.getItem("sanctuaire_token");
@@ -300,8 +302,8 @@ function DashboardContent() {
     const { profile, refetchData, user } = useSanctuaireAuth();
     const [showWizard, setShowWizard] = useState(false);
 
-    // Check if onboarding is complete
-    const isOnboardingComplete = !!(profile?.birthDate && profile?.profileCompleted);
+    // Check if onboarding is complete - use profileCompleted as single source of truth
+    const isOnboardingComplete = profile?.profileCompleted === true;
 
     if (isLoading) {
         return (
@@ -358,8 +360,10 @@ function DashboardContent() {
             localStorage.removeItem('holistic_wizard_email');
             
             await refetchData();
+            toast.success("Diagnostic complété !", { description: "Votre mandala est maintenant accessible." });
         } catch (error) {
             console.error("Failed to save holistic diagnostic:", error);
+            toast.error("Erreur lors de la sauvegarde", { description: "Veuillez réessayer." });
             await refetchData();
         } finally {
             setShowWizard(false);
@@ -373,7 +377,13 @@ function DashboardContent() {
                 <HolisticWizard
                     userEmail={user?.email}
                     onComplete={handleWizardComplete}
-                    onClose={() => setShowWizard(false)}
+                    onClose={() => {
+                        setShowWizard(false);
+                        toast.info(
+                            "Progression sauvegardée ✨",
+                            { description: "Reprenez quand vous êtes prêt." }
+                        );
+                    }}
                 />
             )}
 
