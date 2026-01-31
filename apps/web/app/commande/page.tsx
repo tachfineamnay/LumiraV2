@@ -9,6 +9,14 @@ import { Loader2 } from 'lucide-react';
 import { CheckoutHeader, ProductSummary, CheckoutForm, CheckoutFormData, StripePayment, FreeOrderButton } from '../../components/checkout';
 import api from '../../lib/api';
 
+// Type for connected user from Sanctuaire
+interface ConnectedUser {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+}
+
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface Product {
@@ -25,6 +33,9 @@ function CheckoutContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const productLevel = searchParams.get('product') || 'initie';
+    
+    // Get connected user from Sanctuaire token (if any)
+    const [connectedUser, setConnectedUser] = useState<ConnectedUser | null>(null);
 
     const [product, setProduct] = useState<Product | null>(null);
     const [loading, setLoading] = useState(true);
@@ -32,6 +43,32 @@ function CheckoutContent() {
     const [isFormValid, setIsFormValid] = useState(false);
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [paymentError, setPaymentError] = useState<string | null>(null);
+
+    // Try to fetch connected user from Sanctuaire on mount
+    useEffect(() => {
+        const fetchConnectedUser = async () => {
+            const token = localStorage.getItem('sanctuaire_token') || localStorage.getItem('lumira_token');
+            if (!token) return;
+            
+            try {
+                const response = await api.get('/users/profile', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (response.data) {
+                    setConnectedUser({
+                        email: response.data.email,
+                        firstName: response.data.firstName || '',
+                        lastName: response.data.lastName || '',
+                        phone: response.data.phone || null,
+                    });
+                }
+            } catch {
+                // User not connected or token invalid - that's fine
+                console.log('[Checkout] No connected user found');
+            }
+        };
+        fetchConnectedUser();
+    }, []);
 
     // Fetch product on mount
     useEffect(() => {
@@ -230,11 +267,22 @@ function CheckoutContent() {
                             >
                                 <h2 className="text-xl font-playfair italic text-cosmic-divine mb-6">
                                     Vos informations
+                                    {connectedUser && (
+                                        <span className="text-sm font-normal text-cosmic-stardust ml-2">
+                                            (pré-rempli)
+                                        </span>
+                                    )}
                                 </h2>
 
                                 <CheckoutForm
                                     onFormValid={handleFormValid}
                                     onFormInvalid={handleFormInvalid}
+                                    initialValues={connectedUser ? {
+                                        email: connectedUser.email,
+                                        firstName: connectedUser.firstName || '',
+                                        lastName: connectedUser.lastName || '',
+                                        phone: connectedUser.phone || '',
+                                    } : undefined}
                                 />
                             </motion.div>
 

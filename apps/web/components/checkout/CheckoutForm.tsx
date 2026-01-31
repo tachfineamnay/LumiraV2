@@ -19,6 +19,7 @@ export type CheckoutFormData = z.infer<typeof formSchema>;
 interface CheckoutFormProps {
     onFormValid: (data: CheckoutFormData) => void;
     onFormInvalid: () => void;
+    initialValues?: Partial<CheckoutFormData>;
 }
 
 const InputField = ({
@@ -114,10 +115,11 @@ const InputField = ({
     );
 };
 
-export function CheckoutForm({ onFormValid, onFormInvalid }: CheckoutFormProps) {
+export function CheckoutForm({ onFormValid, onFormInvalid, initialValues }: CheckoutFormProps) {
     const { register, watch, formState: { errors, isValid } } = useForm<CheckoutFormData>({
         resolver: zodResolver(formSchema),
         mode: 'onChange',
+        defaultValues: initialValues,
     });
 
     const watchedFields = watch();
