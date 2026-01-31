@@ -297,9 +297,10 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - AI Studio with -latest suffix for auto-updates
-    private readonly HEAVY_MODEL = 'gemini-1.5-pro-latest';   // Intelligent model for complex tasks
-    private readonly FLASH_MODEL = 'gemini-1.5-flash-latest'; // Fast model for quick responses
+    // Model identifiers - Gemini 2.5 (current stable as of Jan 2026)
+    // Note: gemini-1.5-pro/flash are DEPRECATED, use 2.5 versions
+    private readonly HEAVY_MODEL = 'gemini-2.5-flash';  // Best price-performance for complex tasks
+    private readonly FLASH_MODEL = 'gemini-2.5-flash';  // Same model, fast for chat
 
     constructor(
         private readonly configService: ConfigService,
