@@ -1,11 +1,11 @@
 'use client';
 
-import { StudioEditor } from '@/components/desk-v2/studio/StudioEditor';
+import { OrderWorkflow } from '@/components/desk-v2/studio/OrderWorkflow';
 
 interface StudioPageProps {
   params: { id: string };
 }
 
 export default function StudioPage({ params }: StudioPageProps) {
-  return <StudioEditor orderId={params.id} />;
+  return <OrderWorkflow orderId={params.id} />;
 }
