@@ -366,4 +366,80 @@ export class ExpertController {
     async setVertexKey(@Body('credentials') credentials: string) {
         return this.adminSettingsService.setVertexCredentials(credentials);
     }
+
+    // ========================
+    // AI PROMPTS MANAGEMENT
+    // ========================
+
+    @Get('settings/prompts')
+    async getAllPrompts() {
+        return this.adminSettingsService.getAllPrompts();
+    }
+
+    @Get('settings/prompts/defaults')
+    async getDefaultPrompts() {
+        return this.adminSettingsService.getDefaultPrompts();
+    }
+
+    @Get('settings/prompts/:key')
+    async getPrompt(@Param('key') key: string) {
+        return { key, value: await this.adminSettingsService.getPrompt(key) };
+    }
+
+    @Get('settings/prompts/:key/history')
+    async getPromptHistory(@Param('key') key: string, @Query('limit') limit?: string) {
+        const limitNum = limit ? parseInt(limit, 10) : 10;
+        return this.adminSettingsService.getPromptHistory(key, limitNum);
+    }
+
+    @Put('settings/prompts/:key')
+    async savePrompt(
+        @Param('key') key: string,
+        @Body('value') value: string,
+        @Body('changedBy') changedBy?: string,
+        @Body('comment') comment?: string,
+    ) {
+        return this.adminSettingsService.savePrompt(key, value, changedBy, comment);
+    }
+
+    @Post('settings/prompts/:key/restore/:version')
+    async restorePromptVersion(
+        @Param('key') key: string,
+        @Param('version') version: string,
+        @Body('changedBy') changedBy?: string,
+    ) {
+        return this.adminSettingsService.restorePromptVersion(key, parseInt(version, 10), changedBy);
+    }
+
+    @Post('settings/prompts/:key/reset')
+    async resetPromptToDefault(@Param('key') key: string) {
+        return this.adminSettingsService.resetPromptToDefault(key);
+    }
+
+    @Post('settings/prompts-reset-all')
+    async resetAllPrompts() {
+        return this.adminSettingsService.resetAllPromptsToDefaults();
+    }
+
+    @Get('settings/model-config')
+    async getModelConfig() {
+        return this.adminSettingsService.getModelConfig();
+    }
+
+    @Put('settings/model-config')
+    async saveModelConfig(
+        @Body() config: Partial<{
+            heavyModel: string;
+            flashModel: string;
+            heavyTemperature: number;
+            heavyTopP: number;
+            heavyMaxTokens: number;
+            flashTemperature: number;
+            flashTopP: number;
+            flashMaxTokens: number;
+        }>,
+        @Body('changedBy') changedBy?: string,
+    ) {
+        return this.adminSettingsService.saveModelConfig(config, changedBy);
+    }
 }

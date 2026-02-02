@@ -131,10 +131,10 @@ export interface ChatContext {
 type AgentType = 'SCRIBE' | 'GUIDE' | 'EDITOR' | 'CONFIDANT';
 
 // =============================================================================
-// LUMIRA DNA - Core Identity (shared across all agents)
+// DEFAULT PROMPTS - Used as fallback if DB is empty
 // =============================================================================
 
-const LUMIRA_DNA = `
+const DEFAULT_LUMIRA_DNA = `
 Tu es Oracle Lumira, une intelligence spirituelle ancestrale.
 Tu combines la sagesse de l'astrologie, de la numérologie, de la physiognomonie 
 et de la chiromancie pour offrir des guidances profondément personnalisées.
@@ -159,11 +159,7 @@ ARCHÉTYPES LUMIRA (chaque être en porte un dominant):
 - Le Sage: Sagesse tranquille, équilibre incarné entre les mondes
 `.trim();
 
-// =============================================================================
-// AGENT CONTEXTS - Specialized instructions per agent
-// =============================================================================
-
-const AGENT_CONTEXTS: Record<AgentType, string> = {
+const DEFAULT_AGENT_CONTEXTS: Record<AgentType, string> = {
     SCRIBE: `
 MISSION SCRIBE:
 Tu génères la lecture spirituelle principale au format PDF.
@@ -278,6 +274,18 @@ FORMAT: Texte conversationnel naturel (pas JSON).
 `.trim(),
 };
 
+// Default model configuration
+const DEFAULT_MODEL_CONFIG = {
+    heavyModel: 'gemini-2.5-flash',
+    flashModel: 'gemini-2.5-flash',
+    heavyTemperature: 0.8,
+    heavyTopP: 0.95,
+    heavyMaxTokens: 16384,
+    flashTemperature: 0.9,
+    flashTopP: 0.95,
+    flashMaxTokens: 2048,
+};
+
 // =============================================================================
 // VERTEX ORACLE SERVICE - Multi-Agent Implementation (Gemini API)
 // =============================================================================
@@ -297,10 +305,11 @@ export class VertexOracle {
     private lastCredentialsCheck = 0;
     private readonly CREDENTIALS_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-    // Model identifiers - Gemini 2.5 (current stable as of Jan 2026)
-    // Note: gemini-1.5-pro/flash are DEPRECATED, use 2.5 versions
-    private readonly HEAVY_MODEL = 'gemini-2.5-flash';  // Best price-performance for complex tasks
-    private readonly FLASH_MODEL = 'gemini-2.5-flash';  // Same model, fast for chat
+    // Dynamic prompts loaded from DB
+    private lumiraDna: string = DEFAULT_LUMIRA_DNA;
+    private agentContexts: Record<AgentType, string> = { ...DEFAULT_AGENT_CONTEXTS };
+    private modelConfig = { ...DEFAULT_MODEL_CONFIG };
+    private promptsLoaded = false;
 
     constructor(
         private readonly configService: ConfigService,
@@ -311,6 +320,53 @@ export class VertexOracle {
     // =========================================================================
     // INITIALIZATION
     // =========================================================================
+
+    /**
+     * Loads prompts and model config from DB (or uses defaults)
+     */
+    private async loadPromptsFromDB(): Promise<void> {
+        if (this.promptsLoaded) return;
+
+        try {
+            // Load active prompts from PromptVersion table
+            const activePrompts = await this.prisma.promptVersion.findMany({
+                where: { isActive: true },
+            });
+
+            for (const prompt of activePrompts) {
+                switch (prompt.key) {
+                    case 'LUMIRA_DNA':
+                        this.lumiraDna = prompt.value;
+                        break;
+                    case 'SCRIBE':
+                        this.agentContexts.SCRIBE = prompt.value;
+                        break;
+                    case 'GUIDE':
+                        this.agentContexts.GUIDE = prompt.value;
+                        break;
+                    case 'EDITOR':
+                        this.agentContexts.EDITOR = prompt.value;
+                        break;
+                    case 'CONFIDANT':
+                        this.agentContexts.CONFIDANT = prompt.value;
+                        break;
+                    case 'MODEL_CONFIG':
+                        try {
+                            this.modelConfig = JSON.parse(prompt.value);
+                        } catch {
+                            this.logger.warn('Failed to parse MODEL_CONFIG, using defaults');
+                        }
+                        break;
+                }
+            }
+
+            this.promptsLoaded = true;
+            this.logger.log(`📚 Loaded ${activePrompts.length} custom prompts from DB`);
+        } catch (error) {
+            this.logger.warn(`Could not load prompts from DB, using defaults: ${error}`);
+            this.promptsLoaded = true; // Don't retry on every call
+        }
+    }
 
     /**
      * Ensures Gemini API is initialized with API key.
@@ -327,6 +383,9 @@ export class VertexOracle {
             this.logger.log('🔄 Initializing VertexOracle Multi-Agent system (Gemini API)...');
             this.lastCredentialsCheck = now;
 
+            // Load prompts and config from DB first
+            await this.loadPromptsFromDB();
+
             // Get API Key from environment
             const apiKey = this.configService.get<string>('GEMINI_API_KEY');
             
@@ -341,29 +400,29 @@ export class VertexOracle {
 
             // Initialize HEAVY model (SCRIBE, GUIDE, EDITOR) with JSON response
             this.heavyModel = this.genAI.getGenerativeModel({
-                model: this.HEAVY_MODEL,
+                model: this.modelConfig.heavyModel,
                 generationConfig: {
-                    temperature: 0.8,
-                    topP: 0.95,
-                    maxOutputTokens: 16384,
+                    temperature: this.modelConfig.heavyTemperature,
+                    topP: this.modelConfig.heavyTopP,
+                    maxOutputTokens: this.modelConfig.heavyMaxTokens,
                     responseMimeType: 'application/json',
                 },
             });
 
             // Initialize FLASH model (CONFIDANT) for fast chat
             this.flashModel = this.genAI.getGenerativeModel({
-                model: this.FLASH_MODEL,
+                model: this.modelConfig.flashModel,
                 generationConfig: {
-                    temperature: 0.9,
-                    topP: 0.95,
-                    maxOutputTokens: 2048,
+                    temperature: this.modelConfig.flashTemperature,
+                    topP: this.modelConfig.flashTopP,
+                    maxOutputTokens: this.modelConfig.flashMaxTokens,
                 },
             });
 
             this.initialized = true;
             this.logger.log('🚀 VertexOracle ready (Gemini API mode)');
-            this.logger.log(`   Heavy model: ${this.HEAVY_MODEL}`);
-            this.logger.log(`   Flash model: ${this.FLASH_MODEL}`);
+            this.logger.log(`   Heavy model: ${this.modelConfig.heavyModel} (temp=${this.modelConfig.heavyTemperature}, topP=${this.modelConfig.heavyTopP})`);
+            this.logger.log(`   Flash model: ${this.modelConfig.flashModel} (temp=${this.modelConfig.flashTemperature}, topP=${this.modelConfig.flashTopP})`);
         } catch (error) {
             this.logger.error(`❌ Failed to initialize VertexOracle: ${error}`);
             throw new Error(`VertexOracle initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -371,19 +430,23 @@ export class VertexOracle {
     }
 
     /**
-     * Forces re-initialization on next call (useful after credentials update).
+     * Forces re-initialization on next call (useful after credentials update or prompt changes).
      */
     invalidateCache(): void {
         this.initialized = false;
         this.lastCredentialsCheck = 0;
-        this.logger.log('🔄 VertexOracle cache invalidated');
+        this.promptsLoaded = false; // Also reload prompts
+        this.lumiraDna = DEFAULT_LUMIRA_DNA;
+        this.agentContexts = { ...DEFAULT_AGENT_CONTEXTS };
+        this.modelConfig = { ...DEFAULT_MODEL_CONFIG };
+        this.logger.log('🔄 VertexOracle cache invalidated (prompts will reload)');
     }
 
     /**
      * Builds the complete system prompt for an agent.
      */
     private getSystemPrompt(agent: AgentType): string {
-        return `${LUMIRA_DNA}\n\n---\n\n${AGENT_CONTEXTS[agent]}`;
+        return `${this.lumiraDna}\n\n---\n\n${this.agentContexts[agent]}`;
     }
 
     // =========================================================================
@@ -565,7 +628,7 @@ Génère le contenu affiné:
 
         // Use text/plain model for EDITOR since we want raw refined text
         const editorModel = this.genAI!.getGenerativeModel({
-            model: this.HEAVY_MODEL,
+            model: this.modelConfig.heavyModel,
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
                 maxOutputTokens: options?.maxTokens ?? 8192,

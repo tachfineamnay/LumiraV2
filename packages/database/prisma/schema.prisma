@@ -380,6 +380,25 @@ model SystemSetting {
 }
 
 // =============================================================================
+// PROMPT VERSIONS - AI Prompt History & Versioning
+// =============================================================================
+
+model PromptVersion {
+  id        String   @id @default(cuid())
+  key       String               // LUMIRA_DNA, SCRIBE, GUIDE, EDITOR, CONFIDANT, MODEL_CONFIG
+  version   Int                  // Auto-incrementing per key
+  value     String   @db.Text    // The prompt content or JSON config
+  changedBy String?              // Expert email who made the change
+  comment   String?              // Optional change note
+  isActive  Boolean  @default(false) // Only one active per key
+  createdAt DateTime @default(now())
+
+  @@unique([key, version])
+  @@index([key, isActive])
+  @@index([key, createdAt])
+}
+
+// =============================================================================
 // AKASHIC RECORDS - User's Spiritual Memory & Context
 // =============================================================================
 
