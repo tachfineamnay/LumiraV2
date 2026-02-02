@@ -60,7 +60,11 @@ export class DigitalSoulService {
         private readonly pdfFactory: PdfFactory,
     ) {
         this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
-        this.s3Bucket = this.configService.get<string>('AWS_S3_BUCKET_READINGS', 'lumira-readings');
+        // Use AWS_LECTURES_BUCKET_NAME for PDF storage (fallback to AWS_S3_BUCKET_NAME)
+        this.s3Bucket = this.configService.get<string>(
+            'AWS_LECTURES_BUCKET_NAME',
+            this.configService.get<string>('AWS_S3_BUCKET_NAME', 'oracle-lumira-lectures'),
+        );
 
         this.s3Client = new S3Client({
             region: this.s3Region,

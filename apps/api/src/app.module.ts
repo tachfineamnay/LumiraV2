@@ -17,6 +17,7 @@ import { ExpertModule } from "./modules/expert/expert.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { InsightsModule } from "./modules/insights/insights.module";
 import { ClientModule } from "./modules/client/client.module";
+import { ReadingsModule } from "./modules/readings/readings.module";
 import { ServicesModule } from "./services/services.module";
 
 @Module({
@@ -43,6 +44,7 @@ import { ServicesModule } from "./services/services.module";
     ProductsModule,
     InsightsModule,
     ClientModule,
+    ReadingsModule,
   ],
   controllers: [AppController],
   providers: [
