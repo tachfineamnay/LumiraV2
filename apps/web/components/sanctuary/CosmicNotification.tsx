@@ -11,9 +11,8 @@ interface CosmicNotificationProps {
     delay?: string;
     status?: string;
     actionLabel?: string;
-    secondaryActionLabel?: string;
+    actionHref?: string;
     onAction?: () => void;
-    onSecondaryAction?: () => void;
 }
 
 export const CosmicNotification: React.FC<CosmicNotificationProps> = ({
@@ -23,9 +22,8 @@ export const CosmicNotification: React.FC<CosmicNotificationProps> = ({
     delay,
     status,
     actionLabel,
-    secondaryActionLabel,
+    actionHref,
     onAction,
-    onSecondaryAction,
 }) => {
     return (
         <motion.div
@@ -81,25 +79,26 @@ export const CosmicNotification: React.FC<CosmicNotificationProps> = ({
                             </div>
                         )}
 
-                        {/* Actions */}
-                        <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-                            {actionLabel && (
-                                <button
-                                    onClick={onAction}
-                                    className="px-5 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-sm font-bold uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
-                                >
-                                    {actionLabel}
-                                </button>
-                            )}
-                            {secondaryActionLabel && (
-                                <button
-                                    onClick={onSecondaryAction}
-                                    className="px-5 py-2 rounded-lg hover:bg-white/5 border border-white/10 text-emerald-200/60 hover:text-emerald-200 text-sm font-bold uppercase tracking-widest transition-colors"
-                                >
-                                    {secondaryActionLabel}
-                                </button>
-                            )}
-                        </div>
+                        {/* Action Button */}
+                        {actionLabel && (
+                            <div className="pt-2">
+                                {actionHref ? (
+                                    <a
+                                        href={actionHref}
+                                        className="inline-block px-5 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-sm font-bold uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                                    >
+                                        {actionLabel}
+                                    </a>
+                                ) : (
+                                    <button
+                                        onClick={onAction}
+                                        className="px-5 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-sm font-bold uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                                    >
+                                        {actionLabel}
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

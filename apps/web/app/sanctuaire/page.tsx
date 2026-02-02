@@ -424,32 +424,44 @@ function DashboardContent() {
             {/* 🔔 ONBOARDING REMINDER - Shows if profile incomplete */}
             {!isOnboardingComplete && (
                 <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
                     className="w-full max-w-2xl mx-auto mb-6 relative z-40"
                 >
-                    <div className="glass-card px-5 py-4 rounded-xl border border-amber-400/40 bg-amber-400/5 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-amber-400/20 flex items-center justify-center animate-pulse">
-                                <AlertCircle className="w-5 h-5 text-amber-400" />
+                    <div className="relative group overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-900/40 to-emerald-950/40 backdrop-blur-xl shadow-[0_0_40px_rgba(16,185,129,0.15)]">
+                        {/* Animated Background Sheen */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent pointer-events-none translate-x-[-100%] animate-[shimmer_3s_infinite]" />
+                        
+                        <div className="relative p-6 flex items-center gap-5">
+                            {/* Icon */}
+                            <div className="relative flex-shrink-0">
+                                <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
+                                <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/50">
+                                    <Sparkles className="w-7 h-7 text-emerald-400" />
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-stellar-100 font-medium text-sm">
-                                    {hasDraft ? "📝 Reprenez votre diagnostic" : "⚡ Complétez votre profil"}
-                                </p>
-                                <p className="text-stellar-400 text-xs">
+                            
+                            {/* Content */}
+                            <div className="flex-grow">
+                                <h3 className="text-lg font-playfair italic text-emerald-300 flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                                    {hasDraft ? "Reprenez votre diagnostic" : "Complétez votre profil"}
+                                </h3>
+                                <p className="text-emerald-100/80 text-sm mt-1">
                                     {hasDraft 
-                                        ? "Votre progression a été sauvegardée - continuez là où vous étiez" 
-                                        : "Nécessaire pour générer votre lecture Oracle personnalisée"}
+                                        ? "Votre progression a été sauvegardée. Continuez là où vous vous êtes arrêté." 
+                                        : "Finalisez votre diagnostic holistique pour recevoir votre lecture Oracle personnalisée."}
                                 </p>
                             </div>
+                            
+                            {/* CTA Button */}
+                            <button
+                                onClick={() => setShowWizard(true)}
+                                className="flex-shrink-0 px-5 py-2.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-sm font-bold uppercase tracking-widest transition-all hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                            >
+                                {hasDraft ? "Continuer →" : "Terminer →"}
+                            </button>
                         </div>
-                        <button
-                            onClick={() => setShowWizard(true)}
-                            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-abyss-900 font-bold text-sm hover:shadow-lg hover:shadow-amber-400/30 transition-all whitespace-nowrap"
-                        >
-                            {hasDraft ? "Continuer →" : "Terminer →"}
-                        </button>
                     </div>
                 </motion.div>
             )}
@@ -489,7 +501,7 @@ function DashboardContent() {
             </section>
 
             {/* 🔔 ORDER STATUS */}
-            {hasOrders && (
+            {hasOrders && isOnboardingComplete && (
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -501,10 +513,8 @@ function DashboardContent() {
                         message="L'Oracle travaille sur votre révélation personnalisée. Vous serez notifié par email et via l'application dès qu'elle sera prête."
                         delay="24h"
                         status="En cours d'analyse"
-                        actionLabel="Suivre ma commande"
-                        secondaryActionLabel="Nouvelle lecture"
-                        onAction={() => console.log('Suivre')}
-                        onSecondaryAction={() => console.log('Nouvelle')}
+                        actionLabel="Voir ma lecture"
+                        actionHref="/sanctuaire/draws"
                     />
                 </motion.div>
             )}
