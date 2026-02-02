@@ -893,14 +893,31 @@ ${dto.currentContent}
                 temperature: 0.7,
             });
 
-            // Update order with refined content
+            // Update order with refined content AND save version history
             const currentGenerated = order.generatedContent as Record<string, unknown> || {};
+            const existingVersions = (currentGenerated.contentVersions as Array<{ content: string; timestamp: string; action: string; expertId: string }>) || [];
+            
+            // Save current content to version history before replacing
+            const previousContent = currentGenerated.lecture as string;
+            if (previousContent) {
+                existingVersions.push({
+                    content: previousContent,
+                    timestamp: new Date().toISOString(),
+                    action: 'refine',
+                    expertId: expert.id,
+                });
+            }
+            
+            // Keep only last 10 versions to avoid bloat
+            const trimmedVersions = existingVersions.slice(-10);
+            
             await this.prisma.order.update({
                 where: { id: orderId },
                 data: {
                     generatedContent: {
                         ...currentGenerated,
                         lecture: refinedContent,
+                        contentVersions: trimmedVersions,
                         lastRefinedAt: new Date().toISOString(),
                         refinedBy: expert.id,
                     },
@@ -965,7 +982,7 @@ ${dto.currentContent}
                 existingLecture: currentContent ? currentContent.substring(0, 2000) : '', // First 2000 chars for context
             };
 
-            // Enhanced system prompt for Desk assistant
+            // Enhanced system prompt for Desk assistant - with structured edit suggestions
             const systemPrompt = `Tu es l'assistant IA d'Oracle Lumira, spécialisé dans les lectures spirituelles et karmiques.
 Tu assistes l'expert "${expert.name}" dans la création d'une lecture pour ${chatContext.firstName}.
 
@@ -983,6 +1000,9 @@ RÈGLES:
 3. Propose des insights actionnables pour l'expert
 4. Si on te demande des suggestions de contenu, reste créatif mais aligné avec le profil du client
 5. Réponds en français
+6. **IMPORTANT**: Si l'expert demande de modifier/améliorer/réécrire du contenu, structure ta réponse ainsi:
+   - D'abord une brève explication de ta suggestion
+   - Puis le texte proposé entre balises <suggestion>...</suggestion> pour faciliter l'insertion
 
 MESSAGE DE L'EXPERT:`;
 
@@ -997,7 +1017,16 @@ MESSAGE DE L'EXPERT:`;
 
             this.logger.log(`✅ AI Chat response generated for order ${order.orderNumber}`);
 
-            return { response };
+            // Extract suggested edit if present
+            const suggestionMatch = response.match(/<suggestion>(.*?)<\/suggestion>/s);
+            const suggestedEdit = suggestionMatch ? suggestionMatch[1].trim() : null;
+            const cleanResponse = response.replace(/<suggestion>.*?<\/suggestion>/gs, '').trim();
+
+            return { 
+                response: cleanResponse,
+                suggestedEdit,
+                hasSuggestion: !!suggestedEdit,
+            };
         } catch (error) {
             this.logger.error(`❌ AI Chat failed: ${error}`);
             throw new BadRequestException(`Échec du chat IA: ${error instanceof Error ? error.message : String(error)}`);
@@ -1496,6 +1525,210 @@ MESSAGE DE L'EXPERT:`;
             totalRevenue: revenueResult._sum.amount || 0,
             todayOrders,
         };
+    }
+
+    // ========================
+    // CONTENT VERSIONING
+    // ========================
+
+    /**
+     * Get content version history for an order.
+     */
+    async getContentVersions(orderId: string): Promise<{
+        versions: Array<{ content: string; timestamp: string; action: string; expertId: string }>;
+        currentContent: string | null;
+    }> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { generatedContent: true },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        const content = order.generatedContent as Record<string, unknown> || {};
+        const versions = (content.contentVersions as Array<{ content: string; timestamp: string; action: string; expertId: string }>) || [];
+        const currentContent = content.lecture as string || null;
+
+        return { versions, currentContent };
+    }
+
+    /**
+     * Restore a previous content version.
+     */
+    async restoreContentVersion(
+        orderId: string,
+        versionIndex: number,
+        expert: ExpertEntity,
+    ): Promise<{ success: boolean; restoredContent: string }> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { generatedContent: true, orderNumber: true },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        const content = order.generatedContent as Record<string, unknown> || {};
+        const versions = (content.contentVersions as Array<{ content: string; timestamp: string; action: string; expertId: string }>) || [];
+
+        if (versionIndex < 0 || versionIndex >= versions.length) {
+            throw new BadRequestException('Index de version invalide');
+        }
+
+        const versionToRestore = versions[versionIndex];
+        const currentContent = content.lecture as string;
+
+        // Save current content to history before restoring
+        if (currentContent) {
+            versions.push({
+                content: currentContent,
+                timestamp: new Date().toISOString(),
+                action: 'before_restore',
+                expertId: expert.id,
+            });
+        }
+
+        // Keep only last 10 versions
+        const trimmedVersions = versions.slice(-10);
+
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                generatedContent: {
+                    ...content,
+                    lecture: versionToRestore.content,
+                    contentVersions: trimmedVersions,
+                    lastRestoredAt: new Date().toISOString(),
+                    restoredBy: expert.id,
+                },
+            },
+        });
+
+        this.logger.log(`↩️ Restored version ${versionIndex} for order ${order.orderNumber}`);
+
+        return { success: true, restoredContent: versionToRestore.content };
+    }
+
+    /**
+     * Clear old content versions (keep only last N).
+     */
+    async clearOldVersions(
+        orderId: string,
+        keepCount: number = 3,
+    ): Promise<{ success: boolean; deletedCount: number }> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { generatedContent: true },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        const content = order.generatedContent as Record<string, unknown> || {};
+        const versions = (content.contentVersions as Array<{ content: string; timestamp: string; action: string; expertId: string }>) || [];
+        const originalCount = versions.length;
+
+        // Keep only last N versions
+        const trimmedVersions = versions.slice(-keepCount);
+
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                generatedContent: {
+                    ...content,
+                    contentVersions: trimmedVersions,
+                },
+            },
+        });
+
+        const deletedCount = originalCount - trimmedVersions.length;
+        this.logger.log(`🗑️ Cleared ${deletedCount} old versions for order ${orderId}`);
+
+        return { success: true, deletedCount };
+    }
+
+    /**
+     * Full regeneration from Studio - clears content and re-runs AI generation.
+     */
+    async regenerateFromStudio(
+        orderId: string,
+        expert: ExpertEntity,
+    ): Promise<{
+        success: boolean;
+        orderId: string;
+        orderNumber: string;
+        archetype: string;
+    }> {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { user: { include: { profile: true } } },
+        });
+
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        this.logger.log(`🔄 Full regeneration requested for order ${order.orderNumber} by ${expert.name}`);
+
+        // Save current content to version history if exists
+        const currentGenerated = order.generatedContent as Record<string, unknown> || {};
+        const existingVersions = (currentGenerated.contentVersions as Array<{ content: string; timestamp: string; action: string; expertId: string }>) || [];
+        const currentContent = currentGenerated.lecture as string;
+
+        if (currentContent) {
+            existingVersions.push({
+                content: currentContent,
+                timestamp: new Date().toISOString(),
+                action: 'before_regenerate',
+                expertId: expert.id,
+            });
+        }
+
+        // Reset order status and clear generated content (keep versions)
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                status: 'PROCESSING',
+                generatedContent: {
+                    contentVersions: existingVersions.slice(-10), // Keep history
+                    regeneratedAt: new Date().toISOString(),
+                    regeneratedBy: expert.id,
+                },
+                revisionCount: { increment: 1 },
+            },
+        });
+
+        // Trigger new generation
+        try {
+            const result = await this.generateReading(orderId, expert);
+
+            this.logger.log(`✅ Regeneration completed for ${order.orderNumber} - Archetype: ${result.archetype}`);
+
+            return {
+                success: true,
+                orderId: result.orderId,
+                orderNumber: result.orderNumber,
+                archetype: result.archetype,
+            };
+        } catch (error) {
+            this.logger.error(`❌ Regeneration failed for ${order.orderNumber}: ${error}`);
+
+            // Restore previous content on failure
+            await this.prisma.order.update({
+                where: { id: orderId },
+                data: {
+                    status: 'AWAITING_VALIDATION',
+                    generatedContent: currentGenerated,
+                    errorLog: `Regeneration failed: ${error instanceof Error ? error.message : String(error)}`,
+                },
+            });
+
+            throw new BadRequestException(`Échec de la régénération: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     // ========================

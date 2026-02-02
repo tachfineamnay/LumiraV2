@@ -19,6 +19,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  suggestedEdit?: string; // AI-suggested content to insert
 }
 
 interface AIAssistantProps {
@@ -78,6 +79,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
         role: 'assistant',
         content: data.response || data.message || 'Pas de réponse',
         timestamp: new Date(),
+        suggestedEdit: data.suggestedEdit || null, // Capture suggested edit from API
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -171,27 +173,47 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 
                 {message.role === 'assistant' && (
-                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
-                    <button
-                      onClick={() => handleCopy(message.content, message.id)}
-                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
-                    >
-                      {copiedId === message.id ? (
-                        <Check className="w-3 h-3" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      <span>Copier</span>
-                    </button>
-                    {onInsertText && (
-                      <button
-                        onClick={() => handleInsert(message.content)}
-                        className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors"
-                      >
-                        <Wand2 className="w-3 h-3" />
-                        <span>Insérer</span>
-                      </button>
+                  <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/10">
+                    {/* Suggested edit highlight */}
+                    {message.suggestedEdit && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 mb-2">
+                        <p className="text-xs text-amber-400 font-medium mb-1">💡 Suggestion à insérer:</p>
+                        <p className="text-xs text-slate-300 line-clamp-3">{message.suggestedEdit.substring(0, 150)}...</p>
+                        <button
+                          onClick={() => handleInsert(message.suggestedEdit!)}
+                          className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg
+                                     bg-amber-500 text-slate-900 text-xs font-bold
+                                     hover:bg-amber-400 transition-colors"
+                        >
+                          <Wand2 className="w-3 h-3" />
+                          <span>Insérer cette suggestion</span>
+                        </button>
+                      </div>
                     )}
+                    
+                    {/* Standard actions */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCopy(message.content, message.id)}
+                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+                      >
+                        {copiedId === message.id ? (
+                          <Check className="w-3 h-3" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                        <span>Copier</span>
+                      </button>
+                      {onInsertText && !message.suggestedEdit && (
+                        <button
+                          onClick={() => handleInsert(message.content)}
+                          className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                        >
+                          <Wand2 className="w-3 h-3" />
+                          <span>Insérer</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

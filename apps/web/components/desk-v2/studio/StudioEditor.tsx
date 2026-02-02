@@ -19,6 +19,8 @@ import {
   PanelRightClose,
   PanelLeft,
   PanelRight,
+  RefreshCw,
+  History,
 } from 'lucide-react';
 
 interface StudioEditorProps {
@@ -33,6 +35,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
   const [editorContent, setEditorContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSealing, setIsSealing] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
 
@@ -47,6 +50,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
           toast.error('Échec de la génération', { description: data.error });
         }
         setIsGenerating(false);
+        setIsRegenerating(false);
       }
     },
   });
@@ -91,6 +95,25 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
     } catch (_err) {
       toast.error('Erreur lors du lancement de la génération');
       setIsGenerating(false);
+    }
+  };
+
+  // Regenerate content (full reset)
+  const handleRegenerate = async () => {
+    if (!confirm('⚠️ Régénérer va créer une nouvelle lecture complète.\nL\'ancienne version sera sauvegardée dans l\'historique.\n\nContinuer ?')) {
+      return;
+    }
+
+    setIsRegenerating(true);
+    try {
+      await api.post(`/expert/orders/${orderId}/regenerate`);
+      toast.info('Régénération lancée...', { 
+        description: 'L\'Oracle crée une nouvelle lecture' 
+      });
+      // Socket will notify when complete
+    } catch (_err) {
+      toast.error('Erreur lors de la régénération');
+      setIsRegenerating(false);
     }
   };
 
@@ -204,6 +227,27 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
                 <Sparkles className="w-4 h-4" />
               )}
               <span>{isGenerating ? 'Génération...' : 'Générer la lecture'}</span>
+            </button>
+          )}
+
+          {/* Regenerate button - visible when content exists */}
+          {hasContent && (
+            <button
+              onClick={handleRegenerate}
+              disabled={isRegenerating || isGenerating}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg
+                         bg-slate-800 border border-white/10
+                         text-slate-300 font-medium
+                         hover:bg-slate-700 hover:text-white transition-all
+                         disabled:opacity-50"
+              title="Régénérer complètement la lecture"
+            >
+              {isRegenerating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">{isRegenerating ? 'Régénération...' : 'Régénérer'}</span>
             </button>
           )}
         </div>

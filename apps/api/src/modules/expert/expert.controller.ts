@@ -227,6 +227,49 @@ export class ExpertController {
         return this.expertService.finalizeFromStudio(orderId, dto.finalContent, expert);
     }
 
+    /**
+     * Full regeneration from Studio - completely re-runs AI generation.
+     * Saves current content to version history before regenerating.
+     */
+    @Post('orders/:id/regenerate')
+    async regenerateOrder(
+        @Param('id') orderId: string,
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.regenerateFromStudio(orderId, expert);
+    }
+
+    /**
+     * Get content version history for an order.
+     */
+    @Get('orders/:id/versions')
+    async getContentVersions(@Param('id') orderId: string) {
+        return this.expertService.getContentVersions(orderId);
+    }
+
+    /**
+     * Restore a previous content version.
+     */
+    @Post('orders/:id/versions/:index/restore')
+    async restoreContentVersion(
+        @Param('id') orderId: string,
+        @Param('index') index: string,
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.restoreContentVersion(orderId, parseInt(index, 10), expert);
+    }
+
+    /**
+     * Clear old content versions (cleanup).
+     */
+    @Delete('orders/:id/versions')
+    async clearOldVersions(
+        @Param('id') orderId: string,
+        @Query('keep') keep: string = '3',
+    ) {
+        return this.expertService.clearOldVersions(orderId, parseInt(keep, 10));
+    }
+
     // ========================
     // CLIENTS
     // ========================
