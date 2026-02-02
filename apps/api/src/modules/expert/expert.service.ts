@@ -944,7 +944,7 @@ ${dto.currentContent}
         orderId: string,
         dto: ChatOrderDto,
         expert: ExpertEntity,
-    ): Promise<{ response: string }> {
+    ): Promise<{ response: string; suggestedEdit: string | null; hasSuggestion: boolean }> {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: { 
@@ -1722,7 +1722,7 @@ MESSAGE DE L'EXPERT:`;
                 where: { id: orderId },
                 data: {
                     status: 'AWAITING_VALIDATION',
-                    generatedContent: currentGenerated,
+                    generatedContent: currentGenerated as object,
                     errorLog: `Regeneration failed: ${error instanceof Error ? error.message : String(error)}`,
                 },
             });
