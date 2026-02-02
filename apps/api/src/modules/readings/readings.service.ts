@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 @Injectable()
@@ -95,19 +95,36 @@ export class ReadingsService {
 
         this.logger.log(`🔑 PDF Key: ${pdfKey}`);
 
-        // If the key doesn't end with .pdf, it might be a prefix - list and find the PDF
-        const finalPdfKey = pdfKey;
+        // If the key doesn't end with .pdf, search for the PDF in S3
+        let finalPdfKey = pdfKey;
         if (!pdfKey.endsWith('.pdf')) {
-            // Use the ListObjects approach or construct the expected path
-            // For now, try the most likely pattern
-            const possibleKeys = [
-                `${pdfKey}/lecture.pdf`,
-                pdfKey.includes('-lecture.pdf') ? pdfKey : `${pdfKey}/${Date.now()}-lecture.pdf`,
-            ];
+            this.logger.log(`🔍 Searching for PDF files in ${pdfKey}/...`);
             
-            // Just use the directory pattern and let S3 find it
-            // Or use the stored key if available
-            this.logger.log(`🔍 Attempting key patterns: ${possibleKeys.join(', ')}`);
+            try {
+                // List objects in the readings folder to find the actual PDF file
+                const listCommand = new ListObjectsV2Command({
+                    Bucket: this.s3Bucket,
+                    Prefix: pdfKey.endsWith('/') ? pdfKey : `${pdfKey}/`,
+                    MaxKeys: 10,
+                });
+                
+                const listResult = await this.s3Client.send(listCommand);
+                
+                if (listResult.Contents && listResult.Contents.length > 0) {
+                    // Find the first PDF file
+                    const pdfFile = listResult.Contents.find(obj => obj.Key?.endsWith('.pdf'));
+                    if (pdfFile?.Key) {
+                        finalPdfKey = pdfFile.Key;
+                        this.logger.log(`✅ Found PDF: ${finalPdfKey}`);
+                    } else {
+                        this.logger.warn(`⚠️ No PDF found in ${pdfKey}/, files: ${listResult.Contents.map(c => c.Key).join(', ')}`);
+                    }
+                } else {
+                    this.logger.warn(`⚠️ No files found in S3 with prefix: ${pdfKey}/`);
+                }
+            } catch (listError) {
+                this.logger.error(`❌ Error listing S3 objects: ${listError}`);
+            }
         }
 
         try {
