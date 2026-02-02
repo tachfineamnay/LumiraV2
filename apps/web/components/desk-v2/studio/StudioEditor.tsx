@@ -174,6 +174,7 @@ export function StudioEditor({ orderId }: StudioEditorProps) {
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push('/admin/board')}
+            title="Retour au board"
             className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />

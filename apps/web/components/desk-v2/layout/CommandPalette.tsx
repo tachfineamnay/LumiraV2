@@ -190,6 +190,7 @@ export function CommandPalette() {
                 />
                 <button
                   onClick={() => setIsOpen(false)}
+                  title="Fermer"
                   className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500"
                 >
                   <X className="w-4 h-4" />

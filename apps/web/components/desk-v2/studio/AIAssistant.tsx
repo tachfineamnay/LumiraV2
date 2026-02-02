@@ -255,6 +255,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
+            title="Envoyer"
             className="p-2.5 rounded-xl bg-amber-500 text-slate-900
                        hover:bg-amber-400 transition-colors
                        disabled:opacity-50 disabled:cursor-not-allowed"

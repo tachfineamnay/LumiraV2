@@ -6,16 +6,19 @@ import { StatsGrid } from '@/components/desk-v2/dashboard/StatsGrid';
 import { ActivityFeed } from '@/components/desk-v2/dashboard/ActivityFeed';
 import { QuickActions } from '@/components/desk-v2/dashboard/QuickActions';
 import { useStats } from '@/components/desk-v2/hooks/useStats';
+import { useActivity } from '@/components/desk-v2/hooks/useActivity';
 import { useSocket } from '@/components/desk-v2/hooks/useSocket';
 import { Sparkles, TrendingUp, Calendar } from 'lucide-react';
 
 export default function DashboardPage() {
   const { stats, isLoading, updateStats } = useStats();
+  const { items: activityItems, isLoading: activityLoading, addItem } = useActivity({ limit: 10 });
   const [greeting, setGreeting] = useState('');
 
   // Real-time stats updates via WebSocket
   useSocket({
     onStatsUpdate: updateStats,
+    onNewActivity: addItem,
   });
 
   // Dynamic greeting based on time
@@ -75,7 +78,7 @@ export default function DashboardPage() {
         {/* Activity Feed - 2 columns */}
         <div className="lg:col-span-2">
           <h2 className="text-sm font-medium text-slate-400 mb-3">Activité récente</h2>
-          <ActivityFeed />
+          <ActivityFeed items={activityItems} isLoading={activityLoading} />
         </div>
 
         {/* Quick Actions - 1 column */}

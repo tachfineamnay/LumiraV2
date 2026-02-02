@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Sparkles,
   LogOut,
+  Users,
+  Archive,
 } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 
@@ -27,6 +29,16 @@ const NAV_ITEMS = [
     label: 'Board',
     icon: Kanban,
     badge: true,
+  },
+  {
+    href: '/admin/clients',
+    label: 'Clients',
+    icon: Users,
+  },
+  {
+    href: '/admin/archive',
+    label: 'Archives',
+    icon: Archive,
   },
   {
     href: '/admin/settings',

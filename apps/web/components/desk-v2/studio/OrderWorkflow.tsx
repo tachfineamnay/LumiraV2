@@ -16,8 +16,6 @@ import {
   AlertCircle,
   Sparkles,
   Check,
-  Play,
-  MessageSquare,
   Send,
   ChevronRight,
   RefreshCw,
@@ -28,7 +26,6 @@ import {
   X,
   History,
   RotateCcw,
-  Eye,
 } from 'lucide-react';
 
 // =============================================================================
@@ -39,7 +36,8 @@ interface OrderWorkflowProps {
   orderId: string;
 }
 
-type WorkflowStep = 'intake' | 'generation' | 'refinement' | 'delivery';
+// Simplified 2-step workflow: Studio (edit) → Delivery (confirm & send)
+type WorkflowStep = 'studio' | 'delivery';
 
 interface StepConfig {
   id: WorkflowStep;
@@ -51,25 +49,11 @@ interface StepConfig {
 
 const WORKFLOW_STEPS: StepConfig[] = [
   { 
-    id: 'intake', 
-    label: 'Prise en main', 
-    shortLabel: 'Profil',
-    icon: <User className="w-4 h-4" />,
-    description: 'Consulter le profil client',
-  },
-  { 
-    id: 'generation', 
-    label: 'Génération IA', 
-    shortLabel: 'Générer',
+    id: 'studio', 
+    label: 'Studio', 
+    shortLabel: 'Éditer',
     icon: <Wand2 className="w-4 h-4" />,
-    description: 'L\'Oracle crée la lecture',
-  },
-  { 
-    id: 'refinement', 
-    label: 'Validation & Ajustements', 
-    shortLabel: 'Valider',
-    icon: <MessageSquare className="w-4 h-4" />,
-    description: 'Affiner avec l\'assistant IA',
+    description: 'Créer et affiner la lecture',
   },
   { 
     id: 'delivery', 
@@ -94,7 +78,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const [editorContent, setEditorContent] = useState('');
   
   // Workflow state
-  const [currentStep, setCurrentStep] = useState<WorkflowStep>('intake');
+  const [currentStep, setCurrentStep] = useState<WorkflowStep>('studio');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSealing, setIsSealing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -102,6 +86,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   // Version history
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState<Array<{ content: string; timestamp: string; action: string }>>([]);
+  
+  // Seal confirmation modal
+  const [showSealConfirm, setShowSealConfirm] = useState(false);
+  
+  // Client panel visibility (in Studio view)
+  const [showClientPanel, setShowClientPanel] = useState(true);
 
   // Socket for real-time updates
   const { focusOrder, blurOrder } = useSocket({
@@ -110,7 +100,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         if (data.success) {
           toast.success('Génération terminée !');
           fetchOrder();
-          setCurrentStep('refinement');
+          // Stay in studio mode after generation
         } else {
           toast.error('Échec de la génération', { description: data.error });
         }
@@ -131,15 +121,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         setEditorContent(oracleResponseToHtml(data.generatedContent));
       }
       
-      // Determine current step based on order status
+      // Simplified step determination
       if (data.status === 'COMPLETED') {
         setCurrentStep('delivery');
-      } else if (data.generatedContent) {
-        setCurrentStep('refinement');
-      } else if (data.status === 'PROCESSING') {
-        setCurrentStep('generation');
       } else {
-        setCurrentStep('intake');
+        setCurrentStep('studio');
       }
       
       setError(null);
@@ -171,14 +157,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   // Actions
   const handleGenerate = async () => {
     setIsGenerating(true);
-    setCurrentStep('generation');
     try {
       await api.post(`/expert/orders/${orderId}/generate`);
       toast.info('Génération lancée...', { description: 'L\'Oracle travaille sur votre lecture' });
     } catch {
       toast.error('Erreur lors du lancement de la génération');
       setIsGenerating(false);
-      setCurrentStep('intake');
     }
   };
 
@@ -261,7 +245,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   }
 
   const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
-  const hasContent = !!order.generatedContent || editorContent.length > 0;
 
   return (
     <div className="h-full flex flex-col bg-slate-950">
@@ -273,6 +256,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/admin/board')}
+              title="Retour au board"
               className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -392,156 +376,199 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          MAIN CONTENT - Step-based views
+          MAIN CONTENT - Simplified 2-step workflow
       ═══════════════════════════════════════════════════════════════════ */}
       <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
-          {/* STEP 1: INTAKE - Profile Review */}
-          {currentStep === 'intake' && (
+          {/* STUDIO VIEW - Profile + Editor + AI in one unified view */}
+          {currentStep === 'studio' && (
             <motion.div
-              key="intake"
+              key="studio"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               className="h-full flex"
             >
-              {/* Client Profile - Full width */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="max-w-3xl mx-auto p-6">
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-playfair text-white mb-2">Profil du client</h2>
-                    <p className="text-slate-400">
-                      Consultez les informations du client avant de lancer la génération.
-                    </p>
+              {/* Left Panel - Client Profile (collapsible) */}
+              <div className={`flex-shrink-0 overflow-y-auto border-r border-white/5 transition-all duration-300 ${
+                showClientPanel ? 'w-80' : 'w-0'
+              }`}>
+                {showClientPanel && (
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-white">Profil client</h3>
+                      <button
+                        onClick={() => setShowClientPanel(false)}
+                        title="Masquer le profil"
+                        className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <ClientPanel order={order} compact />
                   </div>
-                  
-                  <ClientPanel order={order} />
-                  
-                  {/* Action */}
-                  <div className="mt-8 flex justify-center">
+                )}
+              </div>
+
+              {/* Center - Main Editor Area */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Sub-header with actions */}
+                <div className="flex-shrink-0 px-4 py-3 bg-slate-900/50 border-b border-white/5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {!showClientPanel && (
+                        <button
+                          onClick={() => setShowClientPanel(true)}
+                          title="Afficher le profil client"
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg
+                                     bg-slate-800 border border-white/10 text-sm text-slate-400 hover:text-white"
+                        >
+                          <User className="w-4 h-4" />
+                          <span>Profil</span>
+                        </button>
+                      )}
+                      <div>
+                        <h3 className="text-sm font-medium text-white">
+                          {editorContent ? 'Éditeur de lecture' : 'Nouvelle lecture'}
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          {editorContent ? 'Affinez le contenu généré' : 'Lancez la génération pour commencer'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {!editorContent && !isGenerating && (
+                        <button
+                          onClick={handleGenerate}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg
+                                     bg-gradient-to-r from-amber-500 to-amber-600
+                                     text-slate-900 font-medium text-sm
+                                     hover:from-amber-400 hover:to-amber-500 transition-all"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>Générer</span>
+                        </button>
+                      )}
+                      
+                      {editorContent && (
+                        <>
+                          <button
+                            onClick={handleRegenerate}
+                            disabled={isRegenerating || isGenerating}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg
+                                       bg-slate-800 border border-white/10 text-sm
+                                       text-slate-400 hover:text-white transition-colors
+                                       disabled:opacity-50"
+                          >
+                            {isRegenerating ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            <span>Régénérer</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => setShowVersions(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg
+                                       bg-slate-800 border border-white/10 text-sm
+                                       text-slate-400 hover:text-white transition-colors"
+                          >
+                            <History className="w-4 h-4" />
+                            <span>Historique</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Editor content or Generation State */}
+                <div className="flex-1 overflow-y-auto">
+                  {isGenerating ? (
+                    // Generation in progress
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="relative w-24 h-24 mx-auto mb-6">
+                          <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 animate-ping" />
+                          <div className="absolute inset-2 rounded-full border-4 border-amber-500/30 animate-ping animation-delay-200" />
+                          <div className="absolute inset-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 
+                                          flex items-center justify-center shadow-xl shadow-amber-500/30">
+                            <Sparkles className="w-8 h-8 text-white animate-pulse" />
+                          </div>
+                        </div>
+                        <h3 className="text-xl font-playfair text-white mb-2">
+                          L&apos;Oracle crée la lecture...
+                        </h3>
+                        <p className="text-sm text-slate-400 max-w-sm">
+                          Analyse du profil de {order.user.firstName}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-2">
+                          <Clock className="w-3 h-3 inline mr-1" />
+                          ~2-3 minutes
+                        </p>
+                      </div>
+                    </div>
+                  ) : editorContent ? (
+                    // Editor with content
+                    <div className="p-4">
+                      <TiptapEditor
+                        orderId={orderId}
+                        initialContent={editorContent}
+                        onContentChange={setEditorContent}
+                      />
+                    </div>
+                  ) : (
+                    // Empty state - no content yet
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-white/10
+                                        flex items-center justify-center mx-auto mb-4">
+                          <Wand2 className="w-10 h-10 text-slate-600" />
+                        </div>
+                        <h3 className="text-lg font-medium text-white mb-2">
+                          Prêt à créer la lecture
+                        </h3>
+                        <p className="text-sm text-slate-400 max-w-sm mb-6">
+                          Consultez le profil client puis lancez la génération IA
+                        </p>
+                        <button
+                          onClick={handleGenerate}
+                          className="flex items-center gap-2 px-6 py-3 mx-auto rounded-xl
+                                     bg-gradient-to-r from-amber-500 to-amber-600
+                                     text-slate-900 font-semibold
+                                     hover:from-amber-400 hover:to-amber-500
+                                     hover:shadow-lg hover:shadow-amber-500/20 transition-all"
+                        >
+                          <Sparkles className="w-5 h-5" />
+                          <span>Lancer la génération</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom action - only show when content exists */}
+                {editorContent && !isGenerating && (
+                  <div className="flex-shrink-0 p-4 bg-slate-900/50 border-t border-white/5">
                     <button
-                      onClick={handleGenerate}
-                      disabled={isGenerating}
-                      className="flex items-center gap-3 px-8 py-4 rounded-2xl
-                                 bg-gradient-to-r from-amber-500 to-amber-600
-                                 text-slate-900 font-semibold text-lg
-                                 hover:from-amber-400 hover:to-amber-500 
-                                 hover:shadow-xl hover:shadow-amber-500/20
-                                 transition-all disabled:opacity-50"
+                      onClick={() => setCurrentStep('delivery')}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
+                                 bg-gradient-to-r from-emerald-500 to-emerald-600
+                                 text-white font-semibold
+                                 hover:from-emerald-400 hover:to-emerald-500 transition-all"
                     >
-                      <Sparkles className="w-6 h-6" />
-                      <span>Lancer la génération</span>
+                      <FileCheck className="w-5 h-5" />
+                      <span>Prêt à livrer</span>
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* STEP 2: GENERATION - Loading */}
-          {currentStep === 'generation' && (
-            <motion.div
-              key="generation"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="h-full flex items-center justify-center"
-            >
-              <div className="text-center">
-                <div className="relative w-32 h-32 mx-auto mb-8">
-                  {/* Animated rings */}
-                  <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 animate-ping" />
-                  <div className="absolute inset-2 rounded-full border-4 border-amber-500/30 animate-ping animation-delay-200" />
-                  <div className="absolute inset-4 rounded-full border-4 border-amber-500/40 animate-ping animation-delay-400" />
-                  
-                  {/* Center orb */}
-                  <div className="absolute inset-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 
-                                  flex items-center justify-center shadow-xl shadow-amber-500/30">
-                    <Sparkles className="w-10 h-10 text-white animate-pulse" />
-                  </div>
-                </div>
-
-                <h2 className="text-2xl font-playfair text-white mb-3">
-                  L&apos;Oracle crée la lecture...
-                </h2>
-                <p className="text-slate-400 max-w-md mx-auto mb-2">
-                  L&apos;intelligence cosmique analyse le profil de {order.user.firstName} 
-                  et compose une lecture personnalisée.
-                </p>
-                <p className="text-sm text-slate-500">
-                  <Clock className="w-4 h-4 inline mr-1" />
-                  Temps estimé : 2-3 minutes
-                </p>
-              </div>
-            </motion.div>
-          )}
-
-          {/* STEP 3: REFINEMENT - Editor + Chat */}
-          {currentStep === 'refinement' && (
-            <motion.div
-              key="refinement"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="h-full flex"
-            >
-              {/* Editor - Main area */}
-              <div className="flex-1 flex flex-col overflow-hidden border-r border-white/5">
-                {/* Sub-header */}
-                <div className="flex-shrink-0 px-4 py-3 bg-slate-900/50 border-b border-white/5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-medium text-white">Éditeur de lecture</h3>
-                      <p className="text-xs text-slate-500">Affinez le contenu avant livraison</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleRegenerate}
-                        disabled={isRegenerating}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg
-                                   bg-slate-800 border border-white/10 text-sm
-                                   text-slate-400 hover:text-white transition-colors
-                                   disabled:opacity-50"
-                      >
-                        {isRegenerating ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4" />
-                        )}
-                        <span>Régénérer</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Editor content */}
-                <div className="flex-1 overflow-y-auto p-4">
-                  <TiptapEditor
-                    orderId={orderId}
-                    initialContent={editorContent}
-                    onContentChange={setEditorContent}
-                  />
-                </div>
-
-                {/* Bottom action */}
-                <div className="flex-shrink-0 p-4 bg-slate-900/50 border-t border-white/5">
-                  <button
-                    onClick={() => setCurrentStep('delivery')}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
-                               bg-gradient-to-r from-purple-500 to-purple-600
-                               text-white font-semibold
-                               hover:from-purple-400 hover:to-purple-500 transition-all"
-                  >
-                    <FileCheck className="w-5 h-5" />
-                    <span>Valider et passer à la livraison</span>
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
+                )}
               </div>
 
-              {/* AI Assistant - Right panel */}
-              <div className="w-96 flex-shrink-0 overflow-hidden">
+              {/* Right Panel - AI Assistant */}
+              <div className="w-80 flex-shrink-0 overflow-hidden border-l border-white/5">
                 <AIAssistant
                   orderId={orderId}
                   clientContext={{
@@ -556,7 +583,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             </motion.div>
           )}
 
-          {/* STEP 4: DELIVERY - Final confirmation */}
+          {/* DELIVERY VIEW - Final confirmation */}
           {currentStep === 'delivery' && (
             <motion.div
               key="delivery"
@@ -585,7 +612,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium text-slate-400">Aperçu de la lecture</h3>
                     <button
-                      onClick={() => setCurrentStep('refinement')}
+                      onClick={() => setCurrentStep('studio')}
                       className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
                     >
                       Modifier
@@ -593,7 +620,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   </div>
                   <div 
                     className="prose prose-invert prose-sm max-w-none max-h-64 overflow-y-auto"
-                    dangerouslySetInnerHTML={{ __html: editorContent.substring(0, 1500) + '...' }}
+                    dangerouslySetInnerHTML={{ __html: truncateHtml(editorContent, 1500) }}
                   />
                 </div>
 
@@ -620,7 +647,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 {/* Actions */}
                 <div className="flex flex-col gap-3">
                   <button
-                    onClick={handleSeal}
+                    onClick={() => setShowSealConfirm(true)}
                     disabled={isSealing}
                     className="flex items-center justify-center gap-3 px-8 py-4 rounded-2xl
                                bg-gradient-to-r from-emerald-500 to-emerald-600
@@ -638,7 +665,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   </button>
                   
                   <button
-                    onClick={() => setCurrentStep('refinement')}
+                    onClick={() => setCurrentStep('studio')}
                     className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl
                                bg-slate-800 text-slate-300 hover:text-white transition-colors"
                   >
@@ -685,6 +712,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 </div>
                 <button
                   onClick={() => setShowVersions(false)}
+                  title="Fermer l'historique"
                   className="p-2 rounded-lg hover:bg-white/5 text-slate-400"
                 >
                   <X className="w-5 h-5" />
@@ -732,6 +760,113 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SEAL CONFIRMATION MODAL
+      ═══════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {showSealConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => !isSealing && setShowSealConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="relative bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 px-6 py-5 border-b border-white/10">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                    <FileCheck className="w-7 h-7 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Confirmer l&apos;envoi</h2>
+                    <p className="text-sm text-slate-400">Cette action est irréversible</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-200/80">
+                      <p className="font-medium mb-1">Attention</p>
+                      <p>Une fois scellée, la lecture ne pourra plus être modifiée et sera immédiatement envoyée au client par email.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/50 border border-white/5 rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-white mb-3">Récapitulatif</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Destinataire</span>
+                      <span className="text-white font-medium">{order.user.firstName} {order.user.lastName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Email</span>
+                      <span className="text-slate-300">{order.user.email}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Commande</span>
+                      <span className="font-mono text-amber-400">{order.orderNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Contenu</span>
+                      <span className="text-emerald-400">{editorContent.length > 0 ? '✓ Prêt' : '⚠ Vide'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 px-6 py-4 bg-slate-800/50 border-t border-white/5">
+                <button
+                  onClick={() => setShowSealConfirm(false)}
+                  disabled={isSealing}
+                  className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-slate-300
+                             hover:bg-white/5 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSealConfirm(false);
+                    handleSeal();
+                  }}
+                  disabled={isSealing || editorContent.length === 0}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+                             bg-gradient-to-r from-emerald-500 to-emerald-600
+                             text-white font-semibold
+                             hover:from-emerald-400 hover:to-emerald-500
+                             transition-all disabled:opacity-50"
+                >
+                  {isSealing ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Envoi...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      <span>Confirmer et envoyer</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -739,6 +874,71 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
+
+/**
+ * Safely truncate HTML content without breaking tags
+ * Preserves complete HTML structure up to maxLength characters of text
+ */
+function truncateHtml(html: string, maxLength: number): string {
+  if (!html) return '';
+  
+  // Strip tags to count actual text length
+  const textContent = html.replace(/<[^>]*>/g, '');
+  if (textContent.length <= maxLength) return html;
+
+  let textCount = 0;
+  let result = '';
+  const tagStack: string[] = [];
+  let i = 0;
+
+  while (i < html.length && textCount < maxLength) {
+    if (html[i] === '<') {
+      // Find end of tag
+      const tagEnd = html.indexOf('>', i);
+      if (tagEnd === -1) break;
+      
+      const tag = html.substring(i, tagEnd + 1);
+      
+      // Check if it's a closing tag
+      if (tag.startsWith('</')) {
+        const tagName = tag.substring(2, tag.length - 1).toLowerCase().trim();
+        if (tagStack.length && tagStack[tagStack.length - 1] === tagName) {
+          tagStack.pop();
+        }
+        result += tag;
+      }
+      // Self-closing tags
+      else if (tag.endsWith('/>') || /^<(br|hr|img|input|meta|link)[\s/>]/i.test(tag)) {
+        result += tag;
+      }
+      // Opening tag
+      else {
+        const tagMatch = tag.match(/^<(\w+)/);
+        if (tagMatch) {
+          tagStack.push(tagMatch[1].toLowerCase());
+        }
+        result += tag;
+      }
+      i = tagEnd + 1;
+    } else {
+      result += html[i];
+      textCount++;
+      i++;
+    }
+  }
+
+  // Close any remaining open tags
+  while (tagStack.length > 0) {
+    result += `</${tagStack.pop()}>`;
+  }
+
+  // Add ellipsis if truncated
+  if (textCount >= maxLength) {
+    result += '...';
+  }
+
+  return result;
+}
 
 function oracleResponseToHtml(response: OracleResponse): string {
   const parts: string[] = [];

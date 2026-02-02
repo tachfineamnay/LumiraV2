@@ -188,6 +188,7 @@ export function KanbanBoard() {
           <button
             onClick={() => fetchOrders()}
             disabled={isLoading}
+            title="Rafraîchir"
             className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
           >
             <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />

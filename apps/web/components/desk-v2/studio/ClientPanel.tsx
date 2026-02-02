@@ -21,9 +21,10 @@ import { Order, LEVEL_CONFIG } from '../types';
 
 interface ClientPanelProps {
   order: Order;
+  compact?: boolean;
 }
 
-export function ClientPanel({ order }: ClientPanelProps) {
+export function ClientPanel({ order, compact = false }: ClientPanelProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(['profile', 'question']);
   const { user } = order;
   const profile = user.profile;

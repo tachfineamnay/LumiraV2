@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Highlight from '@tiptap/extension-highlight';
 import Typography from '@tiptap/extension-typography';
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bold,
@@ -22,6 +22,8 @@ import {
   RotateCw,
   Check,
   Loader2,
+  Save,
+  Cloud,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -34,6 +36,9 @@ interface TiptapEditorProps {
   readOnly?: boolean;
 }
 
+// Auto-save debounce delay in ms
+const AUTOSAVE_DELAY = 2000;
+
 export function TiptapEditor({
   orderId,
   initialContent,
@@ -43,6 +48,53 @@ export function TiptapEditor({
 }: TiptapEditorProps) {
   const [isRefining, setIsRefining] = useState(false);
   const [showAIMenu, setShowAIMenu] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedContent = useRef(initialContent);
+
+  // Auto-save function
+  const saveContent = useCallback(async (content: string) => {
+    if (content === lastSavedContent.current || readOnly) return;
+    
+    setSaveStatus('saving');
+    try {
+      await api.patch(`/expert/orders/${orderId}/draft`, { content });
+      lastSavedContent.current = content;
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+      setSaveStatus('unsaved');
+      // Don't show toast for auto-save failures - just show status indicator
+    }
+  }, [orderId, readOnly]);
+
+  // Debounced save on content change
+  const handleContentChange = useCallback((content: string) => {
+    onContentChange?.(content);
+    
+    if (content !== lastSavedContent.current) {
+      setSaveStatus('unsaved');
+      
+      // Clear existing timeout
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      
+      // Set new timeout for auto-save
+      saveTimeoutRef.current = setTimeout(() => {
+        saveContent(content);
+      }, AUTOSAVE_DELAY);
+    }
+  }, [onContentChange, saveContent]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -62,7 +114,7 @@ export function TiptapEditor({
     content: initialContent,
     editable: !readOnly,
     onUpdate: ({ editor }) => {
-      onContentChange?.(editor.getHTML());
+      handleContentChange(editor.getHTML());
     },
     editorProps: {
       attributes: {
@@ -220,6 +272,28 @@ export function TiptapEditor({
           >
             <RotateCw className="w-4 h-4" />
           </ToolbarButton>
+        </div>
+
+        {/* Save Status Indicator */}
+        <div className="flex items-center gap-2 px-3 text-xs">
+          {saveStatus === 'saving' && (
+            <span className="flex items-center gap-1.5 text-amber-400">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Sauvegarde...</span>
+            </span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Sauvegardé</span>
+            </span>
+          )}
+          {saveStatus === 'unsaved' && (
+            <span className="flex items-center gap-1.5 text-slate-500">
+              <Save className="w-3.5 h-3.5" />
+              <span>Non sauvegardé</span>
+            </span>
+          )}
         </div>
 
         {/* AI Actions */}
