@@ -265,21 +265,6 @@ export default function DrawsPage() {
     const latestPending = pendingReadings[0];
     const currentMonth = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 
-    // Helper function to get status display
-    const getStatusDisplay = (status: string) => {
-        switch (status) {
-            case 'PENDING':
-            case 'PAID':
-                return { label: 'En attente de traitement', color: 'text-amber-400', bgColor: 'bg-amber-400/20' };
-            case 'PROCESSING':
-                return { label: 'Génération en cours', color: 'text-blue-400', bgColor: 'bg-blue-400/20' };
-            case 'AWAITING_VALIDATION':
-                return { label: 'Validation en cours', color: 'text-purple-400', bgColor: 'bg-purple-400/20' };
-            default:
-                return { label: 'En préparation', color: 'text-stellar-400', bgColor: 'bg-stellar-400/20' };
-        }
-    };
-
     if (contextLoading || loading) {
         return (
             <div className="flex-1 flex items-center justify-center min-h-[60vh]">
@@ -329,74 +314,52 @@ export default function DrawsPage() {
                 </div>
             </motion.div>
 
-            {/* LECTURE EN COURS - In Progress Reading Section */}
+            {/* BANNIÈRE INFORMATIVE - Lecture en cours ou disponible */}
             {latestPending && (
-                <motion.section
-                    initial={{ opacity: 0, y: 20 }}
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.05 }}
-                    className="mb-10"
+                    className="mb-6 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3"
                 >
-                    <h2 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Lecture en cours de préparation
-                    </h2>
-
-                    <div className="p-6 rounded-2xl bg-gradient-to-r from-amber-500/10 to-purple-500/10 border border-amber-500/20 backdrop-blur-sm">
-                        {/* Status Badge */}
-                        <div className="flex items-start justify-between gap-4 mb-6">
-                            <div>
-                                <h3 className="text-xl font-semibold text-white mb-2">
-                                    Votre lecture est en cours de création
-                                </h3>
-                                <div className="flex items-center gap-3 text-sm">
-                                    <span className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${getStatusDisplay(latestPending.status || 'PENDING').bgColor} ${getStatusDisplay(latestPending.status || 'PENDING').color}`}>
-                                        <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-                                        {getStatusDisplay(latestPending.status || 'PENDING').label}
-                                    </span>
-                                    <span className="px-2 py-1 rounded-full bg-white/10 text-stellar-400 text-xs font-mono">
-                                        #{latestPending.orderNumber}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-                                <Sparkles className="w-8 h-8 text-amber-400 animate-pulse" />
-                            </div>
-                        </div>
-
-                        {/* Progress Steps */}
-                        <div className="grid grid-cols-3 gap-4 mb-6">
-                            <div className={`p-4 rounded-xl ${latestPending.status === 'PENDING' || latestPending.status === 'PAID' ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-white/5 border border-white/10'}`}>
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${latestPending.status === 'PENDING' || latestPending.status === 'PAID' ? 'bg-amber-400 text-abyss-900' : 'bg-emerald-400 text-abyss-900'}`}>
-                                    {latestPending.status === 'PENDING' || latestPending.status === 'PAID' ? '1' : '✓'}
-                                </div>
-                                <p className="text-sm font-medium text-white">Paiement reçu</p>
-                                <p className="text-xs text-stellar-500">Commande confirmée</p>
-                            </div>
-                            <div className={`p-4 rounded-xl ${latestPending.status === 'PROCESSING' ? 'bg-blue-500/20 border border-blue-500/30' : latestPending.status === 'AWAITING_VALIDATION' ? 'bg-white/5 border border-white/10' : 'bg-white/5 border border-white/10 opacity-50'}`}>
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${latestPending.status === 'PROCESSING' ? 'bg-blue-400 text-abyss-900' : latestPending.status === 'AWAITING_VALIDATION' ? 'bg-emerald-400 text-abyss-900' : 'bg-white/20 text-stellar-400'}`}>
-                                    {latestPending.status === 'PROCESSING' ? <Loader2 className="w-4 h-4 animate-spin" /> : latestPending.status === 'AWAITING_VALIDATION' ? '✓' : '2'}
-                                </div>
-                                <p className="text-sm font-medium text-white">Génération IA</p>
-                                <p className="text-xs text-stellar-500">Analyse en profondeur</p>
-                            </div>
-                            <div className={`p-4 rounded-xl ${latestPending.status === 'AWAITING_VALIDATION' ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-white/5 border border-white/10 opacity-50'}`}>
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${latestPending.status === 'AWAITING_VALIDATION' ? 'bg-purple-400 text-abyss-900' : 'bg-white/20 text-stellar-400'}`}>
-                                    {latestPending.status === 'AWAITING_VALIDATION' ? <Loader2 className="w-4 h-4 animate-spin" /> : '3'}
-                                </div>
-                                <p className="text-sm font-medium text-white">Validation Expert</p>
-                                <p className="text-xs text-stellar-500">Relecture humaine</p>
-                            </div>
-                        </div>
-
-                        {/* Info */}
-                        <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                            <p className="text-sm text-stellar-300">
-                                <span className="font-semibold text-white">Délai estimé :</span> Votre lecture sera disponible sous 24-48h. Nous vous enverrons un email dès qu'elle sera prête.
-                            </p>
-                        </div>
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                        <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
                     </div>
-                </motion.section>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-medium">
+                            Lecture en cours de préparation
+                        </p>
+                        <p className="text-xs text-stellar-400">
+                            Disponible sous 24-48h • <span className="font-mono text-amber-400/80">#{latestPending.orderNumber}</span>
+                        </p>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* BANNIÈRE - Lecture disponible */}
+            {latestReading && latestReading.assets.pdf && !latestPending && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-6 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3"
+                >
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-medium">
+                            Votre lecture est disponible
+                        </p>
+                        <p className="text-xs text-stellar-400">
+                            Consultez votre PDF, chemin de vie et synthèses ci-dessous
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => openPdfViewer(latestReading.assets.pdf!, latestReading.title)}
+                        className="flex-shrink-0 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm font-medium hover:bg-emerald-500/30 transition-colors"
+                    >
+                        Consulter
+                    </button>
+                </motion.div>
             )}
 
             {/* MA LECTURE - Main Reading Section */}
