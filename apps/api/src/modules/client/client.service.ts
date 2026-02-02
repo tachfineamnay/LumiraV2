@@ -196,6 +196,13 @@ export class ClientService {
         // Map completed readings
         const completedReadings = completedOrders.map(order => {
             const content = order.generatedContent as Record<string, unknown> | null;
+            const synthesis = content?.synthesis as Record<string, unknown> | undefined;
+            
+            // Archetype can be at root level (legacy) or in synthesis (new AI structure)
+            const archetype = (content?.archetype as string) || 
+                              (synthesis?.archetype as string) || 
+                              null;
+            
             return {
                 id: order.id,
                 orderNumber: order.orderNumber,
@@ -203,12 +210,12 @@ export class ClientService {
                 status: 'COMPLETED' as const,
                 deliveredAt: order.deliveredAt,
                 createdAt: order.createdAt,
-                archetype: (content?.archetype as string) || null,
-                title: content?.archetype 
-                    ? `Lecture d'Âme - ${content.archetype}`
+                archetype,
+                title: archetype 
+                    ? `Lecture d'Âme - ${archetype}`
                     : `Lecture d'Âme #${order.orderNumber}`,
                 intention: (content?.specificQuestion as string) || null,
-                keywords: (content?.keywords as string[]) || [],
+                keywords: (content?.keywords as string[]) || (synthesis?.keywords as string[]) || [],
                 assets: {
                     pdf: (content?.pdfUrl as string) || null,
                     audio: (content?.audioUrl as string) || null,

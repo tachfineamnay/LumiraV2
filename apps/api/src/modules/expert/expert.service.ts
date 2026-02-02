@@ -1116,6 +1116,10 @@ MESSAGE DE L'EXPERT:`;
      * Finalize an order from the Co-Creation Studio.
      * Seals the content and triggers PDF generation using Gotenberg.
      * Uses the current content from the Right Panel (not the initial draft).
+     * 
+     * Handles two scenarios:
+     * 1. AI-generated content exists (pdf_content structure) → use standard flow
+     * 2. Manual content only (no AI generation) → build minimal pdf_content from raw text
      */
     async finalizeFromStudio(
         orderId: string,
@@ -1134,18 +1138,60 @@ MESSAGE DE L'EXPERT:`;
         this.logger.log(`🔏 Finalizing order ${order.orderNumber} from Studio...`);
 
         try {
-            // 1. Save the final content to the order
             const currentGenerated = order.generatedContent as Record<string, unknown> || {};
+            const hasPdfContent = currentGenerated.pdf_content && 
+                typeof currentGenerated.pdf_content === 'object';
+            
+            // Build pdf_content structure if missing (manual content scenario)
+            let pdfContentData = currentGenerated.pdf_content as Record<string, unknown> | undefined;
+            let synthesisData = currentGenerated.synthesis as Record<string, unknown> | undefined;
+            
+            if (!hasPdfContent) {
+                this.logger.log(`📝 No AI content found, building pdf_content from manual text...`);
+                
+                // Parse sections from the final content (split by headers or double newlines)
+                const contentSections = this.parseManualContentToSections(finalContent);
+                
+                // Build minimal pdf_content structure
+                pdfContentData = {
+                    introduction: contentSections.introduction || 'Bienvenue dans votre lecture spirituelle personnalisée.',
+                    archetype_reveal: 'Votre guidance spirituelle unique',
+                    sections: contentSections.sections.length > 0 
+                        ? contentSections.sections 
+                        : [{
+                            domain: 'Guidance Spirituelle',
+                            title: 'Votre Lecture Personnalisée',
+                            content: finalContent,
+                        }],
+                    conclusion: contentSections.conclusion || 'Que cette lecture vous accompagne sur votre chemin.',
+                    karmic_insights: [],
+                    life_mission: '',
+                    rituals: [],
+                };
+                
+                synthesisData = {
+                    archetype: 'Guidance Personnalisée',
+                    keywords: [],
+                    emotional_state: 'En chemin',
+                    key_blockage: '',
+                };
+            }
+
+            // 1. Save the final content with pdf_content structure
+            const updatedContent = {
+                ...currentGenerated,
+                pdf_content: pdfContentData,
+                synthesis: synthesisData || currentGenerated.synthesis,
+                lecture: finalContent,
+                sealedAt: new Date().toISOString(),
+                sealedBy: expert.id,
+                source: 'studio',
+            };
+            
             await this.prisma.order.update({
                 where: { id: orderId },
                 data: {
-                    generatedContent: {
-                        ...currentGenerated,
-                        lecture: finalContent,
-                        sealedAt: new Date().toISOString(),
-                        sealedBy: expert.id,
-                        source: 'studio',
-                    },
+                    generatedContent: updatedContent as object,
                     status: 'AWAITING_VALIDATION',
                 },
             });
@@ -1216,6 +1262,83 @@ MESSAGE DE L'EXPERT:`;
 
             throw new BadRequestException(`Échec de la finalisation: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Parse manual text content into sections for PDF generation.
+     * Attempts to extract introduction, body sections, and conclusion.
+     */
+    private parseManualContentToSections(content: string): {
+        introduction: string;
+        sections: { domain: string; title: string; content: string }[];
+        conclusion: string;
+    } {
+        // Split content by common section markers
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        // Try to detect headers (lines starting with # or all caps or short lines followed by content)
+        const sections: { domain: string; title: string; content: string }[] = [];
+        let currentSection: { title: string; content: string[] } | null = null;
+        let introduction = '';
+        let conclusion = '';
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            const isHeader = line.startsWith('#') || 
+                             (line.length < 60 && line === line.toUpperCase() && line.length > 3) ||
+                             line.match(/^[A-ZÀ-Ü][^.!?]*:?\s*$/);
+            
+            if (isHeader) {
+                // Save previous section
+                if (currentSection && currentSection.content.length > 0) {
+                    sections.push({
+                        domain: 'Guidance',
+                        title: currentSection.title.replace(/^#+\s*/, ''),
+                        content: currentSection.content.join('\n\n'),
+                    });
+                }
+                currentSection = { title: line, content: [] };
+            } else if (currentSection) {
+                currentSection.content.push(line);
+            } else {
+                // Before first header = introduction
+                introduction += (introduction ? '\n\n' : '') + line;
+            }
+        }
+        
+        // Save last section
+        if (currentSection && currentSection.content.length > 0) {
+            sections.push({
+                domain: 'Guidance',
+                title: currentSection.title.replace(/^#+\s*/, ''),
+                content: currentSection.content.join('\n\n'),
+            });
+        }
+        
+        // If we have sections, use last one as conclusion candidate
+        if (sections.length > 1) {
+            const lastSection = sections[sections.length - 1];
+            if (lastSection.title.toLowerCase().includes('conclusion') ||
+                lastSection.title.toLowerCase().includes('fin') ||
+                lastSection.content.length < 200) {
+                conclusion = lastSection.content;
+                sections.pop();
+            }
+        }
+        
+        // If no sections found, treat whole content as one section
+        if (sections.length === 0 && !introduction) {
+            introduction = content.substring(0, Math.min(500, content.length));
+            if (content.length > 500) {
+                sections.push({
+                    domain: 'Guidance Spirituelle',
+                    title: 'Votre Message',
+                    content: content.substring(500),
+                });
+            }
+        }
+        
+        return { introduction, sections, conclusion };
     }
 
     async getClients(dto: PaginationDto): Promise<PaginatedResult<User>> {
