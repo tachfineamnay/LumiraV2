@@ -301,9 +301,22 @@ function DashboardContent() {
     const { highestLevel, hasCapability, isLoading, orderCount } = useSanctuaire();
     const { profile, refetchData, user } = useSanctuaireAuth();
     const [showWizard, setShowWizard] = useState(false);
+    const [hasDraft, setHasDraft] = useState(false);
 
     // Check if onboarding is complete - use profileCompleted as single source of truth
     const isOnboardingComplete = profile?.profileCompleted === true;
+
+    // Check for existing draft in localStorage (user started but didn't finish)
+    useEffect(() => {
+        const draft = localStorage.getItem('holistic_wizard_draft');
+        const draftEmail = localStorage.getItem('holistic_wizard_email');
+        // Draft exists and belongs to current user
+        if (draft && (!draftEmail || draftEmail === user?.email)) {
+            setHasDraft(true);
+        } else {
+            setHasDraft(false);
+        }
+    }, [user?.email, showWizard]); // Re-check when wizard closes
 
     if (isLoading) {
         return (
@@ -407,6 +420,39 @@ function DashboardContent() {
                     Explorez votre univers intérieur à travers le mandala sacré
                 </motion.p>
             </div>
+
+            {/* 🔔 ONBOARDING REMINDER - Shows if profile incomplete */}
+            {!isOnboardingComplete && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full max-w-2xl mx-auto mb-6 relative z-40"
+                >
+                    <div className="glass-card px-5 py-4 rounded-xl border border-amber-400/40 bg-amber-400/5 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-400/20 flex items-center justify-center animate-pulse">
+                                <AlertCircle className="w-5 h-5 text-amber-400" />
+                            </div>
+                            <div>
+                                <p className="text-stellar-100 font-medium text-sm">
+                                    {hasDraft ? "📝 Reprenez votre diagnostic" : "⚡ Complétez votre profil"}
+                                </p>
+                                <p className="text-stellar-400 text-xs">
+                                    {hasDraft 
+                                        ? "Votre progression a été sauvegardée - continuez là où vous étiez" 
+                                        : "Nécessaire pour générer votre lecture Oracle personnalisée"}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setShowWizard(true)}
+                            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-abyss-900 font-bold text-sm hover:shadow-lg hover:shadow-amber-400/30 transition-all whitespace-nowrap"
+                        >
+                            {hasDraft ? "Continuer →" : "Terminer →"}
+                        </button>
+                    </div>
+                </motion.div>
+            )}
 
             {/* 🪐 MANDALA NAVIGATION or ONBOARDING CTA */}
             <section className="relative w-full flex justify-center items-start py-8 mb-8 z-30">
