@@ -110,6 +110,43 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     },
   });
 
+  // Polling for generation status (fallback for WebSocket)
+  useEffect(() => {
+    if (!isGenerating && !isRegenerating) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/expert/orders/${orderId}`);
+        
+        // Check if generation completed (content appeared or status changed)
+        const hasNewContent = data.generatedContent && !order?.generatedContent;
+        const contentChanged = data.generatedContent?.pdf_content && 
+          !order?.generatedContent?.pdf_content;
+        const statusChanged = data.status !== order?.status;
+        
+        if (hasNewContent || contentChanged || statusChanged) {
+          setOrder(data);
+          if (data.generatedContent) {
+            setEditorContent(oracleResponseToHtml(data.generatedContent));
+          }
+          
+          // Generation completed!
+          if (data.generatedContent?.pdf_content || data.status === 'COMPLETED') {
+            toast.success('Génération terminée !', { 
+              description: 'La lecture est prête pour révision' 
+            });
+            setIsGenerating(false);
+            setIsRegenerating(false);
+          }
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [isGenerating, isRegenerating, orderId, order?.generatedContent, order?.status]);
+
   // Fetch order data
   const fetchOrder = useCallback(async () => {
     try {
