@@ -135,7 +135,7 @@ export function ClientIdentityHeader({ client }: ClientIdentityHeaderProps) {
       </div>
 
       {/* CRM Tags */}
-      {client.crmTags.length > 0 && (
+      {client.crmTags && client.crmTags.length > 0 && (
         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5">
           <span className="text-xs text-stellar-400">Tags:</span>
           {client.crmTags.map((tag, i) => (

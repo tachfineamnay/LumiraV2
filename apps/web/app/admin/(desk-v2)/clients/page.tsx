@@ -17,7 +17,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import api from '@/lib/api';
-import { LEVEL_CONFIG } from '@/components/desk-v2/types';
 
 interface Client {
   id: string;
@@ -25,17 +24,19 @@ interface Client {
   firstName: string | null;
   lastName: string | null;
   createdAt: string;
-  ordersCount: number;
-  totalSpent: number;
-  lastOrderLevel?: number;
-  lastOrderDate?: string;
+  _count?: {
+    orders: number;
+  };
+  profile?: {
+    id: string;
+  } | null;
 }
 
 interface PaginatedResponse {
-  clients: Client[];
+  data: Client[];
   total: number;
   page: number;
-  pageSize: number;
+  limit: number;
   totalPages: number;
 }
 
@@ -57,11 +58,12 @@ export default function ClientsPage() {
         ...(searchQuery && { search: searchQuery }),
       });
       const { data } = await api.get<PaginatedResponse>(`/expert/clients?${params}`);
-      setClients(data.clients);
+      setClients(data.data || []);
       setTotalPages(data.totalPages);
       setTotalClients(data.total);
     } catch (error) {
       console.error('Failed to fetch clients:', error);
+      setClients([]);
     } finally {
       setIsLoading(false);
     }
@@ -172,9 +174,7 @@ export default function ClientsPage() {
             </thead>
             <tbody>
               {clients.map((client, index) => {
-                const levelConfig = client.lastOrderLevel 
-                  ? LEVEL_CONFIG[client.lastOrderLevel as keyof typeof LEVEL_CONFIG] 
-                  : null;
+                const ordersCount = client._count?.orders || 0;
                 
                 return (
                   <motion.tr
@@ -214,23 +214,14 @@ export default function ClientsPage() {
                     <td className="px-4 py-3 text-center">
                       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800">
                         <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="text-sm text-white font-medium">{client.ordersCount}</span>
+                        <span className="text-sm text-white font-medium">{ordersCount}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="text-white font-medium">
-                        {(client.totalSpent / 100).toFixed(0)}€
-                      </span>
+                      <span className="text-slate-400">—</span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {levelConfig ? (
-                        <span className="inline-flex items-center gap-1">
-                          <span>{levelConfig.icon}</span>
-                          <span className="text-xs text-slate-400">{levelConfig.label}</span>
-                        </span>
-                      ) : (
-                        <span className="text-slate-600">—</span>
-                      )}
+                      <span className="text-slate-600">—</span>
                     </td>
                     <td className="px-4 py-3">
                       <button
