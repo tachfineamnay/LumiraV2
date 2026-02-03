@@ -117,6 +117,7 @@ export class ExpertController {
     }
 
     @Get('orders/:id')
+    @SkipThrottle() // Polling endpoint - skip rate limiting for generation status checks
     async getOrderById(@Param('id') id: string) {
         return this.expertService.getOrderById(id);
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TiptapEditor } from './TiptapEditor';
@@ -111,12 +111,32 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   });
 
   // Polling for generation status (fallback for WebSocket)
-  useEffect(() => {
-    if (!isGenerating && !isRegenerating) return;
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollErrorCountRef = useRef(0);
 
-    const pollInterval = setInterval(async () => {
+  useEffect(() => {
+    if (!isGenerating && !isRegenerating) {
+      // Clean up when not generating
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      pollErrorCountRef.current = 0;
+      return;
+    }
+
+    // Calculate interval with exponential backoff on errors (base: 5s, max: 30s)
+    const getPollingInterval = () => {
+      const baseInterval = 5000; // 5 seconds base
+      const maxInterval = 30000; // 30 seconds max
+      const backoffMultiplier = Math.min(Math.pow(2, pollErrorCountRef.current), 6);
+      return Math.min(baseInterval * backoffMultiplier, maxInterval);
+    };
+
+    const poll = async () => {
       try {
         const { data } = await api.get(`/expert/orders/${orderId}`);
+        pollErrorCountRef.current = 0; // Reset error count on success
         
         // Check if generation completed (content appeared or status changed)
         const hasNewContent = data.generatedContent && !order?.generatedContent;
@@ -137,14 +157,41 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             });
             setIsGenerating(false);
             setIsRegenerating(false);
+            return; // Stop polling
           }
         }
-      } catch (err) {
-        console.error('Polling error:', err);
+        
+        // Schedule next poll
+        pollIntervalRef.current = setTimeout(poll, getPollingInterval());
+      } catch (err: any) {
+        pollErrorCountRef.current++;
+        console.warn(`Polling error (attempt ${pollErrorCountRef.current}):`, err?.response?.status || err);
+        
+        // Stop polling after 5 consecutive errors or if rate limited
+        if (pollErrorCountRef.current >= 5) {
+          console.error('Too many polling errors, stopping');
+          toast.error('Erreur de synchronisation', { 
+            description: 'Rechargez la page pour voir l\'état actuel' 
+          });
+          setIsGenerating(false);
+          setIsRegenerating(false);
+          return;
+        }
+        
+        // Continue with backoff
+        pollIntervalRef.current = setTimeout(poll, getPollingInterval());
       }
-    }, 3000); // Poll every 3 seconds
+    };
 
-    return () => clearInterval(pollInterval);
+    // Start polling
+    pollIntervalRef.current = setTimeout(poll, getPollingInterval());
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearTimeout(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
   }, [isGenerating, isRegenerating, orderId, order?.generatedContent, order?.status]);
 
   // Fetch order data
