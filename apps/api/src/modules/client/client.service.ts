@@ -2,6 +2,21 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import { PrismaService } from '../../prisma/prisma.service';
 import { ContextDispatcher } from '../../services/factory/ContextDispatcher';
 
+// Chat quota for free users
+const FREE_CHAT_QUOTA = 3;
+
+// Custom error codes
+export const CHAT_ERROR_CODES = {
+    QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+    NO_ACCESS: 'NO_ACCESS',
+} as const;
+
+interface ChatMessage {
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: string;
+}
+
 @Injectable()
 export class ClientService {
     private readonly logger = new Logger(ClientService.name);
@@ -286,19 +301,20 @@ export class ClientService {
     }
 
     /**
-     * Chat with Oracle Lumira using the CONFIDANT agent
-     * Verifies user has access (completed reading or active subscription)
+     * Get the user's chat quota status
+     * Returns remaining messages and subscription status
      */
-    async chatWithOracle(userId: string, message: string, sessionId?: string) {
-        // Verify user has at least one completed reading or active subscription
+    async getChatQuota(userId: string) {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
-            include: {
+            select: {
+                id: true,
+                subscriptionStatus: true,
                 orders: {
                     where: { status: 'COMPLETED' },
                     take: 1,
+                    select: { id: true },
                 },
-                profile: true,
             },
         });
 
@@ -306,14 +322,89 @@ export class ClientService {
             throw new NotFoundException('Utilisateur non trouvé');
         }
 
-        const hasAccess = user.orders.length > 0 || user.subscriptionStatus === 'ACTIVE';
-        if (!hasAccess) {
-            throw new ForbiddenException(
-                'Vous devez avoir complété au moins une lecture pour accéder au chat avec l\'Oracle.',
-            );
+        const hasCompletedReading = user.orders.length > 0;
+        const isSubscribed = user.subscriptionStatus === 'ACTIVE';
+
+        // If subscribed, unlimited messages
+        if (isSubscribed) {
+            return {
+                isSubscribed: true,
+                hasAccess: true,
+                messagesUsed: 0,
+                messagesRemaining: -1, // -1 = unlimited
+                quota: -1,
+            };
         }
 
-        this.logger.log(`💬 Chat request from user ${userId}: "${message.substring(0, 50)}..."`);
+        // If no completed reading, no access at all
+        if (!hasCompletedReading) {
+            return {
+                isSubscribed: false,
+                hasAccess: false,
+                messagesUsed: 0,
+                messagesRemaining: 0,
+                quota: FREE_CHAT_QUOTA,
+            };
+        }
+
+        // Count user messages across all sessions
+        const sessions = await this.prisma.chatSession.findMany({
+            where: { userId },
+            select: { messages: true },
+        });
+
+        let totalUserMessages = 0;
+        for (const session of sessions) {
+            const messages = session.messages as ChatMessage[] | null;
+            if (messages && Array.isArray(messages)) {
+                totalUserMessages += messages.filter(m => m.role === 'user').length;
+            }
+        }
+
+        const messagesRemaining = Math.max(0, FREE_CHAT_QUOTA - totalUserMessages);
+
+        return {
+            isSubscribed: false,
+            hasAccess: messagesRemaining > 0,
+            messagesUsed: totalUserMessages,
+            messagesRemaining,
+            quota: FREE_CHAT_QUOTA,
+        };
+    }
+
+    /**
+     * Chat with Oracle Lumira using the CONFIDANT agent
+     * Verifies user has access (completed reading or active subscription)
+     * Enforces quota for free users (3 messages max)
+     */
+    async chatWithOracle(userId: string, message: string, sessionId?: string) {
+        // Get quota status
+        const quotaStatus = await this.getChatQuota(userId);
+
+        // Check if user has any access
+        if (!quotaStatus.isSubscribed && quotaStatus.messagesRemaining === 0 && quotaStatus.messagesUsed === 0) {
+            const error = new ForbiddenException({
+                message: 'Vous devez avoir complété au moins une lecture pour accéder au chat avec l\'Oracle.',
+                code: CHAT_ERROR_CODES.NO_ACCESS,
+            });
+            throw error;
+        }
+
+        // Check quota for non-subscribers
+        if (!quotaStatus.isSubscribed && quotaStatus.messagesRemaining <= 0) {
+            this.logger.warn(`⚠️ User ${userId} exceeded chat quota (${quotaStatus.messagesUsed}/${FREE_CHAT_QUOTA})`);
+            const error = new ForbiddenException({
+                message: 'L\'Oracle doit se reposer... Rejoignez le Cercle pour continuer vos échanges.',
+                code: CHAT_ERROR_CODES.QUOTA_EXCEEDED,
+                quotaStatus: {
+                    messagesUsed: quotaStatus.messagesUsed,
+                    quota: FREE_CHAT_QUOTA,
+                },
+            });
+            throw error;
+        }
+
+        this.logger.log(`💬 Chat request from user ${userId}: "${message.substring(0, 50)}..." (${quotaStatus.messagesUsed + 1}/${quotaStatus.isSubscribed ? '∞' : FREE_CHAT_QUOTA})`);
 
         try {
             // Use ContextDispatcher to route to CONFIDANT agent
@@ -323,12 +414,24 @@ export class ClientService {
                 sessionId,
             );
 
+            // Calculate new remaining after this message
+            const newMessagesRemaining = quotaStatus.isSubscribed 
+                ? -1 
+                : Math.max(0, quotaStatus.messagesRemaining - 1);
+
             return {
                 success: true,
                 response: response.reply,
                 sessionId: response.sessionId,
                 contextUsed: response.contextUsed,
                 timestamp: new Date().toISOString(),
+                // Include quota info for frontend
+                quota: {
+                    isSubscribed: quotaStatus.isSubscribed,
+                    messagesRemaining: newMessagesRemaining,
+                    messagesUsed: quotaStatus.messagesUsed + 1,
+                    total: FREE_CHAT_QUOTA,
+                },
             };
         } catch (error) {
             this.logger.error(`❌ Chat error for user ${userId}:`, error);

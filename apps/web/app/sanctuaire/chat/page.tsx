@@ -4,8 +4,9 @@ export const dynamic = 'force-dynamic';
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, User, Bot, Loader2 } from "lucide-react";
+import { Send, Sparkles, User, Bot, Loader2, MessageCircle, Crown } from "lucide-react";
 import { GlassCard } from "../../../components/ui/GlassCard";
+import { SubscriptionLock } from "../../../components/sanctuary/SubscriptionLock";
 import api from "../../../lib/api";
 
 interface Message {
@@ -15,10 +16,19 @@ interface Message {
     timestamp: Date;
 }
 
+interface QuotaStatus {
+    isSubscribed: boolean;
+    messagesRemaining: number;
+    messagesUsed: number;
+    total: number;
+}
+
 export default function OracleChatPage() {
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
+    const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
+    const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         {
             id: "1",
@@ -29,6 +39,28 @@ export default function OracleChatPage() {
     ]);
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Fetch initial quota status
+    useEffect(() => {
+        const fetchQuota = async () => {
+            try {
+                const { data } = await api.get('/client/chat/quota');
+                setQuotaStatus({
+                    isSubscribed: data.isSubscribed,
+                    messagesRemaining: data.messagesRemaining,
+                    messagesUsed: data.messagesUsed,
+                    total: data.quota,
+                });
+                // Check if already exceeded
+                if (!data.isSubscribed && data.messagesRemaining <= 0 && data.messagesUsed > 0) {
+                    setIsQuotaExceeded(true);
+                }
+            } catch (err) {
+                console.error('Failed to fetch quota:', err);
+            }
+        };
+        fetchQuota();
+    }, []);
+
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollIntoView({ behavior: "smooth" });
@@ -36,7 +68,7 @@ export default function OracleChatPage() {
     }, [messages]);
 
     const handleSend = async () => {
-        if (!input.trim()) return;
+        if (!input.trim() || isQuotaExceeded) return;
 
         const userMsg: Message = {
             id: Date.now().toString(),
@@ -62,6 +94,16 @@ export default function OracleChatPage() {
                 setSessionId(data.sessionId);
             }
 
+            // Update quota status from response
+            if (data.quota) {
+                setQuotaStatus({
+                    isSubscribed: data.quota.isSubscribed,
+                    messagesRemaining: data.quota.messagesRemaining,
+                    messagesUsed: data.quota.messagesUsed,
+                    total: data.quota.total,
+                });
+            }
+
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: "assistant",
@@ -71,6 +113,22 @@ export default function OracleChatPage() {
             setMessages((prev) => [...prev, aiMsg]);
         } catch (error: unknown) {
             console.error('Chat error:', error);
+            
+            // Check if quota exceeded (403 with QUOTA_EXCEEDED code)
+            const axiosError = error as { response?: { status?: number; data?: { code?: string; quotaStatus?: { messagesUsed: number; quota: number } } } };
+            if (axiosError.response?.status === 403 && axiosError.response?.data?.code === 'QUOTA_EXCEEDED') {
+                setIsQuotaExceeded(true);
+                if (axiosError.response.data.quotaStatus) {
+                    setQuotaStatus({
+                        isSubscribed: false,
+                        messagesRemaining: 0,
+                        messagesUsed: axiosError.response.data.quotaStatus.messagesUsed,
+                        total: axiosError.response.data.quotaStatus.quota,
+                    });
+                }
+                return; // Don't show error message, show lock instead
+            }
+            
             const errorMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: "assistant",
@@ -81,6 +139,40 @@ export default function OracleChatPage() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Quota indicator component
+    const QuotaIndicator = () => {
+        if (!quotaStatus || quotaStatus.isSubscribed) return null;
+        
+        const remaining = quotaStatus.messagesRemaining;
+        const isLow = remaining <= 1 && remaining > 0;
+        
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+                    remaining === 0
+                        ? 'bg-red-500/20 border border-red-500/30 text-red-300'
+                        : isLow
+                        ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
+                        : 'bg-white/10 border border-white/10 text-white/60'
+                }`}
+            >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>
+                    {remaining === 0 ? (
+                        'Quota épuisé'
+                    ) : (
+                        <>Messages restants : <span className="font-bold">{remaining}</span></>
+                    )}
+                </span>
+                {!quotaStatus.isSubscribed && (
+                    <Crown className="w-3.5 h-3.5 text-amber-400 ml-1" title="Passez premium pour des messages illimités" />
+                )}
+            </motion.div>
+        );
     };
 
     return (
@@ -106,6 +198,9 @@ export default function OracleChatPage() {
                             </p>
                         </div>
                     </div>
+                    
+                    {/* Quota indicator in header */}
+                    <QuotaIndicator />
                 </div>
 
                 {/* 📜 Chat Area */}
@@ -154,35 +249,45 @@ export default function OracleChatPage() {
                     <div ref={scrollRef} />
                 </div>
 
-                {/* ⌨️ Input Area */}
-                <div className="p-6 pt-4 border-t border-white/5 bg-white/5">
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <div className="relative flex items-center gap-2 bg-cosmic-void/80 border border-white/10 rounded-xl p-2 pr-2 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/30 transition-all">
-                            <input
-                                type="text"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                                placeholder="Posez votre question à l'univers..."
-                                className="flex-1 bg-transparent border-none text-white placeholder-white/30 text-sm px-4 py-3 focus:ring-0 focus:outline-none font-medium"
-                                disabled={isLoading}
-                            />
-                            <button
-                                onClick={handleSend}
-                                disabled={!input.trim() || isLoading}
-                                className="p-3 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 text-white hover:shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Envoyer le message"
-                                aria-label="Envoyer le message"
-                            >
-                                <Send className="w-5 h-5" />
-                            </button>
-                        </div>
+                {/* ⌨️ Input Area or Lock */}
+                {isQuotaExceeded ? (
+                    <div className="p-6 border-t border-white/5">
+                        <SubscriptionLock 
+                            messagesUsed={quotaStatus?.messagesUsed || 3} 
+                            quota={quotaStatus?.total || 3}
+                            variant="chat"
+                        />
                     </div>
-                    <p className="text-center text-[10px] text-white/20 mt-3">
-                        L'Oracle offre des guidances spirituelles. Interprétez ses messages avec votre propre intuition.
-                    </p>
-                </div>
+                ) : (
+                    <div className="p-6 pt-4 border-t border-white/5 bg-white/5">
+                        <div className="relative group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                            <div className="relative flex items-center gap-2 bg-cosmic-void/80 border border-white/10 rounded-xl p-2 pr-2 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/30 transition-all">
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                                    placeholder="Posez votre question à l'univers..."
+                                    className="flex-1 bg-transparent border-none text-white placeholder-white/30 text-sm px-4 py-3 focus:ring-0 focus:outline-none font-medium"
+                                    disabled={isLoading}
+                                />
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!input.trim() || isLoading}
+                                    className="p-3 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 text-white hover:shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Envoyer le message"
+                                    aria-label="Envoyer le message"
+                                >
+                                    <Send className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                        <p className="text-center text-[10px] text-white/20 mt-3">
+                            L'Oracle offre des guidances spirituelles. Interprétez ses messages avec votre propre intuition.
+                        </p>
+                    </div>
+                )}
             </GlassCard>
         </div>
     );

@@ -107,9 +107,20 @@ export class ClientController {
     }
 
     /**
+     * GET /api/client/chat/quota
+     * Returns the user's chat quota status
+     */
+    @Get('chat/quota')
+    @Throttle({ default: { limit: 60, ttl: 60000 } })
+    async getChatQuota(@Request() req: { user: { userId: string } }) {
+        return this.clientService.getChatQuota(req.user.userId);
+    }
+
+    /**
      * POST /api/client/chat
      * Chat with Oracle Lumira (CONFIDANT agent)
      * Requires active subscription or completed reading
+     * Free users limited to 3 messages
      */
     @Post('chat')
     @HttpCode(HttpStatus.OK)
