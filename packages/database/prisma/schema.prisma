@@ -170,6 +170,10 @@ model Order {
   revisionCount      Int            @default(0)
   deliveredAt        DateTime?
   deliveryMethod     DeliveryFormat?
+  // Upsell tracking
+  addons             Json?          // Array of purchased addons: [{type: 'FORECAST_6M', amount: 2700, paidAt: Date}]
+  upsellOfferedAt    DateTime?      // When upsell was shown
+  upsellAcceptedAt   DateTime?      // When upsell was accepted
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 

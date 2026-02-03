@@ -4,16 +4,39 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CheckCircle, Sparkles } from 'lucide-react';
+import { UpsellModal } from '@/components/checkout/UpsellModal';
+import api from '@/lib/api';
 
 function PaymentSuccessContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const email = searchParams.get('email') || '';
 
-    const [status, setStatus] = useState<'processing' | 'confirmed'>('processing');
+    const [status, setStatus] = useState<'processing' | 'confirmed' | 'upsell'>('processing');
+    const [orderId, setOrderId] = useState<string | null>(null);
+    const [showUpsell, setShowUpsell] = useState(false);
+    const [upsellDismissed, setUpsellDismissed] = useState(false);
 
+    // Fetch recent order for upsell
     useEffect(() => {
-        // Simulate payment confirmation delay (in reality, this would poll the backend)
+        const fetchOrder = async () => {
+            if (!email) return;
+            
+            try {
+                const { data } = await api.get(`/orders/recent?email=${encodeURIComponent(email)}`);
+                if (data.found && data.orderId) {
+                    setOrderId(data.orderId);
+                }
+            } catch (err) {
+                console.error('Failed to fetch order:', err);
+            }
+        };
+
+        fetchOrder();
+    }, [email]);
+
+    // Processing → Confirmed transition
+    useEffect(() => {
         const timer = setTimeout(() => {
             setStatus('confirmed');
         }, 2500);
@@ -21,23 +44,47 @@ function PaymentSuccessContent() {
         return () => clearTimeout(timer);
     }, []);
 
+    // Show upsell after confirmation (if order found)
     useEffect(() => {
-        if (status === 'confirmed') {
-            // Generate a unique first visit token
+        if (status === 'confirmed' && orderId && !upsellDismissed) {
+            // Show upsell modal after a short delay
+            const upsellTimer = setTimeout(() => {
+                setShowUpsell(true);
+                setStatus('upsell');
+            }, 1000);
+
+            return () => clearTimeout(upsellTimer);
+        }
+    }, [status, orderId, upsellDismissed]);
+
+    // Redirect to sanctuaire (after upsell or if no order)
+    useEffect(() => {
+        if (status === 'confirmed' && (upsellDismissed || !orderId)) {
             const firstVisitToken = `fv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-            // 🧹 Clear any previous onboarding draft to ensure fresh start for new user
+            // Clear any previous onboarding draft
             localStorage.removeItem('holistic_wizard_draft');
             localStorage.removeItem('holistic_wizard_email');
             
-            // Auto-redirect to sanctuaire after animation
             const redirectTimer = setTimeout(() => {
                 router.push(`/sanctuaire?email=${encodeURIComponent(email)}&token=${firstVisitToken}`);
             }, 2000);
 
             return () => clearTimeout(redirectTimer);
         }
-    }, [status, router, email]);
+    }, [status, router, email, upsellDismissed, orderId]);
+
+    const handleUpsellClose = () => {
+        setShowUpsell(false);
+        setUpsellDismissed(true);
+        setStatus('confirmed');
+    };
+
+    const handleUpsellSuccess = () => {
+        setShowUpsell(false);
+        setUpsellDismissed(true);
+        setStatus('confirmed');
+    };
 
 
     return (
@@ -159,22 +206,36 @@ function PaymentSuccessContent() {
                                 transition={{ delay: 0.6 }}
                                 className="text-cosmic-stardust text-sm max-w-md mb-8"
                             >
-                                Votre accès est prêt. Redirection vers votre Sanctuaire...
+                                {status === 'upsell' 
+                                    ? "Une offre spéciale vous attend..."
+                                    : "Votre accès est prêt. Redirection vers votre Sanctuaire..."
+                                }
                             </motion.p>
 
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.8 }}
-                                className="flex items-center gap-2 text-cosmic-gold text-xs"
-                            >
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Redirection en cours...</span>
-                            </motion.div>
+                            {status !== 'upsell' && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.8 }}
+                                    className="flex items-center gap-2 text-cosmic-gold text-xs"
+                                >
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>Redirection en cours...</span>
+                                </motion.div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* Upsell Modal */}
+            {showUpsell && orderId && (
+                <UpsellModal
+                    orderId={orderId}
+                    onClose={handleUpsellClose}
+                    onSuccess={handleUpsellSuccess}
+                />
+            )}
         </div>
     );
 }

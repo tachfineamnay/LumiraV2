@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto, UpdateOrderDto } from './dto/order.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -24,6 +24,31 @@ export class OrdersController {
         // Authenticated user is optional for guest checkout
         const userId = req.user?.userId;
         return this.ordersService.create(createOrderDto, userId);
+    }
+
+    /**
+     * Get most recent order by email (for upsell flow after payment)
+     * Public endpoint - only returns orderId if paid within last hour
+     */
+    @Get('recent')
+    async getRecentOrder(@Query('email') email: string) {
+        if (!email) {
+            throw new HttpException('Email required', HttpStatus.BAD_REQUEST);
+        }
+        
+        const order = await this.ordersService.findRecentByEmail(email);
+        if (!order) {
+            return { found: false };
+        }
+        
+        // Only return minimal data for security
+        return {
+            found: true,
+            orderId: order.id,
+            level: order.level,
+            amount: order.amount,
+            paidAt: order.paidAt
+        };
     }
 
     @UseGuards(JwtAuthGuard, RolesGuard)

@@ -16,6 +16,17 @@ export interface CheckoutIntentDto {
     amountCents: number;
 }
 
+export interface UpsellAddon {
+    type: string;
+    name: string;
+    amount: number;
+    paidAt?: Date;
+}
+
+export interface CreateUpsellIntentDto {
+    addonType: 'FORECAST_6M' | 'FORECAST_12M' | 'PRIORITY_DELIVERY';
+}
+
 @Injectable()
 export class PaymentsService {
     private stripe: Stripe;
@@ -176,7 +187,14 @@ export class PaymentsService {
     }
 
     private async handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-        const { orderId, checkoutFlow, email, firstName, lastName, phone, productLevel } = paymentIntent.metadata;
+        const { orderId, checkoutFlow, email, firstName, lastName, phone, productLevel, isUpsell, upsellType } = paymentIntent.metadata;
+
+        // Handle UPSELL payment
+        if (isUpsell === 'true' && orderId && upsellType) {
+            this.logger.log(`[Upsell Webhook] Processing upsell for order ${orderId}, type: ${upsellType}`);
+            await this.confirmUpsell(orderId, upsellType, paymentIntent.id);
+            return;
+        }
 
         // Legacy flow: orderId already exists
         if (orderId) {
@@ -277,6 +295,211 @@ export class PaymentsService {
 
         const sequence = (count + 1).toString().padStart(3, '0');
         return `${datePrefix}${sequence}`;
+    }
+
+    // =========================
+    // UPSELL ONE-CLICK SYSTEM
+    // =========================
+
+    private readonly UPSELL_PRODUCTS: Record<string, { name: string; amount: number; description: string }> = {
+        'FORECAST_6M': {
+            name: 'Prévisions 6 mois',
+            amount: 2700, // 27€ (special price, normally 67€)
+            description: 'Ajout des prévisions sur 6 mois à votre lecture'
+        },
+        'FORECAST_12M': {
+            name: 'Prévisions 12 mois',
+            amount: 4700, // 47€ (special price, normally 97€)
+            description: 'Ajout des prévisions sur 12 mois à votre lecture'
+        },
+        'PRIORITY_DELIVERY': {
+            name: 'Livraison Prioritaire',
+            amount: 1500, // 15€
+            description: 'Recevez votre lecture en priorité sous 24h'
+        }
+    };
+
+    /**
+     * Mark that upsell was shown to user (for analytics)
+     */
+    async markUpsellOffered(orderId: string) {
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: { upsellOfferedAt: new Date() }
+        });
+    }
+
+    /**
+     * Get order with upsell eligibility info
+     */
+    async getOrderForUpsell(orderId: string) {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { user: true }
+        });
+
+        if (!order) {
+            return null;
+        }
+
+        // Check eligibility: order must be PAID and not already have this addon
+        const existingAddons = (order.addons as UpsellAddon[] | null) || [];
+        const availableUpsells = Object.entries(this.UPSELL_PRODUCTS)
+            .filter(([type]) => !existingAddons.some(a => a.type === type))
+            .map(([type, product]) => ({
+                type,
+                ...product
+            }));
+
+        return {
+            order,
+            availableUpsells,
+            isEligible: order.status === 'PAID' && availableUpsells.length > 0
+        };
+    }
+
+    /**
+     * Create PaymentIntent for upsell addon (one-click if payment method saved)
+     */
+    async createUpsellIntent(orderId: string, addonType: string) {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: { user: true }
+        });
+
+        if (!order) {
+            throw new Error('Order not found');
+        }
+
+        if (order.status !== 'PAID') {
+            throw new Error('Order must be paid before upsell');
+        }
+
+        const product = this.UPSELL_PRODUCTS[addonType];
+        if (!product) {
+            throw new Error('Invalid upsell product');
+        }
+
+        // Check if addon already purchased
+        const existingAddons = (order.addons as UpsellAddon[] | null) || [];
+        if (existingAddons.some(a => a.type === addonType)) {
+            throw new Error('Addon already purchased');
+        }
+
+        // Try to get saved payment method from Stripe customer
+        let paymentMethodId: string | null = null;
+        if (order.user.stripeCustomerId) {
+            try {
+                const paymentMethods = await this.stripe.paymentMethods.list({
+                    customer: order.user.stripeCustomerId,
+                    type: 'card',
+                    limit: 1
+                });
+                if (paymentMethods.data.length > 0) {
+                    paymentMethodId = paymentMethods.data[0].id;
+                }
+            } catch (e) {
+                this.logger.warn(`Could not fetch payment methods: ${e}`);
+            }
+        }
+
+        // Ensure customer exists or create one
+        let customerId = order.user.stripeCustomerId;
+        if (!customerId) {
+            const customer = await this.stripe.customers.create({
+                email: order.userEmail,
+                name: order.userName || undefined,
+                metadata: { userId: order.userId }
+            });
+            customerId = customer.id;
+            
+            // Save customer ID
+            await this.prisma.user.update({
+                where: { id: order.userId },
+                data: { stripeCustomerId: customerId }
+            });
+        }
+
+        // Create PaymentIntent
+        const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
+            amount: product.amount,
+            currency: 'eur',
+            customer: customerId,
+            automatic_payment_methods: { enabled: true },
+            metadata: {
+                orderId: order.id,
+                upsellType: addonType,
+                upsellName: product.name,
+                isUpsell: 'true'
+            },
+            description: product.description
+        };
+
+        // If we have a saved payment method, attach it for faster checkout
+        if (paymentMethodId) {
+            paymentIntentParams.payment_method = paymentMethodId;
+        }
+
+        const paymentIntent = await this.stripe.paymentIntents.create(paymentIntentParams);
+
+        this.logger.log(`[Upsell] Created PaymentIntent ${paymentIntent.id} for order ${orderId}, addon: ${addonType}`);
+
+        return {
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id,
+            amount: product.amount,
+            productName: product.name,
+            hasPaymentMethod: !!paymentMethodId
+        };
+    }
+
+    /**
+     * Confirm upsell after successful payment (called by webhook or direct confirmation)
+     */
+    async confirmUpsell(orderId: string, addonType: string, paymentIntentId: string) {
+        const product = this.UPSELL_PRODUCTS[addonType];
+        if (!product) {
+            throw new Error('Invalid upsell product');
+        }
+
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId }
+        });
+
+        if (!order) {
+            throw new Error('Order not found');
+        }
+
+        const existingAddons = (order.addons as UpsellAddon[] | null) || [];
+        
+        // Add the new addon
+        const newAddon: UpsellAddon = {
+            type: addonType,
+            name: product.name,
+            amount: product.amount,
+            paidAt: new Date()
+        };
+
+        const updatedAddons = [...existingAddons, newAddon];
+
+        // Update order
+        const updatedOrder = await this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                addons: updatedAddons,
+                upsellAcceptedAt: new Date(),
+                // Also update total amount for records
+                amount: order.amount + product.amount
+            }
+        });
+
+        this.logger.log(`[Upsell] Confirmed addon ${addonType} for order ${orderId}. New total: ${updatedOrder.amount}`);
+
+        return {
+            success: true,
+            order: updatedOrder,
+            addon: newAddon
+        };
     }
 }
 

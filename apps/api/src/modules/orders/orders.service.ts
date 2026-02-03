@@ -105,4 +105,21 @@ export class OrdersService {
         const sequence = (count + 1).toString().padStart(3, '0');
         return `${datePrefix}${sequence}`;
     }
+
+    /**
+     * Get most recent PAID order by email (for upsell flow)
+     * Only returns orders paid within the last hour to prevent abuse
+     */
+    async findRecentByEmail(email: string): Promise<Order | null> {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        
+        return this.prisma.order.findFirst({
+            where: {
+                userEmail: email.toLowerCase().trim(),
+                status: 'PAID',
+                paidAt: { gte: oneHourAgo }
+            },
+            orderBy: { paidAt: 'desc' }
+        });
+    }
 }
