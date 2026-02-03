@@ -25,6 +25,20 @@ export function ReadingViewerModal({ isOpen, onClose, pdfUrl, title = 'Votre Lec
     const [zoom, setZoom] = useState(100);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
+
+    // Resolve the PDF URL (convert relative API URLs to absolute)
+    useEffect(() => {
+        if (!pdfUrl) return;
+        
+        // If it's a relative API URL, prepend the API base URL
+        if (pdfUrl.startsWith('/api/')) {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+            setResolvedPdfUrl(`${apiUrl}${pdfUrl}`);
+        } else {
+            setResolvedPdfUrl(pdfUrl);
+        }
+    }, [pdfUrl]);
 
     // Handle ESC key
     useEffect(() => {
@@ -55,8 +69,9 @@ export function ReadingViewerModal({ isOpen, onClose, pdfUrl, title = 'Votre Lec
     };
 
     const handleDownload = () => {
+        if (!resolvedPdfUrl) return;
         const link = document.createElement('a');
-        link.href = pdfUrl;
+        link.href = resolvedPdfUrl;
         link.download = `${title.replace(/\s+/g, '_')}.pdf`;
         link.click();
     };
@@ -110,7 +125,7 @@ export function ReadingViewerModal({ isOpen, onClose, pdfUrl, title = 'Votre Lec
 
                         {/* PDF Viewer */}
                         <div className="flex-1 bg-abyss-900 relative overflow-hidden">
-                            {isLoading && (
+                            {(isLoading || !resolvedPdfUrl) && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-abyss-900 z-10">
                                     <div className="text-center">
                                         <Loader2 className="w-10 h-10 text-horizon-400 animate-spin mx-auto mb-3" />
@@ -118,13 +133,15 @@ export function ReadingViewerModal({ isOpen, onClose, pdfUrl, title = 'Votre Lec
                                     </div>
                                 </div>
                             )}
-                            <iframe
-                                src={`${pdfUrl}#zoom=${zoom}&toolbar=0&navpanes=0`}
-                                className="w-full h-full border-0"
-                                style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
-                                onLoad={() => setIsLoading(false)}
-                                title={title}
-                            />
+                            {resolvedPdfUrl && (
+                                <iframe
+                                    src={`${resolvedPdfUrl}#zoom=${zoom}&toolbar=0&navpanes=0`}
+                                    className="w-full h-full border-0"
+                                    style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
+                                    onLoad={() => setIsLoading(false)}
+                                    title={title}
+                                />
+                            )}
                         </div>
 
                         {/* Floating Control Bar */}
@@ -172,7 +189,7 @@ export function ReadingViewerModal({ isOpen, onClose, pdfUrl, title = 'Votre Lec
 
                                 {/* Open in new tab */}
                                 <a
-                                    href={pdfUrl}
+                                    href={resolvedPdfUrl || '#'}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="p-2 rounded-lg hover:bg-white/10 text-stellar-300 hover:text-white transition-colors"

@@ -357,9 +357,11 @@ export class DigitalSoulService {
                     },
                 }),
             );
-            pdfUrl = `https://${this.s3Bucket}.s3.${this.s3Region}.amazonaws.com/${pdfKey}`;
+            // Use API endpoint for signed URL access (S3 bucket is private)
+            pdfUrl = `/api/readings/${order.orderNumber}/download`;
             this.logger.log(`☁️ PDF uploaded to S3: ${pdfKey}`);
-        } catch (error) {
+            this.logger.log(`🔗 Access URL: ${pdfUrl}`);
+        } catch {
             this.logger.warn(`⚠️ S3 upload failed, using fallback URL`);
             pdfUrl = `/api/readings/${order.orderNumber}/download`;
         }
@@ -760,11 +762,12 @@ export class DigitalSoulService {
                 );
 
                 const s3Elapsed = Date.now() - s3StartTime;
-                pdfUrl = `https://${this.s3Bucket}.s3.${this.s3Region}.amazonaws.com/${pdfKey}`;
+                // Use API endpoint for signed URL access (S3 bucket is private)
+                pdfUrl = `/api/readings/${order.orderNumber}/download`;
                 
                 this.logger.log(`\n✅ STEP 6 COMPLETE: S3 Upload successful`);
                 this.logger.log(`   🔑 Key: ${pdfKey}`);
-                this.logger.log(`   🔗 URL: ${pdfUrl}`);
+                this.logger.log(`   🔗 Access URL: ${pdfUrl}`);
                 this.logger.log(`   ⏱️ S3 upload took: ${s3Elapsed}ms`);
             } catch (error) {
                 this.logger.warn(`\n⚠️ STEP 6 WARNING: S3 upload failed, using fallback`);

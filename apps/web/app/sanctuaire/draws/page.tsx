@@ -220,6 +220,15 @@ export default function DrawsPage() {
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+    // Helper to resolve PDF URLs (convert relative API URLs to absolute)
+    const resolvePdfUrl = useCallback((url: string | null | undefined): string | null => {
+        if (!url) return null;
+        if (url.startsWith('/api/')) {
+            return `${apiUrl}${url}`;
+        }
+        return url;
+    }, [apiUrl]);
+
     // Fetch user's readings
     const fetchReadings = useCallback(async () => {
         const token = localStorage.getItem('sanctuaire_token');
@@ -451,7 +460,7 @@ export default function DrawsPage() {
 
                                 {latestReading.assets.pdf && (
                                     <a
-                                        href={latestReading.assets.pdf}
+                                        href={resolvePdfUrl(latestReading.assets.pdf) || '#'}
                                         download
                                         className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-stellar-300 transition-colors"
                                     >
@@ -464,6 +473,7 @@ export default function DrawsPage() {
                                     <a
                                         href={latestReading.assets.audio}
                                         download
+                                        title="Télécharger l'audio"
                                         className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-stellar-300 transition-colors"
                                     >
                                         <Headphones className="w-5 h-5" />
