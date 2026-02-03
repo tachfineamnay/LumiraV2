@@ -1389,6 +1389,117 @@ MESSAGE DE L'EXPERT:`;
         return client;
     }
 
+    /**
+     * Get complete client data for CRM "Âme Numérique" (Client 360)
+     * Returns user + profile + orders + akashic record + insights + stats in one query
+     */
+    async getClientFull(clientId: string) {
+        const client = await this.prisma.user.findUnique({
+            where: { id: clientId },
+            include: {
+                profile: true,
+                orders: {
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        files: true,
+                    },
+                },
+                akashicRecord: true,
+                spiritualPath: {
+                    include: {
+                        steps: {
+                            orderBy: { dayNumber: 'asc' },
+                        },
+                    },
+                },
+                chatSessions: {
+                    orderBy: { lastMessageAt: 'desc' },
+                    take: 10,
+                    select: {
+                        id: true,
+                        title: true,
+                        messages: true,
+                        lastMessageAt: true,
+                        createdAt: true,
+                    },
+                },
+            },
+        });
+
+        if (!client) {
+            throw new NotFoundException('Client non trouvé');
+        }
+
+        // Get insights separately (different table)
+        const insights = await this.prisma.insight.findMany({
+            where: { userId: clientId },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Calculate stats from orders
+        const completedOrders = client.orders.filter((o: { status: string }) => o.status === 'COMPLETED');
+        const totalSpent = completedOrders.reduce((sum: number, o: { amount: number }) => sum + o.amount, 0);
+
+        // Find favorite level and highest level
+        const levelCounts = completedOrders.reduce((acc: Record<number, number>, o: { level: number }) => {
+            acc[o.level] = (acc[o.level] || 0) + 1;
+            return acc;
+        }, {} as Record<number, number>);
+
+        const levelNames: Record<number, string> = {
+            1: 'Initié',
+            2: 'Mystique',
+            3: 'Profond',
+            4: 'Intégral',
+        };
+
+        let favoriteLevel: string | null = null;
+        let maxLevel = 0;
+        let maxCount = 0;
+        for (const [level, count] of Object.entries(levelCounts)) {
+            const countNum = count as number;
+            if (countNum > maxCount) {
+                maxCount = countNum;
+                favoriteLevel = levelNames[Number(level)] || null;
+            }
+            if (Number(level) > maxLevel) {
+                maxLevel = Number(level);
+            }
+        }
+
+        const lastOrder = client.orders[0] || null;
+
+        // Determine VIP status (LTV > 299€ = 29900 cents)
+        const isVip = totalSpent >= 29900;
+
+        // Transform chatSessions to include messagesCount
+        const chatSessionsWithCount = client.chatSessions.map((session: { id: string; title: string | null; messages: unknown; lastMessageAt: Date | null; createdAt: Date }) => ({
+            id: session.id,
+            title: session.title,
+            messagesCount: Array.isArray(session.messages) ? session.messages.length : 0,
+            lastMessageAt: session.lastMessageAt,
+            createdAt: session.createdAt,
+        }));
+
+        return {
+            ...client,
+            chatSessions: chatSessionsWithCount,
+            insights,
+            stats: {
+                totalOrders: client.orders.length,
+                completedOrders: completedOrders.length,
+                totalSpent,
+                totalSpentFormatted: `${(totalSpent / 100).toFixed(2)} €`,
+                favoriteLevel,
+                highestLevel: maxLevel > 0 ? levelNames[maxLevel] : null,
+                highestLevelNumber: maxLevel,
+                lastOrderAt: lastOrder?.createdAt || null,
+                isVip,
+                memberSince: client.createdAt,
+            },
+        };
+    }
+
     async getClientStats(clientId: string): Promise<ClientStats> {
         const client = await this.prisma.user.findUnique({
             where: { id: clientId },

@@ -289,6 +289,11 @@ export class ExpertController {
         return this.expertService.getClientById(id);
     }
 
+    @Get('clients/:id/full')
+    async getClientFull(@Param('id') id: string) {
+        return this.expertService.getClientFull(id);
+    }
+
     @Get('clients/:id/stats')
     async getClientStats(@Param('id') id: string) {
         return this.expertService.getClientStats(id);
