@@ -35,3 +35,13 @@ export interface ReminderContext {
     sanctuaireLink: string;
     orderNumber: string;
 }
+
+export interface ExpertValidationContext {
+    [key: string]: unknown;
+    firstName: string;
+    orderNumber: string;
+    expertName: string;
+    levelName: string;
+    validatedAt: string;
+    sanctuaireLink: string;
+}

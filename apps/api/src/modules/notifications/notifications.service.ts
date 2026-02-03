@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { EmailService } from './email.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Order, User } from '@prisma/client';
+import { Order, User, NotificationType, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import {
     OrderConfirmationContext,
     ExpertAlertContext,
     ContentReadyContext,
-    ReminderContext
+    ReminderContext,
+    ExpertValidationContext
 } from './dto/send-email.dto';
 
 @Injectable()
@@ -98,6 +99,95 @@ export class NotificationsService {
             subject: `🌙 N'oubliez pas votre lecture spirituelle`,
             template: 'reminder',
             context,
+        });
+    }
+
+    async sendExpertValidation(order: Order, user: User, expertName: string) {
+        const context: ExpertValidationContext = {
+            firstName: user.firstName,
+            orderNumber: order.orderNumber,
+            expertName: expertName,
+            levelName: this.getLevelName(order.level),
+            validatedAt: new Date().toLocaleString('fr-FR', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }),
+            sanctuaireLink: `${process.env.FRONTEND_URL}/sanctuaire`,
+        };
+
+        // Send email
+        await this.emailService.send({
+            to: user.email,
+            subject: `👁️ ${expertName} a validé votre lecture`,
+            template: 'expert-validation',
+            context,
+        });
+
+        // Create in-app notification
+        await this.createNotification({
+            userId: user.id,
+            type: NotificationType.EXPERT_VALIDATION,
+            title: `${expertName} a validé votre lecture`,
+            message: `Votre lecture spirituelle (${order.orderNumber}) a été finalisée et validée par ${expertName}. Elle vous attend dans votre Sanctuaire.`,
+            metadata: {
+                expertName,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                level: order.level,
+            },
+        });
+    }
+
+    // ========================================
+    // In-App Notifications
+    // ========================================
+
+    async createNotification(data: {
+        userId: string;
+        type: NotificationType;
+        title: string;
+        message: string;
+        metadata?: Record<string, unknown>;
+    }) {
+        return this.prisma.notification.create({
+            data: {
+                userId: data.userId,
+                type: data.type,
+                title: data.title,
+                message: data.message,
+                metadata: data.metadata as Prisma.InputJsonValue | undefined,
+            },
+        });
+    }
+
+    async getUserNotifications(userId: string, limit = 10) {
+        return this.prisma.notification.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        });
+    }
+
+    async getUnreadCount(userId: string) {
+        return this.prisma.notification.count({
+            where: { userId, read: false },
+        });
+    }
+
+    async markAsRead(notificationId: string, userId: string) {
+        return this.prisma.notification.updateMany({
+            where: { id: notificationId, userId },
+            data: { read: true, readAt: new Date() },
+        });
+    }
+
+    async markAllAsRead(userId: string) {
+        return this.prisma.notification.updateMany({
+            where: { userId, read: false },
+            data: { read: true, readAt: new Date() },
         });
     }
 }

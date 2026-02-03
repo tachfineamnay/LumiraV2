@@ -105,15 +105,40 @@ model User {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  profile       UserProfile?
-  orders        Order[]
-  spiritualPath SpiritualPath?
-  chatSessions  ChatSession[]
-  akashicRecord AkashicRecord?
+  profile        UserProfile?
+  orders         Order[]
+  spiritualPath  SpiritualPath?
+  chatSessions   ChatSession[]
+  akashicRecord  AkashicRecord?
+  notifications  Notification[]
 
   @@index([email])
   @@index([refId])
   @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+enum NotificationType {
+  EXPERT_VALIDATION
+  ORDER_COMPLETED
+  CONTENT_READY
+  SYSTEM
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  metadata  Json?            // { expertName, orderId, orderNumber, etc. }
+  read      Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
   @@index([createdAt(sort: Desc)])
 }
 

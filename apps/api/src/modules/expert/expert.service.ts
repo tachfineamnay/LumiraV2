@@ -1233,8 +1233,9 @@ MESSAGE DE L'EXPERT:`;
 
             // 4. Send email notification to the client
             try {
-                await this.notificationsService.sendContentReady(order, order.user);
-                this.logger.log(`📧 Email notification sent to ${order.user.email}`);
+                const expertName = expert.name || 'Un expert Lumira';
+                await this.notificationsService.sendExpertValidation(order, order.user, expertName);
+                this.logger.log(`📧 Expert validation email sent to ${order.user.email} (validated by ${expertName})`);
             } catch (emailError) {
                 // Log but don't fail the finalization if email fails
                 this.logger.warn(`⚠️ Failed to send email notification: ${emailError}`);

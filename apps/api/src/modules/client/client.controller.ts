@@ -2,16 +2,19 @@ import {
     Controller,
     Get,
     Post,
+    Patch,
     Body,
     Param,
     Request,
     UseGuards,
     HttpCode,
     HttpStatus,
+    Query,
 } from '@nestjs/common';
 import { ClientService } from './client.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * ClientController - Sanctuaire API endpoints
@@ -25,7 +28,10 @@ import { Throttle } from '@nestjs/throttler';
 @Controller('client')
 @UseGuards(JwtAuthGuard)
 export class ClientController {
-    constructor(private readonly clientService: ClientService) { }
+    constructor(
+        private readonly clientService: ClientService,
+        private readonly notificationsService: NotificationsService,
+    ) { }
 
     /**
      * GET /api/client/spiritual-path
@@ -134,5 +140,56 @@ export class ClientController {
             body.message,
             body.sessionId,
         );
+    }
+
+    // ========================================
+    // Notifications endpoints
+    // ========================================
+
+    /**
+     * GET /api/client/notifications
+     * Returns user notifications (most recent first)
+     */
+    @Get('notifications')
+    @Throttle({ default: { limit: 30, ttl: 60000 } })
+    async getNotifications(
+        @Request() req: { user: { userId: string } },
+        @Query('limit') limit?: string,
+    ) {
+        const notifications = await this.notificationsService.getUserNotifications(
+            req.user.userId,
+            limit ? parseInt(limit, 10) : 10,
+        );
+        const unreadCount = await this.notificationsService.getUnreadCount(req.user.userId);
+        
+        return {
+            notifications,
+            unreadCount,
+        };
+    }
+
+    /**
+     * PATCH /api/client/notifications/:id/read
+     * Mark a notification as read
+     */
+    @Patch('notifications/:id/read')
+    @HttpCode(HttpStatus.OK)
+    async markNotificationRead(
+        @Request() req: { user: { userId: string } },
+        @Param('id') notificationId: string,
+    ) {
+        await this.notificationsService.markAsRead(notificationId, req.user.userId);
+        return { success: true };
+    }
+
+    /**
+     * POST /api/client/notifications/read-all
+     * Mark all notifications as read
+     */
+    @Post('notifications/read-all')
+    @HttpCode(HttpStatus.OK)
+    async markAllNotificationsRead(@Request() req: { user: { userId: string } }) {
+        await this.notificationsService.markAllAsRead(req.user.userId);
+        return { success: true };
     }
 }

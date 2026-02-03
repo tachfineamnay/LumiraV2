@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import axios from "axios";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
+import { ExpertValidationBanner } from "../../components/sanctuary/ExpertValidationBanner";
 import { HolisticWizard } from "../../components/onboarding/HolisticWizard";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 import { useSanctuaireAuth, isFirstVisitToken, setFirstVisitFlag, clearFirstVisitFlag } from "../../context/SanctuaireAuthContext";
@@ -464,6 +465,13 @@ function DashboardContent() {
                         </div>
                     </div>
                 </motion.div>
+            )}
+
+            {/* 👁️ EXPERT VALIDATION NOTIFICATION - Shows when expert validates a reading */}
+            {isOnboardingComplete && (
+                <div className="w-full max-w-2xl mx-auto mb-6 relative z-40">
+                    <ExpertValidationBanner />
+                </div>
             )}
 
             {/* 🪐 MANDALA NAVIGATION or ONBOARDING CTA */}
