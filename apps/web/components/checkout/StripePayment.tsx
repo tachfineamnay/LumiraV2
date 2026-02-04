@@ -68,7 +68,7 @@ export function StripePayment({ amount, onPaymentSuccess, onPaymentError, disabl
         >
             {/* Express Checkout placeholder - Apple Pay/Google Pay */}
             <div className="text-center">
-                <p className="text-cosmic-stardust text-xs uppercase tracking-widest mb-4">Paiement Express</p>
+                <p className="text-stellar-500 text-xs uppercase tracking-widest mb-4">Paiement Express</p>
                 <div className="flex gap-3 justify-center">
                     <div className="px-6 py-3 bg-black rounded-lg border border-white/10 text-white text-sm font-medium flex items-center gap-2 opacity-50 cursor-not-allowed">
                         <span>Apple Pay</span>
@@ -77,18 +77,18 @@ export function StripePayment({ amount, onPaymentSuccess, onPaymentError, disabl
                         <span>Google Pay</span>
                     </div>
                 </div>
-                <p className="text-cosmic-stardust/50 text-xs mt-2">Bientôt disponible</p>
+                <p className="text-stellar-600 text-xs mt-2">Bientôt disponible</p>
             </div>
 
             {/* Divider */}
             <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                <span className="text-cosmic-stardust text-xs uppercase tracking-widest">ou payer par carte</span>
+                <span className="text-stellar-500 text-xs uppercase tracking-widest">ou payer par carte</span>
                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
             </div>
 
             {/* Stripe Payment Element */}
-            <div className="bg-cosmic-deep/60 backdrop-blur-sm border border-white/10 rounded-xl p-4">
+            <div className="bg-abyss-600/60 backdrop-blur-sm border border-white/10 rounded-xl p-4">
                 <PaymentElement
                     onReady={() => setPaymentElementReady(true)}
                     options={{
@@ -104,8 +104,8 @@ export function StripePayment({ amount, onPaymentSuccess, onPaymentError, disabl
                 className={`
                     w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-300
                     ${isProcessing || disabled || !paymentElementReady
-                        ? 'bg-cosmic-deep/60 text-cosmic-stardust cursor-not-allowed border border-white/10'
-                        : 'bg-gradient-to-r from-cosmic-gold via-amber-400 to-cosmic-gold text-cosmic-void shadow-stellar hover:shadow-aurora cursor-pointer relative overflow-hidden group'
+                        ? 'bg-abyss-600/60 text-stellar-500 cursor-not-allowed border border-white/10'
+                        : 'bg-gradient-to-r from-horizon-400 via-horizon-300 to-horizon-400 text-abyss-900 shadow-gold-glow hover:shadow-gold-soft cursor-pointer relative overflow-hidden group'
                     }
                 `}
                 whileTap={{ scale: isProcessing || disabled ? 1 : 0.98 }}
@@ -131,7 +131,7 @@ export function StripePayment({ amount, onPaymentSuccess, onPaymentError, disabl
             </motion.button>
 
             {/* Security note */}
-            <div className="flex items-center justify-center gap-2 text-cosmic-stardust/60 text-xs">
+            <div className="flex items-center justify-center gap-2 text-stellar-500 text-xs">
                 <Lock className="w-3 h-3" />
                 <span>Paiement sécurisé par Stripe</span>
             </div>

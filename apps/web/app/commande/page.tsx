@@ -5,8 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
-import { Loader2 } from 'lucide-react';
-import { CheckoutHeader, ProductSummary, CheckoutForm, CheckoutFormData, StripePayment, FreeOrderButton } from '../../components/checkout';
+import { Loader2, Shield, CreditCard } from 'lucide-react';
+import { CheckoutHeader, ProductSummary, CheckoutForm, CheckoutFormData, StripePayment, FreeOrderButton, TrustBadges } from '../../components/checkout';
 import api from '../../lib/api';
 
 // Type for connected user from Sanctuaire
@@ -196,12 +196,14 @@ function CheckoutContent() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-abyss-900 via-abyss-700 to-abyss-800">
                 <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                    className="relative"
                 >
-                    <Loader2 className="w-12 h-12 text-cosmic-gold" />
+                    <Loader2 className="w-12 h-12 text-horizon-400" />
+                    <div className="absolute inset-0 w-12 h-12 bg-horizon-400/20 rounded-full blur-xl" />
                 </motion.div>
             </div>
         );
@@ -209,10 +211,10 @@ function CheckoutContent() {
 
     return (
         <div className="min-h-screen relative overflow-hidden">
-            {/* Cosmic Background */}
-            <div className="fixed inset-0 bg-gradient-to-b from-[#0A0514] via-[#1a0b2e] to-[#0A0514]" />
+            {/* Cosmic Background - Enhanced */}
+            <div className="fixed inset-0 bg-gradient-to-b from-abyss-900 via-abyss-700 to-abyss-800" />
 
-            {/* Floating Blobs */}
+            {/* Floating Cosmic Orbs */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <motion.div
                     animate={{
@@ -221,7 +223,7 @@ function CheckoutContent() {
                         scale: [1, 1.1, 1],
                     }}
                     transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-                    className="absolute top-1/4 -left-32 w-96 h-96 bg-purple-600/20 rounded-full blur-[100px]"
+                    className="absolute top-1/4 -left-32 w-96 h-96 bg-serenity-500/20 rounded-full blur-[100px]"
                 />
                 <motion.div
                     animate={{
@@ -230,7 +232,7 @@ function CheckoutContent() {
                         scale: [1, 1.15, 1],
                     }}
                     transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-                    className="absolute bottom-1/4 -right-32 w-80 h-80 bg-cosmic-gold/10 rounded-full blur-[80px]"
+                    className="absolute bottom-1/4 -right-32 w-80 h-80 bg-horizon-400/15 rounded-full blur-[80px]"
                 />
                 <motion.div
                     animate={{
@@ -238,41 +240,57 @@ function CheckoutContent() {
                         y: [0, -20, 0],
                     }}
                     transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-900/10 rounded-full blur-[120px]"
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-abyss-500/30 rounded-full blur-[120px]"
+                />
+                {/* Additional gold accent orb */}
+                <motion.div
+                    animate={{
+                        scale: [1, 1.2, 1],
+                        opacity: [0.1, 0.2, 0.1],
+                    }}
+                    transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute top-20 right-1/4 w-64 h-64 bg-horizon-400/10 rounded-full blur-[60px]"
                 />
             </div>
 
             {/* Starfield overlay */}
-            <div className="fixed inset-0 starfield pointer-events-none" />
+            <div className="fixed inset-0 starfield pointer-events-none opacity-60" />
 
             {/* Content */}
             <div className="relative z-10">
                 <CheckoutHeader />
 
-                <main className="max-w-4xl mx-auto px-6 pb-20">
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                        {/* Product Summary - Left Column */}
-                        <div className="lg:col-span-2">
+                <main className="max-w-6xl mx-auto px-6 pb-20">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+                        {/* Product Summary - Left Column (5 cols) */}
+                        <div className="lg:col-span-5 order-2 lg:order-1">
                             {product && <ProductSummary product={product} />}
                         </div>
 
-                        {/* Form & Payment - Right Column */}
-                        <div className="lg:col-span-3 space-y-6">
-                            {/* Glass Container */}
+                        {/* Form & Payment - Right Column (7 cols) */}
+                        <div className="lg:col-span-7 order-1 lg:order-2 space-y-6">
+                            {/* Glass Form Container */}
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5 }}
-                                className="bg-white/[0.02] backdrop-blur-xl border border-cosmic-gold/20 rounded-2xl p-6 shadow-cosmic"
+                                className="bg-abyss-600/40 backdrop-blur-xl border border-horizon-400/20 rounded-2xl p-6 md:p-8 shadow-stellar"
                             >
-                                <h2 className="text-xl font-playfair italic text-cosmic-divine mb-6">
-                                    Vos informations
-                                    {connectedUser && (
-                                        <span className="text-sm font-normal text-cosmic-stardust ml-2">
-                                            (pré-rempli)
-                                        </span>
-                                    )}
-                                </h2>
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 rounded-full bg-horizon-400/10 flex items-center justify-center">
+                                        <CreditCard className="w-5 h-5 text-horizon-400" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-playfair italic text-stellar-100">
+                                            Vos informations
+                                        </h2>
+                                        {connectedUser && (
+                                            <span className="text-sm text-stellar-500">
+                                                Informations pré-remplies
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
 
                                 <CheckoutForm
                                     onFormValid={handleFormValid}
@@ -286,81 +304,109 @@ function CheckoutContent() {
                                 />
                             </motion.div>
 
-                            {/* Payment Section */}
+                            {/* Trust Badges */}
+                            <TrustBadges />
+
+                            {/* Payment Error */}
                             <AnimatePresence mode="wait">
                                 {paymentError && (
                                     <motion.div
                                         initial={{ opacity: 0, y: -10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, y: -10 }}
-                                        className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-rose-300 text-sm"
+                                        className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-rose-300 text-sm flex items-center gap-3"
                                     >
+                                        <Shield className="w-5 h-5 flex-shrink-0" />
                                         {paymentError}
                                     </motion.div>
                                 )}
                             </AnimatePresence>
 
-                            {/* Conditional Payment UI */}
-                            {isFree ? (
-                                <FreeOrderButton
-                                    onSubmit={handleFreeOrderSubmit}
-                                    disabled={!isFormValid}
-                                />
-                            ) : (
-                                <>
-                                    {clientSecret ? (
-                                        <Elements
-                                            stripe={stripePromise}
-                                            options={{
-                                                clientSecret,
-                                                appearance: {
-                                                    theme: 'night',
-                                                    variables: {
-                                                        colorPrimary: '#D4AF37',
-                                                        colorBackground: '#1a0b2e',
-                                                        colorText: '#F0E6FF',
-                                                        colorDanger: '#f43f5e',
-                                                        fontFamily: 'Inter, system-ui, sans-serif',
-                                                        borderRadius: '12px',
-                                                    },
-                                                    rules: {
-                                                        '.Input': {
-                                                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                            backgroundColor: 'rgba(26, 11, 46, 0.6)',
+                            {/* Payment Section */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, delay: 0.2 }}
+                                className="bg-abyss-600/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8"
+                            >
+                                {isFree ? (
+                                    <FreeOrderButton
+                                        onSubmit={handleFreeOrderSubmit}
+                                        disabled={!isFormValid}
+                                    />
+                                ) : (
+                                    <>
+                                        {clientSecret ? (
+                                            <Elements
+                                                stripe={stripePromise}
+                                                options={{
+                                                    clientSecret,
+                                                    appearance: {
+                                                        theme: 'night',
+                                                        variables: {
+                                                            colorPrimary: '#E8A838',
+                                                            colorBackground: '#101830',
+                                                            colorText: '#F8FAFC',
+                                                            colorDanger: '#f43f5e',
+                                                            fontFamily: 'Inter, system-ui, sans-serif',
+                                                            borderRadius: '12px',
                                                         },
-                                                        '.Input:focus': {
-                                                            border: '1px solid rgba(212, 175, 55, 0.5)',
-                                                            boxShadow: '0 0 0 2px rgba(212, 175, 55, 0.2)',
+                                                        rules: {
+                                                            '.Input': {
+                                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                                backgroundColor: 'rgba(16, 24, 48, 0.6)',
+                                                            },
+                                                            '.Input:focus': {
+                                                                border: '1px solid rgba(232, 168, 56, 0.5)',
+                                                                boxShadow: '0 0 0 2px rgba(232, 168, 56, 0.2)',
+                                                            },
                                                         },
                                                     },
-                                                },
-                                            }}
-                                        >
-                                            <StripePayment
-                                                amount={product?.amountCents || 0}
-                                                onPaymentSuccess={handlePaymentSuccess}
-                                                onPaymentError={handlePaymentError}
-                                                disabled={!isFormValid}
-                                            />
-                                        </Elements>
-                                    ) : isFormValid ? (
-                                        <div className="flex items-center justify-center py-8">
-                                            <Loader2 className="w-8 h-8 text-cosmic-gold animate-spin" />
-                                            <span className="ml-3 text-cosmic-stardust">Préparation du paiement...</span>
-                                        </div>
-                                    ) : (
-                                        <motion.div
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            className="bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-2xl p-6 text-center"
-                                        >
-                                            <p className="text-cosmic-stardust">
-                                                Remplissez vos informations pour accéder au paiement
-                                            </p>
-                                        </motion.div>
-                                    )}
-                                </>
-                            )}
+                                                }}
+                                            >
+                                                <StripePayment
+                                                    amount={product?.amountCents || 0}
+                                                    onPaymentSuccess={handlePaymentSuccess}
+                                                    onPaymentError={handlePaymentError}
+                                                    disabled={!isFormValid}
+                                                />
+                                            </Elements>
+                                        ) : isFormValid ? (
+                                            <div className="flex flex-col items-center justify-center py-12">
+                                                <div className="relative">
+                                                    <Loader2 className="w-10 h-10 text-horizon-400 animate-spin" />
+                                                    <div className="absolute inset-0 w-10 h-10 bg-horizon-400/20 rounded-full blur-xl" />
+                                                </div>
+                                                <span className="mt-4 text-stellar-400">Préparation du paiement sécurisé...</span>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-8">
+                                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-abyss-500/50 flex items-center justify-center">
+                                                    <Shield className="w-8 h-8 text-stellar-500" />
+                                                </div>
+                                                <p className="text-stellar-400 text-sm">
+                                                    Remplissez vos informations pour accéder au paiement sécurisé
+                                                </p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </motion.div>
+
+                            {/* Security Footer */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.6 }}
+                                className="flex items-center justify-center gap-6 text-stellar-500 text-xs"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Shield className="w-4 h-4" />
+                                    <span>Paiement sécurisé SSL</span>
+                                </div>
+                                <div className="w-1 h-1 rounded-full bg-stellar-600" />
+                                <span>Propulsé par Stripe</span>
+                            </motion.div>
                         </div>
                     </div>
                 </main>
@@ -372,12 +418,12 @@ function CheckoutContent() {
 export default function CommandePage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0A0514] via-[#1a0b2e] to-[#0A0514]">
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-abyss-900 via-abyss-700 to-abyss-800">
                 <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
                 >
-                    <Loader2 className="w-12 h-12 text-cosmic-gold" />
+                    <Loader2 className="w-12 h-12 text-horizon-400" />
                 </motion.div>
             </div>
         }>

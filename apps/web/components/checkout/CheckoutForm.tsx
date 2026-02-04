@@ -51,7 +51,7 @@ const InputField = ({
     return (
         <div className="relative group">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
-                <Icon className={`w-5 h-5 transition-colors ${isFieldValid ? 'text-emerald-400' : hasValue && error ? 'text-rose-400' : 'text-cosmic-stardust'}`} />
+                <Icon className={`w-5 h-5 transition-colors ${isFieldValid ? 'text-emerald-400' : hasValue && error ? 'text-rose-400' : 'text-stellar-500'}`} />
             </div>
             <input
                 {...register(name, {
@@ -64,14 +64,14 @@ const InputField = ({
                 type={type}
                 placeholder={placeholder || label}
                 className={`
-                    w-full bg-cosmic-deep/60 backdrop-blur-sm border rounded-xl pl-12 pr-12 py-4 
-                    text-cosmic-divine placeholder:text-cosmic-stardust/50
+                    w-full bg-abyss-600/60 backdrop-blur-sm border rounded-xl pl-12 pr-12 py-4 
+                    text-stellar-100 placeholder:text-stellar-500/50
                     focus:outline-none focus:ring-2 transition-all duration-300
                     ${isFieldValid
                         ? 'border-emerald-500/50 focus:ring-emerald-500/30 focus:border-emerald-500'
                         : hasValue && error
                             ? 'border-rose-500/50 focus:ring-rose-500/30 focus:border-rose-500'
-                            : 'border-white/10 focus:ring-cosmic-gold/30 focus:border-cosmic-gold/50 hover:border-white/20'
+                            : 'border-white/10 focus:ring-horizon-400/30 focus:border-horizon-400/50 hover:border-white/20'
                     }
                 `}
             />
