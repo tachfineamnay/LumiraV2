@@ -355,7 +355,7 @@ export class ClientService {
 
         let totalUserMessages = 0;
         for (const session of sessions) {
-            const messages = session.messages as ChatMessage[] | null;
+            const messages = session.messages as unknown as ChatMessage[] | null;
             if (messages && Array.isArray(messages)) {
                 totalUserMessages += messages.filter(m => m.role === 'user').length;
             }

@@ -343,7 +343,7 @@ export class PaymentsService {
         }
 
         // Check eligibility: order must be PAID and not already have this addon
-        const existingAddons = (order.addons as UpsellAddon[] | null) || [];
+        const existingAddons = (order.addons as unknown as UpsellAddon[] | null) || [];
         const availableUpsells = Object.entries(this.UPSELL_PRODUCTS)
             .filter(([type]) => !existingAddons.some(a => a.type === type))
             .map(([type, product]) => ({
@@ -381,7 +381,7 @@ export class PaymentsService {
         }
 
         // Check if addon already purchased
-        const existingAddons = (order.addons as UpsellAddon[] | null) || [];
+        const existingAddons = (order.addons as unknown as UpsellAddon[] | null) || [];
         if (existingAddons.some(a => a.type === addonType)) {
             throw new Error('Addon already purchased');
         }
@@ -470,7 +470,7 @@ export class PaymentsService {
             throw new Error('Order not found');
         }
 
-        const existingAddons = (order.addons as UpsellAddon[] | null) || [];
+        const existingAddons = (order.addons as unknown as UpsellAddon[] | null) || [];
         
         // Add the new addon
         const newAddon: UpsellAddon = {
@@ -486,7 +486,7 @@ export class PaymentsService {
         const updatedOrder = await this.prisma.order.update({
             where: { id: orderId },
             data: {
-                addons: updatedAddons,
+                addons: updatedAddons as unknown as Prisma.InputJsonValue,
                 upsellAcceptedAt: new Date(),
                 // Also update total amount for records
                 amount: order.amount + product.amount
