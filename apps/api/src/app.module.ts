@@ -19,6 +19,7 @@ import { InsightsModule } from "./modules/insights/insights.module";
 import { ClientModule } from "./modules/client/client.module";
 import { ReadingsModule } from "./modules/readings/readings.module";
 import { ServicesModule } from "./services/services.module";
+import { SubscriptionsModule } from "./modules/subscriptions/subscriptions.module";
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ServicesModule } from "./services/services.module";
     InsightsModule,
     ClientModule,
     ReadingsModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [

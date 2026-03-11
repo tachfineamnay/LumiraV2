@@ -18,8 +18,9 @@ export class CreateOrderDto {
     totalAmount: number;
 
     @IsString()
-    @IsNotEmpty()
-    type: string;
+    @IsOptional()
+    /** @deprecated V2 single-offer model — tier is no longer required. Defaults to 1. */
+    type?: string;
 
     @IsString()
     @IsOptional()

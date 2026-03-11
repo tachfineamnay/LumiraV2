@@ -28,12 +28,13 @@ export class OrdersService {
             userId = user.id;
         }
 
-        // 2. Map level (String/Type to Int for Prisma)
+        // 2. Map level — @deprecated: tier system is being phased out (V2 single-offer model).
+        // Defaults to 1 if type is absent or unrecognized.
         const levelMap: Record<string, number> = {
             'INITIE': 1,
             'MYSTIQUE': 2,
             'PROFOND': 3,
-            'INTEGRALE': 4
+            'INTEGRALE': 4,
         };
 
         const orderNumber = await this.generateOrderNumber();
@@ -47,7 +48,7 @@ export class OrdersService {
                 userId,
                 userEmail: email,
                 userName: `${firstName} ${lastName}`,
-                level: levelMap[type] || 1,
+                level: levelMap[type?.toUpperCase()] ?? 1, // defaults to 1 — tier deprecated
                 amount: totalAmount,
                 formData: formData as Prisma.JsonObject,
                 status: 'PENDING',

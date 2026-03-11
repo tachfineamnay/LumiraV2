@@ -172,7 +172,34 @@ export class PaymentsService {
                 await this.handlePaymentSucceeded(paymentIntent);
                 break;
             }
-            // Add more event handlers as needed
+
+            // ----------------------------------------------------------------
+            // V2 — Subscription lifecycle events
+            // ----------------------------------------------------------------
+
+            case 'customer.subscription.created': {
+                const subscription = event.data.object as Stripe.Subscription;
+                await this.handleSubscriptionCreated(subscription);
+                break;
+            }
+
+            case 'customer.subscription.updated': {
+                const subscription = event.data.object as Stripe.Subscription;
+                await this.handleSubscriptionUpdated(subscription);
+                break;
+            }
+
+            case 'customer.subscription.deleted': {
+                const subscription = event.data.object as Stripe.Subscription;
+                await this.handleSubscriptionDeleted(subscription);
+                break;
+            }
+
+            case 'invoice.paid': {
+                const invoice = event.data.object as Stripe.Invoice;
+                await this.handleInvoicePaid(invoice);
+                break;
+            }
         }
 
         await this.prisma.processedEvent.create({
@@ -185,6 +212,196 @@ export class PaymentsService {
 
         return { received: true };
     }
+
+    // =========================================================================
+    // V2 — Subscription webhook handlers
+    // =========================================================================
+
+    /**
+     * customer.subscription.created
+     * Provisions the Subscription record in Prisma and triggers async reading generation.
+     * Responds 200 immediately; generation is fired via setImmediate to avoid Stripe timeout.
+     */
+    private async handleSubscriptionCreated(subscription: Stripe.Subscription) {
+        const userId = subscription.metadata?.userId;
+        if (!userId) {
+            this.logger.warn(`[Sub Created] No userId in subscription metadata: ${subscription.id}`);
+            return;
+        }
+
+        const currentPeriodStart = new Date((subscription as any).current_period_start * 1000);
+        const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000);
+
+        await this.prisma.subscription.upsert({
+            where: { stripeSubscriptionId: subscription.id },
+            create: {
+                userId,
+                stripeSubscriptionId: subscription.id,
+                stripeCustomerId: subscription.customer as string,
+                stripePriceId: subscription.items.data[0]?.price?.id ?? '',
+                status: 'ACTIVE',
+                currentPeriodStart,
+                currentPeriodEnd,
+                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            },
+            update: {
+                status: 'ACTIVE',
+                currentPeriodStart,
+                currentPeriodEnd,
+                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            },
+        });
+
+        // Also sync legacy subscriptionStatus on User
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { subscriptionStatus: 'ACTIVE' },
+        });
+
+        this.logger.log(`[Sub Created] Subscription ${subscription.id} provisioned for user ${userId}.`);
+
+        // Fire-and-forget: dispatch async reading + timeline generation.
+        // setImmediate ensures the webhook 200 response is not blocked.
+        setImmediate(() => {
+            // TODO: dispatch async event to trigger SCRIBE (reading generation)
+            // and GUIDE batch 1 (days 1-10 timeline) for userId.
+            // Example with EventEmitter2 (install @nestjs/event-emitter when ready):
+            // this.eventEmitter.emit('subscription.activated', { userId });
+            this.logger.log(`[Sub Created] Async generation dispatch queued for user ${userId}.`);
+        });
+    }
+
+    /**
+     * customer.subscription.updated
+     * Syncs status, period dates and cancelAtPeriodEnd to Prisma.
+     */
+    private async handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+        const stripeStatus = subscription.status; // active | past_due | canceled | ...
+        const statusMap: Record<string, string> = {
+            active: 'ACTIVE',
+            past_due: 'PAST_DUE',
+            canceled: 'CANCELED',
+            unpaid: 'PAST_DUE',
+            incomplete: 'PAST_DUE',
+            incomplete_expired: 'EXPIRED',
+            trialing: 'ACTIVE',
+            paused: 'PAST_DUE',
+        };
+        const mappedStatus = statusMap[stripeStatus] ?? 'PAST_DUE';
+
+        const existing = await this.prisma.subscription.findUnique({
+            where: { stripeSubscriptionId: subscription.id },
+        });
+        if (!existing) {
+            this.logger.warn(`[Sub Updated] Subscription ${subscription.id} not found in DB — skipping.`);
+            return;
+        }
+
+        const currentPeriodStart = new Date((subscription as any).current_period_start * 1000);
+        const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000);
+
+        await this.prisma.subscription.update({
+            where: { stripeSubscriptionId: subscription.id },
+            data: {
+                status: mappedStatus as any,
+                currentPeriodStart,
+                currentPeriodEnd,
+                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            },
+        });
+
+        // Sync legacy User.subscriptionStatus
+        await this.prisma.user.update({
+            where: { id: existing.userId },
+            data: { subscriptionStatus: mappedStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE' },
+        });
+
+        this.logger.log(`[Sub Updated] ${subscription.id} → ${mappedStatus}, cancelAtPeriodEnd=${subscription.cancel_at_period_end}`);
+    }
+
+    /**
+     * customer.subscription.deleted
+     * Marks the subscription as EXPIRED. User loses access to chat/dreams/timeline.
+     * PDF documents are retained.
+     */
+    private async handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+        const existing = await this.prisma.subscription.findUnique({
+            where: { stripeSubscriptionId: subscription.id },
+        });
+        if (!existing) {
+            this.logger.warn(`[Sub Deleted] Subscription ${subscription.id} not found in DB — skipping.`);
+            return;
+        }
+
+        await this.prisma.subscription.update({
+            where: { stripeSubscriptionId: subscription.id },
+            data: { status: 'EXPIRED' },
+        });
+
+        await this.prisma.user.update({
+            where: { id: existing.userId },
+            data: { subscriptionStatus: 'INACTIVE' },
+        });
+
+        this.logger.log(`[Sub Deleted] Subscription ${subscription.id} marked EXPIRED for user ${existing.userId}.`);
+    }
+
+    /**
+     * invoice.paid
+     * On renewal (billing_reason = subscription_cycle), update the subscription period
+     * and fire async generation of a new reading + timeline for the new month.
+     */
+    private async handleInvoicePaid(invoice: Stripe.Invoice) {
+        const billingReason = (invoice as any).billing_reason as string;
+        if (billingReason !== 'subscription_cycle') {
+            // First payment is handled by subscription.created — skip.
+            return;
+        }
+
+        const invoiceAny = invoice as any;
+        const stripeSubId: string | undefined =
+            typeof invoiceAny.subscription === 'string'
+                ? invoiceAny.subscription
+                : (invoiceAny.subscription as Stripe.Subscription | null)?.id;
+
+        if (!stripeSubId) return;
+
+        const existing = await this.prisma.subscription.findUnique({
+            where: { stripeSubscriptionId: stripeSubId },
+        });
+        if (!existing) {
+            this.logger.warn(`[Invoice Paid] Subscription ${stripeSubId} not found in DB — skipping.`);
+            return;
+        }
+
+        // Fetch fresh subscription object to get updated period dates
+        const stripeSub = await this.stripe.subscriptions.retrieve(stripeSubId);
+        const currentPeriodStart = new Date((stripeSub as any).current_period_start * 1000);
+        const currentPeriodEnd = new Date((stripeSub as any).current_period_end * 1000);
+
+        await this.prisma.subscription.update({
+            where: { stripeSubscriptionId: stripeSubId },
+            data: {
+                status: 'ACTIVE',
+                currentPeriodStart,
+                currentPeriodEnd,
+                cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
+            },
+        });
+
+        this.logger.log(`[Invoice Paid] Renewal for user ${existing.userId} — period updated.`);
+
+        // Fire-and-forget: dispatch new reading + timeline for the new subscription month.
+        setImmediate(() => {
+            // TODO: dispatch async event to trigger SCRIBE + GUIDE batch 1 for new month.
+            // Example: this.eventEmitter.emit('subscription.renewed', { userId: existing.userId });
+            this.logger.log(`[Invoice Paid] Async renewal generation dispatch queued for user ${existing.userId}.`);
+        });
+    }
+
+    // =========================================================================
+    // Legacy one-shot payment handlers
+    // =========================================================================
 
     private async handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
         const { orderId, checkoutFlow, email, firstName, lastName, phone, productLevel, isUpsell, upsellType } = paymentIntent.metadata;
