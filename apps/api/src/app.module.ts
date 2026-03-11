@@ -20,6 +20,7 @@ import { ClientModule } from "./modules/client/client.module";
 import { ReadingsModule } from "./modules/readings/readings.module";
 import { ServicesModule } from "./services/services.module";
 import { SubscriptionsModule } from "./modules/subscriptions/subscriptions.module";
+import { DreamsModule } from "./modules/dreams/dreams.module";
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SubscriptionsModule } from "./modules/subscriptions/subscriptions.modul
     ClientModule,
     ReadingsModule,
     SubscriptionsModule,
+    DreamsModule,
   ],
   controllers: [AppController],
   providers: [

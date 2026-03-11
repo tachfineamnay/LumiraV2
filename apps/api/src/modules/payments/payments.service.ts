@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-
+import { SpiritualPathBatchService } from '../../services/factory/SpiritualPathBatchService';
 import { NotificationsService } from '../notifications/notifications.service';
 
 export interface CheckoutIntentDto {
@@ -37,6 +37,7 @@ export class PaymentsService {
         private ordersService: OrdersService,
         private prisma: PrismaService,
         private notificationsService: NotificationsService,
+        private spiritualPathBatchService: SpiritualPathBatchService,
     ) {
         this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY')!, {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -260,14 +261,13 @@ export class PaymentsService {
 
         this.logger.log(`[Sub Created] Subscription ${subscription.id} provisioned for user ${userId}.`);
 
-        // Fire-and-forget: dispatch async reading + timeline generation.
+        // Fire-and-forget: trigger batch 1 timeline generation (days 1-10).
         // setImmediate ensures the webhook 200 response is not blocked.
         setImmediate(() => {
-            // TODO: dispatch async event to trigger SCRIBE (reading generation)
-            // and GUIDE batch 1 (days 1-10 timeline) for userId.
-            // Example with EventEmitter2 (install @nestjs/event-emitter when ready):
-            // this.eventEmitter.emit('subscription.activated', { userId });
-            this.logger.log(`[Sub Created] Async generation dispatch queued for user ${userId}.`);
+            this.spiritualPathBatchService.generateBatch1ForUser(userId).catch(err => {
+                this.logger.error(`[Sub Created] Batch 1 generation failed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`);
+            });
+            this.logger.log(`[Sub Created] Batch 1 generation triggered for user ${userId}.`);
         });
     }
 
@@ -391,11 +391,12 @@ export class PaymentsService {
 
         this.logger.log(`[Invoice Paid] Renewal for user ${existing.userId} — period updated.`);
 
-        // Fire-and-forget: dispatch new reading + timeline for the new subscription month.
+        // Fire-and-forget: trigger batch 1 timeline generation for the new subscription month.
         setImmediate(() => {
-            // TODO: dispatch async event to trigger SCRIBE + GUIDE batch 1 for new month.
-            // Example: this.eventEmitter.emit('subscription.renewed', { userId: existing.userId });
-            this.logger.log(`[Invoice Paid] Async renewal generation dispatch queued for user ${existing.userId}.`);
+            this.spiritualPathBatchService.generateBatch1ForUser(existing.userId).catch(err => {
+                this.logger.error(`[Invoice Paid] Batch 1 renewal generation failed for user ${existing.userId}: ${err instanceof Error ? err.message : String(err)}`);
+            });
+            this.logger.log(`[Invoice Paid] Batch 1 generation triggered for renewal, user ${existing.userId}.`);
         });
     }
 

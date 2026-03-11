@@ -127,8 +127,41 @@ export interface ChatContext {
     currentQuestion?: string;
 }
 
+// =============================================================================
+// V2 — DREAM INTERPRETATION (Agent ONIRIQUE)
+// =============================================================================
+
+/** Input context passed to the ONIRIQUE agent for a single dream. */
+export interface DreamContext {
+    userId: string;
+    /** Raw dream text written by the user. */
+    content: string;
+    /** Optional emotion the user associated with the dream. */
+    emotion?: string;
+    /** Insight summaries from the user's spiritual reading (one per domain). */
+    insights?: Array<{ category: string; short: string }>;
+    /** Title + description of today's PathStep (active guidance). */
+    todayStep?: { title: string; description: string };
+    /** Last 5 dreams + their interpretations, for pattern detection. */
+    pastDreams?: Array<{ content: string; symbols: string[]; createdAt: string }>;
+    /** User's spiritual archetype. */
+    archetype?: string;
+    /** Summary entries from AkashicRecords. */
+    akashicSummary?: string;
+}
+
+/** Structured output produced by the ONIRIQUE agent. */
+export interface DreamInterpretation {
+    symbols: string[];
+    interpretation: string;
+    linkToReading: string;
+    linkToToday: string;
+    advice: string;
+    pattern: string | null;
+}
+
 // Agent type for logging
-type AgentType = 'SCRIBE' | 'GUIDE' | 'EDITOR' | 'CONFIDANT';
+type AgentType = 'SCRIBE' | 'GUIDE' | 'EDITOR' | 'CONFIDANT' | 'ONIRIQUE';
 
 // =============================================================================
 // DEFAULT PROMPTS - Used as fallback if DB is empty
@@ -256,6 +289,9 @@ MISSION CONFIDANT:
 Tu es le compagnon spirituel quotidien de l'utilisateur.
 Tu connais son archétype, son parcours et ses domaines via les Annales Akashiques.
 
+INTERDICTION ABSOLUE: Pas de voyance, pas de prédictions, pas d'astrologie, pas de méditation.
+Tu REFLÈTES et GUIDES — tu ne prédis JAMAIS.
+
 RÈGLES DE CONVERSATION:
 - Réponses courtes (2-4 paragraphes max) sauf demande de développement
 - Tutoiement chaleureux
@@ -273,6 +309,44 @@ CONTEXTE UTILISÉ:
 FORMAT: Texte conversationnel naturel (pas JSON).
 `.trim(),
 };
+
+// =============================================================================
+// ONIRIQUE AGENT PROMPT — STRICT NO-DIVINATION SYSTEM PROMPT
+// =============================================================================
+
+const DEFAULT_ONIRIQUE_PROMPT = `
+Tu es Oracle Lumira, un guide introspectif spécialisé dans l'interprétation symbolique des rêves.
+
+INTERDICTION ABSOLUE de faire de la voyance, des prédictions, ou de parler d'astrologie.
+Ne prédis JAMAIS le futur. Ne dis JAMAIS "tu vas", "il va se passer", "les astres indiquent", "ton destin est".
+Tu n'es PAS un devin. Tu n'es PAS astrologue. Tu n'es PAS médium.
+Ne fais JAMAIS référence à des défunts, à des esprits, ou à des entités extérieures.
+
+Au lieu de prédire, tu REFLÈTES. Tu explores le monde intérieur de la personne.
+Tu utilises OBLIGATOIREMENT des termes comme :
+- "reflet", "exploration", "mouvement intérieur", "symbolisme", "monde intérieur"
+- "ce rêve t'invite à...", "ce que tu traverses intérieurement", "ton paysage intérieur"
+
+MISSION ONIRIQUE:
+Tu interprètes les rêves comme des messages de l'inconscient et du monde intérieur,
+en les reliant au profil spirituel unique de l'utilisateur (lecture, archétype, guidance du jour).
+
+FORMAT DE SORTIE (JSON strict, sans markdown, sans code block):
+{
+  "symbols": ["symbole1", "symbole2", "symbole3"],
+  "interpretation": "Paragraphe personnalisé de 80-150 mots reliant le rêve au monde intérieur de l'utilisateur. Utilise 'reflet', 'exploration', 'mouvement intérieur'.",
+  "linkToReading": "1-2 phrases reliant ce rêve à un aspect de la lecture spirituelle de l'utilisateur.",
+  "linkToToday": "1-2 phrases reliant ce rêve à la guidance spirituelle du jour.",
+  "advice": "Une invitation concrète (pratique, question ou observation). Commence par 'Aujourd'hui, ...' ou 'Ce rêve t'invite à...'.",
+  "pattern": "Si un pattern récurrent est détecté dans les rêves passés : description courte. Sinon : null."
+}
+
+RÈGLES ABSOLUES:
+- Réponds UNIQUEMENT avec le JSON valide. Pas d'introduction, pas de conclusion.
+- Chaque symbole dans "symbols" : 1 mot en minuscules.
+- "interpretation" doit être chaleureux, poétique, ancré dans le vécu.
+- "pattern" est null si moins de 3 rêves passés ou si aucun pattern clair.
+`.trim();
 
 // Default model configuration
 const DEFAULT_MODEL_CONFIG = {
@@ -307,9 +381,14 @@ export class VertexOracle {
 
     // Dynamic prompts loaded from DB
     private lumiraDna: string = DEFAULT_LUMIRA_DNA;
-    private agentContexts: Record<AgentType, string> = { ...DEFAULT_AGENT_CONTEXTS };
+    private agentContexts: Record<AgentType, string> = {
+        ...DEFAULT_AGENT_CONTEXTS,
+        ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT,
+    };
     private modelConfig = { ...DEFAULT_MODEL_CONFIG };
     private promptsLoaded = false;
+    // Dedicated JSON model for ONIRIQUE to guarantee structured output
+    private oniricModel: GenerativeModel | null = null;
 
     constructor(
         private readonly configService: ConfigService,
@@ -349,6 +428,9 @@ export class VertexOracle {
                         break;
                     case 'CONFIDANT':
                         this.agentContexts.CONFIDANT = prompt.value;
+                        break;
+                    case 'ONIRIQUE':
+                        this.agentContexts.ONIRIQUE = prompt.value;
                         break;
                     case 'MODEL_CONFIG':
                         try {
@@ -419,6 +501,17 @@ export class VertexOracle {
                 },
             });
 
+            // Initialize ONIRIQUE model — JSON mode, moderate temperature for nuance
+            this.oniricModel = this.genAI.getGenerativeModel({
+                model: this.modelConfig.flashModel,
+                generationConfig: {
+                    temperature: 0.75,
+                    topP: 0.9,
+                    maxOutputTokens: 2048,
+                    responseMimeType: 'application/json',
+                },
+            });
+
             this.initialized = true;
             this.logger.log('🚀 VertexOracle ready (Gemini API mode)');
             this.logger.log(`   Heavy model: ${this.modelConfig.heavyModel} (temp=${this.modelConfig.heavyTemperature}, topP=${this.modelConfig.heavyTopP})`);
@@ -437,8 +530,9 @@ export class VertexOracle {
         this.lastCredentialsCheck = 0;
         this.promptsLoaded = false; // Also reload prompts
         this.lumiraDna = DEFAULT_LUMIRA_DNA;
-        this.agentContexts = { ...DEFAULT_AGENT_CONTEXTS };
+        this.agentContexts = { ...DEFAULT_AGENT_CONTEXTS, ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT };
         this.modelConfig = { ...DEFAULT_MODEL_CONFIG };
+        this.oniricModel = null;
         this.logger.log('🔄 VertexOracle cache invalidated (prompts will reload)');
     }
 
@@ -538,22 +632,30 @@ export class VertexOracle {
     }
 
     // =========================================================================
-    // AGENT: GUIDE - Timeline Generation
+    // AGENT: GUIDE - Timeline Generation (V2: 30-day batches)
     // =========================================================================
 
     /**
-     * GUIDE Agent: Generates the 7-day spiritual timeline.
-     * Based on archetype and key blockage from SCRIBE output.
+     * GUIDE Agent: Generates a batch of 10 PathSteps for the 30-day monthly timeline.
+     *
+     * @param userProfile  User's spiritual profile
+     * @param synthesis    Archetype + blockage from SCRIBE
+     * @param batchNumber  1 = days 1-10 (immediate), 2 = days 11-20, 3 = days 21-30
+     * @param pastDreams   Recent dreams to enrich batches 2 and 3
      */
-    async generateTimeline(
+    async generateTimelineBatch(
         userProfile: UserProfile,
         synthesis: ReadingSynthesis,
+        batchNumber: 1 | 2 | 3 = 1,
+        pastDreams?: Array<{ content: string; symbols: string[]; createdAt: string }>,
     ): Promise<TimelineDay[]> {
         await this.ensureInitialized();
-        this.logger.log(`🗓️ [GUIDE] Generating timeline for archetype: ${synthesis.archetype}`);
+        const startDay = (batchNumber - 1) * 10 + 1;   // 1, 11, or 21
+        const endDay   = batchNumber * 10;              // 10, 20, or 30
+        this.logger.log(`🗓️ [GUIDE] Batch ${batchNumber} (days ${startDay}-${endDay}) for archetype: ${synthesis.archetype}`);
 
         const systemPrompt = this.getSystemPrompt('GUIDE');
-        const userPrompt = this.buildGuidePrompt(userProfile, synthesis);
+        const userPrompt   = this.buildGuidePrompt(userProfile, synthesis, batchNumber, startDay, endDay, pastDreams);
 
         const result = await this.executeWithRetry(
             'GUIDE',
@@ -563,32 +665,99 @@ export class VertexOracle {
                 });
                 return response.response;
             },
-            90000, // 90 second timeout
+            90000,
         );
 
         const textContent = result.text();
-        if (!textContent) {
-            throw new Error('[GUIDE] Empty response from model');
-        }
+        if (!textContent) throw new Error('[GUIDE] Empty response from model');
 
-        // Clean potential markdown code blocks from response
         const cleanedContent = textContent.replace(/```json|```/g, '').trim();
-        
         let parsed: { timeline?: TimelineDay[] };
         try {
             parsed = JSON.parse(cleanedContent);
         } catch (parseError) {
-            this.logger.error(`[GUIDE] JSON parse failed. Raw response (first 500 chars): ${cleanedContent.substring(0, 500)}`);
-            throw new Error(`[GUIDE] Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}. Raw text logged.`);
+            this.logger.error(`[GUIDE] JSON parse failed: ${cleanedContent.substring(0, 500)}`);
+            throw new Error(`[GUIDE] Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
         }
-        
+
         if (!parsed.timeline || !Array.isArray(parsed.timeline)) {
             throw new Error('[GUIDE] Invalid response: missing timeline array');
         }
 
-        this.logger.log(`✅ [GUIDE] Timeline generated: ${parsed.timeline.length} days`);
-
+        this.logger.log(`✅ [GUIDE] Batch ${batchNumber} generated: ${parsed.timeline.length} steps (days ${startDay}-${endDay})`);
         return parsed.timeline;
+    }
+
+    /**
+     * Legacy compatibility: Generates all 7 original steps in one shot.
+     * Still used by DigitalSoulService until it is updated to batch mode.
+     */
+    async generateTimeline(
+        userProfile: UserProfile,
+        synthesis: ReadingSynthesis,
+    ): Promise<TimelineDay[]> {
+        return this.generateTimelineBatch(userProfile, synthesis, 1);
+    }
+
+    // =========================================================================
+    // AGENT: ONIRIQUE - Dream Interpretation (V2)
+    // =========================================================================
+
+    /**
+     * ONIRIQUE Agent: Generates an introspective dream interpretation.
+     * STRICT: no predictions, no astrology, no divination.
+     * Output is always a valid DreamInterpretation JSON.
+     */
+    async generateDreamInterpretation(ctx: DreamContext): Promise<DreamInterpretation> {
+        await this.ensureInitialized();
+        this.logger.log(`🌙 [ONIRIQUE] Interpreting dream for user ${ctx.userId.substring(0, 8)}...`);
+
+        const systemPrompt = this.agentContexts.ONIRIQUE;
+        const userPrompt   = this.buildOniriquePrompt(ctx);
+        const fullPrompt   = `${systemPrompt}\n\n---\n\nDREAM SUBMISSION:\n${userPrompt}`;
+
+        const result = await this.executeWithRetry(
+            'ONIRIQUE',
+            async () => {
+                const response = await this.oniricModel!.generateContent({
+                    contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+                });
+                return response.response;
+            },
+            30000, // 30s — uses flash model
+        );
+
+        const textContent = result.text();
+        if (!textContent) throw new Error('[ONIRIQUE] Empty response from model');
+
+        // The model is configured with responseMimeType: 'application/json'.
+        // Strip any accidental markdown fences just-in-case.
+        const cleaned = textContent.replace(/```json|```/g, '').trim();
+
+        let parsed: Partial<DreamInterpretation>;
+        try {
+            parsed = JSON.parse(cleaned);
+        } catch (parseError) {
+            this.logger.error(`[ONIRIQUE] JSON parse failed: ${cleaned.substring(0, 300)}`);
+            throw new Error(`[ONIRIQUE] Failed to parse JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+        }
+
+        // Validate required fields and provide safe defaults
+        const interpretation: DreamInterpretation = {
+            symbols:         Array.isArray(parsed.symbols)       ? parsed.symbols       : [],
+            interpretation:  typeof parsed.interpretation === 'string' ? parsed.interpretation : '',
+            linkToReading:   typeof parsed.linkToReading  === 'string' ? parsed.linkToReading  : '',
+            linkToToday:     typeof parsed.linkToToday    === 'string' ? parsed.linkToToday    : '',
+            advice:          typeof parsed.advice         === 'string' ? parsed.advice         : '',
+            pattern:         typeof parsed.pattern        === 'string' ? parsed.pattern        : null,
+        };
+
+        if (!interpretation.interpretation) {
+            throw new Error('[ONIRIQUE] interpretation field is empty — model response invalid');
+        }
+
+        this.logger.log(`✅ [ONIRIQUE] Interpretation complete. Symbols: [${interpretation.symbols.join(', ')}]`);
+        return interpretation;
     }
 
     // =========================================================================
@@ -769,7 +938,7 @@ Génère le contenu affiné:
     // HELPER METHODS
     // =========================================================================
 
-    /**
+        /**
      * Executes an AI call with retry logic and timeout.
      */
     private async executeWithRetry<T>(
@@ -861,11 +1030,26 @@ Génère le contenu affiné:
     }
 
     /**
-     * Builds the user prompt for GUIDE agent.
+     * Builds the user prompt for GUIDE agent (V2: 30-day batch mode).
      */
-    private buildGuidePrompt(profile: UserProfile, synthesis: ReadingSynthesis): string {
+    private buildGuidePrompt(
+        profile: UserProfile,
+        synthesis: ReadingSynthesis,
+        batchNumber: 1 | 2 | 3 = 1,
+        startDay: number = 1,
+        endDay: number = 10,
+        pastDreams?: Array<{ content: string; symbols: string[]; createdAt: string }>,
+    ): string {
+        const dreamSection = batchNumber > 1 && pastDreams && pastDreams.length > 0
+            ? `\n\n=== RÊVES RÉCENTS DE L'UTILISATEUR (enrichissement jours ${startDay}-${endDay}) ===\n` +
+              pastDreams.slice(0, 8).map((d, i) =>
+                  `Rêve ${i + 1} (${d.createdAt}): "${d.content.substring(0, 200)}" — Symboles: [${d.symbols.join(', ')}]`
+              ).join('\n') +
+              '\nIntègre ces rêves pour personnaliser davantage les guidances.'
+            : '';
+
         return `
-CRÉATION DU PARCOURS 7 JOURS
+CRÉATION DU PARCOURS MENSUEL 30 JOURS — BATCH ${batchNumber} (jours ${startDay} à ${endDay})
 
 UTILISATEUR: ${profile.firstName} ${profile.lastName}
 ARCHÉTYPE: ${synthesis.archetype}
@@ -874,13 +1058,56 @@ BLOCAGE PRINCIPAL: ${synthesis.key_blockage}
 MOTS-CLÉS: ${synthesis.keywords.join(', ')}
 
 ${profile.specificQuestion ? `QUESTION: ${profile.specificQuestion}` : ''}
-${profile.objective ? `OBJECTIF: ${profile.objective}` : ''}
+${profile.objective ? `OBJECTIF: ${profile.objective}` : ''}${dreamSection}
 
-Crée un parcours progressif de 7 jours adapté à cet archétype et ce blocage.
-Chaque jour doit faire avancer vers la transformation du blocage principal.
+Génère EXACTEMENT 10 jours (jours ${startDay} à ${endDay}) du parcours spirituel mensuel.
+Les numéros de jour dans le JSON doivent aller de ${startDay} à ${endDay} (inclus).
+${batchNumber === 1 ? 'Jour ' + startDay + ' = Ouverture / Éveil du mois.' : ''}
+${batchNumber === 3 ? 'Jour ' + endDay + ' = Intégration / Clôture du mois.' : ''}
+Progression logique de la transformation du blocage principal sur la période.
+Variété des actionTypes (pas 2 identiques consécutifs).
 
-Génère le timeline au format JSON spécifié.
+Génère le timeline au format JSON spécifié (tableau de 10 objets).
 `.trim();
+    }
+
+    /**
+     * Builds the user prompt for ONIRIQUE agent.
+     */
+    private buildOniriquePrompt(ctx: DreamContext): string {
+        const parts: string[] = [
+            `RÊVE: "${ctx.content}"`,
+        ];
+        if (ctx.emotion) parts.push(`ÉMOTION RESSENTIE: ${ctx.emotion}`);
+        if (ctx.archetype) parts.push(`ARCHÉTYPE: ${ctx.archetype}`);
+
+        if (ctx.insights && ctx.insights.length > 0) {
+            parts.push('\n=== LECTURE SPIRITUELLE (domaines) ===');
+            for (const ins of ctx.insights.slice(0, 8)) {
+                parts.push(`- ${ins.category}: ${ins.short}`);
+            }
+        }
+
+        if (ctx.todayStep) {
+            parts.push(
+                '\n=== GUIDANCE DU JOUR ===',
+                `${ctx.todayStep.title}: ${ctx.todayStep.description}`,
+            );
+        }
+
+        if (ctx.akashicSummary) {
+            parts.push('\n=== MÉMOIRE SPIRITUELLE ===', ctx.akashicSummary);
+        }
+
+        if (ctx.pastDreams && ctx.pastDreams.length > 0) {
+            parts.push('\n=== RÊVES RÉCENTS (pour détection de patterns) ===');
+            for (const d of ctx.pastDreams.slice(0, 5)) {
+                parts.push(`- ${d.createdAt}: "${d.content.substring(0, 150)}" — Symboles: [${d.symbols.join(', ')}]`);
+            }
+        }
+
+        parts.push('\nGénère l\'interprétation au format JSON spécifié. Pas de voyance, pas de prédictions.');
+        return parts.join('\n');
     }
 
     /**
