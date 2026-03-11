@@ -19,21 +19,11 @@ export class NotificationsService {
         private readonly configService: ConfigService,
     ) { }
 
-    private getLevelName(level: number): string {
-        const levels = {
-            1: 'Initié',
-            2: 'Mystique',
-            3: 'Profond',
-            4: 'Intégrale'
-        };
-        return levels[level] || 'Lecture Spirituelle';
-    }
-
     async sendOrderConfirmation(order: Order, user: User) {
         const context: OrderConfirmationContext = {
             firstName: user.firstName,
             orderNumber: order.orderNumber,
-            level: this.getLevelName(order.level),
+            level: 'Abonné',
             amount: (order.amount / 100).toFixed(2),
             expectedDelivery: '24-48h',
         };
@@ -58,7 +48,7 @@ export class NotificationsService {
             const context: ExpertAlertContext = {
                 orderNumber: order.orderNumber,
                 clientName: order.userName || 'Client',
-                level: this.getLevelName(order.level),
+                level: 'Abonné',
                 createdAt: new Date(order.createdAt).toLocaleString('fr-FR'),
                 adminUrl,
             };
@@ -107,7 +97,7 @@ export class NotificationsService {
             firstName: user.firstName,
             orderNumber: order.orderNumber,
             expertName: expertName,
-            levelName: this.getLevelName(order.level),
+            levelName: 'Abonné',
             validatedAt: new Date().toLocaleString('fr-FR', {
                 day: 'numeric',
                 month: 'long',
@@ -136,7 +126,7 @@ export class NotificationsService {
                 expertName,
                 orderId: order.id,
                 orderNumber: order.orderNumber,
-                level: order.level,
+                level: 4,
             },
         });
     }

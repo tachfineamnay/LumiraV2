@@ -110,7 +110,6 @@ export class ClientService {
                     select: {
                         id: true,
                         orderNumber: true,
-                        level: true,
                         generatedContent: true,
                         deliveredAt: true,
                         createdAt: true,
@@ -133,7 +132,6 @@ export class ClientService {
             readingData = {
                 orderId: latestReading.id,
                 orderNumber: latestReading.orderNumber,
-                level: latestReading.level,
                 deliveredAt: latestReading.deliveredAt,
                 archetype: content.archetype,
                 introduction: content.introduction,
@@ -182,7 +180,6 @@ export class ClientService {
             select: {
                 id: true,
                 orderNumber: true,
-                level: true,
                 status: true,
                 generatedContent: true,
                 deliveredAt: true,
@@ -200,7 +197,6 @@ export class ClientService {
             select: {
                 id: true,
                 orderNumber: true,
-                level: true,
                 status: true,
                 generatedContent: true,
                 deliveredAt: true,
@@ -221,7 +217,6 @@ export class ClientService {
             return {
                 id: order.id,
                 orderNumber: order.orderNumber,
-                level: order.level,
                 status: 'COMPLETED' as const,
                 deliveredAt: order.deliveredAt,
                 createdAt: order.createdAt,
@@ -242,7 +237,6 @@ export class ClientService {
         const inProgressReadings = pendingOrders.map(order => ({
             id: order.id,
             orderNumber: order.orderNumber,
-            level: order.level,
             status: order.status as 'PENDING' | 'PROCESSING' | 'AWAITING_VALIDATION' | 'PAID',
             deliveredAt: null,
             createdAt: order.createdAt,
@@ -284,7 +278,6 @@ export class ClientService {
         return {
             id: order.id,
             orderNumber: order.orderNumber,
-            level: order.level,
             deliveredAt: order.deliveredAt,
             createdAt: order.createdAt,
             userName: order.userName,

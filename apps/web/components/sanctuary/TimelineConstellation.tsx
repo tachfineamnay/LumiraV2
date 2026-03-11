@@ -101,7 +101,7 @@ export function TimelineConstellation({
         }
     }, [selectedStep, onCompleteStep]);
 
-    // Build a map of existing steps by dayNumber
+    return (
         <div className="relative min-h-[600px]">
             {/* Header */}
             <div className="text-center mb-8">

@@ -45,7 +45,6 @@ export class OrdersController {
         return {
             found: true,
             orderId: order.id,
-            level: order.level,
             amount: order.amount,
             paidAt: order.paidAt
         };

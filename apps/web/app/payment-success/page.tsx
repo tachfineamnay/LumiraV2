@@ -160,21 +160,20 @@ function PaymentSuccessContent() {
                                 Votre accès est prêt. Redirection vers votre Sanctuaire...
                             </motion.p>
 
-                            {(
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.8 }}
-                                    className="flex items-center gap-2 text-cosmic-gold text-xs"
-                                >
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Redirection en cours...</span>
-                                </motion.div>
-                            )}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.8 }}
+                                className="flex items-center gap-2 text-cosmic-gold text-xs"
+                            >
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Redirection en cours...</span>
+                            </motion.div>
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
+        </div>
     );
 }
 

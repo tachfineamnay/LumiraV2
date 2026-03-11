@@ -976,7 +976,7 @@ ${dto.currentContent}
                 question: dto.context?.question || profile?.specificQuestion || '',
                 objective: dto.context?.objective || profile?.objective || '',
                 emotionalState: dto.context?.emotionalState || (profile as { emotionalState?: string })?.emotionalState || '',
-                orderLevel: order.level,
+                orderLevel: 4,
                 orderNumber: order.orderNumber,
                 hasGeneratedContent: !!currentContent,
                 existingLecture: currentContent ? currentContent.substring(0, 2000) : '', // First 2000 chars for context
@@ -1441,32 +1441,9 @@ MESSAGE DE L'EXPERT:`;
         const completedOrders = client.orders.filter((o: { status: string }) => o.status === 'COMPLETED');
         const totalSpent = completedOrders.reduce((sum: number, o: { amount: number }) => sum + o.amount, 0);
 
-        // Find favorite level and highest level
-        const levelCounts = completedOrders.reduce((acc: Record<number, number>, o: { level: number }) => {
-            acc[o.level] = (acc[o.level] || 0) + 1;
-            return acc;
-        }, {} as Record<number, number>);
-
-        const levelNames: Record<number, string> = {
-            1: 'Initié',
-            2: 'Mystique',
-            3: 'Profond',
-            4: 'Intégral',
-        };
-
-        let favoriteLevel: string | null = null;
-        let maxLevel = 0;
-        let maxCount = 0;
-        for (const [level, count] of Object.entries(levelCounts)) {
-            const countNum = count as number;
-            if (countNum > maxCount) {
-                maxCount = countNum;
-                favoriteLevel = levelNames[Number(level)] || null;
-            }
-            if (Number(level) > maxLevel) {
-                maxLevel = Number(level);
-            }
-        }
+        const favoriteLevel: string | null = null;
+        const highestLevel = 'Abonné';
+        const highestLevelNumber = 4;
 
         const lastOrder = client.orders[0] || null;
 
@@ -1492,8 +1469,8 @@ MESSAGE DE L'EXPERT:`;
                 totalSpent,
                 totalSpentFormatted: `${(totalSpent / 100).toFixed(2)} €`,
                 favoriteLevel,
-                highestLevel: maxLevel > 0 ? levelNames[maxLevel] : null,
-                highestLevelNumber: maxLevel,
+                highestLevel,
+                highestLevelNumber,
                 lastOrderAt: lastOrder?.createdAt || null,
                 isVip,
                 memberSince: client.createdAt,
@@ -1515,7 +1492,6 @@ MESSAGE DE L'EXPERT:`;
             select: {
                 status: true,
                 amount: true,
-                level: true,
                 createdAt: true,
             },
         });
@@ -1523,27 +1499,7 @@ MESSAGE DE L'EXPERT:`;
         const completedOrders = orders.filter(o => o.status === 'COMPLETED');
         const totalSpent = completedOrders.reduce((sum, o) => sum + o.amount, 0);
 
-        // Find favorite level
-        const levelCounts = completedOrders.reduce((acc: Record<number, number>, o) => {
-            acc[o.level] = (acc[o.level] || 0) + 1;
-            return acc;
-        }, {});
-
-        const levelNames: Record<number, string> = {
-            1: 'INITIÉ',
-            2: 'MYSTIQUE',
-            3: 'PROFOND',
-            4: 'INTÉGRALE',
-        };
-
-        let favoriteLevel: string | null = null;
-        let maxCount = 0;
-        for (const [level, count] of Object.entries(levelCounts)) {
-            if (count > maxCount) {
-                maxCount = count;
-                favoriteLevel = levelNames[Number(level)] || null;
-            }
-        }
+        const favoriteLevel: string | null = null;
 
         const lastOrder = orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 

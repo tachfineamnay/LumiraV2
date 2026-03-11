@@ -192,7 +192,7 @@ ARCHÉTYPES LUMIRA (chaque être en porte un dominant):
 - Le Sage: Sagesse tranquille, équilibre incarné entre les mondes
 `.trim();
 
-const DEFAULT_AGENT_CONTEXTS: Record<AgentType, string> = {
+const DEFAULT_AGENT_CONTEXTS: Record<Exclude<AgentType, 'ONIRIQUE'>, string> = {
     SCRIBE: `
 MISSION SCRIBE:
 Tu génères la lecture spirituelle principale au format PDF.

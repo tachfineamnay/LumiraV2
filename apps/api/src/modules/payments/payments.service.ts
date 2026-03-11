@@ -446,15 +446,6 @@ export class PaymentsService {
                 },
             });
 
-            // 2. Map level
-            const levelMap: Record<string, number> = {
-                'INITIE': 1,
-                'MYSTIQUE': 2,
-                'PROFOND': 3,
-                'INTEGRALE': 4,
-            };
-            const level = levelMap[productLevel?.toUpperCase()] || 1;
-
             // 3. Generate order number
             const orderNumber = await this.generateOrderNumber();
 
@@ -465,7 +456,6 @@ export class PaymentsService {
                     userId: user.id,
                     userEmail: email,
                     userName: `${firstName} ${lastName}`.trim(),
-                    level,
                     amount: paymentIntent.amount,
                     currency: paymentIntent.currency,
                     status: 'PAID',

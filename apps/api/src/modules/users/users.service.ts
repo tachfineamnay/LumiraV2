@@ -126,7 +126,7 @@ export class UsersService {
   async debugUserAndOrders(email: string): Promise<{
     email: string;
     user: { id: string; email: string; firstName: string; lastName: string } | null;
-    orders: { id: string; status: string; amount: number; level: number; createdAt: Date }[];
+    orders: { id: string; status: string; amount: number; createdAt: Date }[];
     wouldAuth: boolean;
   }> {
     const user = await this.prisma.user.findUnique({
@@ -140,7 +140,7 @@ export class UsersService {
 
     const orders = await this.prisma.order.findMany({
       where: { userId: user.id },
-      select: { id: true, status: true, amount: true, level: true, createdAt: true },
+      select: { id: true, status: true, amount: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -190,7 +190,6 @@ export class UsersService {
   async getCompletedOrders(userId: string): Promise<Array<{
     id: string;
     orderNumber: string;
-    level: number;
     status: string;
     deliveredAt: Date | null;
     createdAt: Date;
@@ -203,7 +202,6 @@ export class UsersService {
       select: {
         id: true,
         orderNumber: true,
-        level: true,
         status: true,
         deliveredAt: true,
         createdAt: true,
