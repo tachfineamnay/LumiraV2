@@ -9,9 +9,8 @@ import { SanctuaireGuard } from "../../components/guards/SanctuaireGuard";
 import { SanctuaireSidebar } from "../../components/sanctuary/SanctuaireSidebar";
 import { MobileBottomNav } from "../../components/sanctuary/MobileBottomNav";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, User as UserIcon, LogOut, ChevronDown, Eye, ShoppingBag } from "lucide-react";
+import { Home, User as UserIcon, LogOut, ChevronDown, Eye, ShoppingBag, Crown } from "lucide-react";
 import { useState } from "react";
-import { LevelBadge } from "../../components/ui/LevelBadge";
 
 // =============================================================================
 // LAYOUT CONTENT
@@ -23,14 +22,13 @@ function SanctuaireLayoutContent({
     children: React.ReactNode;
 }) {
     const { user, logout, isAuthenticated } = useSanctuaireAuth();
-    const { levelMetadata, isLoading: entitlementsLoading } = useSanctuaire();
+    const { isSubscribed, isLoading: entitlementsLoading } = useSanctuaire();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const pathname = usePathname();
 
     // Don't show layout chrome for login page
     const isLoginPage = pathname === '/sanctuaire/login';
 
-    const displayLevel = (levelMetadata?.level || 1) as 1 | 2 | 3 | 4;
     const userName = user ? `${user.firstName} ${user.lastName}` : 'Explorateur';
     const userInitial = user?.firstName?.[0]?.toUpperCase() || 'U';
 
@@ -66,14 +64,24 @@ function SanctuaireLayoutContent({
 
                         {/* Right: Level Badge + Profile */}
                         <div className="flex items-center gap-3">
-                            {/* Level Badge */}
+                            {/* Subscription Badge */}
                             <div className="hidden sm:block">
                                 {entitlementsLoading ? (
                                     <div className="px-4 py-2 rounded-full bg-abyss-500/50 animate-pulse">
                                         <span className="text-xs text-stellar-500">Chargement...</span>
                                     </div>
+                                ) : isSubscribed ? (
+                                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md">
+                                        <Crown className="w-4 h-4 text-amber-400" />
+                                        <span className="text-xs font-bold uppercase tracking-widest text-amber-400">Initié</span>
+                                    </div>
                                 ) : (
-                                    <LevelBadge level={displayLevel} />
+                                    <Link
+                                        href="/commande"
+                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 hover:border-amber-500/40 transition-colors"
+                                    >
+                                        <span className="text-xs font-bold uppercase tracking-widest text-amber-400/70">S'abonner</span>
+                                    </Link>
                                 )}
                             </div>
 
@@ -119,8 +127,14 @@ function SanctuaireLayoutContent({
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] text-stellar-500 uppercase tracking-wider">Niveau:</span>
-                                                            {!entitlementsLoading && <LevelBadge level={displayLevel} showName={true} className="scale-75 origin-left" />}
+                                                            {!entitlementsLoading && isSubscribed ? (
+                                                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-400/30">
+                                                                    <Crown className="w-3 h-3 text-amber-400" />
+                                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Cercle des Initiés</span>
+                                                                </div>
+                                                            ) : !entitlementsLoading ? (
+                                                                <span className="text-[10px] text-stellar-500 uppercase tracking-wider">Compte gratuit</span>
+                                                            ) : null}
                                                         </div>
                                                     </div>
 

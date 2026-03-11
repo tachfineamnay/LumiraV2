@@ -3,22 +3,25 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { User, ChevronDown, BookOpen, Plus, LogOut, Settings } from "lucide-react";
-import { LevelBadge } from "../ui/LevelBadge";
+import { User, ChevronDown, BookOpen, Plus, LogOut, Settings, Crown, CreditCard } from "lucide-react";
 import { useSanctuaireAuth } from "../../context/SanctuaireAuthContext";
+import { useSanctuaire } from "../../context/SanctuaireContext";
 
 interface ProfileDropdownProps {
-    userLevel?: 1 | 2 | 3 | 4;
+    /** @deprecated — ignored in V2 */
+    userLevel?: number;
 }
 
-export const ProfileDropdown = ({ userLevel = 1 }: ProfileDropdownProps) => {
+export const ProfileDropdown = ({ }: ProfileDropdownProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const router = useRouter();
     const { user, logout } = useSanctuaireAuth();
+    const { isSubscribed } = useSanctuaire();
 
     const menuItems = [
         { label: "Mon Profil", icon: User, route: "/sanctuaire/profile" },
         { label: "Mes Lectures", icon: BookOpen, route: "/sanctuaire/draws" },
+        { label: "Mon Abonnement", icon: CreditCard, route: "/sanctuaire/abonnement" },
         { label: "Nouvelle Lecture", icon: Plus, route: "/commande" },
     ];
 
@@ -86,8 +89,14 @@ export const ProfileDropdown = ({ userLevel = 1 }: ProfileDropdownProps) => {
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs text-stellar-500 uppercase tracking-wider">Niveau:</span>
-                                    <LevelBadge level={userLevel} />
+                                    {isSubscribed ? (
+                                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-400/30">
+                                            <Crown className="w-3 h-3 text-amber-400" />
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Cercle des Initiés</span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-stellar-500 uppercase tracking-wider">Compte gratuit</span>
+                                    )}
                                 </div>
                             </div>
 

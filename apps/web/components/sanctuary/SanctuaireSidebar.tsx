@@ -10,9 +10,11 @@ import {
     BookOpen,
     MessageCircle,
     Layers,
+    Moon,
     Star,
     ChevronRight,
-    Sparkles
+    Sparkles,
+    CreditCard
 } from "lucide-react";
 
 // =============================================================================
@@ -30,9 +32,11 @@ interface NavItem {
 const navItems: NavItem[] = [
     { key: "accueil", label: "Accueil", icon: Home, route: "/sanctuaire" },
     { key: "tirages", label: "Tirages & Lectures", icon: BookOpen, route: "/sanctuaire/draws" },
+    { key: "reves", label: "Journal des Rêves", icon: Moon, route: "/sanctuaire/reves" },
     { key: "chemin", label: "Chemin Spirituel", icon: Compass, route: "/sanctuaire/path" },
     { key: "synthese", label: "Synthèse", icon: Layers, route: "/sanctuaire/synthesis" },
     { key: "oracle", label: "Conversations", icon: MessageCircle, route: "/sanctuaire/chat" },
+    { key: "abonnement", label: "Mon Abonnement", sublabel: "Gérer", icon: CreditCard, route: "/sanctuaire/abonnement" },
 ];
 
 // =============================================================================

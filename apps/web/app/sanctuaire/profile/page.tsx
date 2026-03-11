@@ -28,7 +28,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { GlassCard } from "../../../components/ui/GlassCard";
-import { LevelBadge } from "../../../components/ui/LevelBadge";
 import { SmartPhotoUploader } from "../../../components/onboarding/SmartPhotoUploader";
 import { useSanctuaire } from "../../../context/SanctuaireContext";
 import { useSanctuaireAuth } from "../../../context/SanctuaireAuthContext";
@@ -39,7 +38,7 @@ import { DELIVERY_STYLES } from "../../../lib/holisticSchema";
 // =============================================================================
 
 export default function ProfilePage() {
-    const { levelMetadata } = useSanctuaire();
+    const { isSubscribed } = useSanctuaire();
     const { user, profile, refetchData } = useSanctuaireAuth();
 
     const [isEditingPhotos, setIsEditingPhotos] = useState(false);
@@ -145,7 +144,6 @@ export default function ProfilePage() {
         return "Rapide";
     };
 
-    const displayLevel = (levelMetadata?.level || 1) as 1 | 2 | 3 | 4;
     const profileComplete = profile?.profileCompleted ?? false;
     const deliveryStyle = getDeliveryStyleInfo(profile?.deliveryStyle);
 
@@ -190,7 +188,16 @@ export default function ProfilePage() {
                             </h1>
                             <p className="text-stellar-400 text-sm mb-3">{user?.email}</p>
                             <div className="flex flex-wrap items-center gap-3">
-                                <LevelBadge level={displayLevel} />
+                                {isSubscribed ? (
+                                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md">
+                                        <span className="text-sm">👑</span>
+                                        <span className="text-xs font-bold uppercase tracking-widest text-amber-400">Cercle des Initiés</span>
+                                    </div>
+                                ) : (
+                                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10">
+                                        <span className="text-xs font-bold uppercase tracking-widest text-stellar-500">Compte gratuit</span>
+                                    </div>
+                                )}
                                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${profileComplete ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
                                     {profileComplete ? (
                                         <><Shield className="w-3 h-3" /> Profil complété</>

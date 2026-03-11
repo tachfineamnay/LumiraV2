@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, User, Compass, BookOpen, MessageCircle } from "lucide-react";
+import { Home, User, Compass, Moon, MessageCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 // =============================================================================
@@ -12,8 +12,8 @@ import { motion } from "framer-motion";
 
 const mobileNavItems = [
     { key: "home", label: "Accueil", icon: Home, route: "/sanctuaire" },
+    { key: "reves", label: "Rêves", icon: Moon, route: "/sanctuaire/reves" },
     { key: "chemin", label: "Chemin", icon: Compass, route: "/sanctuaire/path" },
-    { key: "tirages", label: "Tirages", icon: BookOpen, route: "/sanctuaire/draws" },
     { key: "oracle", label: "Oracle", icon: MessageCircle, route: "/sanctuaire/chat" },
     { key: "profil", label: "Profil", icon: User, route: "/sanctuaire/profile" },
 ];
