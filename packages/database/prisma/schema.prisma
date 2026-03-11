@@ -10,8 +10,12 @@ datasource db {
 
 enum SubscriptionStatus {
   ACTIVE
-  INACTIVE
-  TRIAL
+  INACTIVE // Legacy field on User.subscriptionStatus
+  TRIAL // Legacy field on User.subscriptionStatus
+  // V2 Stripe-aligned statuses (used on Subscription model)
+  PAST_DUE
+  CANCELED
+  EXPIRED
 }
 
 enum OrderStatus {
@@ -88,7 +92,7 @@ enum UserStatus {
 
 model User {
   id                 String             @id @default(cuid())
-  refId              String?            @unique  // Business ID: LUM-C-YY-XXXX
+  refId              String?            @unique // Business ID: LUM-C-YY-XXXX
   email              String             @unique
   firstName          String
   lastName           String
@@ -99,18 +103,20 @@ model User {
   status             UserStatus         @default(ACTIVE)
   totalOrders        Int                @default(0)
   lastOrderAt        DateTime?
-  notes              String?            @db.Text  // Internal CRM notes
-  tags               String[]           // CRM tags for categorization
-  source             String?            // Acquisition source (organic, referral, etc.)
+  notes              String?            @db.Text // Internal CRM notes
+  tags               String[] // CRM tags for categorization
+  source             String? // Acquisition source (organic, referral, etc.)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  profile        UserProfile?
-  orders         Order[]
-  spiritualPath  SpiritualPath?
-  chatSessions   ChatSession[]
-  akashicRecord  AkashicRecord?
-  notifications  Notification[]
+  profile       UserProfile?
+  orders        Order[]
+  spiritualPath SpiritualPath?
+  chatSessions  ChatSession[]
+  akashicRecord AkashicRecord?
+  notifications Notification[]
+  subscription  Subscription? // V2: Single-offer subscription
+  dreams        Dream[] // V2: Dream journal entries
 
   @@index([email])
   @@index([refId])
@@ -132,7 +138,7 @@ model Notification {
   type      NotificationType
   title     String
   message   String           @db.Text
-  metadata  Json?            // { expertName, orderId, orderNumber, etc. }
+  metadata  Json? // { expertName, orderId, orderNumber, etc. }
   read      Boolean          @default(false)
   readAt    DateTime?
   createdAt DateTime         @default(now())
@@ -171,41 +177,44 @@ model UserProfile {
 }
 
 model Order {
-  id                 String         @id @default(cuid())
-  orderNumber        String         @unique
+  id                 String          @id @default(cuid())
+  orderNumber        String          @unique
   userId             String
-  user               User           @relation(fields: [userId], references: [id])
+  user               User            @relation(fields: [userId], references: [id])
   userEmail          String
   userName           String?
+  /// @deprecated Tier numeric level (1-4). Kept for backward compat. Removal planned Phase 13.
   level              Int
   amount             Int
-  currency           String         @default("eur")
-  status             OrderStatus    @default(PENDING)
+  currency           String          @default("eur")
+  status             OrderStatus     @default(PENDING)
   paymentIntentId    String?
   stripeSessionId    String?
   paidAt             DateTime?
   formData           Json
   clientInputs       Json?
-  expertPrompt       String?        @db.Text
-  expertInstructions String?        @db.Text
+  expertPrompt       String?         @db.Text
+  expertInstructions String?         @db.Text
   generatedContent   Json?
-  errorLog           String?        @db.Text
+  errorLog           String?         @db.Text
   expertReview       Json?
   expertValidation   Json?
-  revisionCount      Int            @default(0)
+  revisionCount      Int             @default(0)
   deliveredAt        DateTime?
   deliveryMethod     DeliveryFormat?
+  // V2: Subscription link
+  subscriptionId     String? // Optional link to the Subscription that generated this order
   // Upsell tracking
-  addons             Json?          // Array of purchased addons: [{type: 'FORECAST_6M', amount: 2700, paidAt: Date}]
-  upsellOfferedAt    DateTime?      // When upsell was shown
-  upsellAcceptedAt   DateTime?      // When upsell was accepted
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  addons             Json? // Array of purchased addons: [{type: 'FORECAST_6M', amount: 2700, paidAt: Date}]
+  upsellOfferedAt    DateTime? // When upsell was shown
+  upsellAcceptedAt   DateTime? // When upsell was accepted
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   // Relations for interconnected ecosystem
   files          OrderFile[]
-  generatedSteps PathStep[]     // Steps generated from this reading
-  chatContexts   ChatSession[]  // Chat sessions related to this order
+  generatedSteps PathStep[] // Steps generated from this reading
+  chatContexts   ChatSession[] // Chat sessions related to this order
 
   @@index([userId])
   @@index([userEmail])
@@ -308,17 +317,19 @@ enum InsightCategory {
 }
 
 model Insight {
-  id          String          @id @default(cuid())
-  userId      String
-  orderId     String?
-  category    InsightCategory
-  short       String          @db.Text    // Résumé court (2-3 phrases)
-  full        String          @db.Text    // Texte complet (1-2 paragraphes)
-  viewedAt    DateTime?                   // Null = "Nouveau" badge
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id        String          @id @default(cuid())
+  userId    String
+  orderId   String?
+  category  InsightCategory
+  short     String          @db.Text // Résumé court (2-3 phrases)
+  full      String          @db.Text // Texte complet (1-2 paragraphes)
+  viewedAt  DateTime? // Null = "Nouveau" badge
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
-  @@unique([userId, category])  // Un seul insight par catégorie par user
+  dreams Dream[] // V2: Dreams linked to this insight domain
+
+  @@unique([userId, category]) // Un seul insight par catégorie par user
   @@index([userId])
   @@index([orderId])
 }
@@ -331,15 +342,16 @@ model SpiritualPath {
   id          String    @id @default(cuid())
   userId      String    @unique
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  archetype   String                    // e.g., "Le Guérisseur", "Le Visionnaire"
-  synthesis   String    @db.Text        // AI-generated synthesis of the user's spiritual journey
-  keyBlockage String?                   // Primary spiritual blockage identified
+  archetype   String // e.g., "Le Guérisseur", "Le Visionnaire"
+  synthesis   String    @db.Text // AI-generated synthesis of the user's spiritual journey
+  keyBlockage String? // Primary spiritual blockage identified
+  monthNumber Int       @default(1) // V2: Which subscription month this path covers (1, 2, 3...)
   startedAt   DateTime  @default(now())
   completedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  steps       PathStep[]
+  steps PathStep[]
 
   @@index([userId])
   @@index([archetype])
@@ -349,22 +361,23 @@ model PathStep {
   id              String         @id @default(cuid())
   spiritualPathId String
   spiritualPath   SpiritualPath  @relation(fields: [spiritualPathId], references: [id], onDelete: Cascade)
-  dayNumber       Int                        // Day in the journey (1-30, etc.)
-  title           String                     // Step title
-  description     String         @db.Text    // Detailed description of this step
-  synthesis       String         @db.Text    // AI-generated content for this step
-  archetype       String                     // Archetype theme for this step
+  dayNumber       Int // Day in the journey (1-30, etc.)
+  title           String // Step title
+  description     String         @db.Text // Detailed description of this step
+  synthesis       String         @db.Text // AI-generated content for this step
+  archetype       String // Archetype theme for this step
   actionType      PathActionType @default(REFLECTION) // Type of action required
-  ritualPrompt    String?        @db.Text    // Optional ritual/meditation prompt
+  ritualPrompt    String?        @db.Text // Optional ritual/meditation prompt
   isCompleted     Boolean        @default(false)
   completedAt     DateTime?
-  unlockedAt      DateTime?                  // When this step became available
+  unlockedAt      DateTime? // When this step became available
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   // Link back to the reading that generated this step
   originReadingId String?
-  originReading   Order?         @relation(fields: [originReadingId], references: [id], onDelete: SetNull)
+  originReading   Order?  @relation(fields: [originReadingId], references: [id], onDelete: SetNull)
+  dreams          Dream[] // V2: Dreams submitted on this day
 
   @@unique([spiritualPathId, dayNumber])
   @@index([spiritualPathId])
@@ -381,9 +394,9 @@ model ChatSession {
   id             String    @id @default(cuid())
   userId         String
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  relatedOrderId String?                  // Optional link to a specific reading
+  relatedOrderId String? // Optional link to a specific reading
   relatedOrder   Order?    @relation(fields: [relatedOrderId], references: [id], onDelete: SetNull)
-  title          String?                  // Auto-generated session title
+  title          String? // Auto-generated session title
   messages       Json      @default("[]") // Array of {role, content, timestamp}
   isActive       Boolean   @default(true)
   lastMessageAt  DateTime?
@@ -414,11 +427,11 @@ model SystemSetting {
 
 model PromptVersion {
   id        String   @id @default(cuid())
-  key       String               // LUMIRA_DNA, SCRIBE, GUIDE, EDITOR, CONFIDANT, MODEL_CONFIG
-  version   Int                  // Auto-incrementing per key
-  value     String   @db.Text    // The prompt content or JSON config
-  changedBy String?              // Expert email who made the change
-  comment   String?              // Optional change note
+  key       String // LUMIRA_DNA, SCRIBE, GUIDE, EDITOR, CONFIDANT, MODEL_CONFIG
+  version   Int // Auto-incrementing per key
+  value     String   @db.Text // The prompt content or JSON config
+  changedBy String? // Expert email who made the change
+  comment   String? // Optional change note
   isActive  Boolean  @default(false) // Only one active per key
   createdAt DateTime @default(now())
 
@@ -432,19 +445,19 @@ model PromptVersion {
 // =============================================================================
 
 model AkashicRecord {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Core spiritual identity
-  archetype String?              // Primary archetype (e.g., "Le Guérisseur", "Le Visionnaire")
-  
+  archetype String? // Primary archetype (e.g., "Le Guérisseur", "Le Visionnaire")
+
   // Structured spiritual data
-  domains   Json     @default("{}") // { "relations": {...}, "mission": {...}, "sante": {...}, ... }
-  
+  domains Json @default("{}") // { "relations": {...}, "mission": {...}, "sante": {...}, ... }
+
   // Conversation & interaction history summary
-  history   Json     @default("[]") // Array of { date, topic, insights, sentiment }
-  
+  history Json @default("[]") // Array of { date, topic, insights, sentiment }
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -454,12 +467,61 @@ model AkashicRecord {
 }
 
 // =============================================================================
+// V2 - SUBSCRIPTION — Single-offer 29€/month model
+// =============================================================================
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeSubscriptionId String             @unique
+  stripeCustomerId     String
+  stripePriceId        String
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([stripeSubscriptionId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+// =============================================================================
+// V2 - DREAMS — Oniric journal & interpretation (agent ONIRIQUE)
+// =============================================================================
+
+model Dream {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content         String    @db.Text // Raw dream text written by the user (20-2000 chars)
+  emotion         String? // Optional emotion tag: paix, peur, joie, confusion, tristesse...
+  interpretation  String    @db.Text // Full structured response from the ONIRIQUE agent (JSON string)
+  symbols         String[] // Auto-detected symbols: ["eau", "escalier", "lumière"]
+  linkedInsightId String? // Optional link to a spiritual insight domain
+  linkedInsight   Insight?  @relation(fields: [linkedInsightId], references: [id], onDelete: SetNull)
+  linkedStepId    String? // Optional link to the PathStep active on the day of the dream
+  linkedStep      PathStep? @relation(fields: [linkedStepId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([linkedInsightId])
+  @@index([linkedStepId])
+}
+
+// =============================================================================
 // SEQUENCE COUNTERS - For Business ID Generation
 // =============================================================================
 
 model SequenceCounter {
   id        String   @id @default(cuid())
-  name      String   @unique  // e.g., "client_2026", "order_20260127"
+  name      String   @unique // e.g., "client_2026", "order_20260127"
   value     Int      @default(0)
   updatedAt DateTime @updatedAt
 

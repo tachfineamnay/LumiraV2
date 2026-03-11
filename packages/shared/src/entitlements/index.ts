@@ -258,3 +258,18 @@ export function getUpgradeSuggestions(currentLevel: number): LevelMetadata[] {
 export function isIntegralAvailable(): boolean {
     return false; // Coming soon
 }
+
+// =============================================================================
+// V2 — SUBSCRIPTION-BASED ACCESS (Single-offer 29€/month model)
+// The tier system above is preserved for backward compat and removed in Phase 13.
+// =============================================================================
+
+/**
+ * V2: Check if a Stripe subscription is currently active.
+ * This is the single access gate for the new single-offer model —
+ * replaces all tier-based hasCapability() checks.
+ *
+ * @param status - The SubscriptionStatus value from the Subscription model
+ */
+export const isSubscriptionActive = (status?: string): boolean =>
+    status === 'ACTIVE';
