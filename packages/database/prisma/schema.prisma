@@ -183,8 +183,6 @@ model Order {
   user               User            @relation(fields: [userId], references: [id])
   userEmail          String
   userName           String?
-  /// @deprecated Tier numeric level (1-4). Kept for backward compat. Removal planned Phase 13.
-  level              Int
   amount             Int
   currency           String          @default("eur")
   status             OrderStatus     @default(PENDING)
@@ -219,7 +217,6 @@ model Order {
   @@index([userId])
   @@index([userEmail])
   @@index([status])
-  @@index([level])
   @@index([createdAt(sort: Desc)])
   @@index([paymentIntentId])
 }

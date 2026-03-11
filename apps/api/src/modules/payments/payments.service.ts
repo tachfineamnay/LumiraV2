@@ -90,15 +90,6 @@ export class PaymentsService {
         
         this.logger.log(`[CheckoutIntent] User upserted: ${user.id} for email: ${normalizedEmail}`);
 
-        // 2. Map level
-        const levelMap: Record<string, number> = {
-            'INITIE': 1,
-            'MYSTIQUE': 2,
-            'PROFOND': 3,
-            'INTEGRALE': 4,
-        };
-        const level = levelMap[dto.productLevel?.toUpperCase()] || 1;
-
         // 3. Generate order number
         const orderNumber = await this.generateOrderNumber();
 
@@ -109,7 +100,6 @@ export class PaymentsService {
                 userId: user.id,
                 userEmail: normalizedEmail,
                 userName: `${dto.firstName} ${dto.lastName}`.trim(),
-                level,
                 amount: dto.amountCents,
                 currency: 'eur',
                 status: 'PENDING',

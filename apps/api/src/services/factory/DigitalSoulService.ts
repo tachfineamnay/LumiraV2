@@ -156,8 +156,8 @@ export class DigitalSoulService {
             const orderContext: OrderContext = {
                 orderId: order.id,
                 orderNumber: order.orderNumber,
-                level: order.level,
-                productName: this.getLevelName(order.level),
+                level: 4,
+                productName: 'Abonné',
             };
 
             // STEP 2: Generate AI content
@@ -478,7 +478,7 @@ export class DigitalSoulService {
 
             this.logger.log(`   ✅ Order found: ${order.orderNumber}`);
             this.logger.log(`   📦 Status: ${order.status}`);
-            this.logger.log(`   💰 Level: ${order.level}`);
+            this.logger.log(`   💰 Level: 4 (Abonné)`);
 
             // Allow PAID, PENDING (admin force), PROCESSING, and FAILED (retry)
             const validStatuses = ['PAID', 'PENDING', 'PROCESSING', 'FAILED'];
@@ -539,8 +539,8 @@ export class DigitalSoulService {
             const orderContext: OrderContext = {
                 orderId: order.id,
                 orderNumber: order.orderNumber,
-                level: order.level,
-                productName: this.getLevelName(order.level),
+                level: 4,
+                productName: 'Abonné',
             };
 
             // ==========================================================================
@@ -855,16 +855,6 @@ export class DigitalSoulService {
         } catch (dbError) {
             this.logger.error(`   ❌ Could not save error to database: ${dbError}`);
         }
-    }
-
-    private getLevelName(level: number): string {
-        const names: Record<number, string> = {
-            1: 'Initié',
-            2: 'Mystique',
-            3: 'Profond',
-            4: 'Intégrale',
-        };
-        return names[level] || 'Initié';
     }
 
     private mapActionType(type: string): PathActionType {

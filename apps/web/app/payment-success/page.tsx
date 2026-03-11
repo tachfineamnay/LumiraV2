@@ -4,36 +4,13 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, CheckCircle, Sparkles } from 'lucide-react';
-import { UpsellModal } from '@/components/checkout/UpsellModal';
-import api from '@/lib/api';
 
 function PaymentSuccessContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const email = searchParams.get('email') || '';
 
-    const [status, setStatus] = useState<'processing' | 'confirmed' | 'upsell'>('processing');
-    const [orderId, setOrderId] = useState<string | null>(null);
-    const [showUpsell, setShowUpsell] = useState(false);
-    const [upsellDismissed, setUpsellDismissed] = useState(false);
-
-    // Fetch recent order for upsell
-    useEffect(() => {
-        const fetchOrder = async () => {
-            if (!email) return;
-            
-            try {
-                const { data } = await api.get(`/orders/recent?email=${encodeURIComponent(email)}`);
-                if (data.found && data.orderId) {
-                    setOrderId(data.orderId);
-                }
-            } catch (err) {
-                console.error('Failed to fetch order:', err);
-            }
-        };
-
-        fetchOrder();
-    }, [email]);
+    const [status, setStatus] = useState<'processing' | 'confirmed'>('processing');
 
     // Processing → Confirmed transition
     useEffect(() => {
@@ -44,22 +21,9 @@ function PaymentSuccessContent() {
         return () => clearTimeout(timer);
     }, []);
 
-    // Show upsell after confirmation (if order found)
+    // Redirect to sanctuaire after confirmation
     useEffect(() => {
-        if (status === 'confirmed' && orderId && !upsellDismissed) {
-            // Show upsell modal after a short delay
-            const upsellTimer = setTimeout(() => {
-                setShowUpsell(true);
-                setStatus('upsell');
-            }, 1000);
-
-            return () => clearTimeout(upsellTimer);
-        }
-    }, [status, orderId, upsellDismissed]);
-
-    // Redirect to sanctuaire (after upsell or if no order)
-    useEffect(() => {
-        if (status === 'confirmed' && (upsellDismissed || !orderId)) {
+        if (status === 'confirmed') {
             const firstVisitToken = `fv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
             // Clear any previous onboarding draft
@@ -72,20 +36,7 @@ function PaymentSuccessContent() {
 
             return () => clearTimeout(redirectTimer);
         }
-    }, [status, router, email, upsellDismissed, orderId]);
-
-    const handleUpsellClose = () => {
-        setShowUpsell(false);
-        setUpsellDismissed(true);
-        setStatus('confirmed');
-    };
-
-    const handleUpsellSuccess = () => {
-        setShowUpsell(false);
-        setUpsellDismissed(true);
-        setStatus('confirmed');
-    };
-
+    }, [status, router, email]);
 
     return (
         <div className="min-h-screen relative overflow-hidden flex items-center justify-center">
@@ -206,13 +157,10 @@ function PaymentSuccessContent() {
                                 transition={{ delay: 0.6 }}
                                 className="text-cosmic-stardust text-sm max-w-md mb-8"
                             >
-                                {status === 'upsell' 
-                                    ? "Une offre spéciale vous attend..."
-                                    : "Votre accès est prêt. Redirection vers votre Sanctuaire..."
-                                }
+                                Votre accès est prêt. Redirection vers votre Sanctuaire...
                             </motion.p>
 
-                            {status !== 'upsell' && (
+                            {(
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
@@ -227,16 +175,6 @@ function PaymentSuccessContent() {
                     )}
                 </AnimatePresence>
             </div>
-
-            {/* Upsell Modal */}
-            {showUpsell && orderId && (
-                <UpsellModal
-                    orderId={orderId}
-                    onClose={handleUpsellClose}
-                    onSuccess={handleUpsellSuccess}
-                />
-            )}
-        </div>
     );
 }
 

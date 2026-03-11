@@ -4,8 +4,6 @@ import { User, Expert, UserProfile } from '@prisma/client';
 import {
   aggregateCapabilities,
   getHighestLevel,
-  getLevelMetadata,
-  getLevelNameFromLevel,
   EntitlementsResponse,
 } from '@packages/shared';
 
@@ -27,42 +25,25 @@ export class UsersService {
   }
 
   /**
-   * Get full entitlements for a user based on their paid/completed orders
+   * V2: Get entitlements based on active subscription.
+   * Returns level 4 (full access) when subscribed, 0 when not.
    */
   async getEntitlements(userId: string): Promise<EntitlementsResponse> {
-    // Fetch all orders that should grant entitlements.
-    // Note: an order can move from PAID -> PROCESSING -> AWAITING_VALIDATION -> COMPLETED,
-    // and should continue granting access across the whole lifecycle.
-    // FAILED orders are paid orders where generation failed - they should still grant access.
-    const orders = await this.prisma.order.findMany({
-      where: {
-        userId,
-        OR: [
-          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] } },
-          // Free orders (amount=0) are valid even without a payment step.
-          { status: 'PENDING', amount: 0 },
-        ],
-      },
-      select: { level: true },
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { userId },
+      select: { status: true },
     });
 
-    // Extract levels from orders
-    const levels = orders.map((o) => o.level);
-
-    // Calculate highest level and aggregate capabilities
-    const highestLevel = getHighestLevel(levels);
+    const isActive = subscription?.status === 'ACTIVE';
+    const levels = isActive ? [4] : [];
     const capabilities = aggregateCapabilities(levels);
-    const levelMetadata = getLevelMetadata(highestLevel);
-
-    // Get product IDs the user has purchased
-    const products = [...new Set(levels.map(l => getLevelNameFromLevel(l)))];
+    const highestLevel = getHighestLevel(levels);
 
     return {
       capabilities,
-      products,
+      products: isActive ? ['subscription'] : [],
       highestLevel,
-      levelMetadata,
-      orderCount: orders.length,
+      orderCount: isActive ? 1 : 0,
     };
   }
 
