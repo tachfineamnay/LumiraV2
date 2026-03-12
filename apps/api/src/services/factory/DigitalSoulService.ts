@@ -59,7 +59,7 @@ export class DigitalSoulService {
         private readonly prisma: PrismaService,
         private readonly vertexOracle: VertexOracle,
         private readonly pdfFactory: PdfFactory,
-        private readonly audioGenerationService: AudioGenerationService,
+        private readonly audioGenerationService?: AudioGenerationService,
     ) {
         this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
         // Use AWS_LECTURES_BUCKET_NAME for PDF storage (fallback to AWS_S3_BUCKET_NAME)
@@ -395,10 +395,12 @@ export class DigitalSoulService {
         this.logger.log(`   ⏱️ Time: ${elapsed}ms`);
         this.logger.log(`${'='.repeat(60)}\n`);
 
-        // Fire-and-forget: generate TTS audio in background
-        this.audioGenerationService.generateAllAudio(orderId).catch((err) => {
-            this.logger.error(`🎤 Background audio generation failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
+        // Fire-and-forget: generate TTS audio in background (only when service is injected via DI)
+        if (this.audioGenerationService) {
+            this.audioGenerationService.generateAllAudio(orderId).catch((err) => {
+                this.logger.error(`🎤 Background audio generation failed: ${err instanceof Error ? err.message : String(err)}`);
+            });
+        }
 
         return {
             orderId: order.id,
