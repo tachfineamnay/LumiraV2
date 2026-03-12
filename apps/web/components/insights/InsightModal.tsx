@@ -16,6 +16,7 @@ import {
     Calendar,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { MysticAudioPlayer } from "../ui/MysticAudioPlayer";
 import type { CategoryWithInsight, InsightCategory } from "../../hooks/useInsights";
 
 // Icon mapping for categories
@@ -141,6 +142,11 @@ export function InsightModal({ data, isOpen, onClose, onCreateRitual }: InsightM
 
                         {/* Content */}
                         <div className="flex-1 overflow-y-auto p-6">
+                            {/* Audio Player */}
+                            <div className="mb-5">
+                                <MysticAudioPlayer audioUrl={data.insight.audioUrl} />
+                            </div>
+
                             <div className="prose prose-invert prose-sm max-w-none">
                                 <p className="text-stellar-300 leading-relaxed whitespace-pre-wrap">
                                     {data.insight.full}

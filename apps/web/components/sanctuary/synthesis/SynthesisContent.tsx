@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { BookOpen } from 'lucide-react';
+import { MysticAudioPlayer } from '../../ui/MysticAudioPlayer';
 
 // =============================================================================
 // TYPES
@@ -11,13 +12,14 @@ import { BookOpen } from 'lucide-react';
 interface SynthesisContentProps {
     synthesis: string;
     lifeMission?: string;
+    audioUrl?: string | null;
 }
 
 // =============================================================================
 // COMPONENT
 // =============================================================================
 
-export function SynthesisContent({ synthesis, lifeMission }: SynthesisContentProps) {
+export function SynthesisContent({ synthesis, lifeMission, audioUrl }: SynthesisContentProps) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -35,6 +37,13 @@ export function SynthesisContent({ synthesis, lifeMission }: SynthesisContentPro
                     <p className="text-xs text-stellar-500">Révélation de l&apos;Oracle</p>
                 </div>
             </div>
+
+            {/* Audio Player */}
+            {audioUrl !== undefined && (
+                <div className="mb-6">
+                    <MysticAudioPlayer audioUrl={audioUrl} loadingText="Audio de la synthèse en préparation..." />
+                </div>
+            )}
 
             {/* Synthesis Text */}
             <div className="prose prose-invert max-w-none">

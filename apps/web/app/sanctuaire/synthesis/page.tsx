@@ -34,6 +34,7 @@ interface SpiritualPathAPIResponse {
     keywords?: string[];
     emotionalState?: string;
     lifeMission?: string;
+    synthesisAudioUrl?: string | null;
     startedAt: string;
 }
 
@@ -356,6 +357,7 @@ export default function SynthesisPage() {
                     <SynthesisContent
                         synthesis={synthesis}
                         lifeMission={spiritualPath?.lifeMission}
+                        audioUrl={spiritualPath?.synthesisAudioUrl || null}
                     />
                 )}
 

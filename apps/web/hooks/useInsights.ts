@@ -18,6 +18,7 @@ export interface Insight {
     category: InsightCategory;
     short: string;
     full: string;
+    audioUrl: string | null;
     viewedAt: string | null;
     createdAt: string;
     updatedAt: string;
@@ -96,6 +97,17 @@ export function useInsights(): UseInsightsReturn {
     useEffect(() => {
         fetchInsights();
     }, [fetchInsights]);
+
+    // Auto-poll for pending audio: if any insight exists but has no audioUrl, refetch every 10s
+    useEffect(() => {
+        const hasPendingAudio = categories.some(
+            (cat) => cat.insight !== null && cat.insight.audioUrl === null,
+        );
+        if (!hasPendingAudio) return;
+
+        const interval = setInterval(fetchInsights, 10_000);
+        return () => clearInterval(interval);
+    }, [categories, fetchInsights]);
 
     return {
         categories,

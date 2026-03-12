@@ -67,6 +67,7 @@ enum DeliveryFormat {
 enum FileType {
   FACE_PHOTO
   PALM_PHOTO
+  AUDIO_READING
 }
 
 enum ProductLevel {
@@ -170,6 +171,7 @@ model UserProfile {
   ailments         String?   @db.Text
   fears            String?   @db.Text
   rituals          String?   @db.Text
+  preferredVoice   AudioVoice? // Voix préférée pour le TTS (MASCULINE/FEMININE)
   profileCompleted Boolean   @default(false)
   submittedAt      DateTime?
   createdAt        DateTime  @default(now())
@@ -320,6 +322,7 @@ model Insight {
   category  InsightCategory
   short     String          @db.Text // Résumé court (2-3 phrases)
   full      String          @db.Text // Texte complet (1-2 paragraphes)
+  audioUrl  String?         // URL S3 du fichier audio TTS
   viewedAt  DateTime? // Null = "Nouveau" badge
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt

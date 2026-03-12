@@ -15,6 +15,7 @@ import {
     Loader2,
 } from "lucide-react";
 import { GlassCard } from "../ui/GlassCard";
+import { MysticAudioPlayer } from "../ui/MysticAudioPlayer";
 import { cn } from "../../lib/utils";
 import type { CategoryWithInsight, InsightCategory } from "../../hooks/useInsights";
 
@@ -117,6 +118,14 @@ export function InsightCard({ data, index, onExplore }: InsightCardProps) {
                                     year: "numeric",
                                 })}
                             </p>
+
+                            {/* Mini Audio Player */}
+                            <div className="mt-3">
+                                <MysticAudioPlayer
+                                    audioUrl={data.insight!.audioUrl}
+                                    compact
+                                />
+                            </div>
                         </>
                     ) : (
                         <div className="flex items-center gap-3 text-stellar-500 py-4">

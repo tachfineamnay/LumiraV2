@@ -192,4 +192,17 @@ export class ClientController {
         await this.notificationsService.markAllAsRead(req.user.userId);
         return { success: true };
     }
+
+    /**
+     * PATCH /api/client/voice-preference
+     * Update the user's preferred TTS voice (MASCULINE or FEMININE)
+     */
+    @Patch('voice-preference')
+    @HttpCode(HttpStatus.OK)
+    async updateVoicePreference(
+        @Request() req: { user: { userId: string } },
+        @Body() body: { voice: 'MASCULINE' | 'FEMININE' },
+    ) {
+        return this.clientService.updateVoicePreference(req.user.userId, body.voice);
+    }
 }

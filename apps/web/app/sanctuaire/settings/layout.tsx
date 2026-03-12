@@ -10,6 +10,7 @@ import {
     CreditCard,
     Shield,
     ArrowLeft,
+    SlidersHorizontal,
 } from "lucide-react";
 
 export default function SettingsLayout({
@@ -37,6 +38,12 @@ export default function SettingsLayout({
             icon: Shield,
             href: "/sanctuaire/settings/security",
             color: "text-rose-400"
+        },
+        {
+            label: "Préférences",
+            icon: SlidersHorizontal,
+            href: "/sanctuaire/settings/preferences",
+            color: "text-serenity-400"
         },
     ];
 

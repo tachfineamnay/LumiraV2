@@ -7,9 +7,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
     FileText,
-    Play,
-    Pause,
-    Volume2,
     Calendar,
     Clock,
     Sparkles,
@@ -24,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useSanctuaire } from '../../../context/SanctuaireContext';
 import { ReadingViewerModal } from '../../../components/sanctuary/ReadingViewerModal';
+import { MysticAudioPlayer } from '../../../components/ui/MysticAudioPlayer';
 
 // =============================================================================
 // TYPES
@@ -93,63 +91,6 @@ const DRAW_TYPES: DrawType[] = [
         comingSoon: true,
     },
 ];
-
-// =============================================================================
-// AUDIO PLAYER COMPONENT
-// =============================================================================
-
-function AudioPlayer({ audioUrl }: { audioUrl?: string }) {
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [progress] = useState(0);
-    const [duration] = useState('12:45');
-
-    // Simulated waveform bars
-    const waveformBars = Array.from({ length: 40 }, () => Math.random() * 100);
-
-    const togglePlay = () => {
-        if (!audioUrl) return;
-        setIsPlaying(!isPlaying);
-    };
-
-    return (
-        <div className="flex items-center gap-4 p-4 rounded-xl bg-abyss-800/50 border border-white/5">
-            {/* Play Button */}
-            <button
-                onClick={togglePlay}
-                disabled={!audioUrl}
-                aria-label={isPlaying ? 'Pause' : 'Lecture'}
-                className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                    audioUrl
-                        ? 'bg-horizon-400 text-abyss-900 hover:bg-horizon-300 hover:scale-105'
-                        : 'bg-white/10 text-stellar-500 cursor-not-allowed'
-                }`}
-            >
-                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-            </button>
-
-            {/* Waveform Visualization */}
-            <div className="flex-1 flex items-end gap-[2px] h-10">
-                {waveformBars.map((height, i) => (
-                    <div
-                        key={i}
-                        className={`flex-1 rounded-full transition-all ${
-                            i < waveformBars.length * (progress / 100)
-                                ? 'bg-horizon-400'
-                                : 'bg-white/10'
-                        }`}
-                        style={{ height: `${Math.max(20, height)}%` }}
-                    />
-                ))}
-            </div>
-
-            {/* Duration */}
-            <div className="flex-shrink-0 flex items-center gap-2 text-xs text-stellar-400">
-                <Volume2 className="w-4 h-4" />
-                <span>{duration}</span>
-            </div>
-        </div>
-    );
-}
 
 // =============================================================================
 // DRAW CARD COMPONENT
@@ -438,7 +379,7 @@ export default function DrawsPage() {
                         <div className="space-y-4">
                             {/* Audio Player */}
                             {highestLevel >= 2 && (
-                                <AudioPlayer audioUrl={latestReading.assets.audio} />
+                                <MysticAudioPlayer audioUrl={latestReading.assets.audio} />
                             )}
 
                             {/* Action Button */}

@@ -17,6 +17,7 @@ import { VertexOracle } from './factory/VertexOracle';
 import { PdfFactory } from './factory/PdfFactory';
 import { ContextDispatcher } from './factory/ContextDispatcher';
 import { DigitalSoulService } from './factory/DigitalSoulService';
+import { AudioGenerationService } from './factory/AudioGenerationService';
 import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
 
 @Module({
@@ -30,6 +31,7 @@ import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
         PdfFactory,
         ContextDispatcher,
         DigitalSoulService,
+        AudioGenerationService,
         SpiritualPathBatchService,
     ],
     exports: [
@@ -37,6 +39,7 @@ import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
         PdfFactory,
         ContextDispatcher,
         DigitalSoulService,
+        AudioGenerationService,
         SpiritualPathBatchService,
     ],
 })

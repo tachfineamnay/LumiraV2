@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ContextDispatcher } from '../../services/factory/ContextDispatcher';
+import { AudioVoice } from '@prisma/client';
 
 // Chat quota for free users
 const FREE_CHAT_QUOTA = 3;
@@ -43,11 +44,23 @@ export class ClientService {
             return null;
         }
 
+        // Fetch synthesis audio URL from the latest order's AUDIO_READING file
+        const synthesisAudioFile = await this.prisma.orderFile.findFirst({
+            where: {
+                order: { userId },
+                type: 'AUDIO_READING',
+                key: { contains: 'audio/synthesis/' },
+            },
+            orderBy: { uploadedAt: 'desc' },
+            select: { url: true },
+        });
+
         return {
             id: spiritualPath.id,
             archetype: spiritualPath.archetype,
             synthesis: spiritualPath.synthesis,
             keyBlockage: spiritualPath.keyBlockage,
+            synthesisAudioUrl: synthesisAudioFile?.url || null,
             startedAt: spiritualPath.startedAt,
             completedAt: spiritualPath.completedAt,
             steps: spiritualPath.steps.map(step => ({
@@ -159,6 +172,7 @@ export class ClientService {
                 specificQuestion: user.profile.specificQuestion,
                 objective: user.profile.objective,
                 profileCompleted: user.profile.profileCompleted,
+                preferredVoice: user.profile.preferredVoice,
             } : null,
             archetype,
             latestReading: readingData,
@@ -430,5 +444,25 @@ export class ClientService {
             this.logger.error(`❌ Chat error for user ${userId}:`, error);
             throw error;
         }
+    }
+
+    /**
+     * Update user's preferred TTS voice
+     */
+    async updateVoicePreference(userId: string, voice: string) {
+        if (!['MASCULINE', 'FEMININE'].includes(voice)) {
+            throw new BadRequestException('Voice must be MASCULINE or FEMININE');
+        }
+
+        await this.prisma.userProfile.upsert({
+            where: { userId },
+            update: { preferredVoice: voice as AudioVoice },
+            create: {
+                userId,
+                preferredVoice: voice as AudioVoice,
+            },
+        });
+
+        return { success: true, voice };
     }
 }
