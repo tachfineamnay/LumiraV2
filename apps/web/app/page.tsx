@@ -3,7 +3,7 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Mandala } from "../components/ui/Mandala";
 import { useRef } from "react";
-import { Crown, Sparkles, MessageCircle, BookOpen, Moon, Star, Check } from "lucide-react";
+import { Crown, Sparkles, MessageCircle, BookOpen, Moon, Star, Check, ShieldCheck, FileText, Headphones, Palette, Compass, PenLine } from "lucide-react";
 import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
 import { TestimonialsCarousel } from "../components/landing/TestimonialsCarousel";
@@ -142,7 +142,8 @@ export default function Home() {
 
       {/* 🏛️ SINGLE OFFER (Pricing) */}
       <section id="niveaux" className="py-24 relative z-10">
-        <div className="max-w-4xl mx-auto px-6">
+        <div className="max-w-5xl mx-auto px-6">
+          {/* Section Header */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -150,17 +151,19 @@ export default function Home() {
             className="text-center mb-16"
           >
             <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">
-              Votre Parcours Spirituel
+              Ce Que Vous Recevez
             </span>
             <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-6xl text-cosmic-divine mt-4 mb-6">
-              Tout est inclus. Sans exception.
+              Une Expérience Complète
             </h2>
             <p className="text-cosmic-ethereal max-w-2xl mx-auto text-lg leading-relaxed font-light">
-              Un seul abonnement pour accéder à l'ensemble de votre voyage spirituel avec Oracle Lumira.
+              Intelligence artificielle avancée + révision par un expert humain.
+              <br />
+              <span className="text-white/60">Chaque lecture est unique, profonde et vérifiée.</span>
             </p>
           </motion.div>
 
-          {/* Single Offer Card */}
+          {/* Offer Card */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -170,76 +173,109 @@ export default function Home() {
             {/* Glow */}
             <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-amber-500/20 rounded-3xl blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
 
-            <div className="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-abyss-600/80 via-abyss-700/90 to-abyss-600/80 backdrop-blur-xl p-8 md:p-12">
-              {/* Badge */}
-              <div className="flex justify-center mb-8">
-                <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-amber-500/10 border border-amber-500/30">
-                  <Crown className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-bold tracking-widest uppercase text-amber-300">
-                    {SUBSCRIPTION.name}
-                  </span>
-                </div>
-              </div>
+            <div className="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-abyss-600/80 via-abyss-700/90 to-abyss-600/80 backdrop-blur-xl">
 
-              {/* Price */}
-              <div className="text-center mb-10">
-                <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-6xl md:text-7xl font-playfair italic text-white">{SUBSCRIPTION.price}€</span>
-                  <span className="text-xl text-white/40">/mois</span>
-                </div>
-                <p className="mt-3 text-white/50 text-sm">
-                  Annulation possible à tout moment · Sans engagement
-                </p>
-              </div>
-
-              {/* Features grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto mb-10">
-                {SUBSCRIPTION.features.map((feature, i) => {
-                  const icons = [BookOpen, MessageCircle, Moon, Star, Sparkles, Crown];
-                  const Icon = icons[i % icons.length];
-                  return (
-                    <motion.div
-                      key={feature}
-                      initial={{ opacity: 0, x: -10 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.08 }}
-                      viewport={{ once: true }}
-                      className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+              {/* Top: Price + CTA */}
+              <div className="p-8 md:p-12 pb-0 md:pb-0">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-10">
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 mb-4">
+                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-[11px] font-bold tracking-widest uppercase text-amber-300">
+                        {SUBSCRIPTION.name}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-5xl md:text-6xl font-playfair italic text-white">{SUBSCRIPTION.price}€</span>
+                      <span className="text-lg text-white/40">/mois</span>
+                    </div>
+                    <p className="mt-2 text-white/50 text-sm">
+                      Sans engagement · Annulation en un clic
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-start md:items-end gap-3">
+                    <Link
+                      href="/commande"
+                      className="group/btn relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-bold text-base hover:from-amber-400 hover:to-amber-500 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)]"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                        <Icon className="w-4 h-4 text-amber-400" />
-                      </div>
-                      <span className="text-sm text-white/80">{feature}</span>
-                    </motion.div>
-                  );
-                })}
+                      <Sparkles className="w-5 h-5" />
+                      Commencer mon voyage
+                    </Link>
+                    <div className="flex items-center gap-1.5 text-emerald-400/70 text-xs">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>{SUBSCRIPTION.guaranteeText}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* CTA */}
-              <div className="text-center">
-                <Link
-                  href="/commande"
-                  className="group/btn relative inline-flex items-center gap-3 px-10 py-5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-bold text-lg hover:from-amber-400 hover:to-amber-500 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)]"
-                >
-                  <Sparkles className="w-5 h-5" />
-                  {SUBSCRIPTION.ctaLabel}
-                </Link>
+              {/* Divider */}
+              <div className="mx-8 md:mx-12 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-                <div className="flex items-center justify-center gap-4 mt-6 text-white/40 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-400/60" />
-                    <span>Accès immédiat</span>
-                  </div>
-                  <div className="w-1 h-1 rounded-full bg-white/20" />
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-400/60" />
-                    <span>Paiement sécurisé</span>
-                  </div>
-                  <div className="w-1 h-1 rounded-full bg-white/20" />
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-400/60" />
-                    <span>Sans engagement</span>
-                  </div>
+              {/* Feature Groups */}
+              <div className="p-8 md:p-12 pt-8 md:pt-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {SUBSCRIPTION.featureGroups.map((group, gi) => {
+                    const groupIcons = [
+                      [FileText, Headphones, Palette],
+                      [MessageCircle, Compass, PenLine],
+                    ];
+                    return (
+                      <div key={group.title}>
+                        <h3 className="text-sm font-bold tracking-widest uppercase text-amber-400/80 mb-5 flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-md bg-amber-500/10 flex items-center justify-center text-xs text-amber-400">{gi + 1}</span>
+                          {group.title}
+                        </h3>
+                        <div className="space-y-4">
+                          {group.items.map((item, i) => {
+                            const Icon = groupIcons[gi]?.[i] || Star;
+                            return (
+                              <motion.div
+                                key={item.label}
+                                initial={{ opacity: 0, y: 10 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                transition={{ delay: gi * 0.1 + i * 0.08 }}
+                                viewport={{ once: true }}
+                                className="flex gap-3"
+                              >
+                                <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <Icon className="w-4 h-4 text-amber-400/70" />
+                                </div>
+                                <div>
+                                  <span className="text-sm font-medium text-white/90 block">{item.label}</span>
+                                  <span className="text-xs text-white/45 leading-relaxed">{item.detail}</span>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom Trust Bar */}
+              <div className="mx-8 md:mx-12 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              <div className="p-6 md:px-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-white/40 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400/60" />
+                  <span>Accès immédiat</span>
+                </div>
+                <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400/60" />
+                  <span>Paiement sécurisé Stripe</span>
+                </div>
+                <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400/60" />
+                  <span>Lecture livrée sous 24h</span>
+                </div>
+                <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400/60" />
+                  <span>Révisée par un expert</span>
                 </div>
               </div>
             </div>
