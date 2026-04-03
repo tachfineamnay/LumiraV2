@@ -76,14 +76,13 @@ export default function ArchivePage() {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Debounced search
+  // Debounced search - reset page on query change (fetchOrders re-runs via useCallback dep)
   useEffect(() => {
     const timer = setTimeout(() => {
       setPage(1);
-      fetchOrders();
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   return (
     <div className="p-6 space-y-6">
@@ -179,7 +178,7 @@ export default function ArchivePage() {
                         </span>
                         <span className="text-lg">{levelConfig.icon}</span>
                         <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">
-                          {levelConfig.label}
+                          {levelConfig.name}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-sm text-slate-400">
@@ -217,7 +216,10 @@ export default function ArchivePage() {
                     {/* Actions */}
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => window.open(`/api/orders/${order.id}/pdf`, '_blank')}
+                        onClick={() => {
+                          const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+                          window.open(`${apiBase}/api/readings/${order.orderNumber}/download`, '_blank');
+                        }}
                         title="Télécharger le PDF"
                         className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                       >

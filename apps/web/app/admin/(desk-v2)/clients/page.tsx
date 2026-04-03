@@ -73,14 +73,13 @@ export default function ClientsPage() {
     fetchClients();
   }, [fetchClients]);
 
-  // Debounced search
+  // Debounced search - reset page on query change (fetchClients re-runs via useCallback dep)
   useEffect(() => {
     const timer = setTimeout(() => {
       setPage(1);
-      fetchClients();
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   return (
     <div className="p-6 space-y-6">

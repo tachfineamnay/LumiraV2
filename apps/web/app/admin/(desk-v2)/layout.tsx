@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { DeskLayout } from '@/components/desk-v2/layout/DeskLayout';
 import api from '@/lib/api';
 
@@ -11,7 +11,6 @@ export default function DeskV2Layout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -38,7 +37,7 @@ export default function DeskV2Layout({
     };
 
     verifyAuth();
-  }, [pathname, router]);
+  }, [router]);
 
   // Show loading spinner while checking auth
   if (isLoading) {
