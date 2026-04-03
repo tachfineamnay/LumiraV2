@@ -165,6 +165,18 @@ export class PaymentsService {
             }
 
             // ----------------------------------------------------------------
+            // V2 — One-time checkout (29€ access payment)
+            // ----------------------------------------------------------------
+
+            case 'checkout.session.completed': {
+                const session = event.data.object as Stripe.Checkout.Session;
+                if (session.payment_status === 'paid') {
+                    await this.handleCheckoutSessionCompleted(session);
+                }
+                break;
+            }
+
+            // ----------------------------------------------------------------
             // V2 — Subscription lifecycle events
             // ----------------------------------------------------------------
 
@@ -337,6 +349,57 @@ export class PaymentsService {
         });
 
         this.logger.log(`[Sub Deleted] Subscription ${subscription.id} marked EXPIRED for user ${existing.userId}.`);
+    }
+
+    /**
+     * checkout.session.completed
+     * Grants access for one-time 29€ payment. Sets subscription record with far-future
+     * currentPeriodEnd so access never expires, then fires batch 1 generation.
+     */
+    private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+        const userId = session.client_reference_id;
+        if (!userId) {
+            this.logger.warn(`[Checkout] No userId in client_reference_id: ${session.id}`);
+            return;
+        }
+
+        const now = new Date();
+        const farFuture = new Date('2099-12-31');
+
+        await this.prisma.subscription.upsert({
+            where: { userId },
+            create: {
+                userId,
+                stripeSubscriptionId: session.id,
+                stripeCustomerId: session.customer as string ?? '',
+                stripePriceId: this.configService.get<string>('STRIPE_PRICE_29') ?? '',
+                status: 'ACTIVE',
+                currentPeriodStart: now,
+                currentPeriodEnd: farFuture,
+                cancelAtPeriodEnd: false,
+            },
+            update: {
+                stripeSubscriptionId: session.id,
+                stripeCustomerId: session.customer as string ?? '',
+                status: 'ACTIVE',
+                currentPeriodStart: now,
+                currentPeriodEnd: farFuture,
+                cancelAtPeriodEnd: false,
+            },
+        });
+
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { subscriptionStatus: 'ACTIVE' },
+        });
+
+        this.logger.log(`[Checkout] Access granted for user ${userId} via session ${session.id}`);
+
+        setImmediate(() => {
+            this.spiritualPathBatchService.generateBatch1ForUser(userId).catch(err => {
+                this.logger.error(`[Checkout] Batch 1 failed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`);
+            });
+        });
     }
 
     /**

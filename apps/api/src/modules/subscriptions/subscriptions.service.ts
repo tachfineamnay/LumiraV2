@@ -68,17 +68,17 @@ export class SubscriptionsService {
             });
         }
 
-        const priceId = this.configService.get<string>('STRIPE_PRICE_29_MONTHLY');
+        const priceId = this.configService.get<string>('STRIPE_PRICE_29');
         if (!priceId) {
-            throw new BadRequestException('Stripe monthly price ID is not configured (STRIPE_PRICE_29_MONTHLY).');
+            throw new BadRequestException('Stripe price ID is not configured (STRIPE_PRICE_29).');
         }
 
         const session = await this.stripe.checkout.sessions.create({
-            mode: 'subscription',
+            mode: 'payment',
             customer: customerId,
             line_items: [{ price: priceId, quantity: 1 }],
-            // userId forwarded to the subscription object — used by webhook handler
-            subscription_data: {
+            // userId forwarded to the payment intent metadata — used by webhook handler
+            payment_intent_data: {
                 metadata: { userId },
             },
             client_reference_id: userId,
