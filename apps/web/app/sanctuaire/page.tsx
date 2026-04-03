@@ -626,6 +626,83 @@ function DashboardContent() {
 }
 
 // =============================================================================
+// SUBSCRIPTION SUCCESS HANDLER
+// Polls /subscriptions/status after Stripe redirect until ACTIVE or timeout
+// =============================================================================
+
+function SubscriptionSuccessHandler() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const { refetch } = useSanctuaire();
+    const [activating, setActivating] = useState(false);
+
+    useEffect(() => {
+        if (searchParams.get('subscription') !== 'success') return;
+
+        setActivating(true);
+        const token = localStorage.getItem('sanctuaire_token');
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        let attempts = 0;
+        const maxAttempts = 8; // 16 seconds max
+
+        const poll = setInterval(async () => {
+            attempts++;
+            try {
+                const res = await axios.get(`${API_URL}/api/subscriptions/status`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const status = res.data?.subscription?.status;
+                if (status === 'ACTIVE') {
+                    clearInterval(poll);
+                    setActivating(false);
+                    refetch();
+                    toast.success('Abonnement activé !', { description: 'Bienvenue dans votre Sanctuaire.' });
+                    router.replace('/sanctuaire');
+                }
+            } catch {
+                // ignore transient errors
+            }
+            if (attempts >= maxAttempts) {
+                clearInterval(poll);
+                setActivating(false);
+                refetch();
+                router.replace('/sanctuaire');
+            }
+        }, 2000);
+
+        return () => clearInterval(poll);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    if (!activating) return null;
+
+    return (
+        <div className="fixed inset-0 bg-abyss-700/90 backdrop-blur-xl z-50 flex items-center justify-center">
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center gap-6 text-center px-4"
+            >
+                <div className="relative w-20 h-20">
+                    <div className="absolute inset-0 bg-horizon-400/20 rounded-full blur-xl animate-pulse" />
+                    <div className="relative w-full h-full bg-gradient-to-br from-horizon-400 to-horizon-500 rounded-full flex items-center justify-center">
+                        <Loader2 className="w-10 h-10 text-abyss-800 animate-spin" />
+                    </div>
+                </div>
+                <div>
+                    <h2 className="text-xl font-playfair italic text-stellar-200 mb-2">
+                        Activation en cours...
+                    </h2>
+                    <p className="text-stellar-500 text-sm">
+                        Votre abonnement est en cours d&apos;activation.
+                    </p>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
+// =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
@@ -641,6 +718,7 @@ export default function SanctuaireDashboard() {
                 </div>
             </div>
         }>
+            <SubscriptionSuccessHandler />
             <AutoLoginHandler />
             <DashboardContent />
         </Suspense>

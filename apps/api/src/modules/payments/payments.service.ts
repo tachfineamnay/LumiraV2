@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { OrdersService } from '../orders/orders.service';
@@ -145,7 +145,7 @@ export class PaymentsService {
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             this.logger.error(`Webhook signature verification failed: ${errorMessage}`);
-            throw err;
+            throw new BadRequestException(`Invalid Stripe signature: ${errorMessage}`);
         }
 
         // Idempotency check
@@ -224,7 +224,7 @@ export class PaymentsService {
         const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000);
 
         await this.prisma.subscription.upsert({
-            where: { stripeSubscriptionId: subscription.id },
+            where: { userId },
             create: {
                 userId,
                 stripeSubscriptionId: subscription.id,
@@ -236,6 +236,9 @@ export class PaymentsService {
                 cancelAtPeriodEnd: subscription.cancel_at_period_end,
             },
             update: {
+                stripeSubscriptionId: subscription.id,
+                stripeCustomerId: subscription.customer as string,
+                stripePriceId: subscription.items.data[0]?.price?.id ?? '',
                 status: 'ACTIVE',
                 currentPeriodStart,
                 currentPeriodEnd,

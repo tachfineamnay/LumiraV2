@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Get, Request, HttpCode, HttpStatus, Query } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Request, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginClientDto, LoginExpertDto } from './dto/login.dto';
@@ -6,29 +6,12 @@ import { SanctuaireAuthDto } from './dto/sanctuaire-v2.dto';
 import { SanctuaireRegisterDto } from './dto/sanctuaire-register.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { UsersService } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
     constructor(
         private authService: AuthService,
-        private usersService: UsersService,
     ) { }
-
-    /**
-     * DEBUG ENDPOINT - Temporary for diagnosing auth issues
-     * GET /api/auth/debug-user?email=xxx
-     */
-    @Get('debug-user')
-    @SkipThrottle()
-    async debugUser(@Query('email') email: string) {
-        if (!email) {
-            return { error: 'Email required' };
-        }
-        const normalizedEmail = email.toLowerCase().trim();
-        const result = await this.usersService.debugUserAndOrders(normalizedEmail);
-        return result;
-    }
 
     @Post('login/client')
     async loginClient(@Body() loginDto: LoginClientDto) {

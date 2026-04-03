@@ -214,17 +214,27 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
     const initializeFromToken = async (authToken: string) => {
         try {
             // Fetch user data in parallel
-            const [profileRes, entitlementsRes, ordersRes] = await Promise.all([
-                axios.get(`${API_URL}/api/users/profile`, {
-                    headers: { Authorization: `Bearer ${authToken}` },
-                }),
-                axios.get(`${API_URL}/api/users/entitlements`, {
-                    headers: { Authorization: `Bearer ${authToken}` },
-                }),
-                axios.get(`${API_URL}/api/users/orders/completed`, {
-                    headers: { Authorization: `Bearer ${authToken}` },
-                }),
+            const headers = { Authorization: `Bearer ${authToken}` };
+
+            // Fetch profile and entitlements — required for auth; 401 means invalid token
+            const [profileRes, entitlementsRes] = await Promise.all([
+                axios.get(`${API_URL}/api/users/profile`, { headers }),
+                axios.get(`${API_URL}/api/users/entitlements`, { headers }),
             ]);
+
+            // Orders may not exist yet for new subscribers — treat 404/error as empty array
+            let ordersData: unknown[] = [];
+            try {
+                const ordersRes = await axios.get(`${API_URL}/api/users/orders/completed`, { headers });
+                ordersData = ordersRes.data;
+            } catch (ordersErr: unknown) {
+                const status = (ordersErr as any)?.response?.status;
+                if (status === 401) {
+                    handleLogout();
+                    return;
+                }
+                // 404 or empty — new subscriber with no completed orders yet
+            }
 
             // Set user from profile
             const profileData = profileRes.data;
@@ -247,14 +257,19 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
             setLevelMetadata(entData.levelMetadata);
 
             // Set orders
-            setOrders(ordersRes.data);
+            setOrders(ordersData as any);
 
             setIsAuthenticated(true);
             setError(null);
         } catch (err) {
             console.error('Failed to initialize from token:', err);
-            // Token might be expired or invalid
-            handleLogout();
+            const status = (err as any)?.response?.status;
+            // Only logout on explicit 401 (expired/invalid token), not on network errors
+            if (status === 401) {
+                handleLogout();
+            } else {
+                setIsLoading(false);
+            }
         } finally {
             setIsLoading(false);
         }

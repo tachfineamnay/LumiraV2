@@ -90,7 +90,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                     `${process.env.NEXT_PUBLIC_API_URL}/api/subscriptions/status`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
-                subscriptionStatus = subResponse.data?.status ?? null;
+                subscriptionStatus = subResponse.data?.subscription?.status ?? null;
                 isSubscribed = subscriptionStatus === 'ACTIVE';
             } catch {
                 // Endpoint may not exist yet — fall back to legacy
