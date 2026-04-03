@@ -26,8 +26,12 @@ apps/api/src/
 │   └── insights/       # AI insights
 ├── services/
 │   └── factory/        # Business logic factories
-│       ├── DigitalSoulService.ts
-│       └── VertexOracle.ts
+│       ├── DigitalSoulService.ts    # Orchestrator (AI→PDF→S3→DB→Audio)
+│       ├── VertexOracle.ts          # Multi-agent AI (SCRIBE/GUIDE/EDITOR/CONFIDANT)
+│       ├── AudioGenerationService.ts # TTS pipeline (text→SSML→TTS→S3)
+│       ├── AudioScriptService.ts    # LLM NARRATOR reformulation
+│       ├── PdfFactory.ts            # PDF generation (Handlebars+Gotenberg)
+│       └── ContextDispatcher.ts     # Context-aware orchestration
 ├── common/
 │   ├── decorators/
 │   ├── guards/
@@ -138,8 +142,30 @@ export class DigitalSoulService {
     // 3. Generate PDF via PdfFactory
     // 4. Store results in DB (transaction)
     // 5. Notify user
+    // 6. Fire-and-forget audio generation via AudioGenerationService
   }
 }
+```
+
+### AudioGenerationService
+
+TTS pipeline — converts text to spoken audio:
+
+```typescript
+@Injectable()
+export class AudioGenerationService {
+  async generateAllAudio(orderId: string): Promise<void> {
+    // 1. Fetch insights + synthesis for order
+    // 2. Reformulate text via AudioScriptService (NARRATOR)
+    // 3. Convert to SSML
+    // 4. Synthesize via Google Cloud TTS
+    // 5. Upload MP3 to S3
+    // 6. Save URLs to DB (Insight.audioUrl + OrderFile AUDIO_READING)
+  }
+}
+```
+
+See skill `25-audio-pipeline` for full details.
 ```
 
 ### VertexOracle

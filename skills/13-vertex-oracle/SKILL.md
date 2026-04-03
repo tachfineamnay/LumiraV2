@@ -1,6 +1,6 @@
 ---
 name: VertexOracle Multi-Agent AI
-description: Complete guide to the 4-agent AI architecture for spiritual reading generation.
+description: Complete guide to the 5-agent AI architecture for spiritual reading generation.
 ---
 
 # VertexOracle Multi-Agent AI
@@ -11,12 +11,14 @@ VertexOracle is the core AI service that powers Oracle Lumira's spiritual readin
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| **SCRIBE** | gemini-2.0-flash | Generates main PDF reading content |
-| **GUIDE** | gemini-2.0-flash | Creates 7-day spiritual timeline |
-| **EDITOR** | gemini-2.0-flash | Refines content per expert feedback |
-| **CONFIDANT** | gemini-2.0-flash | Real-time chat with users |
+| **SCRIBE** | gemini-2.5-flash | Generates main PDF reading content |
+| **GUIDE** | gemini-2.5-flash | Creates 7-day spiritual timeline |
+| **EDITOR** | gemini-2.5-flash | Refines content per expert feedback |
+| **CONFIDANT** | gemini-2.5-flash | Real-time chat with users |
+| **NARRATOR** | gemini-2.5-flash | Audio script reformulation (via AudioScriptService) |
 
 **Location**: `apps/api/src/services/factory/VertexOracle.ts`
+**NARRATOR Location**: `apps/api/src/services/factory/AudioScriptService.ts`
 
 ---
 
@@ -44,6 +46,13 @@ VertexOracle is the core AI service that powers Oracle Lumira's spiritual readin
               │   Google Gemini API    │
               │   (GEMINI_API_KEY)     │
               └────────────────────────┘
+
+┌────────────────────────────────────────────┐
+│         AudioScriptService (NARRATOR)      │
+│  Separate service, same Gemini API key     │
+│  Reformulates text for TTS narration       │
+│  See skill 25-audio-pipeline for details   │
+└────────────────────────────────────────────┘
 ```
 
 ---

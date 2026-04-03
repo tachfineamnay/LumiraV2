@@ -61,6 +61,14 @@ AWS_ACCESS_KEY_ID="AKIA..."
 AWS_SECRET_ACCESS_KEY="..."
 AWS_S3_BUCKET="lumira-uploads-prod"
 AWS_S3_BUCKET_URL="https://lumira-uploads-prod.s3.amazonaws.com"
+AWS_LECTURES_BUCKET_NAME="lumira-lectures"  # Separate bucket for audio (fallback: AWS_S3_BUCKET)
+```
+
+### Google Cloud TTS (Audio)
+
+```bash
+GOOGLE_CLOUD_TTS_KEY_JSON="base64-encoded-service-account-json"  # Required for audio generation
+TTS_USE_JOURNEY_VOICES="false"  # Set to "true" for Journey voices instead of Neural2
 ```
 
 ### Email (Notifications)
@@ -201,6 +209,7 @@ Avant de déployer en production, vérifier :
 - [ ] `STRIPE_SECRET_KEY` est une clé **live** (pas test)
 - [ ] `STRIPE_WEBHOOK_SECRET` correspond au webhook Stripe configuré
 - [ ] `GEMINI_API_KEY` est valide et a des quotas suffisants
+- [ ] `GOOGLE_CLOUD_TTS_KEY_JSON` est configuré (base64 du service account JSON avec TTS API activée)
 - [ ] `AWS_S3_BUCKET` est le bucket de production
 - [ ] `WEB_URL` correspond au domaine de production
 - [ ] `NEXT_PUBLIC_API_URL` pointe vers l'API de production

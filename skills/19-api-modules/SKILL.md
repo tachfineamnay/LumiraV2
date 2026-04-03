@@ -32,6 +32,19 @@ L'API NestJS est organisée en **12 modules** dans `apps/api/src/modules/`. Chaq
 | `uploads` | `/api/uploads` | Upload photos (S3) |
 | `webhooks` | `/api/webhooks` | Stripe webhooks |
 
+### Module transversal : ServicesModule
+
+`ServicesModule` (`apps/api/src/services/services.module.ts`) n'est pas un module de routes mais un **module de services partagés** importé par d'autres modules (ex: `ExpertModule`).
+
+**Providers & exports** :
+- `VertexOracle` — Multi-agent AI (SCRIBE/GUIDE/EDITOR/CONFIDANT)
+- `PdfFactory` — PDF generation (Handlebars + Gotenberg)
+- `ContextDispatcher` — Context-aware request orchestration
+- `DigitalSoulService` — Order orchestrator (AI→PDF→S3→DB→Audio)
+- `AudioScriptService` — LLM NARRATOR reformulation for TTS
+- `AudioGenerationService` — Google Cloud TTS pipeline
+- `SpiritualPathBatchService` — Cron for PathStep batches
+
 ---
 
 ## Module : Auth

@@ -15,7 +15,7 @@ packages/ui       → Shared React components
 **Domain**: Spiritual guidance platform (Oracle Lumira) with 4 tiers:
 - **Initié** (29€) → **Mystique** (59€) → **Profond** (99€) → **Intégral** (149€)
 
-**Core Flow**: User onboarding → Stripe checkout → AI reading (VertexOracle) → Expert review → Delivery
+**Core Flow**: User onboarding → Stripe checkout → AI reading (VertexOracle) → Expert review → PDF delivery → Audio generation (TTS)
 
 ---
 
@@ -96,13 +96,22 @@ constructor(private configService: ConfigService) {}
 const secret = this.configService.get<string>('JWT_SECRET');
 ```
 
-**AI Generation** - `VertexOracle` service (`src/services/factory/`) with 4 agents:
+**AI Generation** - `VertexOracle` service (`src/services/factory/`) with 5 agents:
 - **SCRIBE**: PDF reading generation (8 domains, synthesis)
 - **GUIDE**: 7-day spiritual timeline
 - **EDITOR**: Content refinement per expert feedback
 - **CONFIDANT**: Real-time chat
+- **NARRATOR**: Audio script reformulation (AudioScriptService)
 
 All agents share `LUMIRA_DNA` personality (French, mystical, warm).
+
+**Audio Pipeline** - `AudioGenerationService` + `AudioScriptService`:
+```
+Text → AudioScriptService (Gemini 2.5 Flash NARRATOR) → SSML → Google Cloud TTS → S3 → DB
+```
+- Triggered fire-and-forget after `finalizeWithPdf()` and `processOrderGeneration()`
+- Generates audio for 8 insights (`Insight.audioUrl`) + 1 synthesis (`OrderFile` type `AUDIO_READING`)
+- Voices: Neural2 (default) or Journey (`TTS_USE_JOURNEY_VOICES=true`)
 
 **PDF Generation** - `PdfFactory` with Handlebars templates + Gotenberg
 
@@ -116,10 +125,10 @@ After schema changes:
 3. Run `pnpm db:push` → Applies to DB
 
 **Key models**:
-- `User` → `UserProfile` (1:1, onboarding data)
-- `Order` → `OrderFile[]` (purchases + uploaded photos)
+- `User` → `UserProfile` (1:1, onboarding data incl. `preferredVoice: AudioVoice`)
+- `Order` → `OrderFile[]` (purchases + uploaded photos + `AUDIO_READING` files)
 - `SpiritualPath` → `PathStep[]` (7-day journey)
-- `Insight` (8 categories, one per user)
+- `Insight` (8 categories, one per user, `audioUrl` field for TTS)
 - `AkashicRecord` (persistent AI memory)
 - `ChatSession` (conversation history)
 - `Expert` (admin users with roles)
@@ -136,6 +145,10 @@ After schema changes:
 | Subdomain routing | `apps/web/middleware.ts` |
 | User entitlements | `apps/web/context/SanctuaireContext.tsx` |
 | AI multi-agent | `apps/api/src/services/factory/VertexOracle.ts` |
+| AI orchestrator | `apps/api/src/services/factory/DigitalSoulService.ts` |
+| Audio TTS pipeline | `apps/api/src/services/factory/AudioGenerationService.ts` |
+| Audio script reformulation | `apps/api/src/services/factory/AudioScriptService.ts` |
+| Services DI module | `apps/api/src/services/services.module.ts` |
 | PDF generation | `apps/api/src/services/factory/PdfFactory.ts` |
 | Prisma schema | `packages/database/prisma/schema.prisma` |
 
@@ -150,6 +163,8 @@ After schema changes:
 | Duplicating types | Check `@packages/shared` or Prisma types first |
 | Wrong auth token | `lumira_token` for users, `expert_token` for admins |
 | Colors not working | Use `abyss-*`, `horizon-*`, `stellar-*` (not `void`, `gold`) |
+| Audio not generating | Check `GOOGLE_CLOUD_TTS_KEY_JSON` env var + `AudioGenerationService` logs |
+| AudioScriptService passthrough | `GEMINI_API_KEY` missing → raw text sent to TTS (no reformulation) |
 
 ---
 
@@ -168,3 +183,4 @@ Detailed guides in `skills/` folder:
 - `16-stripe-integration` - Payments & webhooks
 - `17-pdf-generation` - Handlebars + Gotenberg
 - `18-data-models` - Complete schema reference
+- `25-audio-pipeline` - TTS audio generation & NARRATOR agent

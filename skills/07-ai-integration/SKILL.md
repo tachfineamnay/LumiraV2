@@ -11,8 +11,10 @@ Lumira V2 integrates AI capabilities via **Google Gemini API** (not Vertex AI di
 
 | Service | Purpose |
 |---------|---------|
-| **VertexOracle** | Multi-agent AI for readings |
-| **Gemini API** | Primary AI provider (gemini-2.0-flash) |
+| **VertexOracle** | Multi-agent AI for readings (SCRIBE/GUIDE/EDITOR/CONFIDANT) |
+| **AudioScriptService** | NARRATOR agent — LLM reformulation for TTS |
+| **Gemini API** | Primary AI provider (gemini-2.5-flash) |
+| **Google Cloud TTS** | Text-to-speech audio generation |
 
 ---
 
@@ -23,11 +25,19 @@ Lumira V2 integrates AI capabilities via **Google Gemini API** (not Vertex AI di
 │  NestJS API     │────▶│  VertexOracle    │────▶│  Gemini AI  │
 │  (Controller)   │     │  (4 Agents)      │     │  (Google)   │
 └─────────────────┘     └──────────────────┘     └─────────────┘
-         │
-         ▼
-┌─────────────────┐
-│  PdfFactory     │ (Handlebars + Gotenberg)
-└─────────────────┘
+         │                                              │
+         │                                              │
+         ▼                                              ▼
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────┐
+│  PdfFactory     │     │AudioScriptService│────▶│  Gemini AI  │
+│(Handlebars+Got.)│     │  (NARRATOR)      │     │(reformulate)│
+└─────────────────┘     └────────┬─────────┘     └─────────────┘
+                                 │
+                                 ▼
+                        ┌──────────────────┐     ┌─────────────┐
+                        │AudioGeneration   │────▶│ Google TTS  │
+                        │Service (TTS+S3)  │     │ (Neural2)   │
+                        └──────────────────┘     └─────────────┘
 ```
 
 ---
@@ -48,7 +58,7 @@ export class VertexOracle {
       this.configService.get('GEMINI_API_KEY')
     );
     this.model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash' 
+      model: 'gemini-2.5-flash' 
     });
   }
 }
@@ -68,12 +78,16 @@ export class VertexOracle {
 ## Environment Variables
 
 ```bash
-# Required
+# Required for AI
 GEMINI_API_KEY=your-gemini-api-key
 
-# Optional overrides (in VertexOracle)
-# Model defaults to gemini-2.0-flash
-# Temperature defaults to 0.7
+# Required for Audio TTS
+GOOGLE_CLOUD_TTS_KEY_JSON=base64-encoded-service-account-json
+
+# Optional
+TTS_USE_JOURNEY_VOICES=false    # Set to 'true' for Journey voices
+# Model defaults to gemini-2.5-flash
+# Temperature defaults to 0.7 (VertexOracle), 0.3 (AudioScriptService)
 ```
 
 ---

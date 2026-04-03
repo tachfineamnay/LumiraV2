@@ -106,6 +106,10 @@ POST /api/expert/orders/:id/validate
 
 // Régénérer le contenu AI pour une commande
 POST /api/expert/orders/:id/regenerate
+
+// Tester la génération audio pour une commande (ADMIN uniquement)
+POST /api/expert/test-audio/:orderId
+// Appelle directement AudioGenerationService.generateAllAudio(orderId)
 ```
 
 ### Processus de validation
@@ -213,6 +217,25 @@ export function OrdersTable() {
 ## Configuration des rôles backend
 
 ```typescript
+// ExpertModule imports ServicesModule for DI
+@Module({
+  imports: [ConfigModule, ServicesModule, JwtModule, ThrottlerModule],
+  controllers: [ExpertController],
+  providers: [ExpertService],
+})
+export class ExpertModule {}
+
+// ExpertService uses DI-injected services (not manual instantiation)
+@Injectable()
+export class ExpertService {
+  constructor(
+    private prisma: PrismaService,
+    private digitalSoulService: DigitalSoulService,  // via ServicesModule
+    private vertexOracle: VertexOracle,              // via ServicesModule
+    // ...
+  ) {}
+}
+
 // Protéger les routes expert
 @Roles(Role.EXPERT, Role.ADMIN)
 @UseGuards(JwtAuthGuard, RolesGuard)
