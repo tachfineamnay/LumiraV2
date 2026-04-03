@@ -102,7 +102,7 @@ export class AuthService {
 
         const token = this.jwtService.sign(payload, { expiresIn: '30d' });
 
-        return {
+    return {
             success: true,
             token,
             user: {
@@ -112,6 +112,54 @@ export class AuthService {
                 lastName: user.lastName,
                 phone: user.phone,
                 level: entitlements.highestLevel,
+            },
+        };
+    }
+
+    /**
+     * Pre-register a Sanctuaire client before Stripe checkout.
+     * Creates or updates the user record and returns a JWT so the
+     * checkout endpoint (which requires auth) can be reached immediately.
+     */
+    async registerSanctuaire(dto: { email: string; firstName: string; lastName: string; phone?: string }): Promise<{
+        success: true;
+        token: string;
+        access_token: string;
+        user: {
+            id: string;
+            email: string;
+            firstName: string;
+            lastName: string;
+            phone: string | null;
+        };
+    }> {
+        const user = await this.usersService.upsertByEmail(
+            dto.email,
+            dto.firstName,
+            dto.lastName,
+            dto.phone,
+        );
+
+        const payload = {
+            email: user.email,
+            sub: user.id,
+            userId: user.id,
+            role: 'CLIENT',
+            level: 0,
+        };
+
+        const token = this.jwtService.sign(payload, { expiresIn: '30d' });
+
+        return {
+            success: true,
+            token,
+            access_token: token,
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                phone: user.phone,
             },
         };
     }

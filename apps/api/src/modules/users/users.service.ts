@@ -121,6 +121,24 @@ export class UsersService {
   }
 
   /**
+   * Find or create a user by email (upsert).
+   * Used for pre-registration before Stripe checkout.
+   */
+  async upsertByEmail(
+    email: string,
+    firstName: string,
+    lastName: string,
+    phone?: string,
+  ): Promise<User> {
+    const normalizedEmail = email.toLowerCase().trim();
+    return this.prisma.user.upsert({
+      where: { email: normalizedEmail },
+      update: { firstName, lastName, ...(phone !== undefined && { phone }) },
+      create: { email: normalizedEmail, firstName, lastName, phone: phone ?? null },
+    });
+  }
+
+  /**
    * DEBUG: Get user and all their orders for diagnosis
    */
   async debugUserAndOrders(email: string): Promise<{

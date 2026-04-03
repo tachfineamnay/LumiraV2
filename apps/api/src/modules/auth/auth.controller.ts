@@ -3,6 +3,7 @@ import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginClientDto, LoginExpertDto } from './dto/login.dto';
 import { SanctuaireAuthDto } from './dto/sanctuaire-v2.dto';
+import { SanctuaireRegisterDto } from './dto/sanctuaire-register.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UsersService } from '../users/users.service';
@@ -49,6 +50,19 @@ export class AuthController {
      * Validates email against paid orders.
      * Rate limited: 5 attempts per 60 seconds.
      */
+    /**
+     * POST /api/auth/sanctuaire/register
+     * Pre-registers a Sanctuaire client (upsert by email) and returns a JWT.
+     * Allows unauthenticated access to the checkout endpoint before payment.
+     * Rate limited: 10 attempts per 60 seconds.
+     */
+    @Post('sanctuaire/register')
+    @HttpCode(HttpStatus.OK)
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    async registerSanctuaire(@Body() dto: SanctuaireRegisterDto) {
+        return this.authService.registerSanctuaire(dto);
+    }
+
     @Post('sanctuaire-v2')
     @HttpCode(HttpStatus.OK)
     @Throttle({ default: { limit: 5, ttl: 60000 } })
