@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
-import { Clock, Sparkles, GripVertical, ExternalLink } from 'lucide-react';
+import { Clock, Sparkles, GripVertical, ExternalLink, Eye } from 'lucide-react';
 import { Order, LEVEL_CONFIG } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -111,12 +111,17 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
             <Clock className="w-3.5 h-3.5" />
             <span>{timeAgo}</span>
           </div>
-          {order.generatedContent && (
+          {order.status === 'AWAITING_VALIDATION' ? (
+            <div className="flex items-center gap-1 text-purple-400 animate-pulse">
+              <Eye className="w-3.5 h-3.5" />
+              <span>À valider</span>
+            </div>
+          ) : order.generatedContent ? (
             <div className="flex items-center gap-1 text-emerald-400">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Généré</span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Question preview */}

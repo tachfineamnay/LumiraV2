@@ -99,7 +99,7 @@ export function CommandPalette() {
     orders: filteredCommands.filter(c => c.category === 'orders'),
   };
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts + custom event from Header search button
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ⌘K to open
@@ -114,8 +114,14 @@ export function CommandPalette() {
       }
     };
 
+    const handleToggle = () => setIsOpen(prev => !prev);
+
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('lumira:palette:toggle', handleToggle);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('lumira:palette:toggle', handleToggle);
+    };
   }, []);
 
   // Focus input when opened

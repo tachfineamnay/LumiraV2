@@ -26,6 +26,7 @@ import {
   X,
   History,
   RotateCcw,
+  Eye,
 } from 'lucide-react';
 
 // =============================================================================
@@ -36,8 +37,8 @@ interface OrderWorkflowProps {
   orderId: string;
 }
 
-// Simplified 2-step workflow: Studio (edit) → Delivery (confirm & send)
-type WorkflowStep = 'studio' | 'delivery';
+// 3-step workflow: Studio (edit) → Review (validate) → Delivery (confirm & send)
+type WorkflowStep = 'studio' | 'review' | 'delivery';
 
 interface StepConfig {
   id: WorkflowStep;
@@ -54,6 +55,13 @@ const WORKFLOW_STEPS: StepConfig[] = [
     shortLabel: 'Éditer',
     icon: <Wand2 className="w-4 h-4" />,
     description: 'Créer et affiner la lecture',
+  },
+  { 
+    id: 'review', 
+    label: 'Révision', 
+    shortLabel: 'Réviser',
+    icon: <Eye className="w-4 h-4" />,
+    description: 'Valider le contenu généré',
   },
   { 
     id: 'delivery', 
@@ -89,6 +97,8 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   
   // Seal confirmation modal
   const [showSealConfirm, setShowSealConfirm] = useState(false);
+  // Full-content preview in delivery view
+  const [showFullPreview, setShowFullPreview] = useState(false);
   
   // Client panel visibility (in Studio view)
   const [showClientPanel, setShowClientPanel] = useState(true);
@@ -205,9 +215,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         setEditorContent(oracleResponseToHtml(data.generatedContent));
       }
       
-      // Simplified step determination
+      // Step determination based on order status
       if (data.status === 'COMPLETED') {
         setCurrentStep('delivery');
+      } else if (data.status === 'AWAITING_VALIDATION') {
+        setCurrentStep('review');
       } else {
         setCurrentStep('studio');
       }
@@ -474,7 +486,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               className="h-full flex"
             >
               {/* Left Panel - Client Profile (collapsible) */}
-              <div className={`flex-shrink-0 overflow-y-auto border-r border-white/5 transition-all duration-300 ${
+              <div className={`flex-shrink-0 overflow-hidden border-r border-white/5 transition-all duration-300 ${
                 showClientPanel ? 'w-80' : 'w-0'
               }`}>
                 {showClientPanel && (
@@ -637,14 +649,14 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 {editorContent && !isGenerating && (
                   <div className="flex-shrink-0 p-4 bg-slate-900/50 border-t border-white/5">
                     <button
-                      onClick={() => setCurrentStep('delivery')}
+                      onClick={() => setCurrentStep('review')}
                       className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
-                                 bg-gradient-to-r from-emerald-500 to-emerald-600
+                                 bg-gradient-to-r from-purple-500 to-purple-600
                                  text-white font-semibold
-                                 hover:from-emerald-400 hover:to-emerald-500 transition-all"
+                                 hover:from-purple-400 hover:to-purple-500 transition-all"
                     >
-                      <FileCheck className="w-5 h-5" />
-                      <span>Prêt à livrer</span>
+                      <Eye className="w-5 h-5" />
+                      <span>Passer en révision</span>
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
@@ -663,6 +675,70 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   }}
                   onInsertText={handleInsertText}
                 />
+              </div>
+            </motion.div>
+          )}
+
+          {/* REVIEW VIEW - Read-only validation before delivery */}
+          {currentStep === 'review' && (
+            <motion.div
+              key="review"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="h-full flex flex-col overflow-hidden"
+            >
+              {/* Sub-header */}
+              <div className="flex-shrink-0 px-4 py-3 bg-purple-900/20 border-b border-purple-500/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-purple-400" />
+                    <span className="text-sm font-medium text-purple-300">Mode révision — lecture seule</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { setCurrentStep('studio'); }}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg
+                                 bg-slate-800 border border-white/10 text-sm text-slate-400 hover:text-white transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Régénérer</span>
+                    </button>
+                    <button
+                      onClick={() => setCurrentStep('studio')}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg
+                                 bg-slate-800 border border-white/10 text-sm text-slate-400 hover:text-white transition-colors"
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      <span>Modifier</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Read-only content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                <TiptapEditor
+                  orderId={orderId}
+                  initialContent={editorContent}
+                  onContentChange={() => {}}
+                  readOnly
+                />
+              </div>
+
+              {/* Bottom action */}
+              <div className="flex-shrink-0 p-4 bg-slate-900/50 border-t border-white/5">
+                <button
+                  onClick={() => setCurrentStep('delivery')}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
+                             bg-gradient-to-r from-emerald-500 to-emerald-600
+                             text-white font-semibold
+                             hover:from-emerald-400 hover:to-emerald-500 transition-all"
+                >
+                  <FileCheck className="w-5 h-5" />
+                  <span>Approuver → Livraison</span>
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
             </motion.div>
           )}
@@ -695,16 +771,26 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6 mb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium text-slate-400">Aperçu de la lecture</h3>
-                    <button
-                      onClick={() => setCurrentStep('studio')}
-                      className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
-                    >
-                      Modifier
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowFullPreview(prev => !prev)}
+                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        {showFullPreview ? 'Réduire' : 'Voir tout'}
+                      </button>
+                      <button
+                        onClick={() => setCurrentStep('studio')}
+                        className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        Modifier
+                      </button>
+                    </div>
                   </div>
                   <div 
-                    className="prose prose-invert prose-sm max-w-none max-h-64 overflow-y-auto"
-                    dangerouslySetInnerHTML={{ __html: truncateHtml(editorContent, 1500) }}
+                    className={`prose prose-invert prose-sm max-w-none overflow-y-auto transition-all ${
+                      showFullPreview ? 'max-h-none' : 'max-h-64'
+                    }`}
+                    dangerouslySetInnerHTML={{ __html: showFullPreview ? editorContent : truncateHtml(editorContent, 1500) }}
                   />
                 </div>
 
@@ -882,10 +968,9 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                    <div className="text-sm text-amber-200/80">
-                      <p className="font-medium mb-1">Attention</p>
-                      <p>Une fois scellée, la lecture ne pourra plus être modifiée et sera immédiatement envoyée au client par email.</p>
-                    </div>
+                    <p className="text-sm text-amber-200/80">
+                      Sera immédiatement envoyée au client par email et ne pourra plus être modifiée.
+                    </p>
                   </div>
                 </div>
 

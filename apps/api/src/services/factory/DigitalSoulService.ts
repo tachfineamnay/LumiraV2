@@ -155,11 +155,12 @@ export class DigitalSoulService {
                 rituals: profile?.rituals || undefined,
             };
 
+            const { level: orderLevel, productName: orderProductName } = this.getLevelFromAmount(order.amount);
             const orderContext: OrderContext = {
                 orderId: order.id,
                 orderNumber: order.orderNumber,
-                level: 4,
-                productName: 'Abonné',
+                level: orderLevel,
+                productName: orderProductName,
             };
 
             // STEP 2: Generate AI content
@@ -487,7 +488,7 @@ export class DigitalSoulService {
 
             this.logger.log(`   ✅ Order found: ${order.orderNumber}`);
             this.logger.log(`   📦 Status: ${order.status}`);
-            this.logger.log(`   💰 Level: 4 (Abonné)`);
+            this.logger.log(`   💰 Amount: ${order.amount} (level resolved at context build)`);
 
             // Allow PAID, PENDING (admin force), PROCESSING, and FAILED (retry)
             const validStatuses = ['PAID', 'PENDING', 'PROCESSING', 'FAILED'];
@@ -544,12 +545,13 @@ export class DigitalSoulService {
                 rituals: profile?.rituals || undefined,
             };
 
-            // Build order context
+            // Build order context — resolve level from order amount
+            const { level: orderLevel, productName: orderProductName } = this.getLevelFromAmount(order.amount);
             const orderContext: OrderContext = {
                 orderId: order.id,
                 orderNumber: order.orderNumber,
-                level: 4,
-                productName: 'Abonné',
+                level: orderLevel,
+                productName: orderProductName,
             };
 
             // ==========================================================================
@@ -883,5 +885,12 @@ export class DigitalSoulService {
             REFLECTION: 'REFLECTION',
         };
         return map[type] || 'REFLECTION';
+    }
+
+    private getLevelFromAmount(amountCents: number): { level: number; productName: string } {
+        if (amountCents <= 2900) return { level: 1, productName: 'Initié' };
+        if (amountCents <= 5900) return { level: 2, productName: 'Mystique' };
+        if (amountCents <= 9900) return { level: 3, productName: 'Profond' };
+        return { level: 4, productName: 'Intégral' };
     }
 }

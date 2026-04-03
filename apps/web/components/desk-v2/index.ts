@@ -13,7 +13,6 @@ export { KanbanColumn } from './kanban/KanbanColumn';
 export { OrderCard } from './kanban/OrderCard';
 
 // Studio Editor
-export { StudioEditor } from './studio/StudioEditor';
 export { OrderWorkflow } from './studio/OrderWorkflow';
 export { TiptapEditor } from './studio/TiptapEditor';
 export { AIAssistant } from './studio/AIAssistant';

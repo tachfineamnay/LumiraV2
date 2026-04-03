@@ -4,19 +4,15 @@ import { useState } from 'react';
 
 import { Search, Bell, Wifi, WifiOff, Command } from 'lucide-react';
 import { useSocket } from '../hooks/useSocket';
+import { useExpertAuth } from '@/context/ExpertAuthContext';
 
 export function Header() {
   const { isConnected, onlineCount, latency } = useSocket();
+  const { expert, isAuthenticated } = useExpertAuth();
   const [showNotifications, setShowNotifications] = useState(false);
 
   const handleSearchClick = () => {
-    // Trigger command palette
-    const event = new KeyboardEvent('keydown', {
-      key: 'k',
-      metaKey: true,
-      bubbles: true,
-    });
-    document.dispatchEvent(event);
+    document.dispatchEvent(new CustomEvent('lumira:palette:toggle'));
   };
 
   return (
@@ -69,17 +65,16 @@ export function Header() {
         {/* Notifications */}
         <button
           onClick={() => setShowNotifications(!showNotifications)}
+          title="Notifications"
           className="relative p-2 rounded-lg hover:bg-white/5 transition-colors"
         >
           <Bell className="w-5 h-5 text-slate-400" />
-          {/* Notification dot */}
-          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500" />
         </button>
 
         {/* Expert avatar */}
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 
                         flex items-center justify-center text-sm font-bold text-white">
-          E
+          {isAuthenticated && expert?.name ? expert.name[0].toUpperCase() : 'E'}
         </div>
       </div>
     </header>

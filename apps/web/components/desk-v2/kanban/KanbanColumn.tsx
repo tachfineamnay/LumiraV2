@@ -48,6 +48,8 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
   });
 
   const colors = COLUMN_COLORS[column.color as keyof typeof COLUMN_COLORS] || COLUMN_COLORS.amber;
+  const isValidationColumn = column.id === 'validation';
+  const hasUrgentOrders = isValidationColumn && orders.length > 0;
 
   return (
     <div
@@ -55,7 +57,7 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
       className={`
         w-80 flex-shrink-0 flex flex-col rounded-xl
         bg-slate-900/50 border transition-colors duration-200
-        ${isOver ? `${colors.border} bg-slate-800/50` : 'border-white/5'}
+        ${hasUrgentOrders ? 'border-purple-500/60 shadow-lg shadow-purple-500/10' : isOver ? `${colors.border} bg-slate-800/50` : 'border-white/5'}
       `}
     >
       {/* Header */}
@@ -64,8 +66,13 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
           <div className="flex items-center gap-2">
             <span className="text-lg">{column.icon}</span>
             <h3 className="font-semibold text-white">{column.title}</h3>
+            {hasUrgentOrders && (
+              <span className="text-xs font-bold text-purple-300 bg-purple-500/20 px-1.5 py-0.5 rounded">
+                À valider
+              </span>
+            )}
           </div>
-          <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${colors.badge}`}>
+          <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${colors.badge} ${hasUrgentOrders ? 'animate-pulse' : ''}`}>
             {orders.length}
           </span>
         </div>

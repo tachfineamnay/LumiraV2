@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +28,16 @@ export function KanbanBoard() {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
 
+  // Notify on initial load if orders are waiting for validation
+  useEffect(() => {
+    if (!isLoading && orders.validation.length > 0) {
+      toast.info(`${orders.validation.length} lecture${orders.validation.length > 1 ? 's' : ''} en attente de validation`, {
+        description: 'Des lectures sont prêtes pour votre approbation.',
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
+
   // Socket for real-time updates
   useSocket({
     onNewOrder: (order) => {
@@ -36,8 +46,13 @@ export function KanbanBoard() {
         description: `${order.user.firstName} - Niveau ${order.level}`,
       });
     },
-    onStatusChange: (_data) => {
-      // Refresh to get updated order
+    onStatusChange: (data) => {
+      // Notify when an order enters validation
+      if (data.newStatus === 'AWAITING_VALIDATION') {
+        toast.info(`Lecture prête à valider: ${data.orderNumber}`, {
+          description: 'Une lecture attend votre approbation dans la colonne Validation.',
+        });
+      }
       fetchOrders();
     },
     onGenerationComplete: (data) => {
@@ -135,6 +150,15 @@ export function KanbanBoard() {
         await api.post(`/expert/orders/${activeId}/generate`);
         toast.success('Génération lancée');
       } else if (destColumn === 'completed') {
+        // Guard: order must be AWAITING_VALIDATION before finalizing
+        const sourceOrder = filteredOrders[sourceColumn]?.find(o => o.id === activeId);
+        if (sourceOrder?.status !== 'AWAITING_VALIDATION') {
+          moveOrder(activeId, destColumn, sourceColumn);
+          toast.error('Impossible de sceller', {
+            description: 'La lecture doit d\'abord être générée et passer en validation.',
+          });
+          return;
+        }
         await api.post(`/expert/orders/${activeId}/finalize`);
         toast.success('Commande scellée');
       } else {

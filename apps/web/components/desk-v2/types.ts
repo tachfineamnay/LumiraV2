@@ -71,6 +71,7 @@ export interface OracleResponse {
     title: string;
     action: string;
     mantra?: string;
+    actionType?: 'MANTRA' | 'RITUAL' | 'JOURNALING' | 'MEDITATION' | 'REFLECTION';
   }>;
   lecture?: string;
 }
