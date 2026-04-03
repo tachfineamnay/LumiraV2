@@ -33,7 +33,7 @@ export class SubscriptionsController {
         const cancelUrl = dto.cancelUrl ?? `${webBaseUrl}/tarifs?subscription=cancelled`;
 
         return this.subscriptionsService.createCheckoutSession(
-            req.user.id,
+            req.user.userId,
             successUrl,
             cancelUrl,
         );
@@ -46,7 +46,7 @@ export class SubscriptionsController {
     @UseGuards(JwtAuthGuard)
     @Get('status')
     async status(@Request() req) {
-        return this.subscriptionsService.getStatus(req.user.id);
+        return this.subscriptionsService.getStatus(req.user.userId);
     }
 
     /**
@@ -58,7 +58,7 @@ export class SubscriptionsController {
     @Post('cancel')
     @HttpCode(HttpStatus.OK)
     async cancel(@Request() req) {
-        return this.subscriptionsService.cancel(req.user.id);
+        return this.subscriptionsService.cancel(req.user.userId);
     }
 
     /**
@@ -69,6 +69,6 @@ export class SubscriptionsController {
     @Post('resume')
     @HttpCode(HttpStatus.OK)
     async resume(@Request() req) {
-        return this.subscriptionsService.resume(req.user.id);
+        return this.subscriptionsService.resume(req.user.userId);
     }
 }
