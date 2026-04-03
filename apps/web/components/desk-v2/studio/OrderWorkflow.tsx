@@ -15,18 +15,17 @@ import {
   Loader2,
   AlertCircle,
   Sparkles,
-  Check,
   Send,
-  ChevronRight,
   RefreshCw,
-  User,
   Wand2,
   FileCheck,
   Clock,
   X,
   History,
   RotateCcw,
-  Eye,
+  Lock,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 // =============================================================================
@@ -37,40 +36,13 @@ interface OrderWorkflowProps {
   orderId: string;
 }
 
-// 3-step workflow: Studio (edit) → Review (validate) → Delivery (confirm & send)
-type WorkflowStep = 'studio' | 'review' | 'delivery';
-
-interface StepConfig {
-  id: WorkflowStep;
-  label: string;
-  shortLabel: string;
-  icon: React.ReactNode;
-  description: string;
-}
-
-const WORKFLOW_STEPS: StepConfig[] = [
-  { 
-    id: 'studio', 
-    label: 'Studio', 
-    shortLabel: 'Éditer',
-    icon: <Wand2 className="w-4 h-4" />,
-    description: 'Créer et affiner la lecture',
-  },
-  { 
-    id: 'review', 
-    label: 'Révision', 
-    shortLabel: 'Réviser',
-    icon: <Eye className="w-4 h-4" />,
-    description: 'Valider le contenu généré',
-  },
-  { 
-    id: 'delivery', 
-    label: 'Livraison', 
-    shortLabel: 'Livrer',
-    icon: <Send className="w-4 h-4" />,
-    description: 'Sceller et envoyer au client',
-  },
-];
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  PAID: { label: 'En attente', className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
+  PROCESSING: { label: 'En cours', className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
+  AWAITING_VALIDATION: { label: 'À valider', className: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' },
+  COMPLETED: { label: 'Livrée', className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' },
+  FAILED: { label: 'Erreur', className: 'bg-red-500/20 text-red-400 border border-red-500/30' },
+};
 
 // =============================================================================
 // MAIN COMPONENT
@@ -85,11 +57,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const [error, setError] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState('');
   
-  // Workflow state
-  const [currentStep, setCurrentStep] = useState<WorkflowStep>('studio');
+  // UI state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSealing, setIsSealing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
   
   // Version history
   const [showVersions, setShowVersions] = useState(false);
@@ -97,11 +69,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   
   // Seal confirmation modal
   const [showSealConfirm, setShowSealConfirm] = useState(false);
-  // Full-content preview in delivery view
-  const [showFullPreview, setShowFullPreview] = useState(false);
-  
-  // Client panel visibility (in Studio view)
-  const [showClientPanel, setShowClientPanel] = useState(true);
 
   // Socket for real-time updates
   const { focusOrder, blurOrder } = useSocket({
@@ -215,15 +182,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         setEditorContent(oracleResponseToHtml(data.generatedContent));
       }
       
-      // Step determination based on order status
-      if (data.status === 'COMPLETED') {
-        setCurrentStep('delivery');
-      } else if (data.status === 'AWAITING_VALIDATION') {
-        setCurrentStep('review');
-      } else {
-        setCurrentStep('studio');
-      }
-      
       setError(null);
     } catch (err) {
       setError('Erreur de chargement de la commande');
@@ -302,15 +260,9 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     toast.success('Texte inséré');
   };
 
-  // Determine step states
-  const getStepState = (stepId: WorkflowStep) => {
-    const stepIndex = WORKFLOW_STEPS.findIndex(s => s.id === stepId);
-    const currentIndex = WORKFLOW_STEPS.findIndex(s => s.id === currentStep);
-    
-    if (stepIndex < currentIndex) return 'completed';
-    if (stepIndex === currentIndex) return 'active';
-    return 'pending';
-  };
+  // Derived state
+  const isReadOnly = order?.status === 'COMPLETED';
+  const statusBadge = STATUS_BADGE[order?.status || 'PAID'] || STATUS_BADGE.PAID;
 
   // Loading state
   if (isLoading) {
@@ -345,7 +297,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   return (
     <div className="h-full flex flex-col bg-slate-950">
       {/* ═══════════════════════════════════════════════════════════════════
-          TOP BAR - Order Info + Back
+          TOP BAR - Status badge + Order Info + Actions
       ═══════════════════════════════════════════════════════════════════ */}
       <div className="flex-shrink-0 px-4 py-3 bg-slate-900/80 border-b border-white/5">
         <div className="flex items-center justify-between">
@@ -377,10 +329,48 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 </div>
               </div>
             </div>
+
+            {/* Status badge */}
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
+              {statusBadge.label}
+            </span>
           </div>
 
-          {/* Quick actions */}
+          {/* Inline actions */}
           <div className="flex items-center gap-2">
+            {/* Generate — only when no content and not generating */}
+            {!editorContent && !isGenerating && !isReadOnly && (
+              <button
+                onClick={handleGenerate}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg
+                           bg-gradient-to-r from-amber-500 to-amber-600
+                           text-slate-900 font-medium text-sm
+                           hover:from-amber-400 hover:to-amber-500 transition-all"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Générer</span>
+              </button>
+            )}
+
+            {/* Regenerate — when content exists */}
+            {editorContent && !isGenerating && !isReadOnly && (
+              <button
+                onClick={handleRegenerate}
+                disabled={isRegenerating}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg
+                           bg-slate-800/50 text-slate-400 hover:text-white 
+                           hover:bg-slate-800 transition-colors disabled:opacity-50"
+              >
+                {isRegenerating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                <span className="text-sm">Régénérer</span>
+              </button>
+            )}
+
+            {/* Version history */}
             {versions.length > 0 && (
               <button
                 onClick={() => setShowVersions(true)}
@@ -391,462 +381,164 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 <span className="text-sm">{versions.length}</span>
               </button>
             )}
+
+            {/* Seal CTA — when content exists, not completed, not busy */}
+            {editorContent && !isReadOnly && !isGenerating && !isSealing && (
+              <button
+                onClick={() => setShowSealConfirm(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg
+                           bg-gradient-to-r from-emerald-500 to-emerald-600
+                           text-white font-semibold text-sm
+                           hover:from-emerald-400 hover:to-emerald-500
+                           hover:shadow-lg hover:shadow-emerald-500/20 transition-all"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Sceller et envoyer</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          WORKFLOW TIMELINE - Horizontal Steps
+          COMPLETED BANNER
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="flex-shrink-0 px-6 py-4 bg-slate-900/40 border-b border-white/5">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between">
-            {WORKFLOW_STEPS.map((step, index) => {
-              const state = getStepState(step.id);
-              const isLast = index === WORKFLOW_STEPS.length - 1;
-              
-              return (
-                <div key={step.id} className="flex items-center flex-1">
-                  {/* Step circle + label */}
-                  <button
-                    onClick={() => {
-                      // Only allow going back or to completed steps
-                      if (state === 'completed' || state === 'active') {
-                        setCurrentStep(step.id);
-                      }
-                    }}
-                    disabled={state === 'pending'}
-                    className={`flex flex-col items-center gap-2 group transition-all ${
-                      state === 'pending' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
-                    }`}
-                  >
-                    {/* Circle */}
-                    <div className={`
-                      relative w-12 h-12 rounded-xl flex items-center justify-center transition-all
-                      ${state === 'completed' 
-                        ? 'bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500/50' 
-                        : state === 'active'
-                          ? 'bg-amber-500/20 text-amber-400 border-2 border-amber-500 shadow-lg shadow-amber-500/20'
-                          : 'bg-slate-800/50 text-slate-500 border-2 border-slate-700'
-                      }
-                      ${state !== 'pending' ? 'group-hover:scale-105' : ''}
-                    `}>
-                      {state === 'completed' ? (
-                        <Check className="w-5 h-5" />
-                      ) : (
-                        step.icon
-                      )}
-                      
-                      {/* Pulse for active */}
-                      {state === 'active' && (
-                        <div className="absolute inset-0 rounded-xl bg-amber-500/20 animate-ping" />
-                      )}
-                    </div>
-
-                    {/* Label */}
-                    <div className="text-center">
-                      <p className={`text-sm font-medium ${
-                        state === 'active' ? 'text-amber-400' : 
-                        state === 'completed' ? 'text-emerald-400' : 'text-slate-500'
-                      }`}>
-                        {step.shortLabel}
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* Connector line */}
-                  {!isLast && (
-                    <div className="flex-1 mx-4">
-                      <div className={`h-1 rounded-full transition-colors ${
-                        getStepState(WORKFLOW_STEPS[index + 1].id) !== 'pending'
-                          ? 'bg-gradient-to-r from-emerald-500 to-amber-500'
-                          : 'bg-slate-800'
-                      }`} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      {isReadOnly && order.deliveredAt && (
+        <div className="flex-shrink-0 px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
+          <div className="flex items-center justify-center gap-2 text-sm text-emerald-400">
+            <Lock className="w-3.5 h-3.5" />
+            <span>
+              Cette lecture a été scellée et envoyée le{' '}
+              {new Date(order.deliveredAt).toLocaleDateString('fr-FR', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          MAIN CONTENT - Simplified 2-step workflow
+          MAIN 3-COLUMN LAYOUT
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 overflow-hidden">
-        <AnimatePresence mode="wait">
-          {/* STUDIO VIEW - Profile + Editor + AI in one unified view */}
-          {currentStep === 'studio' && (
-            <motion.div
-              key="studio"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="h-full flex"
-            >
-              {/* Left Panel - Client Profile (collapsible) */}
-              <div className={`flex-shrink-0 overflow-hidden border-r border-white/5 transition-all duration-300 ${
-                showClientPanel ? 'w-80' : 'w-0'
-              }`}>
-                {showClientPanel && (
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-semibold text-white">Profil client</h3>
-                      <button
-                        onClick={() => setShowClientPanel(false)}
-                        title="Masquer le profil"
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <ClientPanel order={order} compact />
-                  </div>
-                )}
-              </div>
-
-              {/* Center - Main Editor Area */}
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Sub-header with actions */}
-                <div className="flex-shrink-0 px-4 py-3 bg-slate-900/50 border-b border-white/5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {!showClientPanel && (
-                        <button
-                          onClick={() => setShowClientPanel(true)}
-                          title="Afficher le profil client"
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg
-                                     bg-slate-800 border border-white/10 text-sm text-slate-400 hover:text-white"
-                        >
-                          <User className="w-4 h-4" />
-                          <span>Profil</span>
-                        </button>
-                      )}
-                      <div>
-                        <h3 className="text-sm font-medium text-white">
-                          {editorContent ? 'Éditeur de lecture' : 'Nouvelle lecture'}
-                        </h3>
-                        <p className="text-xs text-slate-500">
-                          {editorContent ? 'Affinez le contenu généré' : 'Lancez la génération pour commencer'}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      {!editorContent && !isGenerating && (
-                        <button
-                          onClick={handleGenerate}
-                          className="flex items-center gap-2 px-4 py-2 rounded-lg
-                                     bg-gradient-to-r from-amber-500 to-amber-600
-                                     text-slate-900 font-medium text-sm
-                                     hover:from-amber-400 hover:to-amber-500 transition-all"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          <span>Générer</span>
-                        </button>
-                      )}
-                      
-                      {editorContent && (
-                        <>
-                          <button
-                            onClick={handleRegenerate}
-                            disabled={isRegenerating || isGenerating}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg
-                                       bg-slate-800 border border-white/10 text-sm
-                                       text-slate-400 hover:text-white transition-colors
-                                       disabled:opacity-50"
-                          >
-                            {isRegenerating ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="w-4 h-4" />
-                            )}
-                            <span>Régénérer</span>
-                          </button>
-                          
-                          <button
-                            onClick={() => setShowVersions(true)}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg
-                                       bg-slate-800 border border-white/10 text-sm
-                                       text-slate-400 hover:text-white transition-colors"
-                          >
-                            <History className="w-4 h-4" />
-                            <span>Historique</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Editor content or Generation State */}
-                <div className="flex-1 overflow-y-auto">
-                  {isGenerating ? (
-                    // Generation in progress
-                    <div className="h-full flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="relative w-24 h-24 mx-auto mb-6">
-                          <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 animate-ping" />
-                          <div className="absolute inset-2 rounded-full border-4 border-amber-500/30 animate-ping animation-delay-200" />
-                          <div className="absolute inset-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 
-                                          flex items-center justify-center shadow-xl shadow-amber-500/30">
-                            <Sparkles className="w-8 h-8 text-white animate-pulse" />
-                          </div>
-                        </div>
-                        <h3 className="text-xl font-playfair text-white mb-2">
-                          L&apos;Oracle crée la lecture...
-                        </h3>
-                        <p className="text-sm text-slate-400 max-w-sm">
-                          Analyse du profil de {order.user.firstName}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-2">
-                          <Clock className="w-3 h-3 inline mr-1" />
-                          ~2-3 minutes
-                        </p>
-                      </div>
-                    </div>
-                  ) : editorContent ? (
-                    // Editor with content
-                    <div className="p-4">
-                      <TiptapEditor
-                        orderId={orderId}
-                        initialContent={editorContent}
-                        onContentChange={setEditorContent}
-                      />
-                    </div>
-                  ) : (
-                    // Empty state - no content yet
-                    <div className="h-full flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-white/10
-                                        flex items-center justify-center mx-auto mb-4">
-                          <Wand2 className="w-10 h-10 text-slate-600" />
-                        </div>
-                        <h3 className="text-lg font-medium text-white mb-2">
-                          Prêt à créer la lecture
-                        </h3>
-                        <p className="text-sm text-slate-400 max-w-sm mb-6">
-                          Consultez le profil client puis lancez la génération IA
-                        </p>
-                        <button
-                          onClick={handleGenerate}
-                          className="flex items-center gap-2 px-6 py-3 mx-auto rounded-xl
-                                     bg-gradient-to-r from-amber-500 to-amber-600
-                                     text-slate-900 font-semibold
-                                     hover:from-amber-400 hover:to-amber-500
-                                     hover:shadow-lg hover:shadow-amber-500/20 transition-all"
-                        >
-                          <Sparkles className="w-5 h-5" />
-                          <span>Lancer la génération</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bottom action - only show when content exists */}
-                {editorContent && !isGenerating && (
-                  <div className="flex-shrink-0 p-4 bg-slate-900/50 border-t border-white/5">
-                    <button
-                      onClick={() => setCurrentStep('review')}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
-                                 bg-gradient-to-r from-purple-500 to-purple-600
-                                 text-white font-semibold
-                                 hover:from-purple-400 hover:to-purple-500 transition-all"
-                    >
-                      <Eye className="w-5 h-5" />
-                      <span>Passer en révision</span>
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Right Panel - AI Assistant */}
-              <div className="w-80 flex-shrink-0 overflow-hidden border-l border-white/5">
-                <AIAssistant
-                  orderId={orderId}
-                  clientContext={{
-                    firstName: order.user.firstName,
-                    birthDate: order.user.profile?.birthDate,
-                    question: order.user.profile?.specificQuestion,
-                    objective: order.user.profile?.objective,
-                  }}
-                  onInsertText={handleInsertText}
-                />
-              </div>
-            </motion.div>
-          )}
-
-          {/* REVIEW VIEW - Read-only validation before delivery */}
-          {currentStep === 'review' && (
-            <motion.div
-              key="review"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="h-full flex flex-col overflow-hidden"
-            >
-              {/* Sub-header */}
-              <div className="flex-shrink-0 px-4 py-3 bg-purple-900/20 border-b border-purple-500/20">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Eye className="w-4 h-4 text-purple-400" />
-                    <span className="text-sm font-medium text-purple-300">Mode révision — lecture seule</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => { setCurrentStep('studio'); }}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg
-                                 bg-slate-800 border border-white/10 text-sm text-slate-400 hover:text-white transition-colors"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span>Régénérer</span>
-                    </button>
-                    <button
-                      onClick={() => setCurrentStep('studio')}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg
-                                 bg-slate-800 border border-white/10 text-sm text-slate-400 hover:text-white transition-colors"
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      <span>Modifier</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Read-only content */}
-              <div className="flex-1 overflow-y-auto p-4">
-                <TiptapEditor
-                  orderId={orderId}
-                  initialContent={editorContent}
-                  onContentChange={() => {}}
-                  readOnly
-                />
-              </div>
-
-              {/* Bottom action */}
-              <div className="flex-shrink-0 p-4 bg-slate-900/50 border-t border-white/5">
+      <div className="flex-1 flex overflow-hidden">
+        {/* LEFT PANEL — Client Profile (collapsible) */}
+        <div className={`flex-shrink-0 border-r border-white/5 transition-all duration-300 ${
+          showLeftPanel ? 'w-72' : 'w-12'
+        }`}>
+          {showLeftPanel ? (
+            <div className="h-full flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                <h3 className="text-sm font-semibold text-white">Profil client</h3>
                 <button
-                  onClick={() => setCurrentStep('delivery')}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl
-                             bg-gradient-to-r from-emerald-500 to-emerald-600
-                             text-white font-semibold
-                             hover:from-emerald-400 hover:to-emerald-500 transition-all"
+                  onClick={() => setShowLeftPanel(false)}
+                  title="Réduire le panneau"
+                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
                 >
-                  <FileCheck className="w-5 h-5" />
-                  <span>Approuver → Livraison</span>
-                  <ChevronRight className="w-5 h-5" />
+                  <PanelLeftClose className="w-4 h-4" />
                 </button>
               </div>
-            </motion.div>
-          )}
-
-          {/* DELIVERY VIEW - Final confirmation */}
-          {currentStep === 'delivery' && (
-            <motion.div
-              key="delivery"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="h-full overflow-y-auto"
-            >
-              <div className="max-w-2xl mx-auto p-6">
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600
-                                  flex items-center justify-center mx-auto mb-4
-                                  shadow-xl shadow-emerald-500/20">
-                    <Send className="w-10 h-10 text-white" />
-                  </div>
-                  <h2 className="text-2xl font-playfair text-white mb-2">
-                    Prêt pour la livraison
-                  </h2>
-                  <p className="text-slate-400">
-                    Vérifiez une dernière fois le contenu avant de l&apos;envoyer au client.
-                  </p>
-                </div>
-
-                {/* Preview card */}
-                <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6 mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-slate-400">Aperçu de la lecture</h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowFullPreview(prev => !prev)}
-                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                      >
-                        {showFullPreview ? 'Réduire' : 'Voir tout'}
-                      </button>
-                      <button
-                        onClick={() => setCurrentStep('studio')}
-                        className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
-                      >
-                        Modifier
-                      </button>
-                    </div>
-                  </div>
-                  <div 
-                    className={`prose prose-invert prose-sm max-w-none overflow-y-auto transition-all ${
-                      showFullPreview ? 'max-h-none' : 'max-h-64'
-                    }`}
-                    dangerouslySetInnerHTML={{ __html: showFullPreview ? editorContent : truncateHtml(editorContent, 1500) }}
-                  />
-                </div>
-
-                {/* Recipient info */}
-                <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-4 mb-8">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 
-                                    flex items-center justify-center text-sm font-bold text-white">
-                      {order.user.firstName?.[0]}{order.user.lastName?.[0]}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-white font-medium">
-                        {order.user.firstName} {order.user.lastName}
-                      </p>
-                      <p className="text-sm text-slate-400">{order.user.email}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-500">Commande</p>
-                      <p className="font-mono text-amber-400">{order.orderNumber}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={() => setShowSealConfirm(true)}
-                    disabled={isSealing}
-                    className="flex items-center justify-center gap-3 px-8 py-4 rounded-2xl
-                               bg-gradient-to-r from-emerald-500 to-emerald-600
-                               text-white font-semibold text-lg
-                               hover:from-emerald-400 hover:to-emerald-500
-                               hover:shadow-xl hover:shadow-emerald-500/20
-                               transition-all disabled:opacity-50"
-                  >
-                    {isSealing ? (
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    ) : (
-                      <Send className="w-6 h-6" />
-                    )}
-                    <span>{isSealing ? 'Envoi en cours...' : 'Sceller et envoyer'}</span>
-                  </button>
-                  
-                  <button
-                    onClick={() => setCurrentStep('studio')}
-                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl
-                               bg-slate-800 text-slate-300 hover:text-white transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Retourner à l&apos;éditeur</span>
-                  </button>
-                </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <ClientPanel order={order} compact />
               </div>
-            </motion.div>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col items-center py-3 gap-2">
+              <button
+                onClick={() => setShowLeftPanel(true)}
+                title="Afficher le profil client"
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+              >
+                <PanelLeftOpen className="w-4 h-4" />
+              </button>
+            </div>
           )}
-        </AnimatePresence>
+        </div>
+
+        {/* CENTER — Editor area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {isGenerating ? (
+            /* Generation in progress */
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="relative w-24 h-24 mx-auto mb-6">
+                  <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 animate-ping" />
+                  <div className="absolute inset-2 rounded-full border-4 border-amber-500/30 animate-ping animation-delay-200" />
+                  <div className="absolute inset-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 
+                                  flex items-center justify-center shadow-xl shadow-amber-500/30">
+                    <Sparkles className="w-8 h-8 text-white animate-pulse" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-playfair text-white mb-2">
+                  L&apos;Oracle crée la lecture...
+                </h3>
+                <p className="text-sm text-slate-400 max-w-sm">
+                  Analyse du profil de {order.user.firstName}
+                </p>
+                <p className="text-xs text-slate-500 mt-2">
+                  <Clock className="w-3 h-3 inline mr-1" />
+                  ~2-3 minutes
+                </p>
+              </div>
+            </div>
+          ) : editorContent ? (
+            /* Editor with content */
+            <div className={`flex-1 overflow-y-auto p-4 ${
+              isReadOnly ? 'border-2 border-emerald-500/30 rounded-lg m-2' : ''
+            }`}>
+              <TiptapEditor
+                orderId={orderId}
+                initialContent={editorContent}
+                onContentChange={isReadOnly ? undefined : setEditorContent}
+                readOnly={isReadOnly}
+              />
+            </div>
+          ) : (
+            /* Empty state — no content yet */
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-white/10
+                                flex items-center justify-center mx-auto mb-4">
+                  <Wand2 className="w-10 h-10 text-slate-600" />
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">
+                  Prêt à créer la lecture
+                </h3>
+                <p className="text-sm text-slate-400 max-w-sm mb-6">
+                  Consultez le profil client puis lancez la génération IA
+                </p>
+                <button
+                  onClick={handleGenerate}
+                  className="flex items-center gap-2 px-6 py-3 mx-auto rounded-xl
+                             bg-gradient-to-r from-amber-500 to-amber-600
+                             text-slate-900 font-semibold
+                             hover:from-amber-400 hover:to-amber-500
+                             hover:shadow-lg hover:shadow-amber-500/20 transition-all"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  <span>Lancer la génération</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT PANEL — AI Assistant (always visible) */}
+        <div className="w-80 flex-shrink-0 border-l border-white/5 overflow-hidden">
+          <AIAssistant
+            orderId={orderId}
+            clientContext={{
+              firstName: order.user.firstName,
+              birthDate: order.user.profile?.birthDate,
+              question: order.user.profile?.specificQuestion,
+              objective: order.user.profile?.objective,
+            }}
+            onInsertText={handleInsertText}
+          />
+        </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -1043,71 +735,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
-
-/**
- * Safely truncate HTML content without breaking tags
- * Preserves complete HTML structure up to maxLength characters of text
- */
-function truncateHtml(html: string, maxLength: number): string {
-  if (!html) return '';
-  
-  // Strip tags to count actual text length
-  const textContent = html.replace(/<[^>]*>/g, '');
-  if (textContent.length <= maxLength) return html;
-
-  let textCount = 0;
-  let result = '';
-  const tagStack: string[] = [];
-  let i = 0;
-
-  while (i < html.length && textCount < maxLength) {
-    if (html[i] === '<') {
-      // Find end of tag
-      const tagEnd = html.indexOf('>', i);
-      if (tagEnd === -1) break;
-      
-      const tag = html.substring(i, tagEnd + 1);
-      
-      // Check if it's a closing tag
-      if (tag.startsWith('</')) {
-        const tagName = tag.substring(2, tag.length - 1).toLowerCase().trim();
-        if (tagStack.length && tagStack[tagStack.length - 1] === tagName) {
-          tagStack.pop();
-        }
-        result += tag;
-      }
-      // Self-closing tags
-      else if (tag.endsWith('/>') || /^<(br|hr|img|input|meta|link)[\s/>]/i.test(tag)) {
-        result += tag;
-      }
-      // Opening tag
-      else {
-        const tagMatch = tag.match(/^<(\w+)/);
-        if (tagMatch) {
-          tagStack.push(tagMatch[1].toLowerCase());
-        }
-        result += tag;
-      }
-      i = tagEnd + 1;
-    } else {
-      result += html[i];
-      textCount++;
-      i++;
-    }
-  }
-
-  // Close any remaining open tags
-  while (tagStack.length > 0) {
-    result += `</${tagStack.pop()}>`;
-  }
-
-  // Add ellipsis if truncated
-  if (textCount >= maxLength) {
-    result += '...';
-  }
-
-  return result;
-}
 
 function oracleResponseToHtml(response: OracleResponse): string {
   const parts: string[] = [];
