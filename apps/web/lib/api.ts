@@ -8,9 +8,9 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
     if (typeof window !== 'undefined') {
-        // Check for expert_token first (admin routes), then lumira_token (sanctuaire)
+        // Check for expert_token first (admin routes), then sanctuaire/lumira token
         const expertToken = localStorage.getItem('expert_token');
-        const lumiraToken = localStorage.getItem('lumira_token');
+        const lumiraToken = localStorage.getItem('lumira_token') || localStorage.getItem('sanctuaire_token');
         const token = expertToken || lumiraToken;
         
         if (token && !config.headers.Authorization) {
