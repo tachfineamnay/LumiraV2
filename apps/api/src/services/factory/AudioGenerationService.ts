@@ -9,9 +9,10 @@
  * @module services/factory/AudioGenerationService
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AudioScriptService } from './AudioScriptService';
 import { TextToSpeechClient, protos } from '@google-cloud/text-to-speech';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { AudioVoice } from '@prisma/client';
@@ -39,6 +40,7 @@ export class AudioGenerationService {
     constructor(
         private readonly configService: ConfigService,
         private readonly prisma: PrismaService,
+        @Optional() private readonly audioScriptService?: AudioScriptService,
     ) {
         // Initialize Google TTS client
         const keyJson = this.configService.get<string>('GOOGLE_CLOUD_TTS_KEY_JSON');
@@ -106,8 +108,9 @@ export class AudioGenerationService {
                     await Promise.all(
                         batch.map(async (insight) => {
                             try {
+                                const scriptText = await this.reformulateText(insight.full, 'insight', insight.category);
                                 const audioUrl = await this.generateAndUploadAudio(
-                                    insight.full,
+                                    scriptText,
                                     voice,
                                     `audio/insights/${order.orderNumber}/${insight.category.toLowerCase()}.mp3`,
                                 );
@@ -133,8 +136,9 @@ export class AudioGenerationService {
 
             if (spiritualPath?.synthesis) {
                 try {
+                    const synthesisScript = await this.reformulateText(spiritualPath.synthesis, 'synthesis');
                     const synthesisAudioUrl = await this.generateAndUploadAudio(
-                        spiritualPath.synthesis,
+                        synthesisScript,
                         voice,
                         `audio/synthesis/${order.orderNumber}/synthesis.mp3`,
                     );
@@ -227,6 +231,11 @@ export class AudioGenerationService {
      * Synthesize text and upload the resulting MP3 to S3.
      * Returns the S3 access URL.
      */
+    private async reformulateText(text: string, type: 'synthesis' | 'insight', category?: string): Promise<string> {
+        if (!this.audioScriptService) return text;
+        return this.audioScriptService.reformulate({ text, type, category });
+    }
+
     private async generateAndUploadAudio(text: string, voice: AudioVoice, s3Key: string): Promise<string> {
         const audioBuffer = await this.synthesize(text, voice);
 

@@ -18,6 +18,7 @@ import { PdfFactory } from './factory/PdfFactory';
 import { ContextDispatcher } from './factory/ContextDispatcher';
 import { DigitalSoulService } from './factory/DigitalSoulService';
 import { AudioGenerationService } from './factory/AudioGenerationService';
+import { AudioScriptService } from './factory/AudioScriptService';
 import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
 
 @Module({
@@ -31,6 +32,7 @@ import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
         PdfFactory,
         ContextDispatcher,
         DigitalSoulService,
+        AudioScriptService,
         AudioGenerationService,
         SpiritualPathBatchService,
     ],
@@ -39,6 +41,7 @@ import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
         PdfFactory,
         ContextDispatcher,
         DigitalSoulService,
+        AudioScriptService,
         AudioGenerationService,
         SpiritualPathBatchService,
     ],
