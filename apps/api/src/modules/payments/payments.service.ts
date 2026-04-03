@@ -470,7 +470,7 @@ export class PaymentsService {
             return;
         }
 
-        // Legacy flow: orderId already exists
+        // Legacy flow: orderId already exists (from createCheckoutIntent)
         if (orderId) {
             const order = await this.prisma.order.update({
                 where: { id: orderId },
@@ -488,7 +488,47 @@ export class PaymentsService {
                 this.logger.error(`Failed to send order confirmation: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            // NOTE: No auto-generation. Client completes onboarding first, then expert generates manually from Desk.
+            // V2: Activate subscription (one-time 29€ access) + trigger generation
+            if (productLevel) {
+                const now = new Date();
+                const farFuture = new Date('2099-12-31');
+
+                await this.prisma.subscription.upsert({
+                    where: { userId: order.userId },
+                    create: {
+                        userId: order.userId,
+                        stripeSubscriptionId: paymentIntent.id,
+                        stripeCustomerId: typeof paymentIntent.customer === 'string' ? paymentIntent.customer : '',
+                        stripePriceId: this.configService.get<string>('STRIPE_PRICE_29') ?? '',
+                        status: 'ACTIVE',
+                        currentPeriodStart: now,
+                        currentPeriodEnd: farFuture,
+                        cancelAtPeriodEnd: false,
+                    },
+                    update: {
+                        stripeSubscriptionId: paymentIntent.id,
+                        status: 'ACTIVE',
+                        currentPeriodStart: now,
+                        currentPeriodEnd: farFuture,
+                        cancelAtPeriodEnd: false,
+                    },
+                });
+
+                await this.prisma.user.update({
+                    where: { id: order.userId },
+                    data: { subscriptionStatus: 'ACTIVE' },
+                });
+
+                this.logger.log(`[PaymentIntent] Subscription activated for user ${order.userId}`);
+
+                // Fire-and-forget: trigger batch 1 generation
+                setImmediate(() => {
+                    this.spiritualPathBatchService.generateBatch1ForUser(order.userId).catch(err => {
+                        this.logger.error(`[PaymentIntent] Batch 1 failed for user ${order.userId}: ${err instanceof Error ? err.message : String(err)}`);
+                    });
+                    this.logger.log(`[PaymentIntent] Batch 1 generation triggered for user ${order.userId}`);
+                });
+            }
 
             return;
         }

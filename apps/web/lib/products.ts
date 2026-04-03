@@ -1,5 +1,5 @@
 // =============================================================================
-// V2 — Single subscription product (29€/month)
+// V2 — Single product (29€ one-time payment)
 // =============================================================================
 
 export interface FeatureGroup {
@@ -9,7 +9,7 @@ export interface FeatureGroup {
 
 export interface SubscriptionProduct {
     name: string;
-    price: number;         // euros / mois
+    price: number;         // euros (paiement unique)
     description: string;
     features: string[];
     featureGroups: FeatureGroup[];
@@ -50,7 +50,7 @@ export const SUBSCRIPTION: SubscriptionProduct = {
             ],
         },
     ],
-    ctaLabel: 'Commencer mon voyage — 29€/mois',
+    ctaLabel: 'Commencer mon voyage — 29€',
     guaranteeText: 'Satisfait ou remboursé sous 14 jours',
 };
 
@@ -80,7 +80,7 @@ export const PRODUCTS: Product[] = [
         description: SUBSCRIPTION.description,
         price: SUBSCRIPTION.price,
         features: SUBSCRIPTION.features,
-        duration: 'Mensuel',
+        duration: 'Accès à vie',
         access: ['pdf', 'audio', 'mandala', 'rituels', 'chat', 'dreams'],
         badge: '✨ TOUT INCLUS',
         popular: true,

@@ -3,10 +3,14 @@
 import { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Shield, CreditCard, Crown, Sparkles, Check, ArrowRight } from 'lucide-react';
-import { CheckoutHeader, CheckoutForm, CheckoutFormData, TrustBadges } from '../../components/checkout';
+import { CheckoutHeader, CheckoutForm, CheckoutFormData, StripePayment, TrustBadges } from '../../components/checkout';
 import { SUBSCRIPTION } from '../../lib/products';
 import api from '../../lib/api';
 import Link from 'next/link';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 // Type for connected user from Sanctuaire
 interface ConnectedUser {
@@ -21,8 +25,10 @@ function CheckoutContent() {
     const [connectedUser, setConnectedUser] = useState<ConnectedUser | null>(null);
     const [formData, setFormData] = useState<CheckoutFormData | null>(null);
     const [isFormValid, setIsFormValid] = useState(false);
-    const [isRedirecting, setIsRedirecting] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
+    const [clientSecret, setClientSecret] = useState<string | null>(null);
+    const [step, setStep] = useState<'form' | 'payment'>('form');
 
     // Try to fetch connected user from Sanctuaire on mount
     useEffect(() => {
@@ -58,49 +64,48 @@ function CheckoutContent() {
         setIsFormValid(false);
     };
 
-    const handleSubscribe = async () => {
+    const handleProceedToPayment = async () => {
         if (!formData) return;
 
-        setIsRedirecting(true);
+        setIsLoading(true);
         setPaymentError(null);
 
         try {
-            // If user is not yet registered, create account first
-            const token = localStorage.getItem('sanctuaire_token') || localStorage.getItem('lumira_token');
-            if (!token) {
-                // Create user account before checkout
-                const registerResponse = await api.post('/auth/sanctuaire/register', {
-                    email: formData.email,
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    phone: formData.phone || undefined,
-                });
-                const newToken = registerResponse.data?.token || registerResponse.data?.access_token;
-                if (newToken) {
-                    localStorage.setItem('sanctuaire_token', newToken);
-                }
-            }
-
-            // Call the V2 subscription checkout endpoint
-            const response = await api.post('/subscriptions/checkout', {
-                successUrl: `${window.location.origin}/sanctuaire?subscription=success`,
-                cancelUrl: `${window.location.origin}/commande?subscription=cancelled`,
+            // Create checkout intent — this creates User + Order + PaymentIntent on the backend
+            const response = await api.post('/payments/checkout-intent', {
+                email: formData.email,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                phone: formData.phone || undefined,
+                productLevel: '4',
+                amountCents: 2900,
             });
 
-            // Redirect to Stripe Checkout
-            if (response.data?.url) {
-                window.location.href = response.data.url;
-            } else {
-                throw new Error('No checkout URL returned');
+            const secret = response.data?.clientSecret;
+            if (!secret) {
+                throw new Error('No client secret returned');
             }
+
+            setClientSecret(secret);
+            setStep('payment');
         } catch (err: unknown) {
             console.error('[Checkout] Error:', err);
             const message =
                 (err as { response?: { data?: { message?: string } } })?.response?.data?.message
                 || 'Impossible de préparer le paiement. Veuillez réessayer.';
             setPaymentError(message);
-            setIsRedirecting(false);
+        } finally {
+            setIsLoading(false);
         }
+    };
+
+    const handlePaymentSuccess = () => {
+        // Store token if user was registered during checkout-intent
+        window.location.href = '/sanctuaire?subscription=success';
+    };
+
+    const handlePaymentError = (error: string) => {
+        setPaymentError(error);
     };
 
     return (
@@ -153,7 +158,7 @@ function CheckoutContent() {
                                     {/* Price */}
                                     <div className="flex items-baseline gap-1 mb-6 pb-6 border-b border-white/[0.06]">
                                         <span className="text-4xl font-playfair italic text-white">{SUBSCRIPTION.price}€</span>
-                                        <span className="text-white/40">/mois</span>
+                                        <span className="text-white/40">paiement unique</span>
                                     </div>
 
                                     {/* Features */}
@@ -168,7 +173,7 @@ function CheckoutContent() {
 
                                     <div className="mt-6 pt-4 border-t border-white/[0.06]">
                                         <p className="text-[11px] text-white/30 text-center">
-                                            Sans engagement · Annulation possible à tout moment
+                                            Paiement unique · Accès à vie · Satisfait ou remboursé 14 jours
                                         </p>
                                     </div>
                                 </div>
@@ -177,40 +182,46 @@ function CheckoutContent() {
 
                         {/* Form & Payment - Right Column */}
                         <div className="lg:col-span-7 order-1 lg:order-2 space-y-6">
-                            {/* Glass Form Container */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.5 }}
-                                className="bg-abyss-600/40 backdrop-blur-xl border border-horizon-400/20 rounded-2xl p-6 md:p-8 shadow-stellar"
-                            >
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-10 h-10 rounded-full bg-horizon-400/10 flex items-center justify-center">
-                                        <CreditCard className="w-5 h-5 text-horizon-400" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-playfair italic text-stellar-100">
-                                            Vos informations
-                                        </h2>
-                                        {connectedUser && (
-                                            <span className="text-sm text-stellar-500">
-                                                Informations pré-remplies
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
+                            {/* Step 1: Form */}
+                            <AnimatePresence mode="wait">
+                                {step === 'form' && (
+                                    <motion.div
+                                        key="form"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -20 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="bg-abyss-600/40 backdrop-blur-xl border border-horizon-400/20 rounded-2xl p-6 md:p-8 shadow-stellar"
+                                    >
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="w-10 h-10 rounded-full bg-horizon-400/10 flex items-center justify-center">
+                                                <CreditCard className="w-5 h-5 text-horizon-400" />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-playfair italic text-stellar-100">
+                                                    Vos informations
+                                                </h2>
+                                                {connectedUser && (
+                                                    <span className="text-sm text-stellar-500">
+                                                        Informations pré-remplies
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                <CheckoutForm
-                                    onFormValid={handleFormValid}
-                                    onFormInvalid={handleFormInvalid}
-                                    initialValues={connectedUser ? {
-                                        email: connectedUser.email,
-                                        firstName: connectedUser.firstName || '',
-                                        lastName: connectedUser.lastName || '',
-                                        phone: connectedUser.phone || '',
-                                    } : undefined}
-                                />
-                            </motion.div>
+                                        <CheckoutForm
+                                            onFormValid={handleFormValid}
+                                            onFormInvalid={handleFormInvalid}
+                                            initialValues={connectedUser ? {
+                                                email: connectedUser.email,
+                                                firstName: connectedUser.firstName || '',
+                                                lastName: connectedUser.lastName || '',
+                                                phone: connectedUser.phone || '',
+                                            } : undefined}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
                             {/* Trust Badges */}
                             <TrustBadges />
@@ -230,36 +241,75 @@ function CheckoutContent() {
                                 )}
                             </AnimatePresence>
 
-                            {/* Subscribe Button */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.5, delay: 0.2 }}
-                                className="bg-abyss-600/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8"
-                            >
-                                <button
-                                    onClick={handleSubscribe}
-                                    disabled={!isFormValid || isRedirecting}
-                                    className="w-full flex items-center justify-center gap-3 px-8 py-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-bold text-lg disabled:opacity-40 disabled:cursor-not-allowed hover:from-amber-400 hover:to-amber-500 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(245,158,11,0.3)]"
+                            {/* Step 1: Continue to Payment button */}
+                            {step === 'form' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.5, delay: 0.2 }}
+                                    className="bg-abyss-600/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8"
                                 >
-                                    {isRedirecting ? (
-                                        <>
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                            Redirection vers Stripe...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-5 h-5" />
-                                            S'abonner — {SUBSCRIPTION.price}€/mois
-                                            <ArrowRight className="w-5 h-5" />
-                                        </>
-                                    )}
-                                </button>
+                                    <button
+                                        onClick={handleProceedToPayment}
+                                        disabled={!isFormValid || isLoading}
+                                        className="w-full flex items-center justify-center gap-3 px-8 py-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-bold text-lg disabled:opacity-40 disabled:cursor-not-allowed hover:from-amber-400 hover:to-amber-500 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(245,158,11,0.3)]"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Préparation du paiement...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="w-5 h-5" />
+                                                Payer {SUBSCRIPTION.price}€
+                                                <ArrowRight className="w-5 h-5" />
+                                            </>
+                                        )}
+                                    </button>
+                                </motion.div>
+                            )}
 
-                                <p className="text-center text-xs text-white/30 mt-4">
-                                    Vous serez redirigé vers Stripe pour le paiement sécurisé
-                                </p>
-                            </motion.div>
+                            {/* Step 2: Embedded Stripe Payment */}
+                            {step === 'payment' && clientSecret && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.5 }}
+                                    className="bg-abyss-600/40 backdrop-blur-xl border border-horizon-400/20 rounded-2xl p-6 md:p-8"
+                                >
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-10 h-10 rounded-full bg-horizon-400/10 flex items-center justify-center">
+                                            <CreditCard className="w-5 h-5 text-horizon-400" />
+                                        </div>
+                                        <h2 className="text-xl font-playfair italic text-stellar-100">
+                                            Paiement sécurisé
+                                        </h2>
+                                    </div>
+
+                                    <Elements
+                                        stripe={stripePromise}
+                                        options={{
+                                            clientSecret,
+                                            appearance: {
+                                                theme: 'night',
+                                                variables: {
+                                                    colorPrimary: '#f59e0b',
+                                                    colorBackground: '#1a1a2e',
+                                                    colorText: '#e2e8f0',
+                                                    borderRadius: '12px',
+                                                },
+                                            },
+                                        }}
+                                    >
+                                        <StripePayment
+                                            amount={2900}
+                                            onPaymentSuccess={handlePaymentSuccess}
+                                            onPaymentError={handlePaymentError}
+                                        />
+                                    </Elements>
+                                </motion.div>
+                            )}
 
                             {/* Security Footer */}
                             <motion.div
