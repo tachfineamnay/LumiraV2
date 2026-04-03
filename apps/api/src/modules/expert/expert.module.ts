@@ -10,10 +10,12 @@ import { RolesGuard } from './guards/roles.guard';
 import { ExpertGateway } from './expert.gateway';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IdGenerator } from '../../utils/IdGenerator';
+import { ServicesModule } from '../../services/services.module';
 
 @Module({
     imports: [
         ConfigModule,
+        ServicesModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
             inject: [ConfigService],

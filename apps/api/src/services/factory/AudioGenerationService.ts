@@ -143,6 +143,14 @@ export class AudioGenerationService {
                         `audio/synthesis/${order.orderNumber}/synthesis.mp3`,
                     );
 
+                    // Remove previous audio files to avoid duplicates on retry
+                    await this.prisma.orderFile.deleteMany({
+                        where: {
+                            orderId: order.id,
+                            type: 'AUDIO_READING',
+                        },
+                    });
+
                     // Store in OrderFile for the global reading audio
                     await this.prisma.orderFile.create({
                         data: {

@@ -11,6 +11,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IdGenerator } from '../../utils/IdGenerator';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DigitalSoulService } from '../../services/factory/DigitalSoulService';
+import { VertexOracle } from '../../services/factory/VertexOracle';
 import * as bcrypt from 'bcryptjs';
 import { Expert, Order, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
 
@@ -73,7 +75,11 @@ export class ExpertService {
         private configService: ConfigService,
         private idGenerator: IdGenerator,
         private notificationsService: NotificationsService,
-    ) { }
+        private digitalSoulService: DigitalSoulService,
+        private vertexOracle: VertexOracle,
+    ) {
+        this.logger.log(`🔌 DigitalSoulService injected via DI`);
+    }
 
     // ========================
     // AUTHENTICATION
@@ -505,25 +511,8 @@ export class ExpertService {
         this.logger.log(`🚀 Starting internal generation for order ${order.orderNumber}`);
 
         try {
-            // Dynamic import to avoid circular dependencies
-            const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
-            const { VertexOracle } = await import('../../services/factory/VertexOracle');
-            const { PdfFactory } = await import('../../services/factory/PdfFactory');
-
-            // Create service instances
-            const vertexOracle = new VertexOracle(this.configService, this.prisma);
-            const pdfFactory = new PdfFactory(this.configService);
-            await pdfFactory.onModuleInit();
-            
-            const digitalSoulService = new DigitalSoulService(
-                this.configService,
-                this.prisma,
-                vertexOracle,
-                pdfFactory,
-            );
-
             // Generate AI content only (no PDF yet) - will be validated by expert
-            const result = await digitalSoulService.generateContentOnly(dto.orderId);
+            const result = await this.digitalSoulService.generateContentOnly(dto.orderId);
 
             this.logger.log(`✅ Order ${order.orderNumber} content generated - Archetype: ${result.archetype}`);
             this.logger.log(`📋 Order now AWAITING_VALIDATION`);
@@ -636,23 +625,8 @@ export class ExpertService {
 
             // Generate PDF and finalize order using DigitalSoulService
             try {
-                const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
-                const { VertexOracle } = await import('../../services/factory/VertexOracle');
-                const { PdfFactory } = await import('../../services/factory/PdfFactory');
-
-                const vertexOracle = new VertexOracle(this.configService, this.prisma);
-                const pdfFactory = new PdfFactory(this.configService);
-                await pdfFactory.onModuleInit();
-
-                const digitalSoulService = new DigitalSoulService(
-                    this.configService,
-                    this.prisma,
-                    vertexOracle,
-                    pdfFactory,
-                );
-
                 // Generate PDF and finalize
-                const result = await digitalSoulService.finalizeWithPdf(dto.orderId);
+                const result = await this.digitalSoulService.finalizeWithPdf(dto.orderId);
 
                 // Update with expert validation info
                 const updatedOrder = await this.prisma.order.update({
@@ -724,25 +698,8 @@ export class ExpertService {
         this.logger.log(`🔄 Starting regeneration for order ${order.orderNumber}`);
 
         try {
-            // Dynamic import to avoid circular dependencies
-            const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
-            const { VertexOracle } = await import('../../services/factory/VertexOracle');
-            const { PdfFactory } = await import('../../services/factory/PdfFactory');
-
-            // Create service instances
-            const vertexOracle = new VertexOracle(this.configService, this.prisma);
-            const pdfFactory = new PdfFactory(this.configService);
-            await pdfFactory.onModuleInit();
-            
-            const digitalSoulService = new DigitalSoulService(
-                this.configService,
-                this.prisma,
-                vertexOracle,
-                pdfFactory,
-            );
-
             // Regenerate using internal factory
-            const result = await digitalSoulService.processOrderGeneration(orderId);
+            const result = await this.digitalSoulService.processOrderGeneration(orderId);
 
             this.logger.log(`✅ Order ${order.orderNumber} regenerated successfully - Archetype: ${result.archetype}`);
 
@@ -806,26 +763,8 @@ export class ExpertService {
     }> {
         this.logger.log(`🚀 Starting AI reading generation for order: ${orderId}${expertPrompt ? ' (with expert prompt)' : ''}`);
 
-        // Import the DigitalSoulService dynamically to avoid circular dependencies
-        // In production, this should be properly injected
-        const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
-        const { VertexOracle } = await import('../../services/factory/VertexOracle');
-        const { PdfFactory } = await import('../../services/factory/PdfFactory');
-
-        // Create service instances (in production, use proper DI)
-        const vertexOracle = new VertexOracle(this.configService, this.prisma);
-        const pdfFactory = new PdfFactory(this.configService);
-        await pdfFactory.onModuleInit();
-
-        const digitalSoulService = new DigitalSoulService(
-            this.configService,
-            this.prisma,
-            vertexOracle,
-            pdfFactory,
-        );
-
         try {
-            const result = await digitalSoulService.processOrderGeneration(orderId);
+            const result = await this.digitalSoulService.processOrderGeneration(orderId);
 
             this.logger.log(`✅ AI reading generation completed: ${result.orderNumber} - ${result.archetype}`);
 
@@ -868,10 +807,6 @@ export class ExpertService {
         this.logger.log(`🎨 Refining content for order ${order.orderNumber} with instruction: "${dto.instruction}"`);
 
         try {
-            // Import VertexOracle for AI refinement
-            const { VertexOracle } = await import('../../services/factory/VertexOracle');
-            const vertexOracle = new VertexOracle(this.configService, this.prisma);
-
             // Build the refinement prompt - matching spec exactly
             const systemPrompt = `Tu es Oracle Lumira, un guide spirituel expert en lectures karmiques et astrologiques.
 Voici un texte sacré. Voici l'instruction de l'Expert : [Instruction].
@@ -887,7 +822,7 @@ ${dto.currentContent}
 
 ## Texte modifié:`
 
-            const refinedContent = await vertexOracle.refineText(userPrompt, {
+            const refinedContent = await this.vertexOracle.refineText(userPrompt, {
                 systemPrompt,
                 maxTokens: 4096,
                 temperature: 0.7,
@@ -960,10 +895,6 @@ ${dto.currentContent}
         this.logger.log(`💬 AI Chat for order ${order.orderNumber} - Expert: ${expert.name}`);
 
         try {
-            // Import VertexOracle for AI chat
-            const { VertexOracle } = await import('../../services/factory/VertexOracle');
-            const vertexOracle = new VertexOracle(this.configService, this.prisma);
-
             const profile = order.user?.profile;
             const currentContent = (order.generatedContent as Record<string, unknown>)?.lecture as string || '';
 
@@ -1007,7 +938,7 @@ RÈGLES:
 MESSAGE DE L'EXPERT:`;
 
             // Use the chatWithUser method but with our custom system prompt
-            const response = await vertexOracle.refineText(
+            const response = await this.vertexOracle.refineText(
                 `${systemPrompt}\n\n${dto.message}`,
                 {
                     maxTokens: 1024,
@@ -1071,22 +1002,7 @@ MESSAGE DE L'EXPERT:`;
         if (approval === 'APPROVED') {
             // Generate PDF and finalize
             try {
-                const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
-                const { VertexOracle } = await import('../../services/factory/VertexOracle');
-                const { PdfFactory } = await import('../../services/factory/PdfFactory');
-
-                const vertexOracle = new VertexOracle(this.configService, this.prisma);
-                const pdfFactory = new PdfFactory(this.configService);
-                await pdfFactory.onModuleInit();
-
-                const digitalSoulService = new DigitalSoulService(
-                    this.configService,
-                    this.prisma,
-                    vertexOracle,
-                    pdfFactory,
-                );
-
-                const result = await digitalSoulService.finalizeWithPdf(orderId);
+                const result = await this.digitalSoulService.finalizeWithPdf(orderId);
 
                 const updatedOrder = await this.prisma.order.update({
                     where: { id: orderId },
@@ -1196,24 +1112,8 @@ MESSAGE DE L'EXPERT:`;
                 },
             });
 
-            // 2. Generate PDF using Gotenberg via DigitalSoulService
-            const { DigitalSoulService } = await import('../../services/factory/DigitalSoulService');
-            const { VertexOracle } = await import('../../services/factory/VertexOracle');
-            const { PdfFactory } = await import('../../services/factory/PdfFactory');
-
-            const vertexOracle = new VertexOracle(this.configService, this.prisma);
-            const pdfFactory = new PdfFactory(this.configService);
-            await pdfFactory.onModuleInit();
-
-            const digitalSoulService = new DigitalSoulService(
-                this.configService,
-                this.prisma,
-                vertexOracle,
-                pdfFactory,
-            );
-
-            // Finalize with PDF generation
-            const result = await digitalSoulService.finalizeWithPdf(orderId);
+            // 2. Generate PDF and finalize
+            const result = await this.digitalSoulService.finalizeWithPdf(orderId);
 
             // 3. Update order with validation info
             await this.prisma.order.update({

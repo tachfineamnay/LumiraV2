@@ -15,6 +15,7 @@ import {
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
+import { AudioGenerationService } from '../../services/factory/AudioGenerationService';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
@@ -38,7 +39,19 @@ export class ExpertController {
     constructor(
         private readonly expertService: ExpertService,
         private readonly adminSettingsService: AdminSettingsService,
+        private readonly audioGenerationService: AudioGenerationService,
     ) { }
+
+    // ========================
+    // TEST AUDIO (temporary)
+    // ========================
+
+    @Post('test-audio/:orderId')
+    @Roles('ADMIN')
+    async testAudioGeneration(@Param('orderId') orderId: string) {
+        await this.audioGenerationService.generateAllAudio(orderId);
+        return { message: `Audio generation triggered for order ${orderId}` };
+    }
 
     // ========================
     // AUTHENTICATION
