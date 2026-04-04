@@ -31,6 +31,7 @@ import {
     RefineContentDto,
     FinalizeOrderDto,
     ChatOrderDto,
+    ClientsQueryDto,
 } from './dto';
 
 @Controller('expert')
@@ -289,8 +290,13 @@ export class ExpertController {
     // ========================
 
     @Get('clients')
-    async getClients(@Query() query: PaginationDto) {
+    async getClients(@Query() query: ClientsQueryDto) {
         return this.expertService.getClients(query);
+    }
+
+    @Get('clients/stats')
+    async getClientsStats() {
+        return this.expertService.getClientsStats();
     }
 
     @Post('clients')

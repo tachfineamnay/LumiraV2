@@ -29,6 +29,7 @@ import {
     UpdateClientStatusDto,
     RefineContentDto,
     ChatOrderDto,
+    ClientsQueryDto,
 } from './dto';
 
 interface ExpertEntity {
@@ -1241,8 +1242,19 @@ MESSAGE DE L'EXPERT:`;
         return { introduction, sections, conclusion };
     }
 
-    async getClients(dto: PaginationDto): Promise<PaginatedResult<User>> {
-        const { page = 1, limit = 20, search } = dto;
+    async getClients(dto: ClientsQueryDto) {
+        const {
+            page = 1,
+            limit = 20,
+            search,
+            status,
+            subscriptionStatus,
+            hasOrders,
+            dateFrom,
+            dateTo,
+            sortBy = 'createdAt',
+            sortOrder = 'desc',
+        } = dto;
         const skip = (page - 1) * limit;
 
         const where: Record<string, unknown> = {};
@@ -1256,23 +1268,114 @@ MESSAGE DE L'EXPERT:`;
             ];
         }
 
+        if (status) {
+            where.status = status;
+        }
+
+        if (subscriptionStatus) {
+            where.subscriptionStatus = subscriptionStatus;
+        }
+
+        if (hasOrders === true) {
+            where.totalOrders = { gt: 0 };
+        } else if (hasOrders === false) {
+            where.totalOrders = 0;
+        }
+
+        if (dateFrom || dateTo) {
+            const createdAt: Record<string, Date> = {};
+            if (dateFrom) createdAt.gte = new Date(dateFrom);
+            if (dateTo) {
+                const end = new Date(dateTo);
+                end.setHours(23, 59, 59, 999);
+                createdAt.lte = end;
+            }
+            where.createdAt = createdAt;
+        }
+
+        // Build orderBy — totalSpent needs post-sort
+        const needsPostSort = sortBy === 'totalSpent';
+        const orderBy: Record<string, string> = needsPostSort
+            ? { createdAt: 'desc' }
+            : { [sortBy]: sortOrder };
+
         const [clients, total] = await Promise.all([
             this.prisma.user.findMany({
                 where,
-                orderBy: { createdAt: 'desc' },
-                skip,
-                take: limit,
-                include: { profile: true, _count: { select: { orders: true } } },
+                orderBy,
+                skip: needsPostSort ? undefined : skip,
+                take: needsPostSort ? undefined : limit,
+                include: {
+                    profile: { select: { id: true, profileCompleted: true } },
+                    subscription: { select: { status: true, currentPeriodEnd: true } },
+                    orders: { select: { amount: true, status: true, formData: true }, orderBy: { createdAt: 'desc' } },
+                    _count: { select: { orders: true } },
+                },
             }),
             this.prisma.user.count({ where }),
         ]);
 
+        // Enrich with computed fields
+        const enriched = clients.map((client) => {
+            const completedOrders = client.orders.filter((o) => o.status === 'COMPLETED' || o.status === 'PAID');
+            const totalSpent = completedOrders.reduce((sum, o) => sum + o.amount, 0);
+            const lastOrder = client.orders[0];
+            const lastLevel = lastOrder?.formData
+                ? (lastOrder.formData as Record<string, unknown>)?.level as string || null
+                : null;
+
+            return {
+                id: client.id,
+                refId: client.refId,
+                email: client.email,
+                firstName: client.firstName,
+                lastName: client.lastName,
+                phone: client.phone,
+                status: client.status,
+                subscriptionStatus: client.subscriptionStatus,
+                totalOrders: client._count.orders,
+                totalSpent,
+                lastLevel,
+                lastOrderAt: client.lastOrderAt,
+                tags: client.tags,
+                source: client.source,
+                createdAt: client.createdAt,
+                profile: client.profile,
+                subscription: client.subscription,
+            };
+        });
+
+        // Post-sort if totalSpent
+        if (needsPostSort) {
+            enriched.sort((a, b) =>
+                sortOrder === 'asc' ? a.totalSpent - b.totalSpent : b.totalSpent - a.totalSpent,
+            );
+            const paginated = enriched.slice(skip, skip + limit);
+            return { data: paginated, total, page, limit, totalPages: Math.ceil(total / limit) };
+        }
+
+        return { data: enriched, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
+    async getClientsStats() {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const [totalClients, activeSubscriptions, newThisMonth, revenueResult] = await Promise.all([
+            this.prisma.user.count(),
+            this.prisma.user.count({ where: { subscriptionStatus: 'ACTIVE' } }),
+            this.prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
+            this.prisma.order.aggregate({
+                where: { status: { in: ['COMPLETED', 'PAID'] } },
+                _sum: { amount: true },
+            }),
+        ]);
+
         return {
-            data: clients,
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
+            totalClients,
+            activeSubscriptions,
+            newThisMonth,
+            totalRevenue: revenueResult._sum.amount || 0,
         };
     }
 

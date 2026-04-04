@@ -7,3 +7,4 @@ export * from './pagination.dto';
 export * from './create-client.dto';
 export * from './refine-content.dto';
 export * from './chat-order.dto';
+export * from './clients-query.dto';
