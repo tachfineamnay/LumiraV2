@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useExpertAuth } from '@/context/ExpertAuthContext';
 import { ClientIdentityHeader } from '@/components/desk-v2/clients/ClientIdentityHeader';
 import { ClientTabs } from '@/components/desk-v2/clients/ClientTabs';
 import { ConfirmModal } from '@/components/desk-v2/shared/ConfirmModal';
@@ -19,7 +20,9 @@ import { ClientFullData } from '@/components/desk-v2/clients/types';
 export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { expert } = useExpertAuth();
   const clientId = params.id as string;
+  const isAdmin = expert?.role === 'ADMIN';
 
   const [client, setClient] = useState<ClientFullData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -108,7 +111,7 @@ export default function ClientDetailPage() {
       <ClientIdentityHeader
         client={client}
         onStatusChange={(status) => setStatusAction(status)}
-        onDelete={() => setShowDeleteClient(true)}
+        onDelete={isAdmin ? () => setShowDeleteClient(true) : undefined}
         onRefresh={fetchClient}
       />
 

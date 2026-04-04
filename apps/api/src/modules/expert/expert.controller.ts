@@ -90,6 +90,13 @@ export class ExpertController {
         return this.expertService.getProfile(expert.id);
     }
 
+    @Get('activity')
+    @SkipThrottle()
+    async getActivity(@Query('limit') limit?: string) {
+        const parsedLimit = Math.min(Math.max(parseInt(limit || '10', 10) || 10, 1), 50);
+        return this.expertService.getActivity(parsedLimit);
+    }
+
     // ========================
     // ORDERS
     // ========================

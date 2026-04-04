@@ -36,10 +36,10 @@ interface ArchivedOrder {
 }
 
 interface PaginatedResponse {
-  orders: ArchivedOrder[];
+  data: ArchivedOrder[];
   total: number;
   page: number;
-  pageSize: number;
+  limit: number;
   totalPages: number;
 }
 
@@ -57,12 +57,12 @@ export default function ArchivePage() {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        pageSize: '20',
+        limit: '20',
         status: 'COMPLETED',
         ...(searchQuery && { search: searchQuery }),
       });
-      const { data } = await api.get<PaginatedResponse>(`/expert/orders/archive?${params}`);
-      setOrders(data.orders);
+      const { data } = await api.get<PaginatedResponse>(`/expert/orders/history?${params}`);
+      setOrders(data.data);
       setTotalPages(data.totalPages);
       setTotalOrders(data.total);
     } catch (error) {

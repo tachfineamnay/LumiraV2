@@ -116,8 +116,9 @@ export function KanbanBoard() {
     try {
       await api.post(`/expert/orders/${orderId}/assign`);
       // Optimistic update will come via socket order:claimed event
-    } catch (error) {
-      toast.error('Impossible de prendre la commande');
+    } catch (error: unknown) {
+      const msg = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Impossible de prendre la commande');
       console.error(error);
     }
   };

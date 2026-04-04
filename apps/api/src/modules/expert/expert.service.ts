@@ -210,6 +210,60 @@ export class ExpertService {
     // ========================
 
     /**
+     * Get recent activity feed for the desk dashboard.
+     * Returns recent order events (new, completed, etc.).
+     */
+    async getActivity(limit: number) {
+        const recentOrders = await this.prisma.order.findMany({
+            orderBy: { updatedAt: 'desc' },
+            take: limit,
+        });
+
+        const activities = recentOrders.map(order => {
+            let type: string;
+            let message: string;
+            let timestamp: string;
+
+            switch (order.status) {
+                case 'PAID':
+                    type = 'new_order';
+                    message = `Nouvelle commande de ${order.userName || order.userEmail}`;
+                    timestamp = order.createdAt.toISOString();
+                    break;
+                case 'PROCESSING':
+                    type = 'processing';
+                    message = `Commande ${order.orderNumber} en cours de traitement`;
+                    timestamp = order.updatedAt.toISOString();
+                    break;
+                case 'AWAITING_VALIDATION':
+                    type = 'awaiting_validation';
+                    message = `Lecture ${order.orderNumber} prête à valider`;
+                    timestamp = order.updatedAt.toISOString();
+                    break;
+                case 'COMPLETED':
+                    type = 'completed';
+                    message = `Commande ${order.orderNumber} terminée`;
+                    timestamp = order.updatedAt.toISOString();
+                    break;
+                default:
+                    type = 'status_change';
+                    message = `Commande ${order.orderNumber} → ${order.status}`;
+                    timestamp = order.updatedAt.toISOString();
+            }
+
+            return {
+                id: order.id,
+                type,
+                message,
+                orderNumber: order.orderNumber,
+                timestamp,
+            };
+        });
+
+        return { activities };
+    }
+
+    /**
      * Get newly paid orders (PAID status).
      * These are orders that just completed payment and are waiting for expert to start work.
      */
