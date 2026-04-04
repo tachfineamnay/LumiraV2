@@ -149,7 +149,6 @@ export class ExpertController {
     }
 
     @Delete('orders/:id')
-    @Roles('ADMIN')
     @HttpCode(HttpStatus.NO_CONTENT)
     async deleteOrder(@Param('id') id: string) {
         await this.expertService.deleteOrder(id);
@@ -342,7 +341,6 @@ export class ExpertController {
     }
 
     @Delete('clients/:id')
-    @Roles('ADMIN')
     @HttpCode(HttpStatus.NO_CONTENT)
     async deleteClient(@Param('id') id: string) {
         await this.expertService.deleteClient(id);

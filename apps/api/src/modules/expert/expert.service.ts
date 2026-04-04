@@ -1752,29 +1752,32 @@ MESSAGE DE L'EXPERT:`;
             throw new NotFoundException('Client non trouvé');
         }
 
-        // Delete all order files
-        await this.prisma.orderFile.deleteMany({
-            where: { order: { userId: clientId } },
-        });
+        // Atomic transaction: delete all related data then the user
+        await this.prisma.$transaction(async (tx) => {
+            // Delete all order files (no cascade from Order→User)
+            await tx.orderFile.deleteMany({
+                where: { order: { userId: clientId } },
+            });
 
-        // Delete all orders
-        await this.prisma.order.deleteMany({
-            where: { userId: clientId },
-        });
+            // Delete all orders (no cascade from User)
+            await tx.order.deleteMany({
+                where: { userId: clientId },
+            });
 
-        // Delete insights (no onDelete: Cascade in schema)
-        await this.prisma.insight.deleteMany({
-            where: { userId: clientId },
-        });
+            // Delete insights (no relation defined to User in schema)
+            await tx.insight.deleteMany({
+                where: { userId: clientId },
+            });
 
-        // Delete profile
-        await this.prisma.userProfile.deleteMany({
-            where: { userId: clientId },
-        });
+            // Delete profile (no cascade from User)
+            await tx.userProfile.deleteMany({
+                where: { userId: clientId },
+            });
 
-        // Delete user (cascades: SpiritualPath, ChatSessions, AkashicRecord, Dreams, Notifications, Subscription)
-        await this.prisma.user.delete({
-            where: { id: clientId },
+            // Delete user — auto-cascades: SpiritualPath, ChatSession, AkashicRecord, Subscription, Dream, Notification
+            await tx.user.delete({
+                where: { id: clientId },
+            });
         });
 
         this.logger.log(`🗑️ Client ${clientId} and all related data deleted`);
