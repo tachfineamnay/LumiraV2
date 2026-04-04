@@ -20,7 +20,9 @@ import {
   History,
   RotateCcw,
   Lock,
+  Trash2,
 } from 'lucide-react';
+import { ConfirmModal } from '../shared/ConfirmModal';
 
 // =============================================================================
 // TYPES
@@ -70,6 +72,10 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   
   // Seal confirmation modal
   const [showSealConfirm, setShowSealConfirm] = useState(false);
+  
+  // Delete confirmation
+  const [showDeleteOrder, setShowDeleteOrder] = useState(false);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
 
   // Socket for real-time updates
   const { focusOrder, blurOrder } = useSocket({
@@ -384,13 +390,20 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             })}
           </div>
 
-          {/* Right: status */}
+          {/* Right: status + actions */}
           <div className="flex items-center gap-2">
             {isReadOnly && (
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-600 border border-emerald-500/30">
                 Livrée
               </span>
             )}
+            <button
+              onClick={() => setShowDeleteOrder(true)}
+              title="Supprimer la commande"
+              className="p-2 rounded-lg hover:bg-red-500/10 text-desk-muted hover:text-red-600 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -509,6 +522,29 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ═══════════════ DELETE ORDER CONFIRMATION ═══════════════ */}
+      <ConfirmModal
+        isOpen={showDeleteOrder}
+        onClose={() => !isDeletingOrder && setShowDeleteOrder(false)}
+        onConfirm={async () => {
+          try {
+            setIsDeletingOrder(true);
+            await api.delete(`/expert/orders/${orderId}`);
+            toast.success('Commande supprimée');
+            router.push('/admin/board');
+          } catch (err) {
+            toast.error('Erreur lors de la suppression');
+            console.error(err);
+            setIsDeletingOrder(false);
+          }
+        }}
+        title="Supprimer la commande"
+        description={`Supprimer définitivement la commande ${order?.orderNumber || ''} ? Tous les fichiers et contenus générés seront perdus. Cette action est irréversible.`}
+        confirmLabel="Supprimer"
+        variant="danger"
+        isLoading={isDeletingOrder}
+      />
 
       {/* ═══════════════ SEAL CONFIRMATION MODAL ═══════════════ */}
       <AnimatePresence>

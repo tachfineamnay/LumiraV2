@@ -79,7 +79,7 @@ export function ClientTabs({ client, onRefresh }: ClientTabsProps) {
         transition={{ duration: 0.2 }}
         className="p-5"
       >
-        {activeTab === 'profil' && <TabProfil client={client} />}
+        {activeTab === 'profil' && <TabProfil client={client} onRefresh={onRefresh} />}
         {activeTab === 'lectures' && <TabLectures client={client} onRefresh={onRefresh} />}
         {activeTab === 'insights' && <TabInsights client={client} />}
         {activeTab === 'parcours' && <TabParcours client={client} />}

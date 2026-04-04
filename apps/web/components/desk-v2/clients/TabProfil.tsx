@@ -18,11 +18,17 @@ import {
   X,
   ZoomIn,
   CheckCircle,
+  Pencil,
+  Save,
+  Loader2,
 } from 'lucide-react';
+import api from '@/lib/api';
+import { toast } from 'sonner';
 import { ClientFullData } from './types';
 
 interface TabProfilProps {
   client: ClientFullData;
+  onRefresh?: () => void;
 }
 
 function CollapsibleSection({ title, icon, children, defaultOpen = true }: { title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
@@ -76,7 +82,7 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-export function TabProfil({ client }: TabProfilProps) {
+export function TabProfil({ client, onRefresh }: TabProfilProps) {
   const { profile, stats, crmNotes } = client;
   const [lightboxImage, setLightboxImage] = useState<{ url: string; label: string } | null>(null);
 
@@ -163,13 +169,11 @@ export function TabProfil({ client }: TabProfilProps) {
 
           {/* CRM Notes */}
           <CollapsibleSection title="Notes CRM" icon={<User className="w-4 h-4 text-blue-600" />} defaultOpen={!!crmNotes}>
-            {crmNotes ? (
-              <div className="p-3 bg-desk-hover rounded-lg">
-                <p className="text-sm text-desk-text whitespace-pre-wrap">{crmNotes}</p>
-              </div>
-            ) : (
-              <EmptyState message="Aucune note de l'expert..." />
-            )}
+            <EditableNotes
+              clientId={client.id}
+              initialNotes={crmNotes || ''}
+              onSaved={onRefresh}
+            />
           </CollapsibleSection>
         </div>
 
@@ -283,5 +287,80 @@ export function TabProfil({ client }: TabProfilProps) {
         </div>
       )}
     </>
+  );
+}
+
+// Editable CRM Notes Component
+function EditableNotes({ clientId, initialNotes, onSaved }: { clientId: string; initialNotes: string; onSaved?: () => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [notes, setNotes] = useState(initialNotes);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      await api.patch(`/expert/clients/${clientId}`, { notes });
+      toast.success('Notes mises à jour');
+      setIsEditing(false);
+      onSaved?.();
+    } catch (err) {
+      toast.error('Erreur lors de la sauvegarde');
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="space-y-2">
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={5}
+          placeholder="Ajoutez vos notes sur ce client..."
+          className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-sm text-desk-text placeholder:text-desk-subtle focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-y"
+          autoFocus
+        />
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            onClick={() => { setNotes(initialNotes); setIsEditing(false); }}
+            disabled={isSaving}
+            className="px-3 py-1.5 text-xs text-desk-muted hover:text-desk-text hover:bg-desk-hover rounded-lg transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            Sauvegarder
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group relative">
+      {notes ? (
+        <div className="p-3 bg-desk-hover rounded-lg">
+          <p className="text-sm text-desk-text whitespace-pre-wrap">{notes}</p>
+        </div>
+      ) : (
+        <div className="p-3 bg-desk-hover rounded-lg text-center">
+          <p className="text-sm text-desk-subtle italic">Aucune note de l&apos;expert...</p>
+        </div>
+      )}
+      <button
+        onClick={() => setIsEditing(true)}
+        className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-desk-card text-desk-muted hover:text-amber-600 transition-all"
+        title="Modifier les notes"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+    </div>
   );
 }

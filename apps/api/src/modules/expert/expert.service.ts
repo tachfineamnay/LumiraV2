@@ -1680,12 +1680,17 @@ MESSAGE DE L'EXPERT:`;
             where: { userId: clientId },
         });
 
+        // Delete insights (no onDelete: Cascade in schema)
+        await this.prisma.insight.deleteMany({
+            where: { userId: clientId },
+        });
+
         // Delete profile
         await this.prisma.userProfile.deleteMany({
             where: { userId: clientId },
         });
 
-        // Delete user
+        // Delete user (cascades: SpiritualPath, ChatSessions, AkashicRecord, Dreams, Notifications, Subscription)
         await this.prisma.user.delete({
             where: { id: clientId },
         });

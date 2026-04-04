@@ -12,9 +12,11 @@ import {
   XCircle,
   Loader2,
   AlertCircle,
+  Trash2,
 } from 'lucide-react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { LevelBadge } from '../shared/LevelBadge';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { ClientFullData, ClientOrder } from './types';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -28,6 +30,8 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
   const { orders } = client;
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [regeneratingOrder, setRegeneratingOrder] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ClientOrder | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleViewPdf = async (order: ClientOrder) => {
     // Build the PDF URL from the order
@@ -47,6 +51,22 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
       console.error(error);
     } finally {
       setRegeneratingOrder(null);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      await api.delete(`/expert/orders/${deleteTarget.id}`);
+      toast.success('Commande supprimée', { description: deleteTarget.orderNumber });
+      setDeleteTarget(null);
+      onRefresh();
+    } catch (error) {
+      toast.error('Erreur lors de la suppression');
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -78,6 +98,7 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
               onToggle={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
               onViewPdf={() => handleViewPdf(order)}
               onRegenerate={() => handleRegenerate(order.id)}
+              onDelete={() => setDeleteTarget(order)}
               isRegenerating={regeneratingOrder === order.id}
             />
           ))
@@ -101,6 +122,17 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
           </div>
         </div>
       )}
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => !isDeleting && setDeleteTarget(null)}
+        onConfirm={handleDeleteOrder}
+        title="Supprimer la commande"
+        description={`Supprimer définitivement la commande ${deleteTarget?.orderNumber || ''} ? Tous les fichiers et contenus générés seront perdus. Cette action est irréversible.`}
+        confirmLabel="Supprimer"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </motion.div>
   );
 }
@@ -113,6 +145,7 @@ function OrderItem({
   onToggle,
   onViewPdf,
   onRegenerate,
+  onDelete,
   isRegenerating,
 }: {
   order: ClientOrder;
@@ -121,6 +154,7 @@ function OrderItem({
   onToggle: () => void;
   onViewPdf: () => void;
   onRegenerate: () => void;
+  onDelete: () => void;
   isRegenerating: boolean;
 }) {
   const isCompleted = order.status === 'COMPLETED';
@@ -254,6 +288,14 @@ function OrderItem({
                 Relancer
               </button>
             )}
+
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-lg text-xs font-medium transition-colors ml-auto"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Supprimer
+            </button>
 
             {!hasPdf && isCompleted && (
               className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-600 rounded-lg text-xs"
