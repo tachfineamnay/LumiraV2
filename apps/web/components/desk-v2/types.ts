@@ -128,7 +128,7 @@ export const KANBAN_COLUMNS: KanbanColumn[] = [
     id: 'validation',
     title: 'Validation',
     icon: '👁',
-    color: 'purple',
+    color: 'rose',
     statuses: ['AWAITING_VALIDATION'],
   },
   {

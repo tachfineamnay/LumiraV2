@@ -60,15 +60,15 @@ export function Sidebar() {
   return (
     <motion.aside
       initial={false}
-      animate={{ width: isCollapsed ? 72 : 240 }}
+      animate={{ width: isCollapsed ? 64 : 220 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
       className="relative flex flex-col bg-desk-surface border-r border-desk-border"
     >
       {/* Logo */}
-      <div className="h-16 flex items-center px-4 border-b border-desk-border">
+      <div className="h-12 flex items-center px-3 border-b border-desk-border">
         <Link href="/admin" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-white" />
           </div>
           <AnimatePresence>
             {!isCollapsed && (
@@ -76,7 +76,7 @@ export function Sidebar() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                className="font-semibold text-lg text-desk-text"
+                className="font-semibold text-sm text-desk-text"
               >
                 Oracle Desk
               </motion.span>
@@ -86,7 +86,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-3 space-y-1">
+      <nav className="flex-1 py-3 px-2 space-y-0.5">
         {NAV_ITEMS.map((item) => {
           const isActive = item.exact 
             ? pathname === item.href 
@@ -97,7 +97,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={`
-                group relative flex items-center gap-3 px-3 py-2.5 rounded-lg
+                group relative flex items-center gap-3 px-2.5 py-2 rounded-lg
                 transition-all duration-150
                 ${isActive 
                   ? 'bg-amber-500/10 text-amber-600' 
@@ -163,11 +163,11 @@ export function Sidebar() {
       </button>
 
       {/* Bottom section */}
-      <div className="p-3 border-t border-desk-border">
+      <div className="p-2 border-t border-desk-border">
         <button
           onClick={handleLogout}
           className={`
-            w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
+            w-full flex items-center gap-3 px-2.5 py-2 rounded-lg
             text-desk-muted hover:bg-red-500/10 hover:text-red-600
             transition-all duration-150
           `}

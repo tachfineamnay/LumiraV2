@@ -16,13 +16,13 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 border-b border-desk-border bg-desk-surface">
+    <header className="h-12 flex items-center justify-between px-4 border-b border-desk-border bg-desk-surface">
       {/* Search */}
       <button
         onClick={handleSearchClick}
-        className="flex items-center gap-3 px-4 py-2 rounded-lg bg-desk-card 
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-desk-card 
                    border border-desk-border hover:border-desk-border
-                   text-desk-muted hover:text-desk-text transition-all w-80"
+                   text-desk-muted hover:text-desk-text transition-all w-64"
       >
         <Search className="w-4 h-4" />
         <span className="text-sm">Rechercher...</span>
@@ -33,7 +33,7 @@ export function Header() {
       </button>
 
       {/* Right section */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {/* Connection status */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-desk-card border border-desk-border">
           {isConnected ? (
@@ -72,8 +72,8 @@ export function Header() {
         </button>
 
         {/* Expert avatar */}
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 
-                        flex items-center justify-center text-sm font-bold text-white">
+        <div className="w-7 h-7 rounded-full bg-amber-500 
+                        flex items-center justify-center text-xs font-bold text-white">
           {isAuthenticated && expert?.name ? expert.name[0].toUpperCase() : 'E'}
         </div>
       </div>

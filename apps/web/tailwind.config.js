@@ -109,6 +109,9 @@ module.exports = {
                     muted: "#64748b",
                     subtle: "#94a3b8",
                     accent: "#f59e0b",
+                    success: "#10b981",
+                    danger: "#ef4444",
+                    info: "#3b82f6",
                 },
             },
             fontFamily: {

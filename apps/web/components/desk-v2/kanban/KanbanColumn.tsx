@@ -32,11 +32,11 @@ const COLUMN_COLORS = {
     badge: 'bg-blue-500/20 text-blue-600',
     dot: 'bg-blue-500',
   },
-  purple: {
-    header: 'from-purple-500/20 to-purple-600/5',
-    border: 'border-purple-500/20',
-    badge: 'bg-purple-500/20 text-purple-600',
-    dot: 'bg-purple-500',
+  rose: {
+    header: 'from-rose-500/20 to-rose-600/5',
+    border: 'border-rose-500/20',
+    badge: 'bg-rose-500/20 text-rose-600',
+    dot: 'bg-rose-500',
   },
   green: {
     header: 'from-emerald-500/20 to-emerald-600/5',
@@ -66,7 +66,7 @@ export function KanbanColumn({ column, orders, isLoading, currentExpertId, order
       className={`
         w-80 flex-shrink-0 flex flex-col rounded-xl
         bg-desk-surface border transition-colors duration-200
-        ${hasUrgentOrders ? 'border-purple-500/60 shadow-lg shadow-purple-500/10' : isOver ? `${colors.border} bg-desk-card` : 'border-desk-border'}
+        ${hasUrgentOrders ? 'border-amber-500/60 shadow-lg shadow-amber-500/10' : isOver ? `${colors.border} bg-desk-card` : 'border-desk-border'}
       `}
     >
       {/* Header */}
@@ -76,7 +76,7 @@ export function KanbanColumn({ column, orders, isLoading, currentExpertId, order
             <span className="text-lg">{column.icon}</span>
             <h3 className="font-semibold text-desk-text">{column.title}</h3>
             {hasUrgentOrders && (
-              <span className="text-xs font-bold text-purple-600 bg-purple-500/10 px-1.5 py-0.5 rounded">
+              <span className="text-xs font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded">
                 À valider
               </span>
             )}

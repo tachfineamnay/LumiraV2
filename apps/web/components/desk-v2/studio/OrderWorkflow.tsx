@@ -333,8 +333,8 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             </button>
             
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 
-                              flex items-center justify-center text-sm font-bold text-white">
+              <div className="w-8 h-8 rounded-lg bg-amber-500 
+                              flex items-center justify-center text-xs font-bold text-white">
                 {order.user.firstName?.[0]}{order.user.lastName?.[0]}
               </div>
               <div>

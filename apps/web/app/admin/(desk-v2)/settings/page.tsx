@@ -148,7 +148,7 @@ function TabButton({
     return (
         <button
             onClick={onClick}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
                 active
                     ? "bg-amber-500/20 text-amber-600 border border-amber-500/30"
                     : "text-desk-muted hover:text-desk-text hover:bg-desk-hover"
@@ -262,7 +262,7 @@ function PromptEditor({
             <textarea
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="w-full h-64 p-4 bg-desk-input border border-desk-border rounded-xl text-sm text-desk-text placeholder-desk-subtle resize-y focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
+                className="w-full h-40 p-3 bg-desk-input border border-desk-border rounded-lg text-sm text-desk-text placeholder-desk-subtle resize-y focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
                 placeholder="Entrez le prompt..."
             />
 
@@ -1243,21 +1243,21 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-5">
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-4"
+                className="flex items-center gap-3"
             >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.3)]">
-                    <Settings className="w-7 h-7 text-white" />
+                <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center">
+                    <Settings className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-serif italic text-desk-text">
+                    <h1 className="text-lg font-semibold text-desk-text">
                         Paramètres IA
                     </h1>
-                    <p className="text-sm text-desk-muted">
+                    <p className="text-xs text-desk-muted">
                         Configurer les agents Oracle Lumira
                     </p>
                 </div>

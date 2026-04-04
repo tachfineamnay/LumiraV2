@@ -19,29 +19,20 @@ interface StatsGridProps {
 // Static color classes to avoid Tailwind purge issues
 const COLOR_CLASSES = {
   amber: {
-    bg: 'bg-amber-500/20',
+    bg: 'bg-amber-500/15',
     text: 'text-amber-600',
-    gradient: 'from-amber-500 to-amber-600',
-  },
-  purple: {
-    bg: 'bg-purple-500/20',
-    text: 'text-purple-600',
-    gradient: 'from-purple-500 to-purple-600',
   },
   emerald: {
-    bg: 'bg-emerald-500/20',
+    bg: 'bg-emerald-500/15',
     text: 'text-emerald-600',
-    gradient: 'from-emerald-500 to-emerald-600',
   },
   blue: {
-    bg: 'bg-blue-500/20',
+    bg: 'bg-blue-500/15',
     text: 'text-blue-600',
-    gradient: 'from-blue-500 to-blue-600',
   },
   green: {
-    bg: 'bg-green-500/20',
+    bg: 'bg-green-500/15',
     text: 'text-green-600',
-    gradient: 'from-green-500 to-green-600',
   },
 } as const;
 
@@ -69,7 +60,7 @@ const STAT_CARDS: StatCard[] = [
     label: 'À valider',
     getValue: (s) => s.validationCount,
     icon: ShoppingBag,
-    color: 'purple',
+    color: 'amber',
   },
   {
     id: 'completed',
@@ -97,7 +88,7 @@ const STAT_CARDS: StatCard[] = [
 
 export function StatsGrid({ stats, isLoading }: StatsGridProps) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
       {STAT_CARDS.map((card, index) => {
         const colors = COLOR_CLASSES[card.color];
         const Icon = card.icon;
@@ -109,25 +100,25 @@ export function StatsGrid({ stats, isLoading }: StatsGridProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
             className={`
-              relative overflow-hidden rounded-xl
+              relative overflow-hidden rounded-lg
               bg-desk-surface border border-desk-border
-              p-4 ${card.large ? 'col-span-2 md:col-span-1' : ''}
+              p-3 ${card.large ? 'col-span-2 md:col-span-1' : ''}
             `}
           >
-            {/* Background gradient */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${colors.gradient} opacity-5`} />
+            {/* Background accent */}
+            <div className={`absolute top-0 left-0 w-1 h-full ${colors.bg}`} />
 
             <div className="relative">
-              <div className="flex items-center justify-between mb-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors.bg}`}>
-                  <Icon className={`w-5 h-5 ${colors.text}`} />
+              <div className="flex items-center justify-between mb-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${colors.bg}`}>
+                  <Icon className={`w-4 h-4 ${colors.text}`} />
                 </div>
               </div>
 
               {isLoading ? (
-                <div className="h-8 w-16 rounded bg-desk-card animate-pulse" />
+                <div className="h-7 w-14 rounded bg-desk-card animate-pulse" />
               ) : (
-                <div className="text-2xl font-bold text-desk-text">
+                <div className="text-xl font-bold text-desk-text">
                   {card.getValue(stats)}
                 </div>
               )}

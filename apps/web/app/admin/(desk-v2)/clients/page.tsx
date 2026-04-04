@@ -9,8 +9,6 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  Mail,
-  Calendar,
   ShoppingBag,
   ExternalLink,
   Loader2,
@@ -134,16 +132,16 @@ function StatCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="relative overflow-hidden rounded-xl border border-desk-border bg-desk-surface backdrop-blur-sm p-5"
+      className="relative overflow-hidden rounded-lg border border-desk-border bg-desk-surface p-3"
     >
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-5`} />
-      <div className="relative flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center ${iconColor}`}>
+      <div className="relative flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center ${iconColor}`}>
           {icon}
         </div>
         <div>
-          <p className="text-sm text-desk-muted">{label}</p>
-          <p className="text-2xl font-bold text-desk-text">{value}</p>
+          <p className="text-xs text-desk-muted">{label}</p>
+          <p className="text-xl font-bold text-desk-text">{value}</p>
         </div>
       </div>
     </motion.div>
@@ -165,7 +163,7 @@ function FilterPill({
       className={cn(
         'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
         active
-          ? 'bg-purple-500/20 text-purple-600 border-purple-500/40'
+          ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
           : 'bg-desk-card text-desk-muted border-desk-border hover:border-desk-border hover:text-desk-text'
       )}
     >
@@ -195,9 +193,9 @@ function SortableHeader({
   return (
     <th
       className={cn(
-        'px-4 py-3 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group',
+        'px-3 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group',
         align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left',
-        isActive ? 'text-purple-600' : 'text-desk-subtle hover:text-desk-text'
+        isActive ? 'text-amber-600' : 'text-desk-subtle hover:text-desk-text'
       )}
       onClick={() => onSort(field)}
     >
@@ -331,17 +329,17 @@ export default function ClientsPage() {
   }, [page, totalPages]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-3">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-2xl font-bold text-desk-text flex items-center gap-3">
-          <Users className="w-7 h-7 text-purple-600" />
+        <h1 className="text-lg font-semibold text-desk-text flex items-center gap-2">
+          <Users className="w-5 h-5 text-amber-600" />
           Clients
         </h1>
-        <p className="text-desk-muted mt-1">
+        <p className="text-desk-muted text-sm mt-0.5">
           Gestion et suivi de vos clients
         </p>
       </motion.div>
@@ -350,35 +348,35 @@ export default function ClientsPage() {
       {stats && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            icon={<Users className="w-6 h-6" />}
+            icon={<Users className="w-5 h-5" />}
             label="Total Clients"
             value={stats.totalClients}
-            gradient="from-purple-500/20 to-violet-600/20"
-            iconColor="text-purple-600"
+            gradient="from-amber-500/20 to-amber-600/20"
+            iconColor="text-amber-600"
             delay={0}
           />
           <StatCard
-            icon={<CreditCard className="w-6 h-6" />}
+            icon={<CreditCard className="w-5 h-5" />}
             label="Abonnements Actifs"
             value={stats.activeSubscriptions}
-            gradient="from-emerald-500/20 to-teal-600/20"
+            gradient="from-emerald-500/20 to-emerald-600/20"
             iconColor="text-emerald-600"
             delay={0.05}
           />
           <StatCard
-            icon={<TrendingUp className="w-6 h-6" />}
+            icon={<TrendingUp className="w-5 h-5" />}
             label="Nouveaux ce mois"
             value={stats.newThisMonth}
-            gradient="from-blue-500/20 to-indigo-600/20"
+            gradient="from-blue-500/20 to-blue-600/20"
             iconColor="text-blue-600"
             delay={0.1}
           />
           <StatCard
-            icon={<DollarSign className="w-6 h-6" />}
+            icon={<DollarSign className="w-5 h-5" />}
             label="Revenu Total"
             value={formatCurrency(stats.totalRevenue)}
-            gradient="from-amber-500/20 to-orange-600/20"
-            iconColor="text-amber-600"
+            gradient="from-emerald-500/20 to-emerald-600/20"
+            iconColor="text-emerald-600"
             delay={0.15}
           />
         </div>
@@ -398,8 +396,8 @@ export default function ClientsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par nom, email ou réf..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-desk-card border border-desk-border
-                       text-desk-text placeholder:text-desk-subtle focus:outline-none focus:border-purple-500/50 transition-colors"
+            className="w-full pl-10 pr-4 py-2 rounded-lg bg-desk-card border border-desk-border
+                       text-desk-text placeholder:text-desk-subtle focus:outline-none focus:border-amber-500/50 transition-colors"
           />
           {searchQuery && (
             <button
@@ -414,16 +412,16 @@ export default function ClientsPage() {
         <button
           onClick={() => setShowFilters(!showFilters)}
           className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-colors',
+            'flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors',
             showFilters || activeFilterCount > 0
-              ? 'bg-purple-500/10 border-purple-500/30 text-purple-600'
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
               : 'bg-desk-card border-desk-border text-desk-muted hover:text-desk-text'
           )}
         >
           <Filter className="w-4 h-4" />
           <span>Filtres</span>
           {activeFilterCount > 0 && (
-            <span className="ml-1 w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-bold flex items-center justify-center">
+            <span className="ml-1 w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
               {activeFilterCount}
             </span>
           )}
@@ -436,8 +434,8 @@ export default function ClientsPage() {
             setPageSize(Number(e.target.value));
             setPage(1);
           }}
-          className="px-3 py-2.5 rounded-xl bg-desk-card border border-desk-border
-                     text-desk-text text-sm focus:outline-none focus:border-purple-500/50 transition-colors"
+          className="px-3 py-2 rounded-lg bg-desk-card border border-desk-border
+                     text-desk-text text-sm focus:outline-none focus:border-amber-500/50 transition-colors"
         >
           <option value={10}>10 / page</option>
           <option value={20}>20 / page</option>
@@ -454,9 +452,9 @@ export default function ClientsPage() {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="p-5 rounded-xl bg-desk-surface border border-desk-border space-y-5">
+            <div className="p-4 rounded-lg bg-desk-surface border border-desk-border space-y-4">
               {/* Row 1: Status filters */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* User Status */}
                 <div>
                   <label className="block text-xs font-semibold text-desk-subtle uppercase tracking-wider mb-2">
@@ -507,8 +505,8 @@ export default function ClientsPage() {
                     type="date"
                     value={filters.dateFrom}
                     onChange={(e) => { setFilters((p) => ({ ...p, dateFrom: e.target.value })); setPage(1); }}
-                    className="px-3 py-2 rounded-lg bg-desk-card border border-desk-border text-desk-text text-sm
-                               focus:outline-none focus:border-purple-500/50 transition-colors"
+                    className="px-3 py-1.5 rounded-lg bg-desk-card border border-desk-border text-desk-text text-sm
+                               focus:outline-none focus:border-amber-500/50 transition-colors"
                   />
                 </div>
                 <div>
@@ -519,8 +517,8 @@ export default function ClientsPage() {
                     type="date"
                     value={filters.dateTo}
                     onChange={(e) => { setFilters((p) => ({ ...p, dateTo: e.target.value })); setPage(1); }}
-                    className="px-3 py-2 rounded-lg bg-desk-card border border-desk-border text-desk-text text-sm
-                               focus:outline-none focus:border-purple-500/50 transition-colors"
+                    className="px-3 py-1.5 rounded-lg bg-desk-card border border-desk-border text-desk-text text-sm
+                               focus:outline-none focus:border-amber-500/50 transition-colors"
                   />
                 </div>
 
@@ -548,7 +546,7 @@ export default function ClientsPage() {
             : 'Aucun résultat'}
         </span>
         {activeFilterCount > 0 && (
-          <span className="text-purple-600">{activeFilterCount} filtre{activeFilterCount > 1 ? 's' : ''} actif{activeFilterCount > 1 ? 's' : ''}</span>
+          <span className="text-amber-600">{activeFilterCount} filtre{activeFilterCount > 1 ? 's' : ''} actif{activeFilterCount > 1 ? 's' : ''}</span>
         )}
       </div>
 
@@ -557,18 +555,18 @@ export default function ClientsPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="bg-desk-surface rounded-xl border border-desk-border overflow-hidden"
+        className="bg-desk-surface rounded-lg border border-desk-border overflow-hidden"
       >
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+            <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
           </div>
         ) : clients.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Users className="w-16 h-16 text-desk-subtle mb-4" />
             <p className="text-desk-muted">Aucun client trouvé</p>
             {activeFilterCount > 0 && (
-              <button onClick={resetFilters} className="mt-2 text-sm text-purple-600 hover:text-purple-500 transition-colors">
+              <button onClick={resetFilters} className="mt-2 text-sm text-amber-600 hover:text-amber-500 transition-colors">
                 Réinitialiser les filtres
               </button>
             )}
@@ -585,7 +583,7 @@ export default function ClientsPage() {
                     currentOrder={filters.sortOrder}
                     onSort={handleSort}
                   />
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
                     Email
                   </th>
                   <SortableHeader
@@ -611,7 +609,7 @@ export default function ClientsPage() {
                     onSort={handleSort}
                     align="right"
                   />
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
+                  <th className="text-center px-3 py-2 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
                     Abonnement
                   </th>
                   <th className="w-12" />
@@ -636,10 +634,10 @@ export default function ClientsPage() {
                       onClick={() => router.push(`/admin/clients/${client.id}`)}
                       className="border-b border-desk-border hover:bg-desk-card transition-colors group cursor-pointer"
                     >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600
-                                          flex items-center justify-center text-sm font-bold text-white shrink-0">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-amber-500
+                                          flex items-center justify-center text-xs font-bold text-white shrink-0">
                             {client.firstName?.[0]?.toUpperCase() || '?'}{client.lastName?.[0]?.toUpperCase() || ''}
                           </div>
                           <div className="min-w-0">
@@ -652,46 +650,44 @@ export default function ClientsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <div className="flex items-center gap-2 text-desk-muted">
-                          <Mail className="w-3.5 h-3.5 shrink-0" />
                           <span className="text-sm truncate max-w-[200px]">{client.email}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <div className="flex items-center gap-2 text-desk-muted">
-                          <Calendar className="w-3.5 h-3.5 shrink-0" />
+
                           <span className="text-sm whitespace-nowrap">
                             {new Date(client.createdAt).toLocaleDateString('fr-FR')}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-medium', ordersBadgeColor)}>
+                      <td className="px-3 py-2 text-center">
+                        <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-sm font-medium', ordersBadgeColor)}>
                           <ShoppingBag className="w-3.5 h-3.5" />
                           {client.totalOrders}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-2 text-right">
                         {client.totalSpent > 0 ? (
                           <span className="text-desk-text font-medium text-sm">{formatCurrency(client.totalSpent)}</span>
                         ) : (
                           <span className="text-desk-subtle">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-2 text-center">
                         <span className={cn('inline-flex px-2.5 py-1 rounded-lg text-xs font-medium border', subBadge.className)}>
                           {subBadge.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); router.push(`/admin/clients/${client.id}`); }}
                           title="Voir le profil"
-                          className="opacity-0 group-hover:opacity-100 p-2 rounded-lg
-                                     hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-all"
+                          className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-all"
                         >
-                          <ExternalLink className="w-4 h-4" />
+                          <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                       </td>
                     </motion.tr>
@@ -732,7 +728,7 @@ export default function ClientsPage() {
                 className={cn(
                   'w-9 h-9 rounded-lg text-sm font-medium transition-colors',
                   num === page
-                    ? 'bg-purple-500/10 text-purple-600 border border-purple-500/30'
+                    ? 'bg-amber-500/10 text-amber-600 border border-amber-500/30'
                     : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover'
                 )}
               >

@@ -12,7 +12,6 @@ import {
   User,
   Calendar,
   CheckCircle,
-  FileText,
   ExternalLink,
   Loader2,
   Download,
@@ -85,7 +84,7 @@ export default function ArchivePage() {
   }, [searchQuery]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-4">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -93,11 +92,11 @@ export default function ArchivePage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold text-desk-text flex items-center gap-3">
-            <Archive className="w-7 h-7 text-emerald-600" />
+          <h1 className="text-lg font-semibold text-desk-text flex items-center gap-2">
+            <Archive className="w-5 h-5 text-emerald-600" />
             Archives
           </h1>
-          <p className="text-desk-muted mt-1">
+          <p className="text-desk-muted text-sm mt-0.5">
             {totalOrders} commande{totalOrders > 1 ? 's' : ''} terminée{totalOrders > 1 ? 's' : ''}
           </p>
         </div>
@@ -117,15 +116,15 @@ export default function ArchivePage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par numéro ou client..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl
+            className="w-full pl-10 pr-4 py-2 rounded-lg
                        bg-desk-card border border-desk-border
                        text-desk-text placeholder:text-desk-subtle
-                       focus:outline-none focus:border-emerald-500/50
+                       focus:outline-none focus:border-amber-500/50
                        transition-colors"
           />
         </div>
         
-        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl
+        <button className="flex items-center gap-2 px-3 py-2 rounded-lg
                            bg-desk-card border border-desk-border
                            text-desk-muted hover:text-desk-text transition-colors">
           <Filter className="w-4 h-4" />
@@ -159,15 +158,15 @@ export default function ArchivePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.03 }}
-                className="bg-desk-surface border border-desk-border rounded-xl p-4
-                           hover:bg-desk-card hover:border-desk-border transition-all group"
+                className="bg-desk-surface border border-desk-border rounded-lg p-3
+                           hover:bg-desk-card transition-all group"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     {/* Status badge */}
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/15
                                     flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-emerald-600" />
+                      <CheckCircle className="w-5 h-5 text-emerald-600" />
                     </div>
                     
                     {/* Order info */}
@@ -213,24 +212,24 @@ export default function ArchivePage() {
                       </span>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Actions — always visible */}
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => {
                           const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
                           window.open(`${apiBase}/api/readings/${order.orderNumber}/download`, '_blank');
                         }}
                         title="Télécharger le PDF"
-                        className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-colors"
                       >
-                        <Download className="w-4 h-4" />
+                        <Download className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => router.push(`/admin/studio/${order.id}`)}
                         title="Voir les détails"
-                        className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-colors"
                       >
-                        <ExternalLink className="w-4 h-4" />
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

@@ -7,23 +7,23 @@ import { Kanban, Settings, Users, Archive, LucideIcon } from 'lucide-react';
 // Static color classes to avoid Tailwind purge issues
 const COLOR_CLASSES = {
   amber: {
-    bg: 'bg-amber-500/20',
-    bgHover: 'group-hover:bg-amber-500/30',
+    bg: 'bg-amber-500/15',
+    bgHover: 'group-hover:bg-amber-500/20',
     text: 'text-amber-600',
   },
   slate: {
-    bg: 'bg-slate-500/20',
-    bgHover: 'group-hover:bg-slate-500/30',
+    bg: 'bg-slate-500/15',
+    bgHover: 'group-hover:bg-slate-500/20',
     text: 'text-slate-600',
   },
-  purple: {
-    bg: 'bg-purple-500/20',
-    bgHover: 'group-hover:bg-purple-500/30',
-    text: 'text-purple-600',
+  blue: {
+    bg: 'bg-blue-500/15',
+    bgHover: 'group-hover:bg-blue-500/20',
+    text: 'text-blue-600',
   },
   emerald: {
-    bg: 'bg-emerald-500/20',
-    bgHover: 'group-hover:bg-emerald-500/30',
+    bg: 'bg-emerald-500/15',
+    bgHover: 'group-hover:bg-emerald-500/20',
     text: 'text-emerald-600',
   },
 } as const;
@@ -53,7 +53,7 @@ const ACTIONS: QuickAction[] = [
     label: 'Clients',
     description: 'Voir les clients',
     icon: Users,
-    color: 'purple',
+    color: 'blue',
     href: '/admin/clients',
   },
   {
@@ -78,8 +78,8 @@ export function QuickActions() {
   const router = useRouter();
 
   return (
-    <div className="bg-desk-surface rounded-xl border border-desk-border p-4">
-      <h3 className="text-sm font-semibold text-desk-text mb-4">Actions rapides</h3>
+    <div className="bg-desk-surface rounded-lg border border-desk-border p-3">
+      <h3 className="text-xs font-medium text-desk-muted uppercase tracking-wide mb-3">Actions rapides</h3>
       
       <div className="grid grid-cols-2 gap-3">
         {ACTIONS.map((action, index) => {
@@ -93,14 +93,14 @@ export function QuickActions() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.05 }}
               onClick={() => router.push(action.href)}
-              className="flex items-center gap-3 p-3 rounded-lg text-left
+              className="flex items-center gap-2.5 p-2.5 rounded-lg text-left
                 bg-desk-card border border-desk-border
                 hover:bg-desk-hover hover:border-desk-border
                 transition-all group"
             >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center
                 ${colors.bg} ${colors.bgHover} transition-colors`}>
-                <Icon className={`w-5 h-5 ${colors.text}`} />
+                <Icon className={`w-4 h-4 ${colors.text}`} />
               </div>
               <div>
                 <div className="text-sm font-medium text-desk-text">{action.label}</div>
