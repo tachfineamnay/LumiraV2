@@ -18,13 +18,15 @@ import { KanbanColumn } from './KanbanColumn';
 import { OrderCard } from './OrderCard';
 import { useOrders } from '../hooks/useOrders';
 import { useSocket } from '../hooks/useSocket';
+import { useExpertAuth } from '@/context/ExpertAuthContext';
 import { KANBAN_COLUMNS, Order, KanbanColumnId } from '../types';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
 
 export function KanbanBoard() {
-  const { orders, isLoading, fetchOrders, moveOrder, addOrder } = useOrders();
+  const { orders, isLoading, fetchOrders, moveOrder, updateOrder, addOrder } = useOrders();
+  const { expert } = useExpertAuth();
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
 
@@ -39,7 +41,7 @@ export function KanbanBoard() {
   }, [isLoading]);
 
   // Socket for real-time updates
-  useSocket({
+  const { orderViewers } = useSocket({
     onNewOrder: (order) => {
       addOrder(order);
       toast.success(`Nouvelle commande: ${order.orderNumber}`, {
@@ -64,6 +66,15 @@ export function KanbanBoard() {
         });
       }
       fetchOrders();
+    },
+    onOrderClaimed: (data) => {
+      // Update the order's expertReview optimistically
+      updateOrder(data.orderId, {
+        expertReview: { assignedBy: data.expertId, assignedName: data.expertName, assignedAt: data.timestamp },
+      });
+      if (data.expertId !== expert?.id) {
+        toast.info(`${data.expertName} a pris la commande ${data.orderNumber}`);
+      }
     },
   });
 
@@ -98,6 +109,17 @@ export function KanbanBoard() {
       }
     }
     return null;
+  };
+
+  // Claim an order
+  const handleClaim = async (orderId: string) => {
+    try {
+      await api.post(`/expert/orders/${orderId}/assign`);
+      // Optimistic update will come via socket order:claimed event
+    } catch (error) {
+      toast.error('Impossible de prendre la commande');
+      console.error(error);
+    }
   };
 
   // Drag handlers
@@ -136,6 +158,14 @@ export function KanbanBoard() {
     }
 
     if (!sourceColumn || !destColumn || sourceColumn === destColumn) return;
+
+    // Block drag if assigned to another expert (unless admin)
+    const draggedOrder = filteredOrders[sourceColumn]?.find(o => o.id === activeId);
+    const assignedBy = (draggedOrder?.expertReview as { assignedBy?: string })?.assignedBy;
+    if (assignedBy && assignedBy !== expert?.id && expert?.role !== 'ADMIN') {
+      toast.error('Commande déjà prise par un autre expert');
+      return;
+    }
 
     // Optimistic update
     moveOrder(activeId, sourceColumn, destColumn);
@@ -236,6 +266,9 @@ export function KanbanBoard() {
                 column={column}
                 orders={filteredOrders[column.id]}
                 isLoading={isLoading}
+                currentExpertId={expert?.id}
+                orderViewers={orderViewers}
+                onClaim={handleClaim}
               />
             ))}
           </div>

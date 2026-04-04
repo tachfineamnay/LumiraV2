@@ -179,6 +179,13 @@ export interface SocketEvents {
     sealedBy: string;
     timestamp: string;
   };
+  'order:claimed': {
+    orderId: string;
+    orderNumber: string;
+    expertId: string;
+    expertName: string;
+    timestamp: string;
+  };
   'order:viewer-joined': {
     orderId: string;
     expertId: string;

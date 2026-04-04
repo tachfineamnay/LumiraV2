@@ -3,17 +3,22 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
-import { Clock, Sparkles, GripVertical, ExternalLink, Eye } from 'lucide-react';
-import { Order, LEVEL_CONFIG } from '../types';
+import { Clock, Sparkles, GripVertical, ExternalLink, Eye, UserCheck, Hand } from 'lucide-react';
+import { Order, LEVEL_CONFIG, KanbanColumnId } from '../types';
+import type { OrderViewer } from '../hooks/useSocket';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 interface OrderCardProps {
   order: Order;
   isDragging?: boolean;
+  currentExpertId?: string;
+  columnId?: KanbanColumnId;
+  viewers?: OrderViewer[];
+  onClaim?: (orderId: string) => void;
 }
 
-export function OrderCard({ order, isDragging }: OrderCardProps) {
+export function OrderCard({ order, isDragging, currentExpertId, columnId, viewers = [], onClaim }: OrderCardProps) {
   const router = useRouter();
 
   const {
@@ -36,8 +41,19 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
     locale: fr,
   });
 
+  // Assignment info
+  const assignedBy = (order.expertReview as { assignedBy?: string })?.assignedBy;
+  const assignedName = (order.expertReview as { assignedName?: string })?.assignedName;
+  const isAssignedToMe = assignedBy === currentExpertId;
+  const isAssignedToOther = !!assignedBy && !isAssignedToMe;
+
   const handleClick = () => {
     router.push(`/admin/studio/${order.id}`);
+  };
+
+  const handleClaim = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClaim?.(order.id);
   };
 
   const isBeingDragged = isDragging || isSortableDragging;
@@ -50,7 +66,11 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
         group relative rounded-xl border transition-all duration-200
         ${isBeingDragged 
           ? 'bg-desk-surface border-amber-500/50 shadow-xl shadow-amber-500/10 scale-105 rotate-2 cursor-grabbing z-50' 
-          : 'bg-desk-surface border-desk-border hover:border-desk-border hover:bg-desk-card cursor-pointer'
+          : isAssignedToOther
+            ? 'bg-desk-surface/60 border-desk-border opacity-60 cursor-pointer'
+            : isAssignedToMe
+              ? 'bg-desk-surface border-emerald-500/40 ring-1 ring-emerald-500/20 cursor-pointer'
+              : 'bg-desk-surface border-desk-border hover:border-desk-border hover:bg-desk-card cursor-pointer'
         }
       `}
       onClick={!isBeingDragged ? handleClick : undefined}
@@ -83,6 +103,19 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
             `}>
               {levelConfig.name}
             </span>
+            {/* Assignment badge */}
+            {isAssignedToMe && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-600">
+                <UserCheck className="w-3 h-3" />
+                Ma commande
+              </span>
+            )}
+            {isAssignedToOther && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-600">
+                <UserCheck className="w-3 h-3" />
+                {assignedName || 'Prise'}
+              </span>
+            )}
           </div>
           <span className="text-lg font-semibold text-amber-600">
             {(order.amount / 100).toFixed(0)}€
@@ -130,6 +163,40 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
             <p className="text-xs text-desk-muted line-clamp-2">
               &quot;{order.user.profile.specificQuestion}&quot;
             </p>
+          </div>
+        )}
+
+        {/* Claim button — shown on unassigned orders in paid column */}
+        {columnId === 'paid' && !assignedBy && onClaim && (
+          <button
+            onClick={handleClaim}
+            className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg
+                       bg-amber-500/10 text-amber-600 text-xs font-medium
+                       hover:bg-amber-500/20 transition-colors"
+          >
+            <Hand className="w-3.5 h-3.5" />
+            Prendre cette commande
+          </button>
+        )}
+
+        {/* Presence viewers */}
+        {viewers.length > 0 && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <div className="flex -space-x-1.5">
+              {viewers.slice(0, 3).map(v => (
+                <div
+                  key={v.expertId}
+                  title={v.expertEmail}
+                  className="w-5 h-5 rounded-full bg-blue-500 border-2 border-desk-surface
+                             flex items-center justify-center text-[9px] font-bold text-white"
+                >
+                  {v.expertEmail[0]?.toUpperCase()}
+                </div>
+              ))}
+            </div>
+            <span className="text-[10px] text-desk-subtle">
+              {viewers.length === 1 ? '1 expert consulte' : `${viewers.length} experts consultent`}
+            </span>
           </div>
         )}
       </div>

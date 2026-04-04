@@ -9,7 +9,13 @@ interface UseSocketOptions {
   onNewOrder?: (order: Order) => void;
   onStatusChange?: (data: SocketEvents['order:status-changed']) => void;
   onGenerationComplete?: (data: SocketEvents['order:generation-complete']) => void;
+  onOrderClaimed?: (data: SocketEvents['order:claimed']) => void;
   onStatsUpdate?: (stats: DeskStats) => void;
+}
+
+export interface OrderViewer {
+  expertId: string;
+  expertEmail: string;
 }
 
 export function useSocket(options: UseSocketOptions = {}) {
@@ -18,6 +24,7 @@ export function useSocket(options: UseSocketOptions = {}) {
     onNewOrder,
     onStatusChange,
     onGenerationComplete,
+    onOrderClaimed,
     onStatsUpdate,
   } = options;
 
@@ -25,12 +32,14 @@ export function useSocket(options: UseSocketOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
   const [latency, setLatency] = useState<number | null>(null);
+  const [orderViewers, setOrderViewers] = useState<Record<string, OrderViewer[]>>({});
 
   // Store callbacks in refs to avoid reconnection loops
   const callbacksRef = useRef({
     onNewOrder,
     onStatusChange,
     onGenerationComplete,
+    onOrderClaimed,
     onStatsUpdate,
   });
 
@@ -40,9 +49,10 @@ export function useSocket(options: UseSocketOptions = {}) {
       onNewOrder,
       onStatusChange,
       onGenerationComplete,
+      onOrderClaimed,
       onStatsUpdate,
     };
-  }, [onNewOrder, onStatusChange, onGenerationComplete, onStatsUpdate]);
+  }, [onNewOrder, onStatusChange, onGenerationComplete, onOrderClaimed, onStatsUpdate]);
 
   const connect = useCallback(() => {
     // Prevent multiple connections
@@ -102,6 +112,33 @@ export function useSocket(options: UseSocketOptions = {}) {
       callbacksRef.current.onGenerationComplete?.(data);
     });
 
+    socket.on('order:claimed', (data) => {
+      console.log('[Socket] 🙋 Order claimed:', data.orderNumber, 'by', data.expertName);
+      callbacksRef.current.onOrderClaimed?.(data);
+    });
+
+    socket.on('order:viewer-joined', (data: SocketEvents['order:viewer-joined']) => {
+      setOrderViewers(prev => {
+        const viewers = prev[data.orderId] || [];
+        if (viewers.some(v => v.expertId === data.expertId)) return prev;
+        return { ...prev, [data.orderId]: [...viewers, { expertId: data.expertId, expertEmail: data.expertEmail }] };
+      });
+    });
+
+    socket.on('order:viewer-left', (data: SocketEvents['order:viewer-left']) => {
+      setOrderViewers(prev => {
+        const viewers = prev[data.orderId];
+        if (!viewers) return prev;
+        const filtered = viewers.filter(v => v.expertId !== data.expertId);
+        if (filtered.length === 0) {
+          const next = { ...prev };
+          delete next[data.orderId];
+          return next;
+        }
+        return { ...prev, [data.orderId]: filtered };
+      });
+    });
+
     socket.on('stats:update', (stats) => {
       callbacksRef.current.onStatsUpdate?.(stats);
     });
@@ -156,6 +193,7 @@ export function useSocket(options: UseSocketOptions = {}) {
     isConnected,
     onlineCount,
     latency,
+    orderViewers,
     connect,
     disconnect,
     focusOrder,

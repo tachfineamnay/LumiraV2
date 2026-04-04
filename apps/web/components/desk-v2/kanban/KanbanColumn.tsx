@@ -8,11 +8,15 @@ import {
 import { motion } from 'framer-motion';
 import { OrderCard } from './OrderCard';
 import { KanbanColumn as KanbanColumnType, Order } from '../types';
+import type { OrderViewer } from '../hooks/useSocket';
 
 interface KanbanColumnProps {
   column: KanbanColumnType;
   orders: Order[];
   isLoading?: boolean;
+  currentExpertId?: string;
+  orderViewers?: Record<string, OrderViewer[]>;
+  onClaim?: (orderId: string) => void;
 }
 
 const COLUMN_COLORS = {
@@ -42,7 +46,7 @@ const COLUMN_COLORS = {
   },
 };
 
-export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
+export function KanbanColumn({ column, orders, isLoading, currentExpertId, orderViewers = {}, onClaim }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
@@ -50,6 +54,11 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
   const colors = COLUMN_COLORS[column.color as keyof typeof COLUMN_COLORS] || COLUMN_COLORS.amber;
   const isValidationColumn = column.id === 'validation';
   const hasUrgentOrders = isValidationColumn && orders.length > 0;
+
+  // Count orders assigned to current expert
+  const myOrdersCount = currentExpertId
+    ? orders.filter(o => (o.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId).length
+    : 0;
 
   return (
     <div
@@ -76,6 +85,11 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
             {orders.length}
           </span>
         </div>
+        {myOrdersCount > 0 && (
+          <div className="text-[11px] text-emerald-600 font-medium mt-1">
+            dont {myOrdersCount} à moi
+          </div>
+        )}
       </div>
 
       {/* Cards */}
@@ -109,7 +123,13 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <OrderCard order={order} />
+                <OrderCard
+                  order={order}
+                  columnId={column.id}
+                  currentExpertId={currentExpertId}
+                  viewers={orderViewers[order.id]}
+                  onClaim={onClaim}
+                />
               </motion.div>
             ))
           )}

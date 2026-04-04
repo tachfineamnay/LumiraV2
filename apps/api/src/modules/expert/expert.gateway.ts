@@ -140,6 +140,22 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
+   * Broadcast when an expert claims/is assigned an order
+   */
+  notifyOrderClaimed(order: {
+    orderId: string;
+    orderNumber: string;
+    expertId: string;
+    expertName: string;
+  }) {
+    this.logger.log(`🙋 Order ${order.orderNumber} claimed by ${order.expertName}`);
+    this.server.to('experts').emit('order:claimed', {
+      ...order,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
    * Broadcast when order is sealed/finalized
    */
   notifyOrderSealed(order: {

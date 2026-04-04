@@ -13,6 +13,7 @@ import { IdGenerator } from '../../utils/IdGenerator';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DigitalSoulService } from '../../services/factory/DigitalSoulService';
 import { VertexOracle } from '../../services/factory/VertexOracle';
+import { ExpertGateway } from './expert.gateway';
 import * as bcrypt from 'bcryptjs';
 import { Expert, Order, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
 
@@ -78,6 +79,7 @@ export class ExpertService {
         private notificationsService: NotificationsService,
         private digitalSoulService: DigitalSoulService,
         private vertexOracle: VertexOracle,
+        private gateway: ExpertGateway,
     ) {
         this.logger.log(`🔌 DigitalSoulService injected via DI`);
     }
@@ -433,9 +435,15 @@ export class ExpertService {
             throw new NotFoundException('Commande non trouvée');
         }
 
-        if (!['PENDING', 'PAID'].includes(order.status)) {
+        // Allow re-assignment if already assigned (ADMIN use-case)
+        if (!['PENDING', 'PAID', 'PROCESSING'].includes(order.status)) {
             throw new BadRequestException('Cette commande ne peut pas être prise');
         }
+
+        const expert = await this.prisma.expert.findUnique({
+            where: { id: expertId },
+            select: { name: true },
+        });
 
         const updatedOrder = await this.prisma.order.update({
             where: { id: orderId },
@@ -443,12 +451,21 @@ export class ExpertService {
                 status: 'PROCESSING',
                 expertReview: {
                     assignedBy: expertId,
+                    assignedName: expert?.name || 'Expert',
                     assignedAt: new Date().toISOString(),
                 },
             },
         });
 
         this.logger.log(`📋 Order ${order.orderNumber} assigned to expert ${expertId}`);
+
+        // Notify all connected experts in real-time
+        this.gateway.notifyOrderClaimed({
+            orderId: updatedOrder.id,
+            orderNumber: order.orderNumber,
+            expertId,
+            expertName: expert?.name || 'Expert',
+        });
 
         return updatedOrder;
     }
@@ -748,6 +765,17 @@ export class ExpertService {
         archetype: string;
         stepsCreated: number;
     }> {
+        // Auto-assign the order to this expert if not already assigned
+        const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+        if (order && ['PENDING', 'PAID'].includes(order.status)) {
+            await this.assignOrder(orderId, expert.id);
+        } else if (order && order.status === 'PROCESSING') {
+            // If processing but not assigned, stamp the expert
+            const review = (order.expertReview as Record<string, unknown>) || {};
+            if (!review.assignedBy) {
+                await this.assignOrder(orderId, expert.id);
+            }
+        }
         return this.generateReadingWithPrompt(orderId, undefined, expert);
     }
 
