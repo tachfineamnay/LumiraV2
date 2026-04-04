@@ -1,4 +1,4 @@
-// Types for Client 360 "Âme Numérique" CRM
+// Types for Client 360 "Dossier d'Âme" CRM
 import { OrderStatus } from '../types';
 
 export interface ClientProfile {
@@ -29,6 +29,11 @@ export interface ClientOrder {
   status: OrderStatus;
   amount: number;
   generatedContent?: Record<string, unknown> | null;
+  expertPrompt?: string | null;
+  expertInstructions?: string | null;
+  addons?: Array<{ type: string; amount: number; paidAt?: string }> | null;
+  upsellOfferedAt?: string | null;
+  upsellAcceptedAt?: string | null;
   createdAt: string;
   paidAt?: string | null;
   deliveredAt?: string | null;
@@ -56,6 +61,7 @@ export interface Insight {
   category: InsightCategory;
   summary: string;
   fullText: string;
+  audioUrl?: string | null;
   viewedAt?: string | null;
   createdAt: string;
 }
@@ -94,6 +100,30 @@ export interface ChatSession {
   createdAt: string;
 }
 
+export interface ClientSubscription {
+  id: string;
+  status: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  createdAt: string;
+}
+
+export interface ClientDream {
+  id: string;
+  content: string;
+  emotion?: string | null;
+  symbols: string[];
+  linkedInsightId?: string | null;
+  createdAt: string;
+}
+
+export interface UpsellHistoryItem {
+  orderId: string;
+  type: string;
+  offeredAt?: string | null;
+  acceptedAt?: string | null;
+}
+
 export interface ClientStats {
   totalOrders: number;
   completedOrders: number;
@@ -105,6 +135,26 @@ export interface ClientStats {
   lastOrderAt: string | null;
   isVip: boolean;
   memberSince: string;
+  // Engagement
+  engagementScore: number;
+  stepsCompleted: number;
+  stepsTotal: number;
+  insightsViewed: number;
+  insightsTotal: number;
+  chatMessagesTotal: number;
+  dreamsCount: number;
+  // Recency
+  daysSinceLastActivity: number | null;
+  lastActivityType: string;
+  // Content
+  audioCoverage: number;
+  profileCompleteness: number;
+  archetype: string | null;
+  // Subscription
+  subscriptionStatus: string;
+  subscriptionDaysLeft: number | null;
+  // Upsell
+  upsellHistory: UpsellHistoryItem[];
 }
 
 export interface ClientFullData {
@@ -121,6 +171,8 @@ export interface ClientFullData {
   updatedAt: string;
   profile?: ClientProfile | null;
   orders: ClientOrder[];
+  subscription?: ClientSubscription | null;
+  dreams: ClientDream[];
   akashicRecord?: AkashicRecord | null;
   spiritualPath?: SpiritualPath | null;
   chatSessions: ChatSession[];

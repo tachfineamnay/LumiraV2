@@ -1292,8 +1292,8 @@ MESSAGE DE L'EXPERT:`;
     }
 
     /**
-     * Get complete client data for CRM "Âme Numérique" (Client 360)
-     * Returns user + profile + orders + akashic record + insights + stats in one query
+     * Get complete client data for CRM "Dossier d'Âme" (Client 360)
+     * Returns user + profile + orders + subscription + dreams + akashic record + insights + enriched stats
      */
     async getClientFull(clientId: string) {
         const client = await this.prisma.user.findUnique({
@@ -1305,6 +1305,11 @@ MESSAGE DE L'EXPERT:`;
                     include: {
                         files: true,
                     },
+                },
+                subscription: true,
+                dreams: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 20,
                 },
                 akashicRecord: true,
                 spiritualPath: {
@@ -1338,18 +1343,17 @@ MESSAGE DE L'EXPERT:`;
             orderBy: { createdAt: 'desc' },
         });
 
-        // Calculate stats from orders
+        // ── Core order stats ──
         const completedOrders = client.orders.filter((o: { status: string }) => o.status === 'COMPLETED');
         const totalSpent = completedOrders.reduce((sum: number, o: { amount: number }) => sum + o.amount, 0);
-
-        const favoriteLevel: string | null = null;
-        const highestLevel = 'Abonné';
-        const highestLevelNumber = 4;
-
         const lastOrder = client.orders[0] || null;
-
-        // Determine VIP status (LTV > 299€ = 29900 cents)
         const isVip = totalSpent >= 29900;
+
+        // ── Engagement metrics ──
+        const stepsTotal = client.spiritualPath?.steps?.length ?? 0;
+        const stepsCompleted = client.spiritualPath?.steps?.filter((s: { isCompleted: boolean }) => s.isCompleted).length ?? 0;
+        const insightsTotal = insights.length;
+        const insightsViewed = insights.filter((i: { viewedAt: Date | null }) => i.viewedAt !== null).length;
 
         // Transform chatSessions to include messagesCount
         const chatSessionsWithCount = client.chatSessions.map((session: { id: string; title: string | null; messages: unknown; lastMessageAt: Date | null; createdAt: Date }) => ({
@@ -1360,6 +1364,79 @@ MESSAGE DE L'EXPERT:`;
             createdAt: session.createdAt,
         }));
 
+        const chatMessagesTotal = chatSessionsWithCount.reduce((sum: number, s: { messagesCount: number }) => sum + s.messagesCount, 0);
+        const dreamsCount = client.dreams?.length ?? 0;
+
+        // Engagement score (0-100): 30% steps + 25% insights viewed + 25% chat + 20% dreams
+        const stepsScore = stepsTotal > 0 ? (stepsCompleted / stepsTotal) * 100 : 0;
+        const insightsScore = insightsTotal > 0 ? (insightsViewed / insightsTotal) * 100 : 0;
+        const chatScore = Math.min(chatMessagesTotal / 20, 1) * 100; // 20 messages = 100%
+        const dreamsScore = Math.min(dreamsCount / 5, 1) * 100; // 5 dreams = 100%
+        const engagementScore = Math.round(stepsScore * 0.3 + insightsScore * 0.25 + chatScore * 0.25 + dreamsScore * 0.2);
+
+        // ── Recency ──
+        const activityDates: { date: Date; type: string }[] = [];
+        if (lastOrder) activityDates.push({ date: new Date(lastOrder.createdAt), type: 'order' });
+        const lastChat = chatSessionsWithCount[0];
+        if (lastChat?.lastMessageAt) activityDates.push({ date: new Date(lastChat.lastMessageAt), type: 'chat' });
+        if (client.dreams?.length > 0) activityDates.push({ date: new Date(client.dreams[0].createdAt), type: 'dream' });
+        const completedSteps = client.spiritualPath?.steps?.filter((s: { isCompleted: boolean }) => s.isCompleted) ?? [];
+        if (completedSteps.length > 0) activityDates.push({ date: new Date(completedSteps[completedSteps.length - 1].updatedAt ?? completedSteps[completedSteps.length - 1].createdAt), type: 'step' });
+
+        activityDates.sort((a, b) => b.date.getTime() - a.date.getTime());
+        const lastActivityDate = activityDates[0]?.date ?? null;
+        const daysSinceLastActivity = lastActivityDate
+            ? Math.floor((Date.now() - lastActivityDate.getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+        const lastActivityType = activityDates[0]?.type ?? 'none';
+
+        // ── Content coverage ──
+        const audioCoverage = insightsTotal > 0
+            ? insights.filter((i: { audioUrl: string | null }) => i.audioUrl !== null).length / insightsTotal
+            : 0;
+
+        // Profile completeness (key profile fields)
+        const profileKeyFields = ['birthDate', 'birthTime', 'birthPlace', 'specificQuestion', 'objective', 'facePhotoUrl', 'palmPhotoUrl', 'highs', 'lows', 'fears', 'rituals', 'strongSide', 'weakSide'] as const;
+        const profileFilledCount = client.profile
+            ? profileKeyFields.filter(f => client.profile![f] !== null && client.profile![f] !== undefined && client.profile![f] !== '').length
+            : 0;
+        const profileCompleteness = Math.round((profileFilledCount / profileKeyFields.length) * 100);
+
+        // Archetype
+        const archetype = client.spiritualPath?.archetype ?? client.akashicRecord?.archetype ?? null;
+
+        // ── Subscription ──
+        const sub = client.subscription;
+        let subscriptionStatus: string = 'none';
+        let subscriptionDaysLeft: number | null = null;
+        if (sub) {
+            if (sub.cancelAtPeriodEnd && sub.status === 'ACTIVE') {
+                subscriptionStatus = 'canceling';
+            } else if (sub.status === 'ACTIVE') {
+                subscriptionStatus = 'active';
+            } else if (['CANCELED', 'EXPIRED'].includes(sub.status)) {
+                subscriptionStatus = 'expired';
+            } else {
+                subscriptionStatus = sub.status.toLowerCase();
+            }
+            subscriptionDaysLeft = Math.max(0, Math.floor((new Date(sub.currentPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+        }
+
+        // ── Upsell history ──
+        const upsellHistory = client.orders
+            .filter((o: { addons?: unknown; upsellOfferedAt?: Date | null }) => o.addons || o.upsellOfferedAt)
+            .flatMap((o: { id: string; addons?: unknown; upsellOfferedAt?: Date | null; upsellAcceptedAt?: Date | null }) => {
+                const items: { orderId: string; type: string; offeredAt: Date | null; acceptedAt: Date | null }[] = [];
+                if (Array.isArray(o.addons)) {
+                    for (const addon of o.addons as Array<{ type: string; paidAt?: string }>) {
+                        items.push({ orderId: o.id, type: addon.type, offeredAt: o.upsellOfferedAt ?? null, acceptedAt: o.upsellAcceptedAt ?? null });
+                    }
+                } else if (o.upsellOfferedAt) {
+                    items.push({ orderId: o.id, type: 'unknown', offeredAt: o.upsellOfferedAt, acceptedAt: o.upsellAcceptedAt ?? null });
+                }
+                return items;
+            });
+
         return {
             ...client,
             chatSessions: chatSessionsWithCount,
@@ -1369,12 +1446,32 @@ MESSAGE DE L'EXPERT:`;
                 completedOrders: completedOrders.length,
                 totalSpent,
                 totalSpentFormatted: `${(totalSpent / 100).toFixed(2)} €`,
-                favoriteLevel,
-                highestLevel,
-                highestLevelNumber,
+                favoriteLevel: null as string | null,
+                highestLevel: 'Abonné',
+                highestLevelNumber: 4,
                 lastOrderAt: lastOrder?.createdAt || null,
                 isVip,
                 memberSince: client.createdAt,
+                // Engagement
+                engagementScore,
+                stepsCompleted,
+                stepsTotal,
+                insightsViewed,
+                insightsTotal,
+                chatMessagesTotal,
+                dreamsCount,
+                // Recency
+                daysSinceLastActivity,
+                lastActivityType,
+                // Content
+                audioCoverage: Math.round(audioCoverage * 100),
+                profileCompleteness,
+                archetype,
+                // Subscription
+                subscriptionStatus,
+                subscriptionDaysLeft,
+                // Upsell
+                upsellHistory,
             },
         };
     }

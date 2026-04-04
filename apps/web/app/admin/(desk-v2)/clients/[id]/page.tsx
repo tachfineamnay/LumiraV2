@@ -11,9 +11,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { ClientIdentityHeader } from '@/components/desk-v2/clients/ClientIdentityHeader';
-import { IncarnationPanel } from '@/components/desk-v2/clients/IncarnationPanel';
-import { AkashicSummary } from '@/components/desk-v2/clients/AkashicSummary';
-import { OrderTimeline } from '@/components/desk-v2/clients/OrderTimeline';
+import { ClientTabs } from '@/components/desk-v2/clients/ClientTabs';
 import { ClientFullData } from '@/components/desk-v2/clients/types';
 
 export default function ClientDetailPage() {
@@ -88,7 +86,7 @@ export default function ClientDetailPage() {
           <ArrowLeft className="w-5 h-5 text-stellar-400" />
         </button>
         <h1 className="text-xl font-semibold text-stellar-100">
-          Dossier Confidentiel
+          Dossier d&apos;Âme
         </h1>
         <button
           onClick={fetchClient}
@@ -100,20 +98,11 @@ export default function ClientDetailPage() {
         </button>
       </div>
 
-      {/* Identity Header */}
+      {/* Identity Header with KPIs */}
       <ClientIdentityHeader client={client} />
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr_300px] gap-6">
-        {/* Left Column - Incarnation */}
-        <IncarnationPanel client={client} />
-
-        {/* Center - Akashic Summary */}
-        <AkashicSummary client={client} />
-
-        {/* Right Column - Timeline */}
-        <OrderTimeline client={client} onRefresh={fetchClient} />
-      </div>
+      {/* Tabbed Content */}
+      <ClientTabs client={client} onRefresh={fetchClient} />
     </motion.div>
   );
 }
