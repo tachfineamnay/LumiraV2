@@ -880,7 +880,7 @@ export class DigitalSoulService {
     private async acquireProcessingLock(orderId: string, allowedStatuses: string[]): Promise<boolean> {
         const result = await this.prisma.$executeRawUnsafe(
             `UPDATE "Order" SET status = 'PROCESSING', "errorLog" = NULL, "updatedAt" = NOW()
-             WHERE id = $1 AND status = ANY($2::text[])`,
+             WHERE id = $1 AND status::text = ANY($2)`,
             orderId,
             allowedStatuses,
         );
