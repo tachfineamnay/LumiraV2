@@ -39,24 +39,24 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-desk-surface rounded-xl border border-desk-border">
+    <div className="h-full overflow-y-auto bg-desk-surface">
       {/* Header with client avatar */}
-      <div className="p-4 border-b border-desk-border bg-gradient-to-b from-amber-500/10 to-transparent">
-        <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 
-                          flex items-center justify-center text-xl font-bold text-white">
+      <div className="p-3 border-b border-desk-border">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-lg bg-amber-500 
+                          flex items-center justify-center text-sm font-bold text-white">
             {user.firstName?.[0]}{user.lastName?.[0]}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-desk-text truncate">
+            <h2 className="text-sm font-semibold text-desk-text truncate">
               {user.firstName} {user.lastName}
             </h2>
-            <p className="text-sm text-desk-muted truncate">{user.email}</p>
+            <p className="text-xs text-desk-muted truncate">{user.email}</p>
           </div>
         </div>
 
         {/* Order info */}
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-2.5 flex items-center gap-2">
           <span className="text-lg">{levelConfig.icon}</span>
           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getLevelColor(order.level)}`}>
             {levelConfig.name}

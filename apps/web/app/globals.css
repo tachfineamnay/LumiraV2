@@ -307,3 +307,137 @@
     animation-delay: 300ms;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   TIPTAP / PROSEMIRROR — Reading Experience
+   Styled for long-form spiritual reading content
+   ═══════════════════════════════════════════════════════════ */
+
+.ProseMirror {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 1.0625rem;
+  line-height: 1.8;
+  color: #1e293b;
+  max-width: 70ch;
+  margin: 0 auto;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+/* — Headings — */
+.ProseMirror h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  color: #0f172a;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid rgba(245, 158, 11, 0.2);
+}
+
+.ProseMirror h1:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  color: #1e293b;
+}
+
+.ProseMirror h3 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: rgba(217, 119, 6, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* — Paragraphs — */
+.ProseMirror p {
+  margin-bottom: 1.25rem;
+}
+
+.ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+/* — Blockquotes — */
+.ProseMirror blockquote {
+  border-left: 3px solid rgba(245, 158, 11, 0.4);
+  margin: 1.5rem 0;
+  padding: 0.75rem 1.25rem;
+  background: rgba(245, 158, 11, 0.04);
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+  color: #64748b;
+}
+
+.ProseMirror blockquote p {
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* — Lists — */
+.ProseMirror ul,
+.ProseMirror ol {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.ProseMirror li {
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror li::marker {
+  color: rgba(245, 158, 11, 0.6);
+}
+
+/* — Horizontal rule — */
+.ProseMirror hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.3), transparent);
+  margin: 2.5rem auto;
+  max-width: 40%;
+}
+
+/* — Inline styles — */
+.ProseMirror strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror mark {
+  background: rgba(245, 158, 11, 0.15);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+/* — Placeholder — */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #94a3b8;
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}

@@ -13,6 +13,8 @@ import {
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
 
 interface StepRevisionProps {
@@ -47,6 +49,7 @@ export function StepRevision({
   onShowVersions,
 }: StepRevisionProps) {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(true);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -118,18 +121,46 @@ export function StepRevision({
           </div>
         </div>
 
-        {/* RIGHT PANEL — AI Assistant */}
-        <div className="w-80 flex-shrink-0 border-l border-desk-border overflow-hidden">
-          <AIAssistant
-            orderId={orderId}
-            clientContext={{
-              firstName: order.user.firstName,
-              birthDate: order.user.profile?.birthDate,
-              question: order.user.profile?.specificQuestion,
-              objective: order.user.profile?.objective,
-            }}
-            onInsertText={onInsertText}
-          />
+        {/* RIGHT PANEL — AI Assistant (collapsible) */}
+        <div className={`flex-shrink-0 border-l border-desk-border transition-all duration-300 ${
+          showRightPanel ? 'w-80' : 'w-12'
+        }`}>
+          {showRightPanel ? (
+            <div className="h-full flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-desk-border">
+                <span className="text-xs font-medium text-desk-muted uppercase tracking-wide">Assistant IA</span>
+                <button
+                  onClick={() => setShowRightPanel(false)}
+                  title="Réduire l'assistant"
+                  className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
+                >
+                  <PanelRightClose className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <AIAssistant
+                  orderId={orderId}
+                  clientContext={{
+                    firstName: order.user.firstName,
+                    birthDate: order.user.profile?.birthDate,
+                    question: order.user.profile?.specificQuestion,
+                    objective: order.user.profile?.objective,
+                  }}
+                  onInsertText={onInsertText}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col items-center py-3 gap-2">
+              <button
+                onClick={() => setShowRightPanel(true)}
+                title="Afficher l'assistant IA"
+                className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
+              >
+                <PanelRightOpen className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -177,12 +208,9 @@ export function StepRevision({
             <button
               onClick={onSeal}
               disabled={isSealing || editorContent.length === 0}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl
-                         bg-gradient-to-r from-emerald-500 to-emerald-600
-                         text-white font-semibold text-sm
-                         hover:from-emerald-400 hover:to-emerald-500
-                         hover:shadow-lg hover:shadow-emerald-500/20
-                         transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg
+                         bg-emerald-500 text-white font-semibold text-sm
+                         hover:bg-emerald-400 transition-colors disabled:opacity-50"
             >
               <Lock className="w-4 h-4" />
               <span>Sceller et envoyer</span>

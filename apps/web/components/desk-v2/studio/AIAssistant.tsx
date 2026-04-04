@@ -104,13 +104,12 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
   };
 
   return (
-    <div className="flex flex-col h-full bg-desk-surface rounded-xl border border-desk-border">
+    <div className="flex flex-col h-full bg-desk-surface">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-desk-border">
+      <div className="px-3 py-2 border-b border-desk-border">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 
-                          flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-white" />
+          <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center">
+            <Sparkles className="w-3.5 h-3.5 text-white" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-desk-text">Oracle Assistant</h3>
@@ -248,7 +247,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
             placeholder="Posez une question à l'Oracle..."
-            className="flex-1 px-4 py-2.5 rounded-xl bg-desk-card border border-desk-border
+            className="flex-1 px-3 py-2 rounded-lg bg-desk-card border border-desk-border
                        text-sm text-desk-text placeholder-desk-subtle
                        focus:outline-none focus:border-amber-500/50 transition-colors"
           />
@@ -256,7 +255,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
             title="Envoyer"
-            className="p-2.5 rounded-xl bg-amber-500 text-slate-900
+            className="p-2 rounded-lg bg-amber-500 text-slate-900
                        hover:bg-amber-400 transition-colors
                        disabled:opacity-50 disabled:cursor-not-allowed"
           >
