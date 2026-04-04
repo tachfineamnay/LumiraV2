@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TiptapEditor } from './TiptapEditor';
-import { AIAssistant } from './AIAssistant';
-import { ClientPanel } from './ClientPanel';
+import { StepDossier } from './StepDossier';
+import { StepBriefing } from './StepBriefing';
+import { StepRevision } from './StepRevision';
 import { useSocket } from '../hooks/useSocket';
 import { Order, OracleResponse, LEVEL_CONFIG } from '../types';
 import api from '@/lib/api';
@@ -14,35 +14,36 @@ import {
   ArrowLeft,
   Loader2,
   AlertCircle,
-  Sparkles,
   Send,
-  RefreshCw,
-  Wand2,
   FileCheck,
-  Clock,
   X,
   History,
   RotateCcw,
   Lock,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from 'lucide-react';
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
+type StudioStep = 'dossier' | 'briefing' | 'revision';
+
 interface OrderWorkflowProps {
   orderId: string;
 }
 
-const STATUS_BADGE: Record<string, { label: string; className: string }> = {
-  PAID: { label: 'En attente', className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
-  PROCESSING: { label: 'En cours', className: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
-  AWAITING_VALIDATION: { label: 'À valider', className: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' },
-  COMPLETED: { label: 'Livrée', className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' },
-  FAILED: { label: 'Erreur', className: 'bg-red-500/20 text-red-400 border border-red-500/30' },
+const STEP_META: Record<StudioStep, { num: number; label: string }> = {
+  dossier: { num: 1, label: 'Dossier' },
+  briefing: { num: 2, label: 'Briefing' },
+  revision: { num: 3, label: 'Révision' },
 };
+
+function computeInitialStep(order: Order): StudioStep {
+  if (order.status === 'COMPLETED' || order.status === 'AWAITING_VALIDATION') return 'revision';
+  if (order.generatedContent?.pdf_content) return 'revision';
+  if (order.status === 'PROCESSING') return 'briefing';
+  return 'dossier';
+}
 
 // =============================================================================
 // MAIN COMPONENT
@@ -56,12 +57,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState('');
+  const [step, setStep] = useState<StudioStep>('dossier');
   
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSealing, setIsSealing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [showLeftPanel, setShowLeftPanel] = useState(true);
   
   // Version history
   const [showVersions, setShowVersions] = useState(false);
@@ -76,8 +77,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       if (data.orderId === orderId) {
         if (data.success) {
           toast.success('Génération terminée !');
-          fetchOrder();
-          // Stay in studio mode after generation
+          fetchOrder().then(() => setStep('revision'));
         } else {
           toast.error('Échec de la génération', { description: data.error });
         }
@@ -93,7 +93,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
   useEffect(() => {
     if (!isGenerating && !isRegenerating) {
-      // Clean up when not generating
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
@@ -102,10 +101,9 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       return;
     }
 
-    // Calculate interval with exponential backoff on errors (base: 5s, max: 30s)
     const getPollingInterval = () => {
-      const baseInterval = 5000; // 5 seconds base
-      const maxInterval = 30000; // 30 seconds max
+      const baseInterval = 5000;
+      const maxInterval = 30000;
       const backoffMultiplier = Math.min(Math.pow(2, pollErrorCountRef.current), 6);
       return Math.min(baseInterval * backoffMultiplier, maxInterval);
     };
@@ -113,9 +111,8 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     const poll = async () => {
       try {
         const { data } = await api.get(`/expert/orders/${orderId}`);
-        pollErrorCountRef.current = 0; // Reset error count on success
+        pollErrorCountRef.current = 0;
         
-        // Check if generation completed (content appeared or status changed)
         const hasNewContent = data.generatedContent && !order?.generatedContent;
         const contentChanged = data.generatedContent?.pdf_content && 
           !order?.generatedContent?.pdf_content;
@@ -127,24 +124,22 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             setEditorContent(oracleResponseToHtml(data.generatedContent));
           }
           
-          // Generation completed!
-          if (data.generatedContent?.pdf_content || data.status === 'COMPLETED') {
+          if (data.generatedContent?.pdf_content || data.status === 'COMPLETED' || data.status === 'AWAITING_VALIDATION') {
             toast.success('Génération terminée !', { 
               description: 'La lecture est prête pour révision' 
             });
             setIsGenerating(false);
             setIsRegenerating(false);
-            return; // Stop polling
+            setStep('revision');
+            return;
           }
         }
         
-        // Schedule next poll
         pollIntervalRef.current = setTimeout(poll, getPollingInterval());
       } catch (err: any) {
         pollErrorCountRef.current++;
         console.warn(`Polling error (attempt ${pollErrorCountRef.current}):`, err?.response?.status || err);
         
-        // Stop polling after 5 consecutive errors or if rate limited
         if (pollErrorCountRef.current >= 5) {
           console.error('Too many polling errors, stopping');
           toast.error('Erreur de synchronisation', { 
@@ -155,12 +150,10 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
           return;
         }
         
-        // Continue with backoff
         pollIntervalRef.current = setTimeout(poll, getPollingInterval());
       }
     };
 
-    // Start polling
     pollIntervalRef.current = setTimeout(poll, getPollingInterval());
 
     return () => {
@@ -177,12 +170,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       const { data } = await api.get(`/expert/orders/${orderId}`);
       setOrder(data);
       
-      // Set content if exists
       if (data.generatedContent) {
         setEditorContent(oracleResponseToHtml(data.generatedContent));
       }
       
       setError(null);
+      return data;
     } catch (err) {
       setError('Erreur de chargement de la commande');
       console.error(err);
@@ -201,22 +194,45 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     }
   }, [orderId]);
 
+  // Initial load — set step based on order status
   useEffect(() => {
-    fetchOrder();
+    fetchOrder().then((data) => {
+      if (data) {
+        const initialStep = computeInitialStep(data);
+        setStep(initialStep);
+        if (data.status === 'PROCESSING') {
+          setIsGenerating(true);
+        }
+      }
+    });
     loadVersions();
     focusOrder(orderId);
     return () => blurOrder(orderId);
   }, [orderId, fetchOrder, loadVersions, focusOrder, blurOrder]);
 
-  // Actions
-  const handleGenerate = async () => {
+  // ========= ACTIONS =========
+
+  const handleLaunch = async (expertPrompt: string, expertInstructions?: string) => {
     setIsGenerating(true);
     try {
-      await api.post(`/expert/orders/${orderId}/generate`);
-      toast.info('Génération lancée...', { description: 'L\'Oracle travaille sur votre lecture' });
-    } catch {
-      toast.error('Erreur lors du lancement de la génération');
+      await api.post('/expert/process-order', {
+        orderId,
+        expertPrompt,
+        expertInstructions,
+      });
+      toast.success('Génération terminée !');
+      await fetchOrder();
+      setStep('revision');
       setIsGenerating(false);
+    } catch (err: any) {
+      // If timeout or network error, generation may still be running
+      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
+        toast.info('Génération en cours...', { description: 'L\'Oracle travaille, veuillez patienter.' });
+        // Keep isGenerating true → polling will pick up
+      } else {
+        toast.error('Erreur lors du lancement', { description: err?.response?.data?.message || err?.message });
+        setIsGenerating(false);
+      }
     }
   };
 
@@ -225,6 +241,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     try {
       await api.post(`/expert/orders/${orderId}/regenerate`);
       toast.info('Régénération lancée...');
+      setStep('briefing');
     } catch {
       toast.error('Erreur lors de la régénération');
       setIsRegenerating(false);
@@ -262,9 +279,10 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
   // Derived state
   const isReadOnly = order?.status === 'COMPLETED';
-  const statusBadge = STATUS_BADGE[order?.status || 'PAID'] || STATUS_BADGE.PAID;
+  const levelConfig = order ? (LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1]) : LEVEL_CONFIG[1];
 
-  // Loading state
+  // ========= LOADING / ERROR =========
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center bg-slate-950">
@@ -276,7 +294,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     );
   }
 
-  // Error state
   if (error || !order) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 bg-slate-950">
@@ -292,15 +309,14 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     );
   }
 
-  const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
+  // ========= RENDER =========
 
   return (
     <div className="h-full flex flex-col bg-slate-950">
-      {/* ═══════════════════════════════════════════════════════════════════
-          TOP BAR - Status badge + Order Info + Actions
-      ═══════════════════════════════════════════════════════════════════ */}
+      {/* ═══════════════ TOP BAR ═══════════════ */}
       <div className="flex-shrink-0 px-4 py-3 bg-slate-900/80 border-b border-white/5">
         <div className="flex items-center justify-between">
+          {/* Left: back + client info */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/admin/board')}
@@ -329,221 +345,94 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 </div>
               </div>
             </div>
-
-            {/* Status badge */}
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
-              {statusBadge.label}
-            </span>
           </div>
 
-          {/* Inline actions */}
+          {/* Center: Stepper */}
+          <div className="flex items-center gap-1">
+            {(['dossier', 'briefing', 'revision'] as StudioStep[]).map((s, i) => {
+              const meta = STEP_META[s];
+              const isCurrent = step === s;
+              const isPast = STEP_META[step].num > meta.num;
+              
+              return (
+                <div key={s} className="flex items-center gap-1">
+                  {i > 0 && (
+                    <div className={`w-8 h-px ${isPast ? 'bg-amber-500/60' : 'bg-white/10'}`} />
+                  )}
+                  <button
+                    onClick={() => {
+                      // Only allow navigating to past/current steps (not future beyond what's been reached)
+                      if (isPast || isCurrent) setStep(s);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isCurrent
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                        : isPast
+                          ? 'bg-white/5 text-slate-400 hover:bg-white/10 cursor-pointer'
+                          : 'bg-transparent text-slate-600 cursor-default'
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                      isCurrent ? 'bg-amber-500 text-slate-900' : isPast ? 'bg-slate-700 text-slate-400' : 'bg-slate-800 text-slate-600'
+                    }`}>
+                      {meta.num}
+                    </span>
+                    <span className="hidden sm:inline">{meta.label}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right: status */}
           <div className="flex items-center gap-2">
-            {/* Generate — only when no content and not generating */}
-            {!editorContent && !isGenerating && !isReadOnly && (
-              <button
-                onClick={handleGenerate}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg
-                           bg-gradient-to-r from-amber-500 to-amber-600
-                           text-slate-900 font-medium text-sm
-                           hover:from-amber-400 hover:to-amber-500 transition-all"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Générer</span>
-              </button>
-            )}
-
-            {/* Regenerate — when content exists */}
-            {editorContent && !isGenerating && !isReadOnly && (
-              <button
-                onClick={handleRegenerate}
-                disabled={isRegenerating}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg
-                           bg-slate-800/50 text-slate-400 hover:text-white 
-                           hover:bg-slate-800 transition-colors disabled:opacity-50"
-              >
-                {isRegenerating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
-                )}
-                <span className="text-sm">Régénérer</span>
-              </button>
-            )}
-
-            {/* Version history */}
-            {versions.length > 0 && (
-              <button
-                onClick={() => setShowVersions(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 
-                           text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                <History className="w-4 h-4" />
-                <span className="text-sm">{versions.length}</span>
-              </button>
-            )}
-
-            {/* Seal CTA — when content exists, not completed, not busy */}
-            {editorContent && !isReadOnly && !isGenerating && !isSealing && (
-              <button
-                onClick={() => setShowSealConfirm(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg
-                           bg-gradient-to-r from-emerald-500 to-emerald-600
-                           text-white font-semibold text-sm
-                           hover:from-emerald-400 hover:to-emerald-500
-                           hover:shadow-lg hover:shadow-emerald-500/20 transition-all"
-              >
-                <Lock className="w-4 h-4" />
-                <span>Sceller et envoyer</span>
-              </button>
+            {isReadOnly && (
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Livrée
+              </span>
             )}
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          COMPLETED BANNER
-      ═══════════════════════════════════════════════════════════════════ */}
-      {isReadOnly && order.deliveredAt && (
-        <div className="flex-shrink-0 px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
-          <div className="flex items-center justify-center gap-2 text-sm text-emerald-400">
-            <Lock className="w-3.5 h-3.5" />
-            <span>
-              Cette lecture a été scellée et envoyée le{' '}
-              {new Date(order.deliveredAt).toLocaleDateString('fr-FR', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          MAIN 3-COLUMN LAYOUT
-      ═══════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* LEFT PANEL — Client Profile (collapsible) */}
-        <div className={`flex-shrink-0 border-r border-white/5 transition-all duration-300 ${
-          showLeftPanel ? 'w-72' : 'w-12'
-        }`}>
-          {showLeftPanel ? (
-            <div className="h-full flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-                <h3 className="text-sm font-semibold text-white">Profil client</h3>
-                <button
-                  onClick={() => setShowLeftPanel(false)}
-                  title="Réduire le panneau"
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
-                >
-                  <PanelLeftClose className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                <ClientPanel order={order} compact />
-              </div>
-            </div>
-          ) : (
-            <div className="h-full flex flex-col items-center py-3 gap-2">
-              <button
-                onClick={() => setShowLeftPanel(true)}
-                title="Afficher le profil client"
-                className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
-              >
-                <PanelLeftOpen className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* CENTER — Editor area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {isGenerating ? (
-            /* Generation in progress */
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="relative w-24 h-24 mx-auto mb-6">
-                  <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 animate-ping" />
-                  <div className="absolute inset-2 rounded-full border-4 border-amber-500/30 animate-ping animation-delay-200" />
-                  <div className="absolute inset-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 
-                                  flex items-center justify-center shadow-xl shadow-amber-500/30">
-                    <Sparkles className="w-8 h-8 text-white animate-pulse" />
-                  </div>
-                </div>
-                <h3 className="text-xl font-playfair text-white mb-2">
-                  L&apos;Oracle crée la lecture...
-                </h3>
-                <p className="text-sm text-slate-400 max-w-sm">
-                  Analyse du profil de {order.user.firstName}
-                </p>
-                <p className="text-xs text-slate-500 mt-2">
-                  <Clock className="w-3 h-3 inline mr-1" />
-                  ~2-3 minutes
-                </p>
-              </div>
-            </div>
-          ) : editorContent ? (
-            /* Editor with content */
-            <div className={`flex-1 overflow-y-auto p-4 ${
-              isReadOnly ? 'border-2 border-emerald-500/30 rounded-lg m-2' : ''
-            }`}>
-              <TiptapEditor
-                orderId={orderId}
-                initialContent={editorContent}
-                onContentChange={isReadOnly ? undefined : setEditorContent}
-                readOnly={isReadOnly}
-              />
-            </div>
-          ) : (
-            /* Empty state — no content yet */
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-white/10
-                                flex items-center justify-center mx-auto mb-4">
-                  <Wand2 className="w-10 h-10 text-slate-600" />
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">
-                  Prêt à créer la lecture
-                </h3>
-                <p className="text-sm text-slate-400 max-w-sm mb-6">
-                  Consultez le profil client puis lancez la génération IA
-                </p>
-                <button
-                  onClick={handleGenerate}
-                  className="flex items-center gap-2 px-6 py-3 mx-auto rounded-xl
-                             bg-gradient-to-r from-amber-500 to-amber-600
-                             text-slate-900 font-semibold
-                             hover:from-amber-400 hover:to-amber-500
-                             hover:shadow-lg hover:shadow-amber-500/20 transition-all"
-                >
-                  <Sparkles className="w-5 h-5" />
-                  <span>Lancer la génération</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT PANEL — AI Assistant (always visible) */}
-        <div className="w-80 flex-shrink-0 border-l border-white/5 overflow-hidden">
-          <AIAssistant
-            orderId={orderId}
-            clientContext={{
-              firstName: order.user.firstName,
-              birthDate: order.user.profile?.birthDate,
-              question: order.user.profile?.specificQuestion,
-              objective: order.user.profile?.objective,
-            }}
-            onInsertText={handleInsertText}
+      {/* ═══════════════ STEP CONTENT ═══════════════ */}
+      <div className="flex-1 overflow-hidden">
+        {step === 'dossier' && (
+          <StepDossier
+            order={order}
+            onContinue={() => setStep('briefing')}
           />
-        </div>
+        )}
+
+        {step === 'briefing' && (
+          <StepBriefing
+            order={order}
+            isGenerating={isGenerating || isRegenerating}
+            onLaunch={handleLaunch}
+            onBack={() => setStep('dossier')}
+          />
+        )}
+
+        {step === 'revision' && (
+          <StepRevision
+            order={order}
+            orderId={orderId}
+            editorContent={editorContent}
+            onContentChange={setEditorContent}
+            onInsertText={handleInsertText}
+            onSeal={() => setShowSealConfirm(true)}
+            onRegenerate={handleRegenerate}
+            onBackToBriefing={() => setStep('briefing')}
+            isReadOnly={isReadOnly}
+            isRegenerating={isRegenerating}
+            isSealing={isSealing}
+            versions={versions}
+            onShowVersions={() => setShowVersions(true)}
+          />
+        )}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          VERSION HISTORY DRAWER
-      ═══════════════════════════════════════════════════════════════════ */}
+      {/* ═══════════════ VERSION HISTORY DRAWER ═══════════════ */}
       <AnimatePresence>
         {showVersions && (
           <motion.div
@@ -561,7 +450,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               className="absolute right-0 top-0 h-full w-full max-w-md bg-slate-900 border-l border-white/10"
               onClick={e => e.stopPropagation()}
             >
-              {/* Header */}
               <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
@@ -581,7 +469,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 </button>
               </div>
 
-              {/* Version list */}
               <div className="flex-1 overflow-y-auto p-4">
                 {versions.length === 0 ? (
                   <div className="text-center py-12">
@@ -623,9 +510,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         )}
       </AnimatePresence>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          SEAL CONFIRMATION MODAL
-      ═══════════════════════════════════════════════════════════════════ */}
+      {/* ═══════════════ SEAL CONFIRMATION MODAL ═══════════════ */}
       <AnimatePresence>
         {showSealConfirm && (
           <motion.div
@@ -642,7 +527,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
-              {/* Header */}
               <div className="relative bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 px-6 py-5 border-b border-white/10">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center">
@@ -655,7 +539,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 </div>
               </div>
 
-              {/* Content */}
               <div className="p-6 space-y-4">
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
                   <div className="flex items-start gap-3">
@@ -689,7 +572,6 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="flex items-center gap-3 px-6 py-4 bg-slate-800/50 border-t border-white/5">
                 <button
                   onClick={() => setShowSealConfirm(false)}

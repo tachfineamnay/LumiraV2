@@ -487,8 +487,9 @@ export class ExpertService {
             throw new NotFoundException('Commande non trouvée');
         }
 
-        // Accept both PAID and PROCESSING statuses for generation
-        if (order.status !== 'PROCESSING' && order.status !== 'PAID') {
+        // Accept PAID, PROCESSING, AWAITING_VALIDATION (re-generation), and FAILED (retry)
+        const validStatuses = ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'FAILED'];
+        if (!validStatuses.includes(order.status)) {
             throw new BadRequestException('Cette commande n\'est pas prête pour la génération');
         }
 

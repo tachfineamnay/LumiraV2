@@ -92,6 +92,7 @@ export interface Order {
   updatedAt: string;
   paidAt?: string;
   completedAt?: string;
+  deliveredAt?: string;
   user: User;
   files: OrderFile[];
 }

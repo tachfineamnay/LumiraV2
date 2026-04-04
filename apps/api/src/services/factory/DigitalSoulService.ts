@@ -115,7 +115,8 @@ export class DigitalSoulService {
 
             this.logger.log(`📋 Order: ${order.orderNumber} | Status: ${order.status}`);
 
-            if (order.status !== 'PAID' && order.status !== 'PROCESSING') {
+            const validContentStatuses = ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'FAILED'];
+            if (!validContentStatuses.includes(order.status)) {
                 throw new BadRequestException(`Order not ready for generation: ${order.status}`);
             }
 
@@ -161,6 +162,8 @@ export class DigitalSoulService {
                 orderNumber: order.orderNumber,
                 level: orderLevel,
                 productName: orderProductName,
+                expertPrompt: order.expertPrompt ?? undefined,
+                expertInstructions: order.expertInstructions ?? undefined,
             };
 
             // STEP 2: Generate AI content
@@ -552,6 +555,8 @@ export class DigitalSoulService {
                 orderNumber: order.orderNumber,
                 level: orderLevel,
                 productName: orderProductName,
+                expertPrompt: order.expertPrompt ?? undefined,
+                expertInstructions: order.expertInstructions ?? undefined,
             };
 
             // ==========================================================================
