@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
-import { AdminSettingsService } from './admin-settings.service';
+import { AdminSettingsService, ModelConfig } from './admin-settings.service';
 import { AudioGenerationService } from '../../services/factory/AudioGenerationService';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
@@ -381,6 +381,11 @@ export class ExpertController {
         return this.adminSettingsService.testVertexConnection();
     }
 
+    @Post('settings/openai-test')
+    async testOpenAIConnection() {
+        return this.adminSettingsService.testOpenAIConnection();
+    }
+
     @Put('settings/vertex-key')
     async setVertexKey(@Body('credentials') credentials: string) {
         return this.adminSettingsService.setVertexCredentials(credentials);
@@ -447,16 +452,7 @@ export class ExpertController {
 
     @Put('settings/model-config')
     async saveModelConfig(
-        @Body() config: Partial<{
-            heavyModel: string;
-            flashModel: string;
-            heavyTemperature: number;
-            heavyTopP: number;
-            heavyMaxTokens: number;
-            flashTemperature: number;
-            flashTopP: number;
-            flashMaxTokens: number;
-        }>,
+        @Body() config: Partial<ModelConfig>,
         @Body('changedBy') changedBy?: string,
     ) {
         return this.adminSettingsService.saveModelConfig(config, changedBy);

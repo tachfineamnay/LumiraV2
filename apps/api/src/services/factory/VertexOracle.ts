@@ -15,6 +15,7 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, GenerativeModel, Content, Part } from '@google/generative-ai';
+import OpenAI from 'openai';
 import axios from 'axios';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -162,6 +163,17 @@ export interface DreamInterpretation {
 
 // Agent type for logging
 type AgentType = 'SCRIBE' | 'GUIDE' | 'EDITOR' | 'CONFIDANT' | 'ONIRIQUE';
+
+type AIProvider = 'gemini' | 'openai';
+
+interface AgentProviders {
+    SCRIBE: AIProvider;
+    GUIDE: AIProvider;
+    EDITOR: AIProvider;
+    CONFIDANT: AIProvider;
+    ONIRIQUE: AIProvider;
+    NARRATOR: AIProvider;
+}
 
 // =============================================================================
 // DEFAULT PROMPTS - Used as fallback if DB is empty
@@ -358,6 +370,24 @@ const DEFAULT_MODEL_CONFIG = {
     flashTemperature: 0.9,
     flashTopP: 0.95,
     flashMaxTokens: 2048,
+    // OpenAI defaults
+    openaiHeavyModel: 'gpt-4o',
+    openaiFlashModel: 'gpt-4o-mini',
+    openaiHeavyTemperature: 0.8,
+    openaiHeavyTopP: 0.95,
+    openaiHeavyMaxTokens: 16384,
+    openaiFlashTemperature: 0.9,
+    openaiFlashTopP: 0.95,
+    openaiFlashMaxTokens: 2048,
+    // Per-agent routing
+    agentProviders: {
+        SCRIBE: 'gemini' as AIProvider,
+        GUIDE: 'gemini' as AIProvider,
+        EDITOR: 'gemini' as AIProvider,
+        CONFIDANT: 'gemini' as AIProvider,
+        ONIRIQUE: 'gemini' as AIProvider,
+        NARRATOR: 'gemini' as AIProvider,
+    },
 };
 
 // =============================================================================
@@ -370,6 +400,9 @@ export class VertexOracle {
     
     // Gemini API client
     private genAI: GoogleGenerativeAI | null = null;
+    
+    // OpenAI API client
+    private openaiClient: OpenAI | null = null;
     
     // Models
     private heavyModel: GenerativeModel | null = null;  // SCRIBE, GUIDE, EDITOR
@@ -386,6 +419,7 @@ export class VertexOracle {
         ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT,
     };
     private modelConfig = { ...DEFAULT_MODEL_CONFIG };
+    private agentProviders: AgentProviders = { ...DEFAULT_MODEL_CONFIG.agentProviders };
     private promptsLoaded = false;
     // Dedicated JSON model for ONIRIQUE to guarantee structured output
     private oniricModel: GenerativeModel | null = null;
@@ -434,7 +468,11 @@ export class VertexOracle {
                         break;
                     case 'MODEL_CONFIG':
                         try {
-                            this.modelConfig = JSON.parse(prompt.value);
+                            const parsed = JSON.parse(prompt.value);
+                            this.modelConfig = { ...DEFAULT_MODEL_CONFIG, ...parsed };
+                            if (parsed.agentProviders) {
+                                this.agentProviders = { ...DEFAULT_MODEL_CONFIG.agentProviders, ...parsed.agentProviders };
+                            }
                         } catch {
                             this.logger.warn('Failed to parse MODEL_CONFIG, using defaults');
                         }
@@ -512,10 +550,25 @@ export class VertexOracle {
                 },
             });
 
+            // Initialize OpenAI client (optional — only if key is set)
+            const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+            if (openaiKey) {
+                this.openaiClient = new OpenAI({ apiKey: openaiKey });
+                this.logger.log('🔑 OpenAI client initialized');
+            } else {
+                this.openaiClient = null;
+                this.logger.log('ℹ️ OPENAI_API_KEY not set — OpenAI provider unavailable');
+            }
+
             this.initialized = true;
             this.logger.log('🚀 VertexOracle ready (Gemini API mode)');
             this.logger.log(`   Heavy model: ${this.modelConfig.heavyModel} (temp=${this.modelConfig.heavyTemperature}, topP=${this.modelConfig.heavyTopP})`);
             this.logger.log(`   Flash model: ${this.modelConfig.flashModel} (temp=${this.modelConfig.flashTemperature}, topP=${this.modelConfig.flashTopP})`);
+            if (this.openaiClient) {
+                this.logger.log(`   OpenAI Heavy: ${this.modelConfig.openaiHeavyModel} (temp=${this.modelConfig.openaiHeavyTemperature})`);
+                this.logger.log(`   OpenAI Flash: ${this.modelConfig.openaiFlashModel} (temp=${this.modelConfig.openaiFlashTemperature})`);
+            }
+            this.logger.log(`   Agent providers: ${JSON.stringify(this.agentProviders)}`);
         } catch (error) {
             this.logger.error(`❌ Failed to initialize VertexOracle: ${error}`);
             throw new Error(`VertexOracle initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -532,7 +585,9 @@ export class VertexOracle {
         this.lumiraDna = DEFAULT_LUMIRA_DNA;
         this.agentContexts = { ...DEFAULT_AGENT_CONTEXTS, ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT };
         this.modelConfig = { ...DEFAULT_MODEL_CONFIG };
+        this.agentProviders = { ...DEFAULT_MODEL_CONFIG.agentProviders };
         this.oniricModel = null;
+        this.openaiClient = null;
         this.logger.log('🔄 VertexOracle cache invalidated (prompts will reload)');
     }
 
@@ -561,16 +616,13 @@ export class VertexOracle {
         const systemPrompt = this.getSystemPrompt('SCRIBE');
         const userPrompt = this.buildScribePrompt(userProfile, orderContext);
 
-        // Build multimodal content parts
-        const parts: Part[] = [{ text: `${systemPrompt}\n\n---\n\nUSER REQUEST:\n${userPrompt}` }];
+        // Collect images if available
+        const images: Array<{ mimeType: string; base64: string }> = [];
 
-        // Attach images if available
         if (userProfile.facePhotoUrl) {
             try {
                 const imageData = await this.fetchImageAsBase64(userProfile.facePhotoUrl);
-                parts.push({
-                    inlineData: { mimeType: 'image/jpeg', data: imageData },
-                });
+                images.push({ mimeType: 'image/jpeg', base64: imageData });
                 this.logger.log('📷 [SCRIBE] Face photo attached');
             } catch {
                 this.logger.warn('[SCRIBE] Could not fetch face photo, continuing without it');
@@ -580,28 +632,18 @@ export class VertexOracle {
         if (userProfile.palmPhotoUrl) {
             try {
                 const imageData = await this.fetchImageAsBase64(userProfile.palmPhotoUrl);
-                parts.push({
-                    inlineData: { mimeType: 'image/jpeg', data: imageData },
-                });
+                images.push({ mimeType: 'image/jpeg', base64: imageData });
                 this.logger.log('📷 [SCRIBE] Palm photo attached');
             } catch {
                 this.logger.warn('[SCRIBE] Could not fetch palm photo, continuing without it');
             }
         }
 
-        // Execute with retry logic
-        const result = await this.executeWithRetry(
-            'SCRIBE',
-            async () => {
-                const response = await this.heavyModel!.generateContent({
-                    contents: [{ role: 'user', parts }],
-                });
-                return response.response;
-            },
-            120000, // 2 minute timeout for heavy operations
-        );
+        // Use multimodal adapter if images, otherwise plain JSON adapter
+        const textContent = images.length > 0
+            ? await this.callAIMultimodal('SCRIBE', systemPrompt, userPrompt, images, 120000)
+            : await this.callAIJSON('SCRIBE', systemPrompt, userPrompt, 120000);
 
-        const textContent = result.text();
         if (!textContent) {
             throw new Error('[SCRIBE] Empty response from model');
         }
@@ -657,18 +699,7 @@ export class VertexOracle {
         const systemPrompt = this.getSystemPrompt('GUIDE');
         const userPrompt   = this.buildGuidePrompt(userProfile, synthesis, batchNumber, startDay, endDay, pastDreams);
 
-        const result = await this.executeWithRetry(
-            'GUIDE',
-            async () => {
-                const response = await this.heavyModel!.generateContent({
-                    contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }] }],
-                });
-                return response.response;
-            },
-            90000,
-        );
-
-        const textContent = result.text();
+        const textContent = await this.callAIJSON('GUIDE', systemPrompt, userPrompt, 90000);
         if (!textContent) throw new Error('[GUIDE] Empty response from model');
 
         const cleanedContent = textContent.replace(/```json|```/g, '').trim();
@@ -714,23 +745,10 @@ export class VertexOracle {
 
         const systemPrompt = this.agentContexts.ONIRIQUE;
         const userPrompt   = this.buildOniriquePrompt(ctx);
-        const fullPrompt   = `${systemPrompt}\n\n---\n\nDREAM SUBMISSION:\n${userPrompt}`;
 
-        const result = await this.executeWithRetry(
-            'ONIRIQUE',
-            async () => {
-                const response = await this.oniricModel!.generateContent({
-                    contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-                });
-                return response.response;
-            },
-            30000, // 30s — uses flash model
-        );
-
-        const textContent = result.text();
+        const textContent = await this.callAIJSON('ONIRIQUE', systemPrompt, userPrompt, 30000);
         if (!textContent) throw new Error('[ONIRIQUE] Empty response from model');
 
-        // The model is configured with responseMimeType: 'application/json'.
         // Strip any accidental markdown fences just-in-case.
         const cleaned = textContent.replace(/```json|```/g, '').trim();
 
@@ -795,33 +813,17 @@ ${options?.preserveStructure ? 'IMPORTANT: Préserve la structure et le formatag
 Génère le contenu affiné:
 `.trim();
 
-        // Use text/plain model for EDITOR since we want raw refined text
-        const editorModel = this.genAI!.getGenerativeModel({
-            model: this.modelConfig.heavyModel,
-            generationConfig: {
-                temperature: options?.temperature ?? 0.7,
-                maxOutputTokens: options?.maxTokens ?? 8192,
-            },
+        const refined = await this.callAIText('EDITOR', systemPrompt, userPrompt, 60000, {
+            temperature: options?.temperature ?? 0.7,
+            maxTokens: options?.maxTokens ?? 8192,
         });
 
-        const result = await this.executeWithRetry(
-            'EDITOR',
-            async () => {
-                const response = await editorModel.generateContent({
-                    contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }] }],
-                });
-                return response.response;
-            },
-            60000, // 60 second timeout
-        );
-
-        const refined = result.text()?.trim();
-        if (!refined) {
+        if (!refined?.trim()) {
             throw new Error('[EDITOR] Empty response from model');
         }
 
-        this.logger.log(`✅ [EDITOR] Content refined: ${refined.length} chars`);
-        return refined;
+        this.logger.log(`✅ [EDITOR] Content refined: ${refined.trim().length} chars`);
+        return refined.trim();
     }
 
     // =========================================================================
@@ -841,41 +843,15 @@ Génère le contenu affiné:
         this.logger.log(`💬 [CONFIDANT] Chat for user ${context.userId.substring(0, 8)}...`);
 
         const systemPrompt = this.buildConfidantSystemPrompt(context);
-        
-        // Build conversation contents
-        const contents: Content[] = [];
-        
-        // Add conversation history (last 10 messages for context window)
-        const recentHistory = conversationHistory.slice(-10);
-        for (const msg of recentHistory) {
-            contents.push({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.content }],
-            });
-        }
-        
-        // Add current message with system context
-        const fullUserMessage = contents.length === 0 
-            ? `${systemPrompt}\n\n---\n\nUSER:\n${userMessage}`
-            : userMessage;
-        
-        contents.push({
-            role: 'user',
-            parts: [{ text: fullUserMessage }],
-        });
 
-        const result = await this.executeWithRetry(
+        const reply = await this.callAIChat(
             'CONFIDANT',
-            async () => {
-                const response = await this.flashModel!.generateContent({
-                    contents,
-                });
-                return response.response;
-            },
-            30000, // 30 second timeout for chat
+            systemPrompt,
+            conversationHistory,
+            userMessage,
+            30000,
         );
 
-        const reply = result.text()?.trim();
         if (!reply) {
             throw new Error('[CONFIDANT] Empty response from model');
         }
@@ -937,6 +913,287 @@ Génère le contenu affiné:
     // =========================================================================
     // HELPER METHODS
     // =========================================================================
+
+    /**
+     * Returns the current agent providers configuration.
+     * Used by AudioScriptService to check NARRATOR provider.
+     */
+    getAgentProviders(): AgentProviders {
+        return { ...this.agentProviders };
+    }
+
+    /**
+     * Returns the current model config.
+     * Used by AudioScriptService to get OpenAI model params for NARRATOR.
+     */
+    getModelConfig() {
+        return { ...this.modelConfig };
+    }
+
+    /**
+     * Returns the OpenAI client if available.
+     */
+    getOpenAIClient(): OpenAI | null {
+        return this.openaiClient;
+    }
+
+    /**
+     * Returns the provider for a given agent.
+     */
+    private getProviderForAgent(agent: AgentType): AIProvider {
+        return this.agentProviders[agent] || 'gemini';
+    }
+
+    /**
+     * Returns model params for a given agent + provider.
+     * Maps agent → tier (heavy/flash) and then picks Gemini or OpenAI params.
+     */
+    private getModelParams(agent: AgentType): {
+        provider: AIProvider;
+        model: string;
+        temperature: number;
+        topP: number;
+        maxTokens: number;
+    } {
+        const provider = this.getProviderForAgent(agent);
+        // SCRIBE, GUIDE, EDITOR → heavy tier ; CONFIDANT, ONIRIQUE → flash tier
+        const isHeavy = ['SCRIBE', 'GUIDE', 'EDITOR'].includes(agent);
+
+        if (provider === 'openai') {
+            return {
+                provider,
+                model: isHeavy ? this.modelConfig.openaiHeavyModel : this.modelConfig.openaiFlashModel,
+                temperature: isHeavy ? this.modelConfig.openaiHeavyTemperature : this.modelConfig.openaiFlashTemperature,
+                topP: isHeavy ? this.modelConfig.openaiHeavyTopP : this.modelConfig.openaiFlashTopP,
+                maxTokens: isHeavy ? this.modelConfig.openaiHeavyMaxTokens : this.modelConfig.openaiFlashMaxTokens,
+            };
+        }
+
+        return {
+            provider,
+            model: isHeavy ? this.modelConfig.heavyModel : this.modelConfig.flashModel,
+            temperature: isHeavy ? this.modelConfig.heavyTemperature : this.modelConfig.flashTemperature,
+            topP: isHeavy ? this.modelConfig.heavyTopP : this.modelConfig.flashTopP,
+            maxTokens: isHeavy ? this.modelConfig.heavyMaxTokens : this.modelConfig.flashMaxTokens,
+        };
+    }
+
+    /**
+     * Ensures the OpenAI client is available or throws.
+     */
+    private requireOpenAI(): OpenAI {
+        if (!this.openaiClient) {
+            throw new Error('OPENAI_API_KEY non configurée. Ajoutez la clé dans les variables d\'environnement ou basculez l\'agent sur Gemini.');
+        }
+        return this.openaiClient;
+    }
+
+    /**
+     * Adapter: Call AI with JSON response. Routes to Gemini or OpenAI.
+     */
+    private async callAIJSON(
+        agent: AgentType,
+        systemPrompt: string,
+        userContent: string,
+        timeoutMs: number,
+    ): Promise<string> {
+        const params = this.getModelParams(agent);
+        this.logger.log(`🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model}`);
+
+        if (params.provider === 'openai') {
+            const client = this.requireOpenAI();
+            const result = await this.executeWithRetry(agent, async () => {
+                const response = await client.responses.create({
+                    model: params.model,
+                    instructions: systemPrompt,
+                    input: userContent,
+                    temperature: params.temperature,
+                    top_p: params.topP,
+                    max_output_tokens: params.maxTokens,
+                    text: { format: { type: 'json_object' } },
+                });
+                return response.output_text;
+            }, timeoutMs);
+            return result;
+        }
+
+        // Gemini path
+        const model = this.genAI!.getGenerativeModel({
+            model: params.model,
+            generationConfig: {
+                temperature: params.temperature,
+                topP: params.topP,
+                maxOutputTokens: params.maxTokens,
+                responseMimeType: 'application/json',
+            },
+        });
+        const result = await this.executeWithRetry(agent, async () => {
+            const response = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userContent}` }] }],
+            });
+            return response.response;
+        }, timeoutMs);
+        return result.text();
+    }
+
+    /**
+     * Adapter: Call AI with text (non-JSON) response. Routes to Gemini or OpenAI.
+     */
+    private async callAIText(
+        agent: AgentType,
+        systemPrompt: string,
+        userContent: string,
+        timeoutMs: number,
+        overrideParams?: { temperature?: number; maxTokens?: number },
+    ): Promise<string> {
+        const params = this.getModelParams(agent);
+        const temp = overrideParams?.temperature ?? params.temperature;
+        const maxTok = overrideParams?.maxTokens ?? params.maxTokens;
+        this.logger.log(`🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model}`);
+
+        if (params.provider === 'openai') {
+            const client = this.requireOpenAI();
+            const result = await this.executeWithRetry(agent, async () => {
+                const response = await client.responses.create({
+                    model: params.model,
+                    instructions: systemPrompt,
+                    input: userContent,
+                    temperature: temp,
+                    top_p: params.topP,
+                    max_output_tokens: maxTok,
+                });
+                return response.output_text;
+            }, timeoutMs);
+            return result;
+        }
+
+        // Gemini path
+        const model = this.genAI!.getGenerativeModel({
+            model: params.model,
+            generationConfig: { temperature: temp, maxOutputTokens: maxTok },
+        });
+        const result = await this.executeWithRetry(agent, async () => {
+            const response = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userContent}` }] }],
+            });
+            return response.response;
+        }, timeoutMs);
+        return result.text();
+    }
+
+    /**
+     * Adapter: Call AI for chat (multi-turn). Routes to Gemini or OpenAI.
+     */
+    private async callAIChat(
+        agent: AgentType,
+        systemPrompt: string,
+        history: ChatMessage[],
+        currentMessage: string,
+        timeoutMs: number,
+    ): Promise<string> {
+        const params = this.getModelParams(agent);
+        this.logger.log(`🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model}`);
+
+        if (params.provider === 'openai') {
+            const client = this.requireOpenAI();
+            // Build OpenAI input array from history
+            const input: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+            for (const msg of history) {
+                input.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
+            }
+            input.push({ role: 'user', content: currentMessage });
+
+            const result = await this.executeWithRetry(agent, async () => {
+                const response = await client.responses.create({
+                    model: params.model,
+                    instructions: systemPrompt,
+                    input,
+                    temperature: params.temperature,
+                    top_p: params.topP,
+                    max_output_tokens: params.maxTokens,
+                });
+                return response.output_text;
+            }, timeoutMs);
+            return result;
+        }
+
+        // Gemini path — build contents array
+        const contents: Content[] = [];
+        const recentHistory = history.slice(-10);
+        for (const msg of recentHistory) {
+            contents.push({
+                role: msg.role === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.content }],
+            });
+        }
+        const fullUserMessage = contents.length === 0
+            ? `${systemPrompt}\n\n---\n\nUSER:\n${currentMessage}`
+            : currentMessage;
+        contents.push({ role: 'user', parts: [{ text: fullUserMessage }] });
+
+        const result = await this.executeWithRetry(agent, async () => {
+            const response = await this.flashModel!.generateContent({ contents });
+            return response.response;
+        }, timeoutMs);
+        return result.text()?.trim() || '';
+    }
+
+    /**
+     * Adapter: Call AI with multimodal (text + images). Routes to Gemini or OpenAI.
+     * Used by SCRIBE for face/palm photos.
+     */
+    private async callAIMultimodal(
+        agent: AgentType,
+        systemPrompt: string,
+        userContent: string,
+        images: Array<{ mimeType: string; base64: string }>,
+        timeoutMs: number,
+    ): Promise<string> {
+        const params = this.getModelParams(agent);
+        this.logger.log(`🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model} | Images: ${images.length}`);
+
+        if (params.provider === 'openai') {
+            const client = this.requireOpenAI();
+            // Build multimodal input for OpenAI Responses API
+            const inputParts: Array<{ type: string; text?: string; image_url?: string }> = [
+                { type: 'input_text', text: userContent },
+            ];
+            for (const img of images) {
+                inputParts.push({
+                    type: 'input_image',
+                    image_url: `data:${img.mimeType};base64,${img.base64}`,
+                });
+            }
+
+            const result = await this.executeWithRetry(agent, async () => {
+                const response = await client.responses.create({
+                    model: params.model,
+                    instructions: systemPrompt,
+                    input: inputParts as any,
+                    temperature: params.temperature,
+                    top_p: params.topP,
+                    max_output_tokens: params.maxTokens,
+                    text: { format: { type: 'json_object' } },
+                });
+                return response.output_text;
+            }, timeoutMs);
+            return result;
+        }
+
+        // Gemini path
+        const parts: Part[] = [{ text: `${systemPrompt}\n\n---\n\nUSER REQUEST:\n${userContent}` }];
+        for (const img of images) {
+            parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+        }
+
+        const result = await this.executeWithRetry(agent, async () => {
+            const response = await this.heavyModel!.generateContent({
+                contents: [{ role: 'user', parts }],
+            });
+            return response.response;
+        }, timeoutMs);
+        return result.text();
+    }
 
         /**
      * Executes an AI call with retry logic and timeout.
@@ -1179,6 +1436,21 @@ Réponds uniquement avec le mantra, sans guillemets.
 `.trim();
 
         try {
+            // DailyMantra uses CONFIDANT provider (flash tier)
+            const provider = this.getProviderForAgent('CONFIDANT');
+            if (provider === 'openai') {
+                const client = this.requireOpenAI();
+                const params2 = this.getModelParams('CONFIDANT');
+                const response = await client.responses.create({
+                    model: params2.model,
+                    input: prompt,
+                    temperature: params2.temperature,
+                    max_output_tokens: 200,
+                });
+                return response.output_text?.trim()
+                    || 'Je suis lumière, je suis guidance, je suis en paix.';
+            }
+
             const result = await this.flashModel!.generateContent({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
             });

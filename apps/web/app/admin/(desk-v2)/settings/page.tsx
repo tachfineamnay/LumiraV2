@@ -23,6 +23,7 @@ import {
     Info,
 } from "lucide-react";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 // =============================================================================
 // TYPES
@@ -47,6 +48,17 @@ interface PromptHistory {
     createdAt: string;
 }
 
+type AIProvider = "gemini" | "openai";
+
+interface AgentProviders {
+    SCRIBE: AIProvider;
+    GUIDE: AIProvider;
+    EDITOR: AIProvider;
+    CONFIDANT: AIProvider;
+    ONIRIQUE: AIProvider;
+    NARRATOR: AIProvider;
+}
+
 interface ModelConfig {
     heavyModel: string;
     flashModel: string;
@@ -56,6 +68,15 @@ interface ModelConfig {
     flashTemperature: number;
     flashTopP: number;
     flashMaxTokens: number;
+    openaiHeavyModel: string;
+    openaiFlashModel: string;
+    openaiHeavyTemperature: number;
+    openaiHeavyTopP: number;
+    openaiHeavyMaxTokens: number;
+    openaiFlashTemperature: number;
+    openaiFlashTopP: number;
+    openaiFlashMaxTokens: number;
+    agentProviders: AgentProviders;
 }
 
 type TabId = "credentials" | "personality" | "agents" | "models";
@@ -80,6 +101,16 @@ const AGENT_INFO: Record<string, { label: string; icon: React.ReactNode; descrip
         label: "CONFIDANT",
         icon: <Brain className="w-4 h-4" />,
         description: "Compagnon spirituel quotidien (chat)",
+    },
+    ONIRIQUE: {
+        label: "ONIRIQUE",
+        icon: <Sparkles className="w-4 h-4" />,
+        description: "Interprète les rêves (introspection symbolique)",
+    },
+    NARRATOR: {
+        label: "NARRATOR",
+        icon: <Zap className="w-4 h-4" />,
+        description: "Reformule le texte en script audio (TTS)",
     },
 };
 
@@ -410,9 +441,12 @@ function AgentAccordion({
 
 function CredentialsTab() {
     const [testing, setTesting] = useState(false);
+    const [testingOpenAI, setTestingOpenAI] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+    const [openaiTestResult, setOpenaiTestResult] = useState<{ success: boolean; error?: string } | null>(null);
     const [configStatus, setConfigStatus] = useState<{
         vertexConfigured: boolean;
+        openaiConfigured: boolean;
         projectId?: string;
     } | null>(null);
 
@@ -434,6 +468,23 @@ function CredentialsTab() {
             });
         } finally {
             setTesting(false);
+        }
+    };
+
+    const testOpenAIConnection = async () => {
+        setTestingOpenAI(true);
+        setOpenaiTestResult(null);
+        try {
+            const { data } = await api.post("/expert/settings/openai-test");
+            setOpenaiTestResult(data);
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            setOpenaiTestResult({
+                success: false,
+                error: error.response?.data?.error || "Erreur de connexion",
+            });
+        } finally {
+            setTestingOpenAI(false);
         }
     };
 
@@ -517,12 +568,93 @@ function CredentialsTab() {
                 </div>
             </GlassCard>
 
+            {/* OpenAI Card */}
+            <GlassCard className="p-6">
+                <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center">
+                        <Key className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="text-lg font-medium text-white">Clé API OpenAI</h3>
+                        <p className="text-sm text-slate-400 mt-1">
+                            La clé API est configurée via la variable d&apos;environnement{" "}
+                            <code className="px-1.5 py-0.5 bg-slate-800 rounded text-blue-400 text-xs">
+                                OPENAI_API_KEY
+                            </code>
+                        </p>
+
+                        <div className="mt-4 flex items-center gap-3">
+                            <div
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                                    configStatus?.openaiConfigured
+                                        ? "bg-blue-500/10 border border-blue-500/30"
+                                        : "bg-red-500/10 border border-red-500/30"
+                                }`}
+                            >
+                                {configStatus?.openaiConfigured ? (
+                                    <>
+                                        <Check className="w-4 h-4 text-blue-400" />
+                                        <span className="text-sm text-blue-400">Configurée</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <X className="w-4 h-4 text-red-400" />
+                                        <span className="text-sm text-red-400">Non configurée</span>
+                                    </>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={testOpenAIConnection}
+                                disabled={testingOpenAI}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                            >
+                                {testingOpenAI ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <TestTube className="w-4 h-4" />
+                                )}
+                                Tester la connexion
+                            </button>
+                        </div>
+
+                        {openaiTestResult && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`mt-4 p-3 rounded-lg ${
+                                    openaiTestResult.success
+                                        ? "bg-blue-500/10 border border-blue-500/30"
+                                        : "bg-red-500/10 border border-red-500/30"
+                                }`}
+                            >
+                                {openaiTestResult.success ? (
+                                    <div className="flex items-center gap-2 text-blue-400">
+                                        <Check className="w-4 h-4" />
+                                        <span className="text-sm">
+                                            Connexion réussie ! L&apos;API OpenAI est opérationnelle.
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-start gap-2 text-red-400">
+                                        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                        <span className="text-sm">{openaiTestResult.error}</span>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+                    </div>
+                </div>
+            </GlassCard>
+
             <GlassCard className="p-4">
                 <div className="flex items-start gap-3 text-slate-400">
                     <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
                     <p className="text-sm">
-                        Pour modifier la clé API, mettez à jour la variable d&apos;environnement{" "}
+                        Pour modifier les clés API, mettez à jour les variables d&apos;environnement{" "}
                         <code className="px-1 py-0.5 bg-slate-800 rounded text-xs">GEMINI_API_KEY</code>{" "}
+                        et/ou{" "}
+                        <code className="px-1 py-0.5 bg-slate-800 rounded text-xs">OPENAI_API_KEY</code>{" "}
                         dans votre configuration de déploiement (Coolify, .env, etc.) puis redémarrez
                         l&apos;API.
                     </p>
@@ -641,16 +773,23 @@ function ModelsTab({
         setLocalConfig((prev) => ({ ...prev, [key]: value }));
     };
 
+    const handleProviderChange = (agent: keyof AgentProviders, provider: AIProvider) => {
+        setLocalConfig((prev) => ({
+            ...prev,
+            agentProviders: { ...prev.agentProviders, [agent]: provider },
+        }));
+    };
+
     return (
         <div className="space-y-6">
-            {/* Heavy Model Config */}
+            {/* Gemini Heavy Model Config */}
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center">
                         <Sparkles className="w-6 h-6 text-violet-400" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">Modèle Heavy</h3>
+                        <h3 className="text-lg font-medium text-white">Gemini Heavy</h3>
                         <p className="text-sm text-slate-400 mt-1">
                             Utilisé par SCRIBE, GUIDE et EDITOR pour les tâches complexes
                         </p>
@@ -709,14 +848,14 @@ function ModelsTab({
                 </div>
             </GlassCard>
 
-            {/* Flash Model Config */}
+            {/* Gemini Flash Model Config */}
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal-600/20 border border-cyan-500/30 flex items-center justify-center">
                         <Zap className="w-6 h-6 text-cyan-400" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">Modèle Flash</h3>
+                        <h3 className="text-lg font-medium text-white">Gemini Flash</h3>
                         <p className="text-sm text-slate-400 mt-1">
                             Utilisé par CONFIDANT pour le chat en temps réel
                         </p>
@@ -777,6 +916,202 @@ function ModelsTab({
                 </div>
             </GlassCard>
 
+            {/* OpenAI Heavy Model Config */}
+            <GlassCard className="p-6">
+                <div className="flex items-start gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center">
+                        <Sparkles className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-medium text-white">OpenAI Heavy</h3>
+                        <p className="text-sm text-slate-400 mt-1">
+                            Modèle puissant OpenAI pour les tâches complexes (ex: gpt-4o)
+                        </p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">Modèle</label>
+                        <input
+                            type="text"
+                            value={localConfig.openaiHeavyModel}
+                            onChange={(e) => handleChange("openaiHeavyModel", e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">Max Tokens</label>
+                        <input
+                            type="number"
+                            value={localConfig.openaiHeavyMaxTokens}
+                            onChange={(e) => handleChange("openaiHeavyMaxTokens", parseInt(e.target.value))}
+                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">
+                            Temperature ({localConfig.openaiHeavyTemperature})
+                        </label>
+                        <input
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value={localConfig.openaiHeavyTemperature}
+                            onChange={(e) =>
+                                handleChange("openaiHeavyTemperature", parseFloat(e.target.value))
+                            }
+                            className="w-full accent-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">
+                            Top P ({localConfig.openaiHeavyTopP})
+                        </label>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={localConfig.openaiHeavyTopP}
+                            onChange={(e) => handleChange("openaiHeavyTopP", parseFloat(e.target.value))}
+                            className="w-full accent-blue-500"
+                        />
+                    </div>
+                </div>
+            </GlassCard>
+
+            {/* OpenAI Flash Model Config */}
+            <GlassCard className="p-6">
+                <div className="flex items-start gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 border border-sky-500/30 flex items-center justify-center">
+                        <Zap className="w-6 h-6 text-sky-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-medium text-white">OpenAI Flash</h3>
+                        <p className="text-sm text-slate-400 mt-1">
+                            Modèle rapide OpenAI pour le chat et les tâches légères (ex: gpt-4o-mini)
+                        </p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">Modèle</label>
+                        <input
+                            type="text"
+                            value={localConfig.openaiFlashModel}
+                            onChange={(e) => handleChange("openaiFlashModel", e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-sky-500/50"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">Max Tokens</label>
+                        <input
+                            type="number"
+                            value={localConfig.openaiFlashMaxTokens}
+                            onChange={(e) =>
+                                handleChange("openaiFlashMaxTokens", parseInt(e.target.value))
+                            }
+                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-sky-500/50"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">
+                            Temperature ({localConfig.openaiFlashTemperature})
+                        </label>
+                        <input
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value={localConfig.openaiFlashTemperature}
+                            onChange={(e) =>
+                                handleChange("openaiFlashTemperature", parseFloat(e.target.value))
+                            }
+                            className="w-full accent-sky-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">
+                            Top P ({localConfig.openaiFlashTopP})
+                        </label>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={localConfig.openaiFlashTopP}
+                            onChange={(e) => handleChange("openaiFlashTopP", parseFloat(e.target.value))}
+                            className="w-full accent-sky-500"
+                        />
+                    </div>
+                </div>
+            </GlassCard>
+
+            {/* Per-Agent Provider Selection */}
+            <GlassCard className="p-6">
+                <div className="flex items-start gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center">
+                        <Bot className="w-6 h-6 text-amber-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-medium text-white">Provider par Agent</h3>
+                        <p className="text-sm text-slate-400 mt-1">
+                            Choisir Gemini ou OpenAI pour chaque agent indépendamment
+                        </p>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    {(Object.keys(AGENT_INFO) as Array<keyof typeof AGENT_INFO>).map((agentKey) => {
+                        const info = AGENT_INFO[agentKey];
+                        const provider = localConfig.agentProviders?.[agentKey as keyof AgentProviders] || "gemini";
+                        return (
+                            <div
+                                key={agentKey}
+                                className="flex items-center justify-between p-3 bg-slate-800/30 border border-white/5 rounded-xl"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
+                                        {info.icon}
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-medium text-white">{info.label}</span>
+                                        <p className="text-xs text-slate-500">{info.description}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-white/10">
+                                    <button
+                                        onClick={() => handleProviderChange(agentKey as keyof AgentProviders, "gemini")}
+                                        className={cn(
+                                            "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+                                            provider === "gemini"
+                                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                : "text-slate-500 hover:text-slate-300"
+                                        )}
+                                    >
+                                        Gemini
+                                    </button>
+                                    <button
+                                        onClick={() => handleProviderChange(agentKey as keyof AgentProviders, "openai")}
+                                        className={cn(
+                                            "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+                                            provider === "openai"
+                                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                                                : "text-slate-500 hover:text-slate-300"
+                                        )}
+                                    >
+                                        OpenAI
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </GlassCard>
+
             {/* Save Button */}
             <div className="flex justify-end">
                 <button
@@ -815,6 +1150,22 @@ export default function SettingsPage() {
         flashTemperature: 0.9,
         flashTopP: 0.95,
         flashMaxTokens: 2048,
+        openaiHeavyModel: "gpt-4o",
+        openaiFlashModel: "gpt-4o-mini",
+        openaiHeavyTemperature: 0.8,
+        openaiHeavyTopP: 0.95,
+        openaiHeavyMaxTokens: 16384,
+        openaiFlashTemperature: 0.9,
+        openaiFlashTopP: 0.95,
+        openaiFlashMaxTokens: 2048,
+        agentProviders: {
+            SCRIBE: "gemini",
+            GUIDE: "gemini",
+            EDITOR: "gemini",
+            CONFIDANT: "gemini",
+            ONIRIQUE: "gemini",
+            NARRATOR: "gemini",
+        },
     });
 
     // Load data on mount

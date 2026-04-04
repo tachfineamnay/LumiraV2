@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 const VERTEX_CREDENTIALS_KEY = 'VERTEX_CREDENTIALS_JSON';
 
@@ -17,7 +18,19 @@ export const PROMPT_KEYS = {
 
 export type PromptKey = keyof typeof PROMPT_KEYS;
 
+export type AIProvider = 'gemini' | 'openai';
+
+export interface AgentProviders {
+    SCRIBE: AIProvider;
+    GUIDE: AIProvider;
+    EDITOR: AIProvider;
+    CONFIDANT: AIProvider;
+    ONIRIQUE: AIProvider;
+    NARRATOR: AIProvider;
+}
+
 export interface ModelConfig {
+    // Gemini models
     heavyModel: string;
     flashModel: string;
     heavyTemperature: number;
@@ -26,6 +39,17 @@ export interface ModelConfig {
     flashTemperature: number;
     flashTopP: number;
     flashMaxTokens: number;
+    // OpenAI models
+    openaiHeavyModel: string;
+    openaiFlashModel: string;
+    openaiHeavyTemperature: number;
+    openaiHeavyTopP: number;
+    openaiHeavyMaxTokens: number;
+    openaiFlashTemperature: number;
+    openaiFlashTopP: number;
+    openaiFlashMaxTokens: number;
+    // Per-agent provider selection
+    agentProviders: AgentProviders;
 }
 
 export interface PromptWithMeta {
@@ -55,6 +79,7 @@ export interface VertexTestResult {
 
 export interface VertexConfigStatus {
     vertexConfigured: boolean;
+    openaiConfigured: boolean;
     projectId?: string;
     clientEmail?: string;
     lastTested?: string;
@@ -131,19 +156,22 @@ export class AdminSettingsService {
             where: { key: VERTEX_CREDENTIALS_KEY },
         });
 
+        const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+
         if (!setting?.value) {
-            return { vertexConfigured: false };
+            return { vertexConfigured: false, openaiConfigured: !!openaiKey };
         }
 
         try {
             const parsed = JSON.parse(setting.value);
             return {
                 vertexConfigured: true,
+                openaiConfigured: !!openaiKey,
                 projectId: parsed.project_id || 'Inconnu',
                 clientEmail: parsed.client_email || 'Inconnu',
             };
         } catch {
-            return { vertexConfigured: true, projectId: 'Erreur parsing' };
+            return { vertexConfigured: true, openaiConfigured: !!openaiKey, projectId: 'Erreur parsing' };
         }
     }
 
@@ -224,6 +252,49 @@ export class AdminSettingsService {
                 success: false,
                 error: friendlyError,
             };
+        }
+    }
+
+    /**
+     * Test the OpenAI API connection with the API key.
+     */
+    async testOpenAIConnection(): Promise<VertexTestResult> {
+        const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+
+        if (!apiKey) {
+            return { success: false, error: 'OPENAI_API_KEY non configurée dans les variables d\'environnement' };
+        }
+
+        try {
+            this.logger.log('🔄 Testing OpenAI API connection...');
+
+            const client = new OpenAI({ apiKey });
+            const response = await client.responses.create({
+                model: 'gpt-4o-mini',
+                input: 'Hi',
+                max_output_tokens: 10,
+            });
+
+            if (response.output_text) {
+                this.logger.log('✅ OpenAI API connection test successful');
+                return { success: true, projectId: 'openai-api' };
+            }
+
+            return { success: false, error: 'Réponse vide de l\'API OpenAI' };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.logger.error(`❌ OpenAI API connection test failed: ${errorMessage}`);
+
+            let friendlyError = errorMessage;
+            if (errorMessage.includes('auth') || errorMessage.includes('401')) {
+                friendlyError = 'Clé API invalide. Vérifiez votre OPENAI_API_KEY.';
+            } else if (errorMessage.includes('rate') || errorMessage.includes('429')) {
+                friendlyError = 'Quota dépassé. Attendez un moment ou vérifiez vos limites OpenAI.';
+            } else if (errorMessage.includes('403')) {
+                friendlyError = 'Permission refusée (403). Vérifiez les permissions de votre clé API.';
+            }
+
+            return { success: false, error: friendlyError };
         }
     }
 
@@ -407,17 +478,20 @@ export class AdminSettingsService {
      * Get model configuration (or defaults)
      */
     async getModelConfig(): Promise<ModelConfig> {
+        const defaults = this.getDefaultModelConfig();
         const prompt = await this.getPrompt(PROMPT_KEYS.MODEL_CONFIG);
         
         if (prompt) {
             try {
-                return JSON.parse(prompt) as ModelConfig;
+                const stored = JSON.parse(prompt);
+                // Merge stored over defaults — handles old configs missing new fields
+                return { ...defaults, ...stored, agentProviders: { ...defaults.agentProviders, ...stored.agentProviders } };
             } catch {
                 // Return defaults if parsing fails
             }
         }
 
-        return this.getDefaultModelConfig();
+        return defaults;
     }
 
     /**
@@ -585,6 +659,24 @@ FORMAT: Texte conversationnel naturel (pas JSON).`,
             flashTemperature: 0.9,
             flashTopP: 0.95,
             flashMaxTokens: 2048,
+            // OpenAI defaults
+            openaiHeavyModel: 'gpt-4o',
+            openaiFlashModel: 'gpt-4o-mini',
+            openaiHeavyTemperature: 0.8,
+            openaiHeavyTopP: 0.95,
+            openaiHeavyMaxTokens: 16384,
+            openaiFlashTemperature: 0.9,
+            openaiFlashTopP: 0.95,
+            openaiFlashMaxTokens: 2048,
+            // All agents default to Gemini (zero breaking change)
+            agentProviders: {
+                SCRIBE: 'gemini',
+                GUIDE: 'gemini',
+                EDITOR: 'gemini',
+                CONFIDANT: 'gemini',
+                ONIRIQUE: 'gemini',
+                NARRATOR: 'gemini',
+            },
         };
     }
 }
