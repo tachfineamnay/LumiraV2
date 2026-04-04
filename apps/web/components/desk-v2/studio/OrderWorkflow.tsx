@@ -285,10 +285,10 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-slate-950">
+      <div className="h-full flex items-center justify-center bg-desk-bg">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
-          <p className="text-slate-400">Chargement de la commande...</p>
+          <p className="text-desk-muted">Chargement de la commande...</p>
         </div>
       </div>
     );
@@ -296,12 +296,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
   if (error || !order) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 bg-slate-950">
-        <AlertCircle className="w-16 h-16 text-red-400" />
-        <p className="text-slate-400 text-lg">{error || 'Commande introuvable'}</p>
+      <div className="h-full flex flex-col items-center justify-center gap-4 bg-desk-bg">
+        <AlertCircle className="w-16 h-16 text-red-600" />
+        <p className="text-desk-muted text-lg">{error || 'Commande introuvable'}</p>
         <button
           onClick={() => router.push('/admin/board')}
-          className="px-6 py-3 rounded-xl bg-slate-800 text-white hover:bg-slate-700 transition-colors"
+          className="px-6 py-3 rounded-xl bg-desk-card text-desk-text hover:bg-desk-hover transition-colors"
         >
           Retour au board
         </button>
@@ -312,16 +312,16 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   // ========= RENDER =========
 
   return (
-    <div className="h-full flex flex-col bg-slate-950">
+    <div className="h-full flex flex-col bg-desk-bg">
       {/* ═══════════════ TOP BAR ═══════════════ */}
-      <div className="flex-shrink-0 px-4 py-3 bg-slate-900/80 border-b border-white/5">
+      <div className="flex-shrink-0 px-4 py-3 bg-desk-surface border-b border-desk-border">
         <div className="flex items-center justify-between">
           {/* Left: back + client info */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/admin/board')}
               title="Retour au board"
-              className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+              className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -333,15 +333,15 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-white">
+                  <span className="font-semibold text-desk-text">
                     {order.user.firstName} {order.user.lastName}
                   </span>
                   <span className="text-lg">{levelConfig.icon}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="font-mono text-amber-400">{order.orderNumber}</span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-slate-500">{levelConfig.name}</span>
+                  <span className="font-mono text-amber-600">{order.orderNumber}</span>
+                  <span className="text-desk-subtle">•</span>
+                  <span className="text-desk-muted">{levelConfig.name}</span>
                 </div>
               </div>
             </div>
@@ -357,7 +357,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               return (
                 <div key={s} className="flex items-center gap-1">
                   {i > 0 && (
-                    <div className={`w-8 h-px ${isPast ? 'bg-amber-500/60' : 'bg-white/10'}`} />
+                    <div className={`w-8 h-px ${isPast ? 'bg-amber-500/60' : 'bg-desk-border'}`} />
                   )}
                   <button
                     onClick={() => {
@@ -366,14 +366,14 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                     }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                       isCurrent
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                        ? 'bg-amber-500/20 text-amber-600 border border-amber-500/40'
                         : isPast
-                          ? 'bg-white/5 text-slate-400 hover:bg-white/10 cursor-pointer'
-                          : 'bg-transparent text-slate-600 cursor-default'
+                          ? 'bg-desk-card text-desk-muted hover:bg-desk-hover cursor-pointer'
+                          : 'bg-transparent text-desk-subtle cursor-default'
                     }`}
                   >
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      isCurrent ? 'bg-amber-500 text-slate-900' : isPast ? 'bg-slate-700 text-slate-400' : 'bg-slate-800 text-slate-600'
+                      isCurrent ? 'bg-amber-500 text-slate-900' : isPast ? 'bg-desk-hover text-desk-muted' : 'bg-desk-card text-desk-subtle'
                     }`}>
                       {meta.num}
                     </span>
@@ -387,7 +387,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
           {/* Right: status */}
           <div className="flex items-center gap-2">
             {isReadOnly && (
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-600 border border-emerald-500/30">
                 Livrée
               </span>
             )}
@@ -447,23 +447,23 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25 }}
-              className="absolute right-0 top-0 h-full w-full max-w-md bg-slate-900 border-l border-white/10"
+              className="absolute right-0 top-0 h-full w-full max-w-md bg-desk-surface border-l border-desk-border"
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
+              <div className="flex items-center justify-between px-4 py-4 border-b border-desk-border">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                    <History className="w-5 h-5 text-amber-400" />
+                    <History className="w-5 h-5 text-amber-600" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Historique</h2>
-                    <p className="text-xs text-slate-500">{versions.length} versions</p>
+                    <h2 className="text-lg font-semibold text-desk-text">Historique</h2>
+                    <p className="text-xs text-desk-subtle">{versions.length} versions</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowVersions(false)}
                   title="Fermer l'historique"
-                  className="p-2 rounded-lg hover:bg-white/5 text-slate-400"
+                  className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -472,30 +472,30 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               <div className="flex-1 overflow-y-auto p-4">
                 {versions.length === 0 ? (
                   <div className="text-center py-12">
-                    <History className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                    <p className="text-slate-500">Aucune version précédente</p>
+                    <History className="w-12 h-12 text-desk-subtle mx-auto mb-3" />
+                    <p className="text-desk-muted">Aucune version précédente</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {versions.map((version, index) => (
                       <div
                         key={index}
-                        className="bg-slate-800/50 border border-white/5 rounded-xl p-4"
+                        className="bg-desk-card border border-desk-border rounded-xl p-4"
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-desk-subtle">
                             {new Date(version.timestamp).toLocaleString('fr-FR')}
                           </span>
-                          <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-400">
+                          <span className="text-xs px-2 py-0.5 rounded bg-desk-hover text-desk-muted">
                             {version.action}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-400 line-clamp-2 mb-3">
+                        <p className="text-sm text-desk-muted line-clamp-2 mb-3">
                           {version.content.replace(/<[^>]*>/g, '').substring(0, 100)}...
                         </p>
                         <button
                           onClick={() => handleRestoreVersion(index)}
-                          className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300"
+                          className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-500"
                         >
                           <RotateCcw className="w-3 h-3" />
                           <span>Restaurer cette version</span>
@@ -524,17 +524,17 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+              className="w-full max-w-lg bg-desk-surface border border-desk-border rounded-2xl overflow-hidden shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
-              <div className="relative bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 px-6 py-5 border-b border-white/10">
+                <div className="relative bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 px-6 py-5 border-b border-desk-border">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                    <FileCheck className="w-7 h-7 text-emerald-400" />
+                    <FileCheck className="w-7 h-7 text-emerald-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-white">Confirmer l&apos;envoi</h2>
-                    <p className="text-sm text-slate-400">Cette action est irréversible</p>
+                    <h2 className="text-xl font-bold text-desk-text">Confirmer l&apos;envoi</h2>
+                    <p className="text-sm text-desk-muted">Cette action est irréversible</p>
                   </div>
                 </div>
               </div>
@@ -542,42 +542,42 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               <div className="p-6 space-y-4">
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                    <p className="text-sm text-amber-200/80">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-700">
                       Sera immédiatement envoyée au client par email et ne pourra plus être modifiée.
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 border border-white/5 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-white mb-3">Récapitulatif</h3>
+                <div className="bg-desk-card border border-desk-border rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-desk-text mb-3">Récapitulatif</h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Destinataire</span>
-                      <span className="text-white font-medium">{order.user.firstName} {order.user.lastName}</span>
+                      <span className="text-desk-muted">Destinataire</span>
+                      <span className="text-desk-text font-medium">{order.user.firstName} {order.user.lastName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Email</span>
-                      <span className="text-slate-300">{order.user.email}</span>
+                      <span className="text-desk-muted">Email</span>
+                      <span className="text-desk-text">{order.user.email}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Commande</span>
-                      <span className="font-mono text-amber-400">{order.orderNumber}</span>
+                      <span className="text-desk-muted">Commande</span>
+                      <span className="font-mono text-amber-600">{order.orderNumber}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Contenu</span>
-                      <span className="text-emerald-400">{editorContent.length > 0 ? '✓ Prêt' : '⚠ Vide'}</span>
+                      <span className="text-desk-muted">Contenu</span>
+                      <span className="text-emerald-600">{editorContent.length > 0 ? '✓ Prêt' : '⚠ Vide'}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 px-6 py-4 bg-slate-800/50 border-t border-white/5">
+              <div className="flex items-center gap-3 px-6 py-4 bg-desk-card border-t border-desk-border">
                 <button
                   onClick={() => setShowSealConfirm(false)}
                   disabled={isSealing}
-                  className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-slate-300
-                             hover:bg-white/5 hover:text-white transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 py-3 rounded-xl border border-desk-border text-desk-muted
+                             hover:bg-desk-hover hover:text-desk-text transition-colors disabled:opacity-50"
                 >
                   Annuler
                 </button>

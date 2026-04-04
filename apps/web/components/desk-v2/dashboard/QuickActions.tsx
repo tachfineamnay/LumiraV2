@@ -9,22 +9,22 @@ const COLOR_CLASSES = {
   amber: {
     bg: 'bg-amber-500/20',
     bgHover: 'group-hover:bg-amber-500/30',
-    text: 'text-amber-400',
+    text: 'text-amber-600',
   },
   slate: {
     bg: 'bg-slate-500/20',
     bgHover: 'group-hover:bg-slate-500/30',
-    text: 'text-slate-400',
+    text: 'text-slate-600',
   },
   purple: {
     bg: 'bg-purple-500/20',
     bgHover: 'group-hover:bg-purple-500/30',
-    text: 'text-purple-400',
+    text: 'text-purple-600',
   },
   emerald: {
     bg: 'bg-emerald-500/20',
     bgHover: 'group-hover:bg-emerald-500/30',
-    text: 'text-emerald-400',
+    text: 'text-emerald-600',
   },
 } as const;
 
@@ -78,8 +78,8 @@ export function QuickActions() {
   const router = useRouter();
 
   return (
-    <div className="bg-slate-900/50 rounded-xl border border-white/5 p-4">
-      <h3 className="text-sm font-semibold text-white mb-4">Actions rapides</h3>
+    <div className="bg-desk-surface rounded-xl border border-desk-border p-4">
+      <h3 className="text-sm font-semibold text-desk-text mb-4">Actions rapides</h3>
       
       <div className="grid grid-cols-2 gap-3">
         {ACTIONS.map((action, index) => {
@@ -94,8 +94,8 @@ export function QuickActions() {
               transition={{ delay: index * 0.05 }}
               onClick={() => router.push(action.href)}
               className="flex items-center gap-3 p-3 rounded-lg text-left
-                bg-slate-800/50 border border-white/5
-                hover:bg-slate-800 hover:border-white/10
+                bg-desk-card border border-desk-border
+                hover:bg-desk-hover hover:border-desk-border
                 transition-all group"
             >
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center
@@ -103,8 +103,8 @@ export function QuickActions() {
                 <Icon className={`w-5 h-5 ${colors.text}`} />
               </div>
               <div>
-                <div className="text-sm font-medium text-white">{action.label}</div>
-                <div className="text-xs text-slate-500">{action.description}</div>
+                <div className="text-sm font-medium text-desk-text">{action.label}</div>
+                <div className="text-xs text-desk-subtle">{action.description}</div>
               </div>
             </motion.button>
           );

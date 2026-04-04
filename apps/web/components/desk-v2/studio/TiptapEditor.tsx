@@ -118,7 +118,7 @@ export function TiptapEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-invert prose-amber max-w-none focus:outline-none min-h-[500px] px-8 py-6',
+        class: 'prose prose-slate prose-amber max-w-none focus:outline-none min-h-[500px] px-8 py-6',
       },
     },
   });
@@ -185,11 +185,11 @@ export function TiptapEditor({
   if (!editor) return null;
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+    <div className="flex flex-col h-full bg-desk-surface rounded-xl border border-desk-border overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 px-4 py-2 border-b border-white/5 bg-slate-900/80">
+      <div className="flex items-center gap-1 px-4 py-2 border-b border-desk-border bg-desk-card">
         {/* Formatting */}
-        <div className="flex items-center gap-0.5 pr-3 border-r border-white/10">
+        <div className="flex items-center gap-0.5 pr-3 border-r border-desk-border">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBold().run()}
             isActive={editor.isActive('bold')}
@@ -207,7 +207,7 @@ export function TiptapEditor({
         </div>
 
         {/* Headings */}
-        <div className="flex items-center gap-0.5 px-3 border-r border-white/10">
+        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             isActive={editor.isActive('heading', { level: 1 })}
@@ -232,7 +232,7 @@ export function TiptapEditor({
         </div>
 
         {/* Lists */}
-        <div className="flex items-center gap-0.5 px-3 border-r border-white/10">
+        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             isActive={editor.isActive('bulletList')}
@@ -257,7 +257,7 @@ export function TiptapEditor({
         </div>
 
         {/* History */}
-        <div className="flex items-center gap-0.5 px-3 border-r border-white/10">
+        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border">
           <ToolbarButton
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
@@ -277,19 +277,19 @@ export function TiptapEditor({
         {/* Save Status Indicator */}
         <div className="flex items-center gap-2 px-3 text-xs">
           {saveStatus === 'saving' && (
-            <span className="flex items-center gap-1.5 text-amber-400">
+            <span className="flex items-center gap-1.5 text-amber-600">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               <span>Sauvegarde...</span>
             </span>
           )}
           {saveStatus === 'saved' && (
-            <span className="flex items-center gap-1.5 text-emerald-400">
+            <span className="flex items-center gap-1.5 text-emerald-600">
               <Cloud className="w-3.5 h-3.5" />
               <span>Sauvegardé</span>
             </span>
           )}
           {saveStatus === 'unsaved' && (
-            <span className="flex items-center gap-1.5 text-slate-500">
+            <span className="flex items-center gap-1.5 text-desk-subtle">
               <Save className="w-3.5 h-3.5" />
               <span>Non sauvegardé</span>
             </span>
@@ -305,7 +305,7 @@ export function TiptapEditor({
               text-sm font-medium transition-all
               ${showAIMenu 
                 ? 'bg-amber-500 text-slate-900' 
-                : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                : 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20'
               }
             `}
           >
@@ -324,7 +324,7 @@ export function TiptapEditor({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.95 }}
                 className="absolute right-0 top-full mt-2 w-48 py-2 rounded-xl
-                           bg-slate-800 border border-white/10 shadow-xl z-50"
+                           bg-desk-surface border border-desk-border shadow-xl z-50"
               >
                 {AI_ACTIONS.map(action => (
                   <button
@@ -332,7 +332,7 @@ export function TiptapEditor({
                     onClick={() => refineContent(action.action)}
                     disabled={isRefining}
                     className="w-full flex items-center gap-3 px-4 py-2 text-sm text-left
-                               text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+                               text-desk-muted hover:bg-desk-hover hover:text-desk-text transition-colors"
                   >
                     <span>{action.icon}</span>
                     <span>{action.label}</span>
@@ -365,14 +365,14 @@ export function TiptapEditor({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             className="absolute top-16 right-4 z-40 flex items-center gap-1 p-1 rounded-lg 
-                       bg-slate-800 border border-white/10 shadow-xl"
+                       bg-desk-surface border border-desk-border shadow-xl"
           >
             {AI_ACTIONS.slice(0, 3).map(action => (
               <button
                 key={action.id}
                 onClick={() => refineContent(action.action)}
                 className="flex items-center gap-1.5 px-2 py-1 rounded text-xs
-                           text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+                           text-desk-muted hover:bg-desk-hover hover:text-desk-text transition-colors"
               >
                 <span>{action.icon}</span>
                 <span>{action.label}</span>
@@ -394,14 +394,14 @@ export function TiptapEditor({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm
+            className="absolute inset-0 bg-desk-bg/80 backdrop-blur-sm
                        flex items-center justify-center z-50"
           >
             <div className="flex flex-col items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
+                <Sparkles className="w-6 h-6 text-amber-600 animate-pulse" />
               </div>
-              <span className="text-sm text-slate-400">L&apos;Oracle affine votre texte...</span>
+              <span className="text-sm text-desk-muted">L&apos;Oracle affine votre texte...</span>
             </div>
           </motion.div>
         )}
@@ -427,8 +427,8 @@ function ToolbarButton({ children, onClick, isActive, disabled, title }: Toolbar
       className={`
         p-2 rounded-lg transition-colors
         ${isActive 
-          ? 'bg-amber-500/20 text-amber-400' 
-          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          ? 'bg-amber-500/20 text-amber-600' 
+          : 'text-desk-muted hover:bg-desk-hover hover:text-desk-text'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
       `}

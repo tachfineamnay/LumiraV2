@@ -32,24 +32,24 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto p-6 space-y-6">
           {/* Hero card */}
-          <div className="bg-gradient-to-br from-amber-500/10 via-slate-900/60 to-slate-900/80 
-                          border border-white/10 rounded-2xl p-6">
+          <div className="bg-gradient-to-br from-amber-500/10 via-desk-surface/60 to-desk-surface/80 
+                          border border-desk-border rounded-2xl p-6">
             <div className="flex items-start gap-5">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 
                               flex items-center justify-center text-2xl font-bold text-white shrink-0">
                 {user.firstName?.[0]}{user.lastName?.[0]}
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="text-2xl font-bold text-white">
+                <h1 className="text-2xl font-bold text-desk-text">
                   {user.firstName} {user.lastName}
                 </h1>
-                <p className="text-slate-400 mt-1">{user.email}</p>
+                <p className="text-desk-muted mt-1">{user.email}</p>
                 <div className="flex items-center gap-3 mt-3">
                   <span className="text-xl">{levelConfig.icon}</span>
-                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <span className="px-3 py-1 rounded-full text-sm font-medium bg-amber-500/20 text-amber-600 border border-amber-500/30">
                     {levelConfig.name}
                   </span>
-                  <span className="font-mono text-sm text-slate-500">{order.orderNumber}</span>
+                  <span className="font-mono text-sm text-desk-subtle">{order.orderNumber}</span>
                 </div>
               </div>
             </div>
@@ -76,7 +76,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                     <InfoLine icon={<MapPin className="w-4 h-4" />} label="Lieu" value={profile.birthPlace} />
                   )}
                   {!profile?.birthDate && !profile?.birthTime && !profile?.birthPlace && (
-                    <p className="text-sm text-slate-500 italic">Aucune donnée de naissance renseignée</p>
+                    <p className="text-sm text-desk-subtle italic">Aucune donnée de naissance renseignée</p>
                   )}
                 </div>
               </DossierCard>
@@ -88,7 +88,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                   title="Question du client"
                   accent="purple"
                 >
-                  <p className="text-slate-200 italic leading-relaxed">
+                  <p className="text-desk-text italic leading-relaxed">
                     &quot;{profile.specificQuestion}&quot;
                   </p>
                 </DossierCard>
@@ -101,7 +101,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                   title="Objectif"
                   accent="blue"
                 >
-                  <p className="text-slate-300 leading-relaxed">{profile.objective}</p>
+                  <p className="text-desk-text leading-relaxed">{profile.objective}</p>
                 </DossierCard>
               )}
             </div>
@@ -118,14 +118,14 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                   <div className="space-y-4">
                     {profile?.highs && (
                       <div>
-                        <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Points forts</span>
-                        <p className="text-slate-300 mt-1 leading-relaxed">{profile.highs}</p>
+                        <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Points forts</span>
+                        <p className="text-desk-text mt-1 leading-relaxed">{profile.highs}</p>
                       </div>
                     )}
                     {profile?.lows && (
                       <div>
-                        <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Défis</span>
-                        <p className="text-slate-300 mt-1 leading-relaxed">{profile.lows}</p>
+                        <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Défis</span>
+                        <p className="text-desk-text mt-1 leading-relaxed">{profile.lows}</p>
                       </div>
                     )}
                   </div>
@@ -139,7 +139,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                   title="Peurs & Blocages"
                   accent="red"
                 >
-                  <p className="text-slate-300 leading-relaxed">{profile.fears}</p>
+                  <p className="text-desk-muted leading-relaxed">{profile.fears}</p>
                 </DossierCard>
               )}
 
@@ -150,7 +150,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                   title="Rituels actuels"
                   accent="teal"
                 >
-                  <p className="text-slate-300 leading-relaxed">{profile.rituals}</p>
+                  <p className="text-desk-muted leading-relaxed">{profile.rituals}</p>
                 </DossierCard>
               )}
 
@@ -180,7 +180,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
       </div>
 
       {/* Bottom action bar */}
-      <div className="flex-shrink-0 px-6 py-4 bg-slate-900/80 border-t border-white/5">
+      <div className="flex-shrink-0 px-6 py-4 bg-desk-surface border-t border-desk-border">
         <div className="max-w-6xl mx-auto flex justify-end">
           <button
             onClick={onContinue}
@@ -204,13 +204,13 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
 // =============================================================================
 
 const ACCENT_COLORS: Record<string, { bg: string; border: string; icon: string }> = {
-  amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: 'text-amber-400' },
-  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', icon: 'text-purple-400' },
-  blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', icon: 'text-blue-400' },
-  rose: { bg: 'bg-rose-500/10', border: 'border-rose-500/20', icon: 'text-rose-400' },
-  red: { bg: 'bg-red-500/10', border: 'border-red-500/20', icon: 'text-red-400' },
-  teal: { bg: 'bg-teal-500/10', border: 'border-teal-500/20', icon: 'text-teal-400' },
-  slate: { bg: 'bg-slate-500/10', border: 'border-slate-500/20', icon: 'text-slate-400' },
+  amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: 'text-amber-600' },
+  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', icon: 'text-purple-600' },
+  blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', icon: 'text-blue-600' },
+  rose: { bg: 'bg-rose-500/10', border: 'border-rose-500/20', icon: 'text-rose-600' },
+  red: { bg: 'bg-red-500/10', border: 'border-red-500/20', icon: 'text-red-600' },
+  teal: { bg: 'bg-teal-500/10', border: 'border-teal-500/20', icon: 'text-teal-600' },
+  slate: { bg: 'bg-slate-500/10', border: 'border-slate-500/20', icon: 'text-slate-600' },
 };
 
 function DossierCard({
@@ -230,7 +230,7 @@ function DossierCard({
     <div className={`${colors.bg} border ${colors.border} rounded-xl p-4`}>
       <div className="flex items-center gap-2 mb-3">
         <span className={colors.icon}>{icon}</span>
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <h3 className="text-sm font-semibold text-desk-text">{title}</h3>
       </div>
       {children}
     </div>
@@ -240,16 +240,16 @@ function DossierCard({
 function InfoLine({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-slate-500">{icon}</span>
-      <span className="text-xs text-slate-500 w-16 shrink-0">{label}</span>
-      <span className="text-sm text-white">{value}</span>
+      <span className="text-desk-subtle">{icon}</span>
+      <span className="text-xs text-desk-subtle w-16 shrink-0">{label}</span>
+      <span className="text-sm text-desk-text">{value}</span>
     </div>
   );
 }
 
 function PhotoCard({ url, label }: { url: string; label: string }) {
   return (
-    <div className="group relative aspect-square rounded-lg overflow-hidden bg-slate-800 border border-white/5">
+    <div className="group relative aspect-square rounded-lg overflow-hidden bg-desk-card border border-desk-border">
       <Image
         src={url}
         alt={label}

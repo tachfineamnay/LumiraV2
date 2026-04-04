@@ -19,25 +19,25 @@ const COLUMN_COLORS = {
   amber: {
     header: 'from-amber-500/20 to-amber-600/5',
     border: 'border-amber-500/20',
-    badge: 'bg-amber-500/20 text-amber-400',
+    badge: 'bg-amber-500/20 text-amber-600',
     dot: 'bg-amber-500',
   },
   blue: {
     header: 'from-blue-500/20 to-blue-600/5',
     border: 'border-blue-500/20',
-    badge: 'bg-blue-500/20 text-blue-400',
+    badge: 'bg-blue-500/20 text-blue-600',
     dot: 'bg-blue-500',
   },
   purple: {
     header: 'from-purple-500/20 to-purple-600/5',
     border: 'border-purple-500/20',
-    badge: 'bg-purple-500/20 text-purple-400',
+    badge: 'bg-purple-500/20 text-purple-600',
     dot: 'bg-purple-500',
   },
   green: {
     header: 'from-emerald-500/20 to-emerald-600/5',
     border: 'border-emerald-500/20',
-    badge: 'bg-emerald-500/20 text-emerald-400',
+    badge: 'bg-emerald-500/20 text-emerald-600',
     dot: 'bg-emerald-500',
   },
 };
@@ -56,8 +56,8 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
       ref={setNodeRef}
       className={`
         w-80 flex-shrink-0 flex flex-col rounded-xl
-        bg-slate-900/50 border transition-colors duration-200
-        ${hasUrgentOrders ? 'border-purple-500/60 shadow-lg shadow-purple-500/10' : isOver ? `${colors.border} bg-slate-800/50` : 'border-white/5'}
+        bg-desk-surface border transition-colors duration-200
+        ${hasUrgentOrders ? 'border-purple-500/60 shadow-lg shadow-purple-500/10' : isOver ? `${colors.border} bg-desk-card` : 'border-desk-border'}
       `}
     >
       {/* Header */}
@@ -65,9 +65,9 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-lg">{column.icon}</span>
-            <h3 className="font-semibold text-white">{column.title}</h3>
+            <h3 className="font-semibold text-desk-text">{column.title}</h3>
             {hasUrgentOrders && (
-              <span className="text-xs font-bold text-purple-300 bg-purple-500/20 px-1.5 py-0.5 rounded">
+              <span className="text-xs font-bold text-purple-600 bg-purple-500/10 px-1.5 py-0.5 rounded">
                 À valider
               </span>
             )}
@@ -90,13 +90,13 @@ export function KanbanColumn({ column, orders, isLoading }: KanbanColumnProps) {
               {[1, 2, 3].map(i => (
                 <div
                   key={i}
-                  className="h-32 rounded-lg bg-slate-800/50 animate-pulse"
+                  className="h-32 rounded-lg bg-desk-card animate-pulse"
                 />
               ))}
             </>
           ) : orders.length === 0 ? (
             // Empty state
-            <div className="flex flex-col items-center justify-center h-32 text-slate-500">
+            <div className="flex flex-col items-center justify-center h-32 text-desk-muted">
               <span className="text-2xl mb-2">📭</span>
               <span className="text-sm">Aucune commande</span>
             </div>

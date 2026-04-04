@@ -55,19 +55,19 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.3 }}
-      className="bg-slate-800/50 border border-white/10 rounded-xl overflow-hidden"
+      className="bg-desk-surface border border-desk-border rounded-xl overflow-hidden shadow-sm"
     >
       {/* Header */}
-      <div className="p-4 border-b border-white/10">
-        <h3 className="text-lg font-semibold text-stellar-100 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-serenity-400" />
+      <div className="p-4 border-b border-desk-border">
+        <h3 className="text-lg font-semibold text-desk-text flex items-center gap-2">
+          <Clock className="w-5 h-5 text-serenity-600" />
           Ligne de Temps
         </h3>
-        <p className="text-xs text-stellar-400 mt-1">Historique des commandes</p>
+        <p className="text-xs text-desk-muted mt-1">Historique des commandes</p>
       </div>
 
       {/* Orders List */}
-      <div className="divide-y divide-white/5 max-h-[550px] overflow-y-auto">
+      <div className="divide-y divide-desk-border-subtle max-h-[550px] overflow-y-auto">
         {orders.length > 0 ? (
           orders.map((order, index) => (
             <OrderItem
@@ -83,21 +83,21 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
           ))
         ) : (
           <div className="p-8 text-center">
-            <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
-              <FileText className="w-6 h-6 text-stellar-400" />
+            <div className="w-12 h-12 rounded-full bg-desk-hover flex items-center justify-center mx-auto mb-3">
+              <FileText className="w-6 h-6 text-desk-muted" />
             </div>
-            <p className="text-sm text-stellar-400">Aucune commande</p>
-            <p className="text-xs text-stellar-400/60 mt-1">Le voyage n'a pas encore commencé...</p>
+            <p className="text-sm text-desk-muted">Aucune commande</p>
+            <p className="text-xs text-desk-subtle mt-1">Le voyage n'a pas encore commencé...</p>
           </div>
         )}
       </div>
 
       {/* Summary Footer */}
       {orders.length > 0 && (
-        <div className="p-4 border-t border-white/10 bg-white/5">
+        <div className="p-4 border-t border-desk-border bg-desk-hover">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-stellar-400">Total dépensé</span>
-            <span className="text-amber-400 font-semibold">{client.stats.totalSpentFormatted}</span>
+            <span className="text-desk-muted">Total dépensé</span>
+            <span className="text-amber-600 font-semibold">{client.stats.totalSpentFormatted}</span>
           </div>
         </div>
       )}
@@ -137,7 +137,7 @@ function OrderItem({
       {/* Main Row */}
       <button
         onClick={onToggle}
-        className="w-full p-4 flex items-start gap-3 hover:bg-white/5 transition-colors text-left"
+        className="w-full p-4 flex items-start gap-3 hover:bg-desk-hover transition-colors text-left"
       >
         {/* Timeline Dot */}
         <div className="relative">
@@ -146,32 +146,32 @@ function OrderItem({
             ${isCompleted ? 'bg-emerald-500' : isFailed ? 'bg-red-500' : 'bg-amber-500'}
           `} />
           {index < 999 && ( // Always show line except for very last
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 w-px h-full bg-white/10" />
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 w-px h-full bg-desk-border" />
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs text-stellar-400">{order.orderNumber}</span>
+            <span className="font-mono text-xs text-desk-muted">{order.orderNumber}</span>
             <LevelBadge level={order.level} size="sm" showIcon={false} />
           </div>
           
           <div className="flex items-center gap-2 mt-1">
             <StatusBadge status={order.status} size="sm" />
-            <span className="text-xs text-stellar-400">
+            <span className="text-xs text-desk-muted">
               {formatAmount(order.amount)}
             </span>
           </div>
 
-          <p className="text-xs text-stellar-400/60 mt-1">
+          <p className="text-xs text-desk-subtle mt-1">
             {formatDate(order.createdAt)}
           </p>
         </div>
 
         {/* Expand Icon */}
         <ChevronDown className={`
-          w-4 h-4 text-stellar-400 transition-transform mt-1
+          w-4 h-4 text-desk-muted transition-transform mt-1
           ${isExpanded ? 'rotate-180' : ''}
         `} />
       </button>
@@ -185,24 +185,24 @@ function OrderItem({
           className="px-4 pb-4 ml-6"
         >
           {/* Timeline Details */}
-          <div className="pl-4 border-l border-white/10 space-y-2 text-xs">
+          <div className="pl-4 border-l border-desk-border space-y-2 text-xs">
             {order.paidAt && (
               <TimelineEvent
-                icon={<CheckCircle className="w-3 h-3 text-emerald-400" />}
+                icon={<CheckCircle className="w-3 h-3 text-emerald-600" />}
                 label="Payée"
                 date={order.paidAt}
               />
             )}
             {order.deliveredAt && (
               <TimelineEvent
-                icon={<CheckCircle className="w-3 h-3 text-emerald-400" />}
+                icon={<CheckCircle className="w-3 h-3 text-emerald-600" />}
                 label="Livrée"
                 date={order.deliveredAt}
               />
             )}
             {isFailed && (
               <TimelineEvent
-                icon={<XCircle className="w-3 h-3 text-red-400" />}
+                icon={<XCircle className="w-3 h-3 text-red-600" />}
                 label="Échec"
                 date={order.createdAt}
               />
@@ -215,7 +215,7 @@ function OrderItem({
               {order.files.map((file) => (
                 <div 
                   key={file.id}
-                  className="w-12 h-12 rounded-lg overflow-hidden border border-white/10"
+                  className="w-12 h-12 rounded-lg overflow-hidden border border-desk-border"
                 >
                   <img 
                     src={file.url} 
@@ -232,7 +232,7 @@ function OrderItem({
             {hasPdf && (
               <button
                 onClick={(e) => { e.stopPropagation(); onViewPdf(); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 rounded-lg text-xs font-medium transition-colors"
               >
                 <FileText className="w-3.5 h-3.5" />
                 Voir PDF
@@ -244,7 +244,7 @@ function OrderItem({
               <button
                 onClick={(e) => { e.stopPropagation(); onRegenerate(); }}
                 disabled={isRegenerating}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-stellar-100 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-desk-hover hover:bg-desk-card text-desk-text rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
               >
                 {isRegenerating ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -256,7 +256,7 @@ function OrderItem({
             )}
 
             {!hasPdf && isCompleted && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-400 rounded-lg text-xs">
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-600 rounded-lg text-xs"
                 <AlertCircle className="w-3.5 h-3.5" />
                 PDF non disponible
               </div>
@@ -279,10 +279,10 @@ function TimelineEvent({
   date: string;
 }) {
   return (
-    <div className="flex items-center gap-2 text-stellar-400">
+    <div className="flex items-center gap-2 text-desk-muted">
       {icon}
       <span>{label}</span>
-      <span className="text-stellar-400/60">{formatDate(date)}</span>
+      <span className="text-desk-subtle">{formatDate(date)}</span>
     </div>
   );
 }

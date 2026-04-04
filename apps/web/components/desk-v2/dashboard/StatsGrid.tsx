@@ -20,27 +20,27 @@ interface StatsGridProps {
 const COLOR_CLASSES = {
   amber: {
     bg: 'bg-amber-500/20',
-    text: 'text-amber-400',
+    text: 'text-amber-600',
     gradient: 'from-amber-500 to-amber-600',
   },
   purple: {
     bg: 'bg-purple-500/20',
-    text: 'text-purple-400',
+    text: 'text-purple-600',
     gradient: 'from-purple-500 to-purple-600',
   },
   emerald: {
     bg: 'bg-emerald-500/20',
-    text: 'text-emerald-400',
+    text: 'text-emerald-600',
     gradient: 'from-emerald-500 to-emerald-600',
   },
   blue: {
     bg: 'bg-blue-500/20',
-    text: 'text-blue-400',
+    text: 'text-blue-600',
     gradient: 'from-blue-500 to-blue-600',
   },
   green: {
     bg: 'bg-green-500/20',
-    text: 'text-green-400',
+    text: 'text-green-600',
     gradient: 'from-green-500 to-green-600',
   },
 } as const;
@@ -110,7 +110,7 @@ export function StatsGrid({ stats, isLoading }: StatsGridProps) {
             transition={{ delay: index * 0.05 }}
             className={`
               relative overflow-hidden rounded-xl
-              bg-slate-900/50 border border-white/5
+              bg-desk-surface border border-desk-border
               p-4 ${card.large ? 'col-span-2 md:col-span-1' : ''}
             `}
           >
@@ -125,14 +125,14 @@ export function StatsGrid({ stats, isLoading }: StatsGridProps) {
               </div>
 
               {isLoading ? (
-                <div className="h-8 w-16 rounded bg-slate-800 animate-pulse" />
+                <div className="h-8 w-16 rounded bg-desk-card animate-pulse" />
               ) : (
-                <div className="text-2xl font-bold text-white">
+                <div className="text-2xl font-bold text-desk-text">
                   {card.getValue(stats)}
                 </div>
               )}
               
-              <div className="text-sm text-slate-400 mt-1">
+              <div className="text-sm text-desk-muted mt-1">
                 {card.label}
               </div>
             </div>

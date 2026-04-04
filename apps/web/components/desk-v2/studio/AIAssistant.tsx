@@ -104,23 +104,23 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/30 rounded-xl border border-white/5">
+    <div className="flex flex-col h-full bg-desk-surface rounded-xl border border-desk-border">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-white/5">
+      <div className="px-4 py-3 border-b border-desk-border">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 
                           flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Oracle Assistant</h3>
-            <p className="text-xs text-slate-500">IA contextuelle</p>
+            <h3 className="text-sm font-semibold text-desk-text">Oracle Assistant</h3>
+            <p className="text-xs text-desk-subtle">IA contextuelle</p>
           </div>
         </div>
       </div>
 
       {/* Quick prompts */}
-      <div className="px-3 py-2 border-b border-white/5">
+      <div className="px-3 py-2 border-b border-desk-border">
         <div className="flex flex-wrap gap-1.5">
           {QUICK_PROMPTS.map(prompt => (
             <button
@@ -128,8 +128,8 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
               onClick={() => sendMessage(prompt.prompt)}
               disabled={isLoading}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg
-                         bg-slate-800/50 border border-white/5
-                         text-xs text-slate-400 hover:text-white hover:border-white/10
+                         bg-desk-card border border-desk-border
+                         text-xs text-desk-muted hover:text-desk-text hover:border-desk-border
                          transition-colors disabled:opacity-50"
             >
               <span>{prompt.icon}</span>
@@ -144,12 +144,12 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
-              <MessageSquare className="w-8 h-8 text-amber-400/50" />
+              <MessageSquare className="w-8 h-8 text-amber-600/50" />
             </div>
-            <h4 className="text-sm font-medium text-white mb-1">
+            <h4 className="text-sm font-medium text-desk-text mb-1">
               Commencez une conversation
             </h4>
-            <p className="text-xs text-slate-500 max-w-[200px]">
+            <p className="text-xs text-desk-subtle max-w-[200px]">
               Posez une question ou utilisez les suggestions rapides ci-dessus
             </p>
           </div>
@@ -166,19 +166,19 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
                   max-w-[85%] rounded-2xl px-4 py-2.5
                   ${message.role === 'user'
                     ? 'bg-amber-500 text-slate-900'
-                    : 'bg-slate-800 text-white border border-white/5'
+                    : 'bg-desk-card text-desk-text border border-desk-border'
                   }
                 `}
               >
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 
                 {message.role === 'assistant' && (
-                  <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/10">
+                  <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-desk-border">
                     {/* Suggested edit highlight */}
                     {message.suggestedEdit && (
                       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 mb-2">
-                        <p className="text-xs text-amber-400 font-medium mb-1">💡 Suggestion à insérer:</p>
-                        <p className="text-xs text-slate-300 line-clamp-3">{message.suggestedEdit.substring(0, 150)}...</p>
+                        <p className="text-xs text-amber-600 font-medium mb-1">💡 Suggestion à insérer:</p>
+                        <p className="text-xs text-desk-muted line-clamp-3">{message.suggestedEdit.substring(0, 150)}...</p>
                         <button
                           onClick={() => handleInsert(message.suggestedEdit!)}
                           className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg
@@ -195,7 +195,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleCopy(message.content, message.id)}
-                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+                        className="flex items-center gap-1 text-xs text-desk-muted hover:text-desk-text transition-colors"
                       >
                         {copiedId === message.id ? (
                           <Check className="w-3 h-3" />
@@ -207,7 +207,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
                       {onInsertText && !message.suggestedEdit && (
                         <button
                           onClick={() => handleInsert(message.content)}
-                          className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                          className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-500 transition-colors"
                         >
                           <Wand2 className="w-3 h-3" />
                           <span>Insérer</span>
@@ -227,8 +227,8 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
             animate={{ opacity: 1 }}
             className="flex justify-start"
           >
-            <div className="bg-slate-800 rounded-2xl px-4 py-3 border border-white/5">
-              <div className="flex items-center gap-2 text-amber-400">
+            <div className="bg-desk-card rounded-2xl px-4 py-3 border border-desk-border">
+              <div className="flex items-center gap-2 text-amber-600">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm">L&apos;Oracle réfléchit...</span>
               </div>
@@ -240,7 +240,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-white/5">
+      <div className="p-3 border-t border-desk-border">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -248,8 +248,8 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
             placeholder="Posez une question à l'Oracle..."
-            className="flex-1 px-4 py-2.5 rounded-xl bg-slate-800/50 border border-white/5
-                       text-sm text-white placeholder-slate-500
+            className="flex-1 px-4 py-2.5 rounded-xl bg-desk-card border border-desk-border
+                       text-sm text-desk-text placeholder-desk-subtle
                        focus:outline-none focus:border-amber-500/50 transition-colors"
           />
           <button

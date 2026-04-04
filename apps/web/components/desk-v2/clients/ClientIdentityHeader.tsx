@@ -24,19 +24,19 @@ interface ClientIdentityHeaderProps {
 
 function KpiCard({ icon, value, label, color = 'stellar' }: { icon: React.ReactNode; value: string | number; label: string; color?: string }) {
   const colorMap: Record<string, string> = {
-    amber: 'text-amber-400',
-    emerald: 'text-emerald-400',
-    purple: 'text-purple-400',
-    red: 'text-red-400',
-    blue: 'text-blue-400',
-    stellar: 'text-stellar-100',
+    amber: 'text-amber-600',
+    emerald: 'text-emerald-600',
+    purple: 'text-purple-600',
+    red: 'text-red-600',
+    blue: 'text-blue-600',
+    stellar: 'text-desk-text',
   };
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg min-w-[120px]">
+    <div className="flex items-center gap-2 px-3 py-2 bg-desk-hover rounded-lg min-w-[120px]">
       <span className={colorMap[color] || colorMap.stellar}>{icon}</span>
       <div>
         <p className={`text-lg font-bold ${colorMap[color] || colorMap.stellar}`}>{value}</p>
-        <p className="text-[10px] text-stellar-400 leading-tight">{label}</p>
+        <p className="text-[10px] text-desk-muted leading-tight">{label}</p>
       </div>
     </div>
   );
@@ -44,10 +44,10 @@ function KpiCard({ icon, value, label, color = 'stellar' }: { icon: React.ReactN
 
 function SubscriptionPill({ status }: { status: string }) {
   const config: Record<string, { label: string; bg: string; text: string }> = {
-    active: { label: 'Abonné Actif', bg: 'bg-emerald-500/20 border-emerald-500/30', text: 'text-emerald-400' },
-    canceling: { label: 'Résiliation en cours', bg: 'bg-amber-500/20 border-amber-500/30', text: 'text-amber-400' },
-    expired: { label: 'Expiré', bg: 'bg-red-500/20 border-red-500/30', text: 'text-red-400' },
-    none: { label: 'Non abonné', bg: 'bg-white/5 border-white/10', text: 'text-stellar-400' },
+    active: { label: 'Abonné Actif', bg: 'bg-emerald-500/20 border-emerald-500/30', text: 'text-emerald-600' },
+    canceling: { label: 'Résiliation en cours', bg: 'bg-amber-500/20 border-amber-500/30', text: 'text-amber-600' },
+    expired: { label: 'Expiré', bg: 'bg-red-500/20 border-red-500/30', text: 'text-red-600' },
+    none: { label: 'Non abonné', bg: 'bg-desk-hover border-desk-border', text: 'text-desk-muted' },
   };
   const c = config[status] || config.none;
   return (
@@ -70,7 +70,7 @@ export function ClientIdentityHeader({ client }: ClientIdentityHeaderProps) {
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-800/80 to-slate-900/80 border border-white/10 p-6"
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-desk-card to-desk-surface border border-desk-border p-6 shadow-sm"
     >
       {stats.isVip && (
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5" />
@@ -96,18 +96,18 @@ export function ClientIdentityHeader({ client }: ClientIdentityHeaderProps) {
 
             <div>
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-stellar-100">
+                <h2 className="text-2xl font-bold text-desk-text">
                   {client.firstName} {client.lastName}
                 </h2>
                 {stats.isVip && (
-                  <span className="px-2 py-0.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/30 rounded-full text-xs font-medium text-amber-400 flex items-center gap-1">
+                  <span className="px-2 py-0.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/30 rounded-full text-xs font-medium text-amber-600 flex items-center gap-1">
                     <Star className="w-3 h-3" />
                     VIP
                   </span>
                 )}
               </div>
               
-              <div className="flex items-center gap-4 mt-1 text-sm text-stellar-400">
+              <div className="flex items-center gap-4 mt-1 text-sm text-desk-muted">
                 <span className="flex items-center gap-1">
                   <Mail className="w-3.5 h-3.5" />
                   {client.email}
@@ -122,7 +122,7 @@ export function ClientIdentityHeader({ client }: ClientIdentityHeaderProps) {
 
               <div className="flex items-center gap-2 mt-2">
                 {client.refId && (
-                  <span className="px-2 py-0.5 bg-white/5 rounded text-xs text-stellar-400 font-mono">
+                  <span className="px-2 py-0.5 bg-desk-hover rounded text-xs text-desk-muted font-mono">
                     {client.refId}
                   </span>
                 )}
@@ -134,10 +134,10 @@ export function ClientIdentityHeader({ client }: ClientIdentityHeaderProps) {
           {/* Archetype Badge */}
           {archetype && (
             <div className="lg:ml-auto flex items-center gap-3 px-4 py-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
-              <Sparkles className="w-5 h-5 text-purple-400" />
+              <Sparkles className="w-5 h-5 text-purple-600" />
               <div>
-                <p className="text-xs text-purple-400/70">Archétype Dominant</p>
-                <p className="text-lg font-semibold text-purple-300">{archetype}</p>
+                <p className="text-xs text-purple-600/70">Archétype Dominant</p>
+                <p className="text-lg font-semibold text-purple-600">{archetype}</p>
               </div>
             </div>
           )}
@@ -185,8 +185,8 @@ export function ClientIdentityHeader({ client }: ClientIdentityHeaderProps) {
 
         {/* CRM Tags */}
         {client.crmTags && client.crmTags.length > 0 && (
-          <div className="flex items-center gap-2 pt-3 border-t border-white/5">
-            <span className="text-xs text-stellar-400">Tags:</span>
+          <div className="flex items-center gap-2 pt-3 border-t border-desk-border-subtle">
+            <span className="text-xs text-desk-muted">Tags:</span>
             {client.crmTags.map((tag, i) => (
               <Badge key={i} variant="info" size="sm">
                 {tag}

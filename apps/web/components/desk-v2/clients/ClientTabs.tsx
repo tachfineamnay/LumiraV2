@@ -42,9 +42,9 @@ export function ClientTabs({ client, onRefresh }: ClientTabsProps) {
   ];
 
   return (
-    <div className="bg-slate-800/50 border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-desk-surface border border-desk-border rounded-xl overflow-hidden shadow-sm">
       {/* Tab Bar */}
-      <div className="flex border-b border-white/10 overflow-x-auto">
+      <div className="flex border-b border-desk-border overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -52,8 +52,8 @@ export function ClientTabs({ client, onRefresh }: ClientTabsProps) {
             className={`
               flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-colors whitespace-nowrap min-w-[140px]
               ${activeTab === tab.id
-                ? 'text-amber-400 border-b-2 border-amber-400 bg-amber-500/5'
-                : 'text-stellar-400 hover:text-stellar-100 hover:bg-white/5'
+                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-500/5'
+                : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover'
               }
             `}
           >
@@ -62,7 +62,7 @@ export function ClientTabs({ client, onRefresh }: ClientTabsProps) {
             {tab.count !== undefined && tab.count > 0 && (
               <span className={`
                 px-1.5 py-0.5 text-xs rounded-full
-                ${activeTab === tab.id ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-stellar-400'}
+                ${activeTab === tab.id ? 'bg-amber-500/20 text-amber-600' : 'bg-desk-card text-desk-muted'}
               `}>
                 {tab.count}
               </span>

@@ -127,7 +127,7 @@ function GlassCard({
 }) {
     return (
         <div
-            className={`bg-slate-900/50 backdrop-blur-sm border border-white/10 rounded-2xl ${className}`}
+            className={`bg-desk-surface shadow-sm border border-desk-border rounded-2xl ${className}`}
         >
             {children}
         </div>
@@ -150,8 +150,8 @@ function TabButton({
             onClick={onClick}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
                 active
-                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-amber-500/20 text-amber-600 border border-amber-500/30"
+                    : "text-desk-muted hover:text-desk-text hover:bg-desk-hover"
             }`}
         >
             {icon}
@@ -169,13 +169,13 @@ function StatusBadge({
 }) {
     if (!isCustom) {
         return (
-            <span className="px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400 text-xs">
+            <span className="px-2 py-0.5 rounded-full bg-desk-card text-desk-muted text-xs">
                 Par défaut
             </span>
         );
     }
     return (
-        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs">
+        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 text-xs">
             Personnalisé (v{version})
         </span>
     );
@@ -247,7 +247,7 @@ function PromptEditor({
                     <button
                         onClick={loadHistory}
                         disabled={loadingHistory}
-                        className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 hover:text-white transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-desk-muted hover:text-desk-text transition-colors"
                     >
                         {loadingHistory ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
@@ -262,14 +262,14 @@ function PromptEditor({
             <textarea
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="w-full h-64 p-4 bg-slate-800/50 border border-white/10 rounded-xl text-sm text-slate-200 placeholder-slate-500 resize-y focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
+                className="w-full h-64 p-4 bg-desk-input border border-desk-border rounded-xl text-sm text-desk-text placeholder-desk-subtle resize-y focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
                 placeholder="Entrez le prompt..."
             />
 
-            <div className="flex items-center justify-between text-xs text-slate-500">
+            <div className="flex items-center justify-between text-xs text-desk-subtle">
                 <span>{value.length} caractères</span>
                 {isDifferentFromDefault && (
-                    <span className="text-amber-400">Différent de la valeur par défaut</span>
+                    <span className="text-amber-600">Différent de la valeur par défaut</span>
                 )}
             </div>
 
@@ -279,7 +279,7 @@ function PromptEditor({
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     placeholder="Note de modification (optionnel)..."
-                    className="w-full px-3 py-2 bg-slate-800/30 border border-white/5 rounded-lg text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:border-amber-500/30"
+                    className="w-full px-3 py-2 bg-desk-input border border-desk-border-subtle rounded-lg text-sm text-desk-text placeholder-desk-subtle focus:outline-none focus:border-amber-500/30"
                 />
             )}
 
@@ -287,7 +287,7 @@ function PromptEditor({
                 <button
                     onClick={() => onSave(value, comment)}
                     disabled={!hasChanges || saving}
-                    className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500 text-black font-medium rounded-lg transition-colors text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-desk-card disabled:text-desk-subtle text-black font-medium rounded-lg transition-colors text-sm"
                 >
                     {saving ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -300,7 +300,7 @@ function PromptEditor({
                     <button
                         onClick={onReset}
                         disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                        className="flex items-center gap-2 px-4 py-2 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
                     >
                         <RotateCcw className="w-4 h-4" />
                         Reset
@@ -317,8 +317,8 @@ function PromptEditor({
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden"
                     >
-                        <div className="mt-4 p-4 bg-slate-800/30 border border-white/5 rounded-xl space-y-2">
-                            <h4 className="text-sm font-medium text-white flex items-center gap-2">
+                        <div className="mt-4 p-4 bg-desk-bg border border-desk-border-subtle rounded-xl space-y-2">
+                            <h4 className="text-sm font-medium text-desk-text flex items-center gap-2">
                                 <History className="w-4 h-4" />
                                 Versions précédentes
                             </h4>
@@ -329,21 +329,21 @@ function PromptEditor({
                                         className={`flex items-center justify-between p-2 rounded-lg ${
                                             h.isActive
                                                 ? "bg-amber-500/10 border border-amber-500/30"
-                                                : "bg-slate-700/30"
+                                                : "bg-desk-card"
                                         }`}
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-sm font-mono text-white">
+                                                <span className="text-sm font-mono text-desk-text">
                                                     v{h.version}
                                                 </span>
                                                 {h.isActive && (
-                                                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded">
+                                                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-600 text-[10px] rounded">
                                                         Actif
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-xs text-slate-400 truncate">
+                                            <div className="text-xs text-desk-muted truncate">
                                                 {h.comment || "Sans commentaire"} •{" "}
                                                 {new Date(h.createdAt).toLocaleDateString("fr-FR")}
                                             </div>
@@ -351,7 +351,7 @@ function PromptEditor({
                                         {!h.isActive && (
                                             <button
                                                 onClick={() => restoreVersion(h.version)}
-                                                className="px-2 py-1 text-xs text-amber-400 hover:bg-amber-500/10 rounded transition-colors"
+                                                className="px-2 py-1 text-xs text-amber-600 hover:bg-amber-500/10 rounded transition-colors"
                                             >
                                                 Restaurer
                                             </button>
@@ -389,24 +389,24 @@ function AgentAccordion({
         <GlassCard className="overflow-hidden">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between p-4 hover:bg-desk-hover transition-colors"
             >
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center text-violet-600">
                         {info.icon}
                     </div>
                     <div className="text-left">
                         <div className="flex items-center gap-2">
-                            <span className="font-medium text-white">{info.label}</span>
+                            <span className="font-medium text-desk-text">{info.label}</span>
                             <StatusBadge isCustom={prompt.isCustom} version={prompt.version} />
                         </div>
-                        <p className="text-xs text-slate-400">{info.description}</p>
+                        <p className="text-xs text-desk-muted">{info.description}</p>
                     </div>
                 </div>
                 {expanded ? (
-                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                    <ChevronUp className="w-5 h-5 text-desk-muted" />
                 ) : (
-                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                    <ChevronDown className="w-5 h-5 text-desk-muted" />
                 )}
             </button>
 
@@ -418,7 +418,7 @@ function AgentAccordion({
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden"
                     >
-                        <div className="p-4 pt-0 border-t border-white/5">
+                        <div className="p-4 pt-0 border-t border-desk-border-subtle">
                             <PromptEditor
                                 promptKey={agentKey}
                                 prompt={prompt}
@@ -493,13 +493,13 @@ function CredentialsTab() {
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30 flex items-center justify-center">
-                        <Key className="w-6 h-6 text-emerald-400" />
+                        <Key className="w-6 h-6 text-emerald-600" />
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-lg font-medium text-white">Clé API Gemini</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">Clé API Gemini</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             La clé API est configurée via la variable d&apos;environnement{" "}
-                            <code className="px-1.5 py-0.5 bg-slate-800 rounded text-amber-400 text-xs">
+                            <code className="px-1.5 py-0.5 bg-desk-card rounded text-amber-600 text-xs">
                                 GEMINI_API_KEY
                             </code>
                         </p>
@@ -514,13 +514,13 @@ function CredentialsTab() {
                             >
                                 {configStatus?.vertexConfigured ? (
                                     <>
-                                        <Check className="w-4 h-4 text-emerald-400" />
-                                        <span className="text-sm text-emerald-400">Configurée</span>
+                                        <Check className="w-4 h-4 text-emerald-600" />
+                                        <span className="text-sm text-emerald-600">Configurée</span>
                                     </>
                                 ) : (
                                     <>
-                                        <X className="w-4 h-4 text-red-400" />
-                                        <span className="text-sm text-red-400">Non configurée</span>
+                                        <X className="w-4 h-4 text-red-600" />
+                                        <span className="text-sm text-red-600">Non configurée</span>
                                     </>
                                 )}
                             </div>
@@ -528,7 +528,7 @@ function CredentialsTab() {
                             <button
                                 onClick={testConnection}
                                 disabled={testing}
-                                className="flex items-center gap-2 px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                                className="flex items-center gap-2 px-4 py-1.5 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
                             >
                                 {testing ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -550,14 +550,14 @@ function CredentialsTab() {
                                 }`}
                             >
                                 {testResult.success ? (
-                                    <div className="flex items-center gap-2 text-emerald-400">
+                                    <div className="flex items-center gap-2 text-emerald-600">
                                         <Check className="w-4 h-4" />
                                         <span className="text-sm">
                                             Connexion réussie ! L&apos;API Gemini est opérationnelle.
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="flex items-start gap-2 text-red-400">
+                                    <div className="flex items-start gap-2 text-red-600">
                                         <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                                         <span className="text-sm">{testResult.error}</span>
                                     </div>
@@ -572,13 +572,13 @@ function CredentialsTab() {
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center">
-                        <Key className="w-6 h-6 text-blue-400" />
+                        <Key className="w-6 h-6 text-blue-600" />
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-lg font-medium text-white">Clé API OpenAI</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">Clé API OpenAI</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             La clé API est configurée via la variable d&apos;environnement{" "}
-                            <code className="px-1.5 py-0.5 bg-slate-800 rounded text-blue-400 text-xs">
+                            <code className="px-1.5 py-0.5 bg-desk-card rounded text-blue-600 text-xs">
                                 OPENAI_API_KEY
                             </code>
                         </p>
@@ -593,13 +593,13 @@ function CredentialsTab() {
                             >
                                 {configStatus?.openaiConfigured ? (
                                     <>
-                                        <Check className="w-4 h-4 text-blue-400" />
-                                        <span className="text-sm text-blue-400">Configurée</span>
+                                        <Check className="w-4 h-4 text-blue-600" />
+                                        <span className="text-sm text-blue-600">Configurée</span>
                                     </>
                                 ) : (
                                     <>
-                                        <X className="w-4 h-4 text-red-400" />
-                                        <span className="text-sm text-red-400">Non configurée</span>
+                                        <X className="w-4 h-4 text-red-600" />
+                                        <span className="text-sm text-red-600">Non configurée</span>
                                     </>
                                 )}
                             </div>
@@ -607,7 +607,7 @@ function CredentialsTab() {
                             <button
                                 onClick={testOpenAIConnection}
                                 disabled={testingOpenAI}
-                                className="flex items-center gap-2 px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                                className="flex items-center gap-2 px-4 py-1.5 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
                             >
                                 {testingOpenAI ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -629,14 +629,14 @@ function CredentialsTab() {
                                 }`}
                             >
                                 {openaiTestResult.success ? (
-                                    <div className="flex items-center gap-2 text-blue-400">
+                                    <div className="flex items-center gap-2 text-blue-600">
                                         <Check className="w-4 h-4" />
                                         <span className="text-sm">
                                             Connexion réussie ! L&apos;API OpenAI est opérationnelle.
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="flex items-start gap-2 text-red-400">
+                                    <div className="flex items-start gap-2 text-red-600">
                                         <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                                         <span className="text-sm">{openaiTestResult.error}</span>
                                     </div>
@@ -648,13 +648,13 @@ function CredentialsTab() {
             </GlassCard>
 
             <GlassCard className="p-4">
-                <div className="flex items-start gap-3 text-slate-400">
+                <div className="flex items-start gap-3 text-desk-muted">
                     <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
                     <p className="text-sm">
                         Pour modifier les clés API, mettez à jour les variables d&apos;environnement{" "}
-                        <code className="px-1 py-0.5 bg-slate-800 rounded text-xs">GEMINI_API_KEY</code>{" "}
+                        <code className="px-1 py-0.5 bg-desk-card rounded text-xs">GEMINI_API_KEY</code>{" "}
                         et/ou{" "}
-                        <code className="px-1 py-0.5 bg-slate-800 rounded text-xs">OPENAI_API_KEY</code>{" "}
+                        <code className="px-1 py-0.5 bg-desk-card rounded text-xs">OPENAI_API_KEY</code>{" "}
                         dans votre configuration de déploiement (Coolify, .env, etc.) puis redémarrez
                         l&apos;API.
                     </p>
@@ -689,11 +689,11 @@ function PersonalityTab({
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center">
-                        <Brain className="w-6 h-6 text-amber-400" />
+                        <Brain className="w-6 h-6 text-amber-600" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">LUMIRA DNA</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">LUMIRA DNA</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             L&apos;ADN de personnalité partagé par tous les agents. Définit le ton, les
                             valeurs et les archétypes Lumira.
                         </p>
@@ -786,11 +786,11 @@ function ModelsTab({
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center">
-                        <Sparkles className="w-6 h-6 text-violet-400" />
+                        <Sparkles className="w-6 h-6 text-violet-600" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">Gemini Heavy</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">Gemini Heavy</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             Utilisé par SCRIBE, GUIDE et EDITOR pour les tâches complexes
                         </p>
                     </div>
@@ -798,25 +798,25 @@ function ModelsTab({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Modèle</label>
+                        <label className="block text-sm text-desk-muted mb-2">Modèle</label>
                         <input
                             type="text"
                             value={localConfig.heavyModel}
                             onChange={(e) => handleChange("heavyModel", e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Max Tokens</label>
+                        <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
                         <input
                             type="number"
                             value={localConfig.heavyMaxTokens}
                             onChange={(e) => handleChange("heavyMaxTokens", parseInt(e.target.value))}
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Temperature ({localConfig.heavyTemperature})
                         </label>
                         <input
@@ -832,7 +832,7 @@ function ModelsTab({
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Top P ({localConfig.heavyTopP})
                         </label>
                         <input
@@ -852,11 +852,11 @@ function ModelsTab({
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal-600/20 border border-cyan-500/30 flex items-center justify-center">
-                        <Zap className="w-6 h-6 text-cyan-400" />
+                        <Zap className="w-6 h-6 text-cyan-600" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">Gemini Flash</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">Gemini Flash</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             Utilisé par CONFIDANT pour le chat en temps réel
                         </p>
                     </div>
@@ -864,27 +864,27 @@ function ModelsTab({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Modèle</label>
+                        <label className="block text-sm text-desk-muted mb-2">Modèle</label>
                         <input
                             type="text"
                             value={localConfig.flashModel}
                             onChange={(e) => handleChange("flashModel", e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Max Tokens</label>
+                        <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
                         <input
                             type="number"
                             value={localConfig.flashMaxTokens}
                             onChange={(e) =>
                                 handleChange("flashMaxTokens", parseInt(e.target.value))
                             }
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Temperature ({localConfig.flashTemperature})
                         </label>
                         <input
@@ -900,7 +900,7 @@ function ModelsTab({
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Top P ({localConfig.flashTopP})
                         </label>
                         <input
@@ -920,11 +920,11 @@ function ModelsTab({
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center">
-                        <Sparkles className="w-6 h-6 text-blue-400" />
+                        <Sparkles className="w-6 h-6 text-blue-600" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">OpenAI Heavy</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">OpenAI Heavy</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             Modèle puissant OpenAI pour les tâches complexes (ex: gpt-4o)
                         </p>
                     </div>
@@ -932,25 +932,25 @@ function ModelsTab({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Modèle</label>
+                        <label className="block text-sm text-desk-muted mb-2">Modèle</label>
                         <input
                             type="text"
                             value={localConfig.openaiHeavyModel}
                             onChange={(e) => handleChange("openaiHeavyModel", e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-blue-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Max Tokens</label>
+                        <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
                         <input
                             type="number"
                             value={localConfig.openaiHeavyMaxTokens}
                             onChange={(e) => handleChange("openaiHeavyMaxTokens", parseInt(e.target.value))}
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-blue-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Temperature ({localConfig.openaiHeavyTemperature})
                         </label>
                         <input
@@ -966,7 +966,7 @@ function ModelsTab({
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Top P ({localConfig.openaiHeavyTopP})
                         </label>
                         <input
@@ -986,11 +986,11 @@ function ModelsTab({
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 border border-sky-500/30 flex items-center justify-center">
-                        <Zap className="w-6 h-6 text-sky-400" />
+                        <Zap className="w-6 h-6 text-sky-600" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">OpenAI Flash</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">OpenAI Flash</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             Modèle rapide OpenAI pour le chat et les tâches légères (ex: gpt-4o-mini)
                         </p>
                     </div>
@@ -998,27 +998,27 @@ function ModelsTab({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Modèle</label>
+                        <label className="block text-sm text-desk-muted mb-2">Modèle</label>
                         <input
                             type="text"
                             value={localConfig.openaiFlashModel}
                             onChange={(e) => handleChange("openaiFlashModel", e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-sky-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-sky-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">Max Tokens</label>
+                        <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
                         <input
                             type="number"
                             value={localConfig.openaiFlashMaxTokens}
                             onChange={(e) =>
                                 handleChange("openaiFlashMaxTokens", parseInt(e.target.value))
                             }
-                            className="w-full px-3 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-sky-500/50"
+                            className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-sky-500/50"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Temperature ({localConfig.openaiFlashTemperature})
                         </label>
                         <input
@@ -1034,7 +1034,7 @@ function ModelsTab({
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-slate-400 mb-2">
+                        <label className="block text-sm text-desk-muted mb-2">
                             Top P ({localConfig.openaiFlashTopP})
                         </label>
                         <input
@@ -1054,11 +1054,11 @@ function ModelsTab({
             <GlassCard className="p-6">
                 <div className="flex items-start gap-4 mb-6">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center">
-                        <Bot className="w-6 h-6 text-amber-400" />
+                        <Bot className="w-6 h-6 text-amber-600" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-medium text-white">Provider par Agent</h3>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <h3 className="text-lg font-medium text-desk-text">Provider par Agent</h3>
+                        <p className="text-sm text-desk-muted mt-1">
                             Choisir Gemini ou OpenAI pour chaque agent indépendamment
                         </p>
                     </div>
@@ -1071,25 +1071,25 @@ function ModelsTab({
                         return (
                             <div
                                 key={agentKey}
-                                className="flex items-center justify-between p-3 bg-slate-800/30 border border-white/5 rounded-xl"
+                                className="flex items-center justify-between p-3 bg-desk-bg border border-desk-border-subtle rounded-xl"
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
+                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center text-violet-600">
                                         {info.icon}
                                     </div>
                                     <div>
-                                        <span className="text-sm font-medium text-white">{info.label}</span>
-                                        <p className="text-xs text-slate-500">{info.description}</p>
+                                        <span className="text-sm font-medium text-desk-text">{info.label}</span>
+                                        <p className="text-xs text-desk-subtle">{info.description}</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-white/10">
+                                <div className="flex items-center bg-desk-card rounded-lg p-0.5 border border-desk-border">
                                     <button
                                         onClick={() => handleProviderChange(agentKey as keyof AgentProviders, "gemini")}
                                         className={cn(
                                             "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
                                             provider === "gemini"
-                                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                                : "text-slate-500 hover:text-slate-300"
+                                                ? "bg-emerald-500/20 text-emerald-600 border border-emerald-500/30"
+                                                : "text-desk-subtle hover:text-desk-text"
                                         )}
                                     >
                                         Gemini
@@ -1099,8 +1099,8 @@ function ModelsTab({
                                         className={cn(
                                             "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
                                             provider === "openai"
-                                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                                                : "text-slate-500 hover:text-slate-300"
+                                                ? "bg-blue-500/20 text-blue-600 border border-blue-500/30"
+                                                : "text-desk-subtle hover:text-desk-text"
                                         )}
                                     >
                                         OpenAI
@@ -1117,7 +1117,7 @@ function ModelsTab({
                 <button
                     onClick={() => onSave(localConfig)}
                     disabled={!hasChanges || saving}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500 text-black font-medium rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-desk-card disabled:text-desk-subtle text-black font-medium rounded-lg transition-colors"
                 >
                     {saving ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1237,7 +1237,7 @@ export default function SettingsPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+                <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
             </div>
         );
     }
@@ -1254,10 +1254,10 @@ export default function SettingsPage() {
                     <Settings className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-serif italic text-white">
+                    <h1 className="text-2xl font-serif italic text-desk-text">
                         Paramètres IA
                     </h1>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-desk-muted">
                         Configurer les agents Oracle Lumira
                     </p>
                 </div>

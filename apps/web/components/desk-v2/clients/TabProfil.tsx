@@ -28,16 +28,16 @@ interface TabProfilProps {
 function CollapsibleSection({ title, icon, children, defaultOpen = true }: { title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="border border-white/5 rounded-xl overflow-hidden">
+    <div className="border border-desk-border-subtle rounded-xl overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+        className="w-full flex items-center justify-between p-4 hover:bg-desk-hover transition-colors"
       >
-        <div className="flex items-center gap-2 text-stellar-100">
+        <div className="flex items-center gap-2 text-desk-text">
           {icon}
           <span className="font-medium">{title}</span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-stellar-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-desk-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence>
         {isOpen && (
@@ -59,10 +59,10 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   if (!value) return null;
   return (
     <div className="flex items-start gap-2 py-1.5">
-      <span className="text-stellar-400 mt-0.5">{icon}</span>
+      <span className="text-desk-muted mt-0.5">{icon}</span>
       <div>
-        <p className="text-xs text-stellar-400">{label}</p>
-        <p className="text-sm text-stellar-100">{value}</p>
+        <p className="text-xs text-desk-muted">{label}</p>
+        <p className="text-sm text-desk-text">{value}</p>
       </div>
     </div>
   );
@@ -71,7 +71,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="text-center py-4">
-      <p className="text-sm text-stellar-400 italic">{message}</p>
+      <p className="text-sm text-desk-muted italic">{message}</p>
     </div>
   );
 }
@@ -98,17 +98,17 @@ export function TabProfil({ client }: TabProfilProps) {
   return (
     <>
       {/* Profile Completeness Bar */}
-      <div className="mb-5 p-4 bg-white/5 rounded-xl">
+      <div className="mb-5 p-4 bg-desk-hover rounded-xl">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-stellar-100 font-medium flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
+          <span className="text-sm text-desk-text font-medium flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
             Complétude du profil
           </span>
-          <span className={`text-sm font-bold ${stats.profileCompleteness >= 70 ? 'text-emerald-400' : 'text-amber-400'}`}>
+          <span className={`text-sm font-bold ${stats.profileCompleteness >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>
             {stats.profileCompleteness}%
           </span>
         </div>
-        <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-desk-card rounded-full overflow-hidden">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${stats.profileCompleteness}%` }}
@@ -123,7 +123,7 @@ export function TabProfil({ client }: TabProfilProps) {
         {/* Left Column */}
         <div className="space-y-4">
           {/* Carte Natale */}
-          <CollapsibleSection title="Carte Natale" icon={<Calendar className="w-4 h-4 text-purple-400" />}>
+          <CollapsibleSection title="Carte Natale" icon={<Calendar className="w-4 h-4 text-purple-600" />}>
             {hasNatalData ? (
               <div className="space-y-1">
                 <InfoRow icon={<Calendar className="w-3.5 h-3.5" />} label="Date de naissance" value={formatBirthDate(profile?.birthDate)} />
@@ -136,23 +136,23 @@ export function TabProfil({ client }: TabProfilProps) {
           </CollapsibleSection>
 
           {/* Question & Objectif */}
-          <CollapsibleSection title="Désirs & Aspirations" icon={<Target className="w-4 h-4 text-emerald-400" />}>
+          <CollapsibleSection title="Désirs & Aspirations" icon={<Target className="w-4 h-4 text-emerald-600" />}>
             {hasDesires ? (
               <div className="space-y-3">
                 {profile?.specificQuestion && (
                   <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
-                    <p className="text-xs text-blue-400/70 font-medium mb-1 flex items-center gap-1">
+                    <p className="text-xs text-blue-600/70 font-medium mb-1 flex items-center gap-1">
                       <HelpCircle className="w-3 h-3" /> Question posée
                     </p>
-                    <p className="text-sm text-stellar-300 italic">&ldquo;{profile.specificQuestion}&rdquo;</p>
+                    <p className="text-sm text-desk-text italic">&ldquo;{profile.specificQuestion}&rdquo;</p>
                   </div>
                 )}
                 {profile?.objective && (
                   <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
-                    <p className="text-xs text-emerald-400/70 font-medium mb-1 flex items-center gap-1">
+                    <p className="text-xs text-emerald-600/70 font-medium mb-1 flex items-center gap-1">
                       <Target className="w-3 h-3" /> Objectif de vie
                     </p>
-                    <p className="text-sm text-stellar-300">{profile.objective}</p>
+                    <p className="text-sm text-desk-text">{profile.objective}</p>
                   </div>
                 )}
               </div>
@@ -162,10 +162,10 @@ export function TabProfil({ client }: TabProfilProps) {
           </CollapsibleSection>
 
           {/* CRM Notes */}
-          <CollapsibleSection title="Notes CRM" icon={<User className="w-4 h-4 text-blue-400" />} defaultOpen={!!crmNotes}>
+          <CollapsibleSection title="Notes CRM" icon={<User className="w-4 h-4 text-blue-600" />} defaultOpen={!!crmNotes}>
             {crmNotes ? (
-              <div className="p-3 bg-white/5 rounded-lg">
-                <p className="text-sm text-stellar-300 whitespace-pre-wrap">{crmNotes}</p>
+              <div className="p-3 bg-desk-hover rounded-lg">
+                <p className="text-sm text-desk-text whitespace-pre-wrap">{crmNotes}</p>
               </div>
             ) : (
               <EmptyState message="Aucune note de l'expert..." />
@@ -176,19 +176,19 @@ export function TabProfil({ client }: TabProfilProps) {
         {/* Right Column */}
         <div className="space-y-4">
           {/* Personnalité */}
-          <CollapsibleSection title="Personnalité" icon={<Sparkles className="w-4 h-4 text-amber-400" />}>
+          <CollapsibleSection title="Personnalité" icon={<Sparkles className="w-4 h-4 text-amber-600" />}>
             {hasPersonality ? (
               <div className="space-y-3">
                 {(profile?.strongSide || profile?.highs) && (
                   <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                    <p className="text-xs text-emerald-400 font-medium mb-1">Forces</p>
-                    <p className="text-sm text-stellar-100">{profile?.strongSide || profile?.highs}</p>
+                    <p className="text-xs text-emerald-600 font-medium mb-1">Forces</p>
+                    <p className="text-sm text-desk-text">{profile?.strongSide || profile?.highs}</p>
                   </div>
                 )}
                 {(profile?.weakSide || profile?.lows) && (
                   <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="text-xs text-red-400 font-medium mb-1">Zones de croissance</p>
-                    <p className="text-sm text-stellar-100">{profile?.weakSide || profile?.lows}</p>
+                    <p className="text-xs text-red-600 font-medium mb-1">Zones de croissance</p>
+                    <p className="text-sm text-desk-text">{profile?.weakSide || profile?.lows}</p>
                   </div>
                 )}
               </div>
@@ -198,19 +198,19 @@ export function TabProfil({ client }: TabProfilProps) {
           </CollapsibleSection>
 
           {/* Peurs & Blocages */}
-          <CollapsibleSection title="Douleurs & Blocages" icon={<AlertTriangle className="w-4 h-4 text-red-400" />} defaultOpen={false}>
+          <CollapsibleSection title="Douleurs & Blocages" icon={<AlertTriangle className="w-4 h-4 text-red-600" />} defaultOpen={false}>
             {hasProblems ? (
               <div className="space-y-3">
                 {profile?.fears && (
                   <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-lg">
-                    <p className="text-xs text-red-400/70 font-medium mb-1">Peurs & Blocages</p>
-                    <p className="text-sm text-stellar-300">{profile.fears}</p>
+                    <p className="text-xs text-red-600/70 font-medium mb-1">Peurs & Blocages</p>
+                    <p className="text-sm text-desk-text">{profile.fears}</p>
                   </div>
                 )}
                 {profile?.healthConcerns && (
                   <div className="p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
-                    <p className="text-xs text-orange-400/70 font-medium mb-1">Préoccupations santé</p>
-                    <p className="text-sm text-stellar-300">{profile.healthConcerns}</p>
+                    <p className="text-xs text-orange-600/70 font-medium mb-1">Préoccupations santé</p>
+                    <p className="text-sm text-desk-text">{profile.healthConcerns}</p>
                   </div>
                 )}
               </div>
@@ -221,21 +221,21 @@ export function TabProfil({ client }: TabProfilProps) {
 
           {/* Rituels */}
           {profile?.rituals && (
-            <CollapsibleSection title="Pratiques actuelles" icon={<Heart className="w-4 h-4 text-pink-400" />} defaultOpen={false}>
+            <CollapsibleSection title="Pratiques actuelles" icon={<Heart className="w-4 h-4 text-pink-600" />} defaultOpen={false}>
               <div className="p-3 bg-pink-500/5 border border-pink-500/10 rounded-lg">
-                <p className="text-sm text-stellar-300">{profile.rituals}</p>
+                <p className="text-sm text-desk-text">{profile.rituals}</p>
               </div>
             </CollapsibleSection>
           )}
 
           {/* Photos */}
-          <CollapsibleSection title="Galerie Biométrique" icon={<Camera className="w-4 h-4 text-serenity-400" />}>
+          <CollapsibleSection title="Galerie Biométrique" icon={<Camera className="w-4 h-4 text-serenity-600" />}>
             {hasPhotos ? (
               <div className="grid grid-cols-2 gap-3">
                 {profile?.facePhotoUrl && (
                   <button
                     onClick={() => setLightboxImage({ url: profile.facePhotoUrl!, label: 'Visage' })}
-                    className="group relative aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-amber-500/50 transition-all"
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-desk-border hover:border-amber-500/50 transition-all"
                   >
                     <img src={profile.facePhotoUrl} alt="Visage" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
@@ -249,7 +249,7 @@ export function TabProfil({ client }: TabProfilProps) {
                 {profile?.palmPhotoUrl && (
                   <button
                     onClick={() => setLightboxImage({ url: profile.palmPhotoUrl!, label: 'Paume de la main' })}
-                    className="group relative aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-amber-500/50 transition-all"
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-desk-border hover:border-amber-500/50 transition-all"
                   >
                     <img src={profile.palmPhotoUrl} alt="Paume" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">

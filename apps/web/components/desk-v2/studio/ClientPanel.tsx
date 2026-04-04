@@ -39,19 +39,19 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-900/30 rounded-xl border border-white/5">
+    <div className="h-full overflow-y-auto bg-desk-surface rounded-xl border border-desk-border">
       {/* Header with client avatar */}
-      <div className="p-4 border-b border-white/5 bg-gradient-to-b from-amber-500/10 to-transparent">
+      <div className="p-4 border-b border-desk-border bg-gradient-to-b from-amber-500/10 to-transparent">
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 
                           flex items-center justify-center text-xl font-bold text-white">
             {user.firstName?.[0]}{user.lastName?.[0]}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-white truncate">
+            <h2 className="text-lg font-semibold text-desk-text truncate">
               {user.firstName} {user.lastName}
             </h2>
-            <p className="text-sm text-slate-400 truncate">{user.email}</p>
+            <p className="text-sm text-desk-muted truncate">{user.email}</p>
           </div>
         </div>
 
@@ -61,8 +61,8 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getLevelColor(order.level)}`}>
             {levelConfig.name}
           </span>
-          <span className="text-sm text-slate-500">•</span>
-          <span className="font-mono text-sm text-slate-400">{order.orderNumber}</span>
+          <span className="text-sm text-desk-subtle">•</span>
+          <span className="font-mono text-sm text-desk-muted">{order.orderNumber}</span>
         </div>
       </div>
 
@@ -109,7 +109,7 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
             onToggle={() => toggleSection('question')}
             highlight
           >
-            <p className="text-sm text-slate-300 italic leading-relaxed">
+            <p className="text-sm text-desk-muted italic leading-relaxed">
               &quot;{profile.specificQuestion}&quot;
             </p>
           </CollapsibleSection>
@@ -123,7 +123,7 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
             isExpanded={expandedSections.includes('objective')}
             onToggle={() => toggleSection('objective')}
           >
-            <p className="text-sm text-slate-300">{profile.objective}</p>
+            <p className="text-sm text-desk-muted">{profile.objective}</p>
           </CollapsibleSection>
         )}
 
@@ -138,14 +138,14 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
             <div className="space-y-3">
               {profile?.highs && (
                 <div>
-                  <span className="text-xs text-emerald-400 font-medium">Points forts</span>
-                  <p className="text-sm text-slate-300 mt-1">{profile.highs}</p>
+                  <span className="text-xs text-emerald-600 font-medium">Points forts</span>
+                  <p className="text-sm text-desk-muted mt-1">{profile.highs}</p>
                 </div>
               )}
               {profile?.lows && (
                 <div>
-                  <span className="text-xs text-amber-400 font-medium">Défis</span>
-                  <p className="text-sm text-slate-300 mt-1">{profile.lows}</p>
+                  <span className="text-xs text-amber-600 font-medium">Défis</span>
+                  <p className="text-sm text-desk-muted mt-1">{profile.lows}</p>
                 </div>
               )}
             </div>
@@ -160,7 +160,7 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
             isExpanded={expandedSections.includes('fears')}
             onToggle={() => toggleSection('fears')}
           >
-            <p className="text-sm text-slate-300">{profile.fears}</p>
+            <p className="text-sm text-desk-muted">{profile.fears}</p>
           </CollapsibleSection>
         )}
 
@@ -172,7 +172,7 @@ export function ClientPanel({ order, compact = false }: ClientPanelProps) {
             isExpanded={expandedSections.includes('rituals')}
             onToggle={() => toggleSection('rituals')}
           >
-            <p className="text-sm text-slate-300">{profile.rituals}</p>
+            <p className="text-sm text-desk-muted">{profile.rituals}</p>
           </CollapsibleSection>
         )}
 
@@ -220,17 +220,17 @@ function CollapsibleSection({
   children,
 }: CollapsibleSectionProps) {
   return (
-    <div className={`rounded-lg overflow-hidden ${highlight ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-slate-800/30'}`}>
+    <div className={`rounded-lg overflow-hidden ${highlight ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-desk-card'}`}>
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-white/5 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-desk-hover transition-colors"
       >
-        <span className={highlight ? 'text-amber-400' : 'text-slate-500'}>{icon}</span>
-        <span className="flex-1 text-sm font-medium text-white">{title}</span>
+        <span className={highlight ? 'text-amber-600' : 'text-desk-subtle'}>{icon}</span>
+        <span className="flex-1 text-sm font-medium text-desk-text">{title}</span>
         {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-slate-500" />
+          <ChevronUp className="w-4 h-4 text-desk-subtle" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-500" />
+          <ChevronDown className="w-4 h-4 text-desk-subtle" />
         )}
       </button>
       <AnimatePresence>
@@ -259,9 +259,9 @@ interface InfoRowProps {
 function InfoRow({ icon, label, value }: InfoRowProps) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-slate-500">{icon}</span>
-      <span className="text-xs text-slate-500">{label}:</span>
-      <span className="text-sm text-white">{value}</span>
+      <span className="text-desk-subtle">{icon}</span>
+      <span className="text-xs text-desk-subtle">{label}:</span>
+      <span className="text-sm text-desk-text">{value}</span>
     </div>
   );
 }
@@ -273,7 +273,7 @@ function PhotoThumbnail({ url, label }: { url: string; label: string }) {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="aspect-square rounded-lg overflow-hidden bg-slate-800 
+        className="aspect-square rounded-lg overflow-hidden bg-desk-card 
                    hover:ring-2 hover:ring-amber-500/50 transition-all"
       >
         <img src={url} alt={label} className="w-full h-full object-cover" />
@@ -319,10 +319,10 @@ function formatDate(dateStr: string): string {
 
 function getLevelColor(level: number): string {
   switch (level) {
-    case 1: return 'bg-emerald-500/20 text-emerald-400';
-    case 2: return 'bg-blue-500/20 text-blue-400';
-    case 3: return 'bg-purple-500/20 text-purple-400';
-    case 4: return 'bg-amber-500/20 text-amber-400';
-    default: return 'bg-slate-500/20 text-slate-400';
+    case 1: return 'bg-emerald-500/20 text-emerald-600';
+    case 2: return 'bg-blue-500/20 text-blue-600';
+    case 3: return 'bg-purple-500/20 text-purple-600';
+    case 4: return 'bg-amber-500/20 text-amber-600';
+    default: return 'bg-slate-500/20 text-desk-muted';
   }
 }

@@ -11,7 +11,7 @@ interface DeskLayoutProps {
 
 export function DeskLayout({ children }: DeskLayoutProps) {
   return (
-    <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
+    <div className="flex h-screen bg-desk-bg text-desk-text overflow-hidden">
       {/* Command Palette (⌘K) */}
       <CommandPalette />
       

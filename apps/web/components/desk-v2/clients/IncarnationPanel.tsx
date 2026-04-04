@@ -35,17 +35,17 @@ function CollapsibleSection({ title, icon, children, defaultOpen = true }: Colla
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border-b border-white/5 last:border-0">
+    <div className="border-b border-desk-border-subtle last:border-0">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+        className="w-full flex items-center justify-between p-4 hover:bg-desk-hover transition-colors"
       >
-        <div className="flex items-center gap-2 text-stellar-100">
+        <div className="flex items-center gap-2 text-desk-text">
           {icon}
           <span className="font-medium">{title}</span>
         </div>
         <ChevronDown 
-          className={`w-4 h-4 text-stellar-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-desk-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
       <AnimatePresence>
@@ -70,10 +70,10 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   if (!value) return null;
   return (
     <div className="flex items-start gap-2 py-1.5">
-      <span className="text-stellar-400 mt-0.5">{icon}</span>
+      <span className="text-desk-muted mt-0.5">{icon}</span>
       <div>
-        <p className="text-xs text-stellar-400">{label}</p>
-        <p className="text-sm text-stellar-100">{value}</p>
+        <p className="text-xs text-desk-muted">{label}</p>
+        <p className="text-sm text-desk-text">{value}</p>
       </div>
     </div>
   );
@@ -82,7 +82,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="text-center py-4">
-      <p className="text-sm text-stellar-400 italic">{message}</p>
+      <p className="text-sm text-desk-muted italic">{message}</p>
     </div>
   );
 }
@@ -117,20 +117,20 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.1 }}
-        className="bg-slate-800/50 border border-white/10 rounded-xl overflow-hidden"
+        className="bg-desk-surface border border-desk-border rounded-xl overflow-hidden shadow-sm"
       >
-        <div className="p-4 border-b border-white/10">
-          <h3 className="text-lg font-semibold text-stellar-100 flex items-center gap-2">
-            <User className="w-5 h-5 text-amber-400" />
+        <div className="p-4 border-b border-desk-border">
+          <h3 className="text-lg font-semibold text-desk-text flex items-center gap-2">
+            <User className="w-5 h-5 text-amber-600" />
             L'Incarnation
           </h3>
-          <p className="text-xs text-stellar-400 mt-1">Données physiques et terrestres</p>
+          <p className="text-xs text-desk-muted mt-1">Données physiques et terrestres</p>
         </div>
 
         {/* Natal Chart */}
         <CollapsibleSection 
           title="Carte Natale" 
-          icon={<Calendar className="w-4 h-4 text-purple-400" />}
+          icon={<Calendar className="w-4 h-4 text-purple-600" />}
         >
           {hasNatalData ? (
             <div className="space-y-1">
@@ -158,7 +158,7 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         {/* Biometric Gallery */}
         <CollapsibleSection 
           title="Galerie Biométrique" 
-          icon={<Camera className="w-4 h-4 text-serenity-400" />}
+          icon={<Camera className="w-4 h-4 text-serenity-600" />}
         >
           {hasPhotos ? (
             <div className="grid grid-cols-2 gap-3">
@@ -187,21 +187,21 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         {/* Personality Traits */}
         <CollapsibleSection 
           title="Personnalité" 
-          icon={<Sparkles className="w-4 h-4 text-amber-400" />}
+          icon={<Sparkles className="w-4 h-4 text-amber-600" />}
           defaultOpen={false}
         >
           {hasPersonality ? (
             <div className="space-y-3">
               {(profile?.strongSide || profile?.highs) && (
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                  <p className="text-xs text-emerald-400 font-medium mb-1">Forces</p>
-                  <p className="text-sm text-stellar-100">{profile?.strongSide || profile?.highs}</p>
+                    <p className="text-xs text-emerald-600 font-medium mb-1">Forces</p>
+                    <p className="text-sm text-desk-text">{profile?.strongSide || profile?.highs}</p>
                 </div>
               )}
               {(profile?.weakSide || profile?.lows) && (
                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <p className="text-xs text-red-400 font-medium mb-1">Zones de croissance</p>
-                  <p className="text-sm text-stellar-100">{profile?.weakSide || profile?.lows}</p>
+                    <p className="text-xs text-red-600 font-medium mb-1">Zones de croissance</p>
+                    <p className="text-sm text-desk-text">{profile?.weakSide || profile?.lows}</p>
                 </div>
               )}
             </div>
@@ -213,21 +213,21 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         {/* Problems - Fears & Health */}
         <CollapsibleSection 
           title="Douleurs & Blocages" 
-          icon={<AlertTriangle className="w-4 h-4 text-red-400" />}
+          icon={<AlertTriangle className="w-4 h-4 text-red-600" />}
           defaultOpen={false}
         >
           {hasProblems ? (
             <div className="space-y-3">
               {profile?.fears && (
                 <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-lg">
-                  <p className="text-xs text-red-400/70 font-medium mb-1">Peurs & Blocages</p>
-                  <p className="text-sm text-stellar-300">{profile.fears}</p>
+                    <p className="text-xs text-red-600/70 font-medium mb-1">Peurs & Blocages</p>
+                    <p className="text-sm text-desk-text">{profile.fears}</p>
                 </div>
               )}
               {profile?.healthConcerns && (
                 <div className="p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
-                  <p className="text-xs text-orange-400/70 font-medium mb-1">Préoccupations santé</p>
-                  <p className="text-sm text-stellar-300">{profile.healthConcerns}</p>
+                    <p className="text-xs text-orange-600/70 font-medium mb-1">Préoccupations santé</p>
+                    <p className="text-sm text-desk-text">{profile.healthConcerns}</p>
                 </div>
               )}
             </div>
@@ -239,27 +239,27 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         {/* Desires - Questions & Objectives */}
         <CollapsibleSection 
           title="Désirs & Aspirations" 
-          icon={<Target className="w-4 h-4 text-emerald-400" />}
+          icon={<Target className="w-4 h-4 text-emerald-600" />}
           defaultOpen={false}
         >
           {hasDesires ? (
             <div className="space-y-3">
               {profile?.specificQuestion && (
                 <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
-                  <p className="text-xs text-blue-400/70 font-medium mb-1 flex items-center gap-1">
+                    <p className="text-xs text-blue-600/70 font-medium mb-1 flex items-center gap-1">
                     <HelpCircle className="w-3 h-3" />
                     Question posée
                   </p>
-                  <p className="text-sm text-stellar-300 italic">"{profile.specificQuestion}"</p>
+                  <p className="text-sm text-desk-text italic">"{profile.specificQuestion}"</p>
                 </div>
               )}
               {profile?.objective && (
                 <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
-                  <p className="text-xs text-emerald-400/70 font-medium mb-1 flex items-center gap-1">
+                    <p className="text-xs text-emerald-600/70 font-medium mb-1 flex items-center gap-1">
                     <Target className="w-3 h-3" />
                     Objectif de vie
                   </p>
-                  <p className="text-sm text-stellar-300">{profile.objective}</p>
+                  <p className="text-sm text-desk-text">{profile.objective}</p>
                 </div>
               )}
             </div>
@@ -272,11 +272,11 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         {profile?.rituals && (
           <CollapsibleSection 
             title="Pratiques actuelles" 
-            icon={<Heart className="w-4 h-4 text-pink-400" />}
+            icon={<Heart className="w-4 h-4 text-pink-600" />}
             defaultOpen={false}
           >
             <div className="p-3 bg-pink-500/5 border border-pink-500/10 rounded-lg">
-              <p className="text-sm text-stellar-300">{profile.rituals}</p>
+              <p className="text-sm text-desk-text">{profile.rituals}</p>
             </div>
           </CollapsibleSection>
         )}
@@ -306,7 +306,7 @@ function PhotoThumbnail({
   return (
     <button
       onClick={onClick}
-      className="group relative aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-amber-500/50 transition-all"
+      className="group relative aspect-square rounded-lg overflow-hidden border border-desk-border hover:border-amber-500/50 transition-all"
     >
       <img
         src={url}

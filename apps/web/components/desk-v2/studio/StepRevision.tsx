@@ -53,7 +53,7 @@ export function StepRevision({
       {/* Completed banner */}
       {isReadOnly && order.deliveredAt && (
         <div className="flex-shrink-0 px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
-          <div className="flex items-center justify-center gap-2 text-sm text-emerald-400">
+          <div className="flex items-center justify-center gap-2 text-sm text-emerald-600">
             <Lock className="w-3.5 h-3.5" />
             <span>
               Cette lecture a été scellée et envoyée le{' '}
@@ -72,17 +72,17 @@ export function StepRevision({
       {/* 3-column layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT PANEL — Client Profile (collapsible) */}
-        <div className={`flex-shrink-0 border-r border-white/5 transition-all duration-300 ${
+        <div className={`flex-shrink-0 border-r border-desk-border transition-all duration-300 ${
           showLeftPanel ? 'w-72' : 'w-12'
         }`}>
           {showLeftPanel ? (
             <div className="h-full flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-                <h3 className="text-sm font-semibold text-white">Profil client</h3>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-desk-border">
+                <h3 className="text-sm font-semibold text-desk-text">Profil client</h3>
                 <button
                   onClick={() => setShowLeftPanel(false)}
                   title="Réduire le panneau"
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
                 >
                   <PanelLeftClose className="w-4 h-4" />
                 </button>
@@ -96,7 +96,7 @@ export function StepRevision({
               <button
                 onClick={() => setShowLeftPanel(true)}
                 title="Afficher le profil client"
-                className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+                className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
               >
                 <PanelLeftOpen className="w-4 h-4" />
               </button>
@@ -119,7 +119,7 @@ export function StepRevision({
         </div>
 
         {/* RIGHT PANEL — AI Assistant */}
-        <div className="w-80 flex-shrink-0 border-l border-white/5 overflow-hidden">
+        <div className="w-80 flex-shrink-0 border-l border-desk-border overflow-hidden">
           <AIAssistant
             orderId={orderId}
             clientContext={{
@@ -135,13 +135,13 @@ export function StepRevision({
 
       {/* Bottom action bar */}
       {!isReadOnly && (
-        <div className="flex-shrink-0 px-4 py-3 bg-slate-900/80 border-t border-white/5">
+        <div className="flex-shrink-0 px-4 py-3 bg-desk-surface border-t border-desk-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button
                 onClick={onBackToBriefing}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg
-                           text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm"
+                           text-desk-muted hover:text-desk-text hover:bg-desk-hover transition-colors text-sm"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Briefing</span>
@@ -151,8 +151,8 @@ export function StepRevision({
                 onClick={onRegenerate}
                 disabled={isRegenerating}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg
-                           bg-slate-800/50 text-slate-400 hover:text-white 
-                           hover:bg-slate-800 transition-colors disabled:opacity-50 text-sm"
+                           bg-desk-card text-desk-muted hover:text-desk-text
+                           hover:bg-desk-hover transition-colors disabled:opacity-50 text-sm"
               >
                 {isRegenerating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -165,8 +165,8 @@ export function StepRevision({
               {versions.length > 0 && (
                 <button
                   onClick={onShowVersions}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 
-                             text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-sm"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-desk-card 
+                             text-desk-muted hover:text-desk-text hover:bg-desk-hover transition-colors text-sm"
                 >
                   <History className="w-4 h-4" />
                   <span>{versions.length}</span>

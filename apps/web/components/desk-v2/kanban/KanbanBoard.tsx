@@ -176,21 +176,21 @@ export function KanbanBoard() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-6 py-4 flex items-center justify-between border-b border-white/5">
+      <div className="px-6 py-4 flex items-center justify-between border-b border-desk-border">
         <div>
-          <h1 className="text-xl font-semibold text-white">Board</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
+          <h1 className="text-xl font-semibold text-desk-text">Board</h1>
+          <p className="text-sm text-desk-muted mt-0.5">
             Gérez vos commandes par glisser-déposer
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Level filter */}
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-800/50 border border-white/5">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-desk-card border border-desk-border">
             <button
               onClick={() => setLevelFilter(null)}
               className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                levelFilter === null ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:text-white'
+                levelFilter === null ? 'bg-amber-500 text-slate-900' : 'text-desk-muted hover:text-desk-text'
               }`}
             >
               Tous
@@ -200,7 +200,7 @@ export function KanbanBoard() {
                 key={level}
                 onClick={() => setLevelFilter(level)}
                 className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                  levelFilter === level ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:text-white'
+                  levelFilter === level ? 'bg-amber-500 text-slate-900' : 'text-desk-muted hover:text-desk-text'
                 }`}
               >
                 N{level}
@@ -213,7 +213,7 @@ export function KanbanBoard() {
             onClick={() => fetchOrders()}
             disabled={isLoading}
             title="Rafraîchir"
-            className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+            className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
           >
             <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>

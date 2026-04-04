@@ -93,11 +93,11 @@ export default function ArchivePage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Archive className="w-7 h-7 text-emerald-400" />
+          <h1 className="text-2xl font-bold text-desk-text flex items-center gap-3">
+            <Archive className="w-7 h-7 text-emerald-600" />
             Archives
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-desk-muted mt-1">
             {totalOrders} commande{totalOrders > 1 ? 's' : ''} terminée{totalOrders > 1 ? 's' : ''}
           </p>
         </div>
@@ -111,23 +111,23 @@ export default function ArchivePage() {
         className="flex items-center gap-4"
       >
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-desk-subtle" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par numéro ou client..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl
-                       bg-slate-800/50 border border-white/10
-                       text-white placeholder:text-slate-500
+                       bg-desk-card border border-desk-border
+                       text-desk-text placeholder:text-desk-subtle
                        focus:outline-none focus:border-emerald-500/50
                        transition-colors"
           />
         </div>
         
         <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl
-                           bg-slate-800/50 border border-white/10
-                           text-slate-400 hover:text-white transition-colors">
+                           bg-desk-card border border-desk-border
+                           text-desk-muted hover:text-desk-text transition-colors">
           <Filter className="w-4 h-4" />
           <span>Filtres</span>
         </button>
@@ -142,12 +142,12 @@ export default function ArchivePage() {
       >
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+            <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-slate-900/50 rounded-xl border border-white/5">
-            <Archive className="w-16 h-16 text-slate-600 mb-4" />
-            <p className="text-slate-400">Aucune commande archivée</p>
+          <div className="flex flex-col items-center justify-center py-20 bg-desk-surface rounded-xl border border-desk-border">
+            <Archive className="w-16 h-16 text-desk-subtle mb-4" />
+            <p className="text-desk-muted">Aucune commande archivée</p>
           </div>
         ) : (
           orders.map((order, index) => {
@@ -159,34 +159,34 @@ export default function ArchivePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.03 }}
-                className="bg-slate-900/50 border border-white/5 rounded-xl p-4
-                           hover:bg-slate-900/70 hover:border-white/10 transition-all group"
+                className="bg-desk-surface border border-desk-border rounded-xl p-4
+                           hover:bg-desk-card hover:border-desk-border transition-all group"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     {/* Status badge */}
                     <div className="w-12 h-12 rounded-xl bg-emerald-500/20
                                     flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-emerald-400" />
+                      <CheckCircle className="w-6 h-6 text-emerald-600" />
                     </div>
                     
                     {/* Order info */}
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-amber-400 font-medium">
+                        <span className="font-mono text-amber-600 font-medium">
                           {order.orderNumber}
                         </span>
                         <span className="text-lg">{levelConfig.icon}</span>
-                        <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">
+                        <span className="text-xs text-desk-subtle bg-desk-card px-2 py-0.5 rounded">
                           {levelConfig.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-slate-400">
+                      <div className="flex items-center gap-3 mt-1 text-sm text-desk-muted">
                         <span className="flex items-center gap-1">
                           <User className="w-3.5 h-3.5" />
                           {order.user.firstName} {order.user.lastName}
                         </span>
-                        <span className="text-slate-600">•</span>
+                        <span className="text-desk-subtle">•</span>
                         <span>{order.user.email}</span>
                       </div>
                     </div>
@@ -196,11 +196,11 @@ export default function ArchivePage() {
                   <div className="flex items-center gap-6">
                     {/* Dates */}
                     <div className="text-right">
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <div className="flex items-center gap-1.5 text-xs text-desk-subtle">
                         <Calendar className="w-3.5 h-3.5" />
                         <span>Créée le {new Date(order.createdAt).toLocaleDateString('fr-FR')}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-emerald-400 mt-1">
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-600 mt-1">
                         <CheckCircle className="w-3.5 h-3.5" />
                         <span>Livrée le {new Date(order.completedAt).toLocaleDateString('fr-FR')}</span>
                       </div>
@@ -208,7 +208,7 @@ export default function ArchivePage() {
 
                     {/* Amount */}
                     <div className="text-right min-w-[80px]">
-                      <span className="text-lg font-semibold text-white">
+                      <span className="text-lg font-semibold text-desk-text">
                         {(order.amount / 100).toFixed(0)}€
                       </span>
                     </div>
@@ -221,14 +221,14 @@ export default function ArchivePage() {
                           window.open(`${apiBase}/api/readings/${order.orderNumber}/download`, '_blank');
                         }}
                         title="Télécharger le PDF"
-                        className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                        className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
                       >
                         <Download className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => router.push(`/admin/studio/${order.id}`)}
                         title="Voir les détails"
-                        className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                        className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
                       >
                         <ExternalLink className="w-4 h-4" />
                       </button>
@@ -249,7 +249,7 @@ export default function ArchivePage() {
           transition={{ delay: 0.3 }}
           className="flex items-center justify-between"
         >
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-desk-subtle">
             Page {page} sur {totalPages}
           </p>
           <div className="flex items-center gap-2">
@@ -257,8 +257,8 @@ export default function ArchivePage() {
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
               className="flex items-center gap-1 px-3 py-2 rounded-lg
-                         bg-slate-800/50 border border-white/10
-                         text-slate-400 hover:text-white
+                         bg-desk-card border border-desk-border
+                         text-desk-muted hover:text-desk-text
                          disabled:opacity-50 disabled:cursor-not-allowed
                          transition-colors"
             >
@@ -269,8 +269,8 @@ export default function ArchivePage() {
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               className="flex items-center gap-1 px-3 py-2 rounded-lg
-                         bg-slate-800/50 border border-white/10
-                         text-slate-400 hover:text-white
+                         bg-desk-card border border-desk-border
+                         text-desk-muted hover:text-desk-text
                          disabled:opacity-50 disabled:cursor-not-allowed
                          transition-colors"
             >

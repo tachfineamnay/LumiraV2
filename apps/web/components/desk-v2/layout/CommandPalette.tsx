@@ -177,10 +177,10 @@ export function CommandPalette() {
             transition={{ duration: 0.15 }}
             className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-xl z-50"
           >
-            <div className="bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+            <div className="bg-desk-surface rounded-2xl border border-desk-border shadow-2xl overflow-hidden">
               {/* Search input */}
-              <div className="flex items-center gap-3 px-4 border-b border-white/5">
-                <Search className="w-5 h-5 text-slate-500" />
+              <div className="flex items-center gap-3 px-4 border-b border-desk-border">
+                <Search className="w-5 h-5 text-desk-subtle" />
                 <input
                   ref={inputRef}
                   type="text"
@@ -191,13 +191,13 @@ export function CommandPalette() {
                   }}
                   onKeyDown={handleKeyDown}
                   placeholder="Rechercher une commande, un client, une action..."
-                  className="flex-1 py-4 bg-transparent text-white placeholder-slate-500 
+                  className="flex-1 py-4 bg-transparent text-desk-text placeholder-desk-subtle 
                              outline-none text-base"
                 />
                 <button
                   onClick={() => setIsOpen(false)}
                   title="Fermer"
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500"
+                  className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -206,7 +206,7 @@ export function CommandPalette() {
               {/* Results */}
               <div className="max-h-[400px] overflow-y-auto py-2">
                 {filteredCommands.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-slate-500">
+                  <div className="px-4 py-8 text-center text-desk-subtle">
                     Aucun résultat pour &quot;{query}&quot;
                   </div>
                 ) : (
@@ -243,17 +243,17 @@ export function CommandPalette() {
               </div>
 
               {/* Footer */}
-              <div className="px-4 py-2 border-t border-white/5 flex items-center gap-4 text-xs text-slate-500">
+              <div className="px-4 py-2 border-t border-desk-border flex items-center gap-4 text-xs text-desk-subtle">
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">↑↓</kbd>
+                  <kbd className="px-1.5 py-0.5 rounded bg-desk-card text-desk-muted">↑↓</kbd>
                   naviguer
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">↵</kbd>
+                  <kbd className="px-1.5 py-0.5 rounded bg-desk-card text-desk-muted">↵</kbd>
                   sélectionner
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">esc</kbd>
+                  <kbd className="px-1.5 py-0.5 rounded bg-desk-card text-desk-muted">esc</kbd>
                   fermer
                 </span>
               </div>
@@ -276,7 +276,7 @@ interface CommandGroupProps {
 function CommandGroup({ title, items, selectedIndex, onSelect, startIndex }: CommandGroupProps) {
   return (
     <div className="px-2">
-      <div className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider">
+      <div className="px-2 py-1.5 text-xs font-medium text-desk-subtle uppercase tracking-wider">
         {title}
       </div>
       {items.map((item, index) => {
@@ -290,24 +290,24 @@ function CommandGroup({ title, items, selectedIndex, onSelect, startIndex }: Com
             className={`
               w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
               transition-colors text-left
-              ${isSelected ? 'bg-amber-500/10 text-amber-400' : 'text-slate-300 hover:bg-white/5'}
+              ${isSelected ? 'bg-amber-500/10 text-amber-600' : 'text-desk-muted hover:bg-desk-hover'}
             `}
           >
-            <span className={isSelected ? 'text-amber-400' : 'text-slate-500'}>
+            <span className={isSelected ? 'text-amber-600' : 'text-desk-subtle'}>
               {item.icon}
             </span>
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{item.label}</div>
               {item.description && (
-                <div className="text-xs text-slate-500 truncate">{item.description}</div>
+                <div className="text-xs text-desk-subtle truncate">{item.description}</div>
               )}
             </div>
             {item.shortcut && (
-              <kbd className="text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
+              <kbd className="text-xs text-desk-subtle bg-desk-card px-1.5 py-0.5 rounded">
                 {item.shortcut}
               </kbd>
             )}
-            {isSelected && <ArrowRight className="w-4 h-4 text-amber-400" />}
+            {isSelected && <ArrowRight className="w-4 h-4 text-amber-600" />}
           </button>
         );
       })}

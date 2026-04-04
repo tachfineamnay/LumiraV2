@@ -29,17 +29,17 @@ export function TabInsights({ client }: TabInsightsProps) {
       {/* Coverage Meters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Insights viewed */}
-        <div className="p-4 bg-white/5 rounded-xl">
+        <div className="p-4 bg-desk-hover rounded-xl">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-stellar-100 font-medium flex items-center gap-2">
-              <Eye className="w-4 h-4 text-purple-400" />
+            <span className="text-sm text-desk-text font-medium flex items-center gap-2">
+              <Eye className="w-4 h-4 text-purple-600" />
               Insights consultés
             </span>
-            <span className="text-sm font-bold text-purple-400">
+            <span className="text-sm font-bold text-purple-600">
               {stats.insightsViewed}/{stats.insightsTotal}
             </span>
           </div>
-          <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-desk-card rounded-full overflow-hidden">
             <div
               className="h-full rounded-full bg-purple-500 transition-all duration-500"
               style={{ width: `${stats.insightsTotal > 0 ? (stats.insightsViewed / stats.insightsTotal) * 100 : 0}%` }}
@@ -48,17 +48,17 @@ export function TabInsights({ client }: TabInsightsProps) {
         </div>
 
         {/* Audio coverage */}
-        <div className="p-4 bg-white/5 rounded-xl">
+        <div className="p-4 bg-desk-hover rounded-xl">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-stellar-100 font-medium flex items-center gap-2">
-              <Volume2 className="w-4 h-4 text-amber-400" />
+            <span className="text-sm text-desk-text font-medium flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-amber-600" />
               Couverture audio
             </span>
-            <span className="text-sm font-bold text-amber-400">
+            <span className="text-sm font-bold text-amber-600">
               {insightsWithAudio}/{stats.insightsTotal}
             </span>
           </div>
-          <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-desk-card rounded-full overflow-hidden">
             <div
               className="h-full rounded-full bg-amber-500 transition-all duration-500"
               style={{ width: `${stats.audioCoverage}%` }}
@@ -89,9 +89,9 @@ export function TabInsights({ client }: TabInsightsProps) {
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center mb-4">
-            <Sparkles className="w-8 h-8 text-purple-400/50" />
+            <Sparkles className="w-8 h-8 text-purple-600/50" />
           </div>
-          <p className="text-sm text-stellar-400 italic">Les insights seront révélés après la première lecture...</p>
+          <p className="text-sm text-desk-muted italic">Les insights seront révélés après la première lecture...</p>
         </div>
       )}
     </div>
@@ -125,9 +125,9 @@ function InsightCard({
       <div className={`p-3 rounded-lg border opacity-40 ${colorClasses[config.color]}`}>
         <div className="flex items-center gap-2">
           <span className="text-lg">{config.icon}</span>
-          <span className="text-sm text-stellar-400">{config.label}</span>
+          <span className="text-sm text-desk-muted">{config.label}</span>
         </div>
-        <p className="text-xs text-stellar-400/60 mt-1 italic">Non révélé</p>
+        <p className="text-xs text-desk-subtle mt-1 italic">Non révélé</p>
       </div>
     );
   }
@@ -141,28 +141,28 @@ function InsightCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-lg">{config.icon}</span>
-          <span className="text-sm font-medium text-stellar-100">{config.label}</span>
+          <span className="text-sm font-medium text-desk-text">{config.label}</span>
         </div>
         <div className="flex items-center gap-1">
           {insight.audioUrl && (
             <span className="p-1 bg-amber-500/20 rounded" title="Audio disponible">
-              <Volume2 className="w-3 h-3 text-amber-400" />
+              <Volume2 className="w-3 h-3 text-amber-600" />
             </span>
           )}
           {!insight.viewedAt && (
-            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full">
+            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-600 text-xs rounded-full">
               Nouveau
             </span>
           )}
           {insight.viewedAt && (
-            <span className="px-1.5 py-0.5 bg-white/10 text-stellar-400 text-xs rounded-full">
+            <span className="px-1.5 py-0.5 bg-desk-card text-desk-muted text-xs rounded-full">
               Vu
             </span>
           )}
         </div>
       </div>
 
-      <p className="text-xs text-stellar-300 mt-2 line-clamp-2">{insight.summary}</p>
+      <p className="text-xs text-desk-text mt-2 line-clamp-2">{insight.summary}</p>
 
       <AnimatePresence>
         {isExpanded && (
@@ -170,11 +170,11 @@ function InsightCard({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-3 pt-3 border-t border-white/10"
+            className="mt-3 pt-3 border-t border-desk-border"
           >
-            <p className="text-sm text-stellar-100 whitespace-pre-wrap">{insight.fullText}</p>
+            <p className="text-sm text-desk-text whitespace-pre-wrap">{insight.fullText}</p>
             <div className="flex items-center gap-3 mt-2">
-              <p className="text-xs text-stellar-400">
+              <p className="text-xs text-desk-muted">
                 Généré le {formatDate(insight.createdAt)}
               </p>
               {insight.audioUrl && (
@@ -183,7 +183,7 @@ function InsightCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300"
+                  className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-500"
                 >
                   <Volume2 className="w-3 h-3" />
                   Écouter

@@ -30,10 +30,10 @@ function MetricBar({ label, value, max, color }: { label: string; value: number;
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-stellar-400">{label}</span>
-        <span className="text-xs font-medium text-stellar-100">{value}/{max}</span>
+        <span className="text-xs text-desk-muted">{label}</span>
+        <span className="text-xs font-medium text-desk-text">{value}/{max}</span>
       </div>
-      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-desk-card rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${colorMap[color] || colorMap.amber} transition-all duration-500`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -47,22 +47,22 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
     <div className="space-y-6">
       {/* Engagement Dashboard */}
       <div>
-        <h4 className="text-sm font-medium text-stellar-100 mb-3 flex items-center gap-2">
-          <Activity className="w-4 h-4 text-amber-400" />
+        <h4 className="text-sm font-medium text-desk-text mb-3 flex items-center gap-2">
+          <Activity className="w-4 h-4 text-amber-600" />
           Métriques d&apos;Engagement
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Score global */}
-          <div className="p-4 bg-gradient-to-br from-amber-500/10 to-slate-900/60 border border-amber-500/20 rounded-xl text-center">
-            <p className="text-4xl font-bold text-amber-400">{stats.engagementScore}</p>
-            <p className="text-xs text-stellar-400 mt-1">Score d&apos;engagement /100</p>
-            <p className="text-[10px] text-stellar-400/60 mt-2">
+          <div className="p-4 bg-gradient-to-br from-amber-500/10 to-desk-surface/60 border border-amber-500/20 rounded-xl text-center">
+            <p className="text-4xl font-bold text-amber-600">{stats.engagementScore}</p>
+            <p className="text-xs text-desk-muted mt-1">Score d&apos;engagement /100</p>
+            <p className="text-[10px] text-desk-subtle mt-2">
               30% étapes · 25% insights · 25% chat · 20% rêves
             </p>
           </div>
 
           {/* Dimension breakdown */}
-          <div className="p-4 bg-white/5 rounded-xl space-y-3">
+          <div className="p-4 bg-desk-hover rounded-xl space-y-3">
             <MetricBar label="Étapes complétées" value={stats.stepsCompleted} max={stats.stepsTotal || 7} color="amber" />
             <MetricBar label="Insights consultés" value={stats.insightsViewed} max={stats.insightsTotal || 8} color="purple" />
             <MetricBar label="Messages chat" value={stats.chatMessagesTotal} max={20} color="blue" />
@@ -74,34 +74,34 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
       {/* Subscription + Recency Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Subscription Card */}
-        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-          <h4 className="text-sm font-medium text-stellar-100 mb-3 flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-emerald-400" />
+        <div className="p-4 bg-desk-hover rounded-xl border border-desk-border-subtle">
+          <h4 className="text-sm font-medium text-desk-text mb-3 flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-emerald-600" />
             Abonnement
           </h4>
           {subscription ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-stellar-400">Statut</span>
+                <span className="text-xs text-desk-muted">Statut</span>
                 <SubscriptionStatusBadge status={stats.subscriptionStatus} />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-stellar-400">Expiration</span>
-                <span className="text-xs text-stellar-100">
+                <span className="text-xs text-desk-muted">Expiration</span>
+                <span className="text-xs text-desk-text">
                   {new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
               </div>
               {stats.subscriptionDaysLeft !== null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-stellar-400">Jours restants</span>
-                  <span className={`text-xs font-bold ${stats.subscriptionDaysLeft > 7 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <span className="text-xs text-desk-muted">Jours restants</span>
+                  <span className={`text-xs font-bold ${stats.subscriptionDaysLeft > 7 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {stats.subscriptionDaysLeft}j
                   </span>
                 </div>
               )}
               {subscription.cancelAtPeriodEnd && (
                 <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                  <p className="text-xs text-amber-400 flex items-center gap-1">
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" />
                     Résiliation programmée à la fin de la période
                   </p>
@@ -110,44 +110,44 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-sm text-stellar-400">Non abonné</p>
-              <p className="text-xs text-stellar-400/60 mt-1">Achat unique uniquement</p>
+              <p className="text-sm text-desk-muted">Non abonné</p>
+              <p className="text-xs text-desk-subtle mt-1">Achat unique uniquement</p>
             </div>
           )}
         </div>
 
         {/* Recency Card */}
-        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-          <h4 className="text-sm font-medium text-stellar-100 mb-3 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-400" />
+        <div className="p-4 bg-desk-hover rounded-xl border border-desk-border-subtle">
+          <h4 className="text-sm font-medium text-desk-text mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-600" />
             Récence
           </h4>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-stellar-400">Dernière activité</span>
+              <span className="text-xs text-desk-muted">Dernière activité</span>
               <span className={`text-sm font-bold ${
-                stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 7 ? 'text-emerald-400' :
-                stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 30 ? 'text-amber-400' :
-                'text-red-400'
+                stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 7 ? 'text-emerald-600' :
+                stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 30 ? 'text-amber-600' :
+                'text-red-600'
               }`}>
                 {stats.daysSinceLastActivity !== null ? `Il y a ${stats.daysSinceLastActivity}j` : '—'}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-stellar-400">Type</span>
-              <span className="text-xs text-stellar-100 capitalize">
+              <span className="text-xs text-desk-muted">Type</span>
+              <span className="text-xs text-desk-text capitalize">
                 {activityTypeLabel(stats.lastActivityType)}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-stellar-400">Profil complété</span>
-              <span className={`text-xs font-bold ${stats.profileCompleteness >= 70 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span className="text-xs text-desk-muted">Profil complété</span>
+              <span className={`text-xs font-bold ${stats.profileCompleteness >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>
                 {stats.profileCompleteness}%
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-stellar-400">Couverture audio</span>
-              <span className="text-xs text-stellar-100">{stats.audioCoverage}%</span>
+              <span className="text-xs text-desk-muted">Couverture audio</span>
+              <span className="text-xs text-desk-text">{stats.audioCoverage}%</span>
             </div>
           </div>
         </div>
@@ -155,15 +155,15 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
 
       {/* Upsell History */}
       <div>
-        <h4 className="text-sm font-medium text-stellar-100 mb-3 flex items-center gap-2">
-          <ShoppingCart className="w-4 h-4 text-emerald-400" />
+        <h4 className="text-sm font-medium text-desk-text mb-3 flex items-center gap-2">
+          <ShoppingCart className="w-4 h-4 text-emerald-600" />
           Historique Upsell
         </h4>
         {stats.upsellHistory.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-stellar-400 border-b border-white/10">
+                <tr className="text-desk-muted border-b border-desk-border">
                   <th className="text-left py-2 px-3">Type</th>
                   <th className="text-left py-2 px-3">Proposé le</th>
                   <th className="text-left py-2 px-3">Accepté le</th>
@@ -172,21 +172,21 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
               </thead>
               <tbody>
                 {stats.upsellHistory.map((item, i) => (
-                  <tr key={i} className="border-b border-white/5">
-                    <td className="py-2 px-3 text-stellar-100 font-mono">{item.type}</td>
-                    <td className="py-2 px-3 text-stellar-400">
+                  <tr key={i} className="border-b border-desk-border-subtle">
+                    <td className="py-2 px-3 text-desk-text font-mono">{item.type}</td>
+                    <td className="py-2 px-3 text-desk-muted">
                       {item.offeredAt ? formatDate(item.offeredAt) : '—'}
                     </td>
-                    <td className="py-2 px-3 text-stellar-400">
+                    <td className="py-2 px-3 text-desk-muted">
                       {item.acceptedAt ? formatDate(item.acceptedAt) : '—'}
                     </td>
                     <td className="py-2 px-3">
                       {item.acceptedAt ? (
-                        <span className="flex items-center gap-1 text-emerald-400">
+                        <span className="flex items-center gap-1 text-emerald-600">
                           <CheckCircle className="w-3 h-3" /> Accepté
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-amber-400">
+                        <span className="flex items-center gap-1 text-amber-600">
                           <Clock className="w-3 h-3" /> En attente
                         </span>
                       )}
@@ -197,16 +197,16 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
             </table>
           </div>
         ) : (
-          <div className="text-center py-6 bg-white/[0.02] rounded-lg">
-            <p className="text-sm text-stellar-400">Aucun upsell proposé</p>
+          <div className="text-center py-6 bg-desk-bg rounded-lg">
+            <p className="text-sm text-desk-muted">Aucun upsell proposé</p>
           </div>
         )}
       </div>
 
       {/* Key Signals */}
       <div>
-        <h4 className="text-sm font-medium text-stellar-100 mb-3 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-amber-400" />
+        <h4 className="text-sm font-medium text-desk-text mb-3 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-amber-600" />
           Signaux Clés
         </h4>
         <div className="space-y-2">
@@ -236,35 +236,35 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
 
       {/* Chat Sessions */}
       <div>
-        <h4 className="text-sm font-medium text-stellar-100 mb-3 flex items-center gap-2">
-          <MessageCircle className="w-4 h-4 text-blue-400" />
+        <h4 className="text-sm font-medium text-desk-text mb-3 flex items-center gap-2">
+          <MessageCircle className="w-4 h-4 text-blue-600" />
           Conversations
           {chatSessions.length > 0 && (
-            <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded-full">{chatSessions.length}</span>
+            <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-600 rounded-full">{chatSessions.length}</span>
           )}
         </h4>
         {chatSessions.length > 0 ? (
           <div className="space-y-2">
             {chatSessions.map((session) => (
-              <div key={session.id} className="p-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors">
+              <div key={session.id} className="p-3 bg-desk-hover hover:bg-desk-card rounded-lg transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-stellar-100">{session.title || 'Conversation'}</p>
-                    <p className="text-xs text-stellar-400">{session.messagesCount} messages</p>
+                    <p className="text-sm font-medium text-desk-text">{session.title || 'Conversation'}</p>
+                    <p className="text-xs text-desk-muted">{session.messagesCount} messages</p>
                   </div>
                   <div className="text-right flex items-center gap-2">
-                    <p className="text-xs text-stellar-400">
+                    <p className="text-xs text-desk-muted">
                       {session.lastMessageAt ? formatDate(session.lastMessageAt) : formatDate(session.createdAt)}
                     </p>
-                    <ChevronRight className="w-4 h-4 text-stellar-400" />
+                    <ChevronRight className="w-4 h-4 text-desk-muted" />
                   </div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-6 bg-white/[0.02] rounded-lg">
-            <p className="text-sm text-stellar-400 italic">Aucune conversation avec l&apos;Oracle...</p>
+          <div className="text-center py-6 bg-desk-bg rounded-lg">
+            <p className="text-sm text-desk-muted italic">Aucune conversation avec l&apos;Oracle...</p>
           </div>
         )}
       </div>
@@ -274,10 +274,10 @@ export function TabIntelligence({ client }: TabIntelligenceProps) {
 
 function Signal({ type, text }: { type: 'warning' | 'danger' | 'info' | 'success'; text: string }) {
   const styles = {
-    warning: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
-    danger: 'bg-red-500/10 border-red-500/20 text-red-400',
-    info: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
-    success: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+    warning: 'bg-amber-500/10 border-amber-500/20 text-amber-600',
+    danger: 'bg-red-500/10 border-red-500/20 text-red-600',
+    info: 'bg-blue-500/10 border-blue-500/20 text-blue-600',
+    success: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600',
   };
   const icons = {
     warning: <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />,
@@ -296,10 +296,10 @@ function Signal({ type, text }: { type: 'warning' | 'danger' | 'info' | 'success
 
 function SubscriptionStatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; cls: string }> = {
-    active: { label: 'Actif', cls: 'bg-emerald-500/20 text-emerald-400' },
-    canceling: { label: 'Résiliation', cls: 'bg-amber-500/20 text-amber-400' },
-    expired: { label: 'Expiré', cls: 'bg-red-500/20 text-red-400' },
-    none: { label: 'Aucun', cls: 'bg-white/10 text-stellar-400' },
+    active: { label: 'Actif', cls: 'bg-emerald-500/20 text-emerald-600' },
+    canceling: { label: 'Résiliation', cls: 'bg-amber-500/20 text-amber-600' },
+    expired: { label: 'Expiré', cls: 'bg-red-500/20 text-red-600' },
+    none: { label: 'Aucun', cls: 'bg-desk-card text-desk-muted' },
   };
   const c = config[status] || config.none;
   return <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${c.cls}`}>{c.label}</span>;

@@ -48,11 +48,11 @@ export default function DashboardPage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Sparkles className="w-7 h-7 text-amber-400" />
+          <h1 className="text-2xl font-bold text-desk-text flex items-center gap-3">
+            <Sparkles className="w-7 h-7 text-amber-600" />
             {greeting}, Expert
           </h1>
-          <p className="text-slate-400 mt-1 flex items-center gap-2">
+          <p className="text-desk-muted mt-1 flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             {today}
           </p>
@@ -60,8 +60,8 @@ export default function DashboardPage() {
 
         {/* Quick summary */}
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-          <TrendingUp className="w-5 h-5 text-emerald-400" />
-          <span className="text-sm text-emerald-400 font-medium">
+          <TrendingUp className="w-5 h-5 text-emerald-600" />
+          <span className="text-sm text-emerald-600 font-medium">
             {stats.completedToday} lectures aujourd&apos;hui
           </span>
         </div>
@@ -69,7 +69,7 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <section>
-        <h2 className="text-sm font-medium text-slate-400 mb-3">Vue d&apos;ensemble</h2>
+        <h2 className="text-sm font-medium text-desk-muted mb-3">Vue d&apos;ensemble</h2>
         <StatsGrid stats={stats} isLoading={isLoading} />
       </section>
 
@@ -77,13 +77,13 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Activity Feed - 2 columns */}
         <div className="lg:col-span-2">
-          <h2 className="text-sm font-medium text-slate-400 mb-3">Activité récente</h2>
+          <h2 className="text-sm font-medium text-desk-muted mb-3">Activité récente</h2>
           <ActivityFeed items={activityItems} isLoading={activityLoading} />
         </div>
 
         {/* Quick Actions - 1 column */}
         <div>
-          <h2 className="text-sm font-medium text-slate-400 mb-3">Actions rapides</h2>
+          <h2 className="text-sm font-medium text-desk-muted mb-3">Actions rapides</h2>
           <QuickActions />
         </div>
       </div>

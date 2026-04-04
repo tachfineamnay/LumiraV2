@@ -32,19 +32,19 @@ export function AkashicSummary({ client }: AkashicSummaryProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
-      className="bg-slate-800/50 border border-white/10 rounded-xl overflow-hidden min-h-[600px]"
+      className="bg-desk-surface border border-desk-border rounded-xl overflow-hidden min-h-[600px] shadow-sm"
     >
       {/* Header */}
-      <div className="p-4 border-b border-white/10">
-        <h3 className="text-lg font-semibold text-stellar-100 flex items-center gap-2">
-          <BookOpen className="w-5 h-5 text-purple-400" />
+      <div className="p-4 border-b border-desk-border">
+        <h3 className="text-lg font-semibold text-desk-text flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-purple-600" />
           Les Annales Akashiques
         </h3>
-        <p className="text-xs text-stellar-400 mt-1">Mémoire spirituelle et insights de l'âme</p>
+        <p className="text-xs text-desk-muted mt-1">Mémoire spirituelle et insights de l'âme</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-white/10">
+      <div className="flex border-b border-desk-border">
         <TabButton 
           active={activeTab === 'insights'} 
           onClick={() => setActiveTab('insights')}
@@ -115,17 +115,17 @@ export function AkashicSummary({ client }: AkashicSummaryProps) {
                   {/* Archetype */}
                   {akashicRecord.archetype && (
                     <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
-                      <p className="text-xs text-purple-400/70 mb-1">Archétype Identifié</p>
-                      <p className="text-xl font-semibold text-purple-300">{akashicRecord.archetype}</p>
+                      <p className="text-xs text-purple-600/70 mb-1">Archétype Identifié</p>
+                      <p className="text-xl font-semibold text-purple-600">{akashicRecord.archetype}</p>
                     </div>
                   )}
 
                   {/* Domain Data */}
                   {akashicRecord.domainData && Object.keys(akashicRecord.domainData).length > 0 && (
                     <div className="space-y-3">
-                      <p className="text-sm font-medium text-stellar-100">Données des Domaines</p>
-                      <div className="p-4 bg-white/5 rounded-lg">
-                        <pre className="text-xs text-stellar-300 whitespace-pre-wrap overflow-x-auto">
+                      <p className="text-sm font-medium text-desk-text">Données des Domaines</p>
+                      <div className="p-4 bg-desk-hover rounded-lg">
+                        <pre className="text-xs text-desk-text whitespace-pre-wrap overflow-x-auto">
                           {JSON.stringify(akashicRecord.domainData, null, 2)}
                         </pre>
                       </div>
@@ -135,16 +135,16 @@ export function AkashicSummary({ client }: AkashicSummaryProps) {
                   {/* Interaction History */}
                   {akashicRecord.interactionHistory && akashicRecord.interactionHistory.length > 0 && (
                     <div className="space-y-3">
-                      <p className="text-sm font-medium text-stellar-100">Historique des Interactions</p>
+                      <p className="text-sm font-medium text-desk-text">Historique des Interactions</p>
                       <div className="space-y-2">
                         {akashicRecord.interactionHistory.slice(0, 5).map((interaction, i) => (
-                          <div key={i} className="p-3 bg-white/5 rounded-lg flex items-start gap-3">
+                          <div key={i} className="p-3 bg-desk-hover rounded-lg flex items-start gap-3">
                             <div className="p-1.5 bg-amber-500/20 rounded">
-                              <Clock className="w-3 h-3 text-amber-400" />
+                              <Clock className="w-3 h-3 text-amber-600" />
                             </div>
                             <div>
-                              <p className="text-xs text-stellar-400">{interaction.date}</p>
-                              <p className="text-sm text-stellar-100">{interaction.summary}</p>
+                              <p className="text-xs text-desk-muted">{interaction.date}</p>
+                              <p className="text-sm text-desk-text">{interaction.summary}</p>
                             </div>
                           </div>
                         ))}
@@ -155,18 +155,18 @@ export function AkashicSummary({ client }: AkashicSummaryProps) {
                   {/* Spiritual Path */}
                   {spiritualPath && (
                     <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                      <p className="text-sm font-medium text-amber-400 mb-2">Parcours Spirituel</p>
+                      <p className="text-sm font-medium text-amber-600 mb-2">Parcours Spirituel</p>
                       <div className="flex items-center gap-4">
                         <div>
-                          <p className="text-xs text-stellar-400">Progression</p>
-                          <p className="text-lg font-bold text-stellar-100">
+                          <p className="text-xs text-desk-muted">Progression</p>
+                          <p className="text-lg font-bold text-desk-text">
                             {spiritualPath.steps.filter(s => s.isCompleted).length}/{spiritualPath.steps.length} étapes
                           </p>
                         </div>
                         {spiritualPath.keyBlockage && (
-                          <div className="flex-1 border-l border-white/10 pl-4">
-                            <p className="text-xs text-stellar-400">Blocage clé</p>
-                            <p className="text-sm text-stellar-100">{spiritualPath.keyBlockage}</p>
+                          <div className="flex-1 border-l border-desk-border pl-4">
+                            <p className="text-xs text-desk-muted">Blocage clé</p>
+                            <p className="text-sm text-desk-text">{spiritualPath.keyBlockage}</p>
                           </div>
                         )}
                       </div>
@@ -191,22 +191,22 @@ export function AkashicSummary({ client }: AkashicSummaryProps) {
                   {chatSessions.map((session) => (
                     <div 
                       key={session.id}
-                      className="p-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                      className="p-3 bg-desk-hover hover:bg-desk-card rounded-lg transition-colors cursor-pointer"
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-stellar-100">
+                          <p className="text-sm font-medium text-desk-text">
                             {session.title || 'Conversation'}
                           </p>
-                          <p className="text-xs text-stellar-400">
+                          <p className="text-xs text-desk-muted">
                             {session.messagesCount} messages
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-stellar-400">
+                          <p className="text-xs text-desk-muted">
                             {session.lastMessageAt ? formatDate(session.lastMessageAt) : formatDate(session.createdAt)}
                           </p>
-                          <ChevronRight className="w-4 h-4 text-stellar-400 ml-auto" />
+                          <ChevronRight className="w-4 h-4 text-desk-muted ml-auto" />
                         </div>
                       </div>
                     </div>
@@ -243,8 +243,8 @@ function TabButton({
       className={`
         flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors
         ${active 
-          ? 'text-amber-400 border-b-2 border-amber-400 bg-amber-500/5' 
-          : 'text-stellar-400 hover:text-stellar-100 hover:bg-white/5'
+          ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-500/5' 
+          : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover'
         }
       `}
     >
@@ -253,7 +253,7 @@ function TabButton({
       {count !== undefined && count > 0 && (
         <span className={`
           px-1.5 py-0.5 text-xs rounded-full
-          ${active ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-stellar-400'}
+          ${active ? 'bg-amber-500/20 text-amber-600' : 'bg-desk-card text-desk-muted'}
         `}>
           {count}
         </span>
@@ -290,9 +290,9 @@ function InsightCard({
       <div className={`p-3 rounded-lg border opacity-40 ${colorClasses[config.color]}`}>
         <div className="flex items-center gap-2">
           <span className="text-lg">{config.icon}</span>
-          <span className="text-sm text-stellar-400">{config.label}</span>
+          <span className="text-sm text-desk-muted">{config.label}</span>
         </div>
-        <p className="text-xs text-stellar-400/60 mt-1 italic">Non révélé</p>
+        <p className="text-xs text-desk-muted/60 mt-1 italic">Non révélé</p>
       </div>
     );
   }
@@ -306,16 +306,16 @@ function InsightCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-lg">{config.icon}</span>
-          <span className="text-sm font-medium text-stellar-100">{config.label}</span>
+          <span className="text-sm font-medium text-desk-text">{config.label}</span>
         </div>
         {!insight.viewedAt && (
-          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full">
+          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-600 text-xs rounded-full">
             Nouveau
           </span>
         )}
       </div>
       
-      <p className="text-xs text-stellar-300 mt-2 line-clamp-2">{insight.summary}</p>
+      <p className="text-xs text-desk-text mt-2 line-clamp-2">{insight.summary}</p>
       
       <AnimatePresence>
         {isExpanded && (
@@ -323,10 +323,10 @@ function InsightCard({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-3 pt-3 border-t border-white/10"
+            className="mt-3 pt-3 border-t border-desk-border"
           >
-            <p className="text-sm text-stellar-100 whitespace-pre-wrap">{insight.fullText}</p>
-            <p className="text-xs text-stellar-400 mt-2">
+            <p className="text-sm text-desk-text whitespace-pre-wrap">{insight.fullText}</p>
+            <p className="text-xs text-desk-muted mt-2">
               Généré le {formatDate(insight.createdAt)}
             </p>
           </motion.div>
@@ -341,9 +341,9 @@ function EmptyAkashic({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center mb-4">
-        <Eye className="w-8 h-8 text-purple-400/50" />
+        <Eye className="w-8 h-8 text-purple-600/50" />
       </div>
-      <p className="text-sm text-stellar-400 italic max-w-xs">{message}</p>
+      <p className="text-sm text-desk-muted italic max-w-xs">{message}</p>
     </div>
   );
 }

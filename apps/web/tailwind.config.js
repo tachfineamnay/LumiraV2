@@ -95,6 +95,21 @@ module.exports = {
                     500: "#f59e0b",
                     600: "#d97706",
                 },
+
+                // Desk admin light theme
+                desk: {
+                    bg: "#f8fafc",
+                    surface: "#ffffff",
+                    card: "#f1f5f9",
+                    hover: "#e2e8f0",
+                    input: "#ffffff",
+                    border: "#e2e8f0",
+                    "border-subtle": "#f1f5f9",
+                    text: "#0f172a",
+                    muted: "#64748b",
+                    subtle: "#94a3b8",
+                    accent: "#f59e0b",
+                },
             },
             fontFamily: {
                 playfair: ["var(--font-playfair)", "serif"],

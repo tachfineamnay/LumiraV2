@@ -49,8 +49,8 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
       className={`
         group relative rounded-xl border transition-all duration-200
         ${isBeingDragged 
-          ? 'bg-slate-800 border-amber-500/50 shadow-xl shadow-amber-500/10 scale-105 rotate-2 cursor-grabbing z-50' 
-          : 'bg-slate-800/50 border-white/5 hover:border-white/10 hover:bg-slate-800/80 cursor-pointer'
+          ? 'bg-desk-surface border-amber-500/50 shadow-xl shadow-amber-500/10 scale-105 rotate-2 cursor-grabbing z-50' 
+          : 'bg-desk-surface border-desk-border hover:border-desk-border hover:bg-desk-card cursor-pointer'
         }
       `}
       onClick={!isBeingDragged ? handleClick : undefined}
@@ -60,10 +60,10 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
         {...attributes}
         {...listeners}
         className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100
-                   hover:bg-white/5 cursor-grab active:cursor-grabbing transition-opacity"
+                   hover:bg-desk-hover cursor-grab active:cursor-grabbing transition-opacity"
         onClick={e => e.stopPropagation()}
       >
-        <GripVertical className="w-4 h-4 text-slate-500" />
+        <GripVertical className="w-4 h-4 text-desk-subtle" />
       </div>
 
       {/* Content */}
@@ -73,7 +73,7 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-lg">{levelConfig.icon}</span>
-              <span className="font-mono text-sm font-medium text-white">
+              <span className="font-mono text-sm font-medium text-desk-text">
                 {order.orderNumber}
               </span>
             </div>
@@ -84,40 +84,40 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
               {levelConfig.name}
             </span>
           </div>
-          <span className="text-lg font-semibold text-amber-400">
+          <span className="text-lg font-semibold text-amber-600">
             {(order.amount / 100).toFixed(0)}€
           </span>
         </div>
 
         {/* Client info */}
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 
                           flex items-center justify-center text-xs font-medium text-white">
             {order.user.firstName?.[0]}{order.user.lastName?.[0]}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-white truncate">
+            <div className="text-sm font-medium text-desk-text truncate">
               {order.user.firstName} {order.user.lastName}
             </div>
-            <div className="text-xs text-slate-500 truncate">
+            <div className="text-xs text-desk-subtle truncate">
               {order.user.email}
             </div>
           </div>
         </div>
 
         {/* Meta */}
-        <div className="flex items-center gap-4 text-xs text-slate-500">
+        <div className="flex items-center gap-4 text-xs text-desk-subtle">
           <div className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" />
             <span>{timeAgo}</span>
           </div>
           {order.status === 'AWAITING_VALIDATION' ? (
-            <div className="flex items-center gap-1 text-purple-400 animate-pulse">
+            <div className="flex items-center gap-1 text-purple-600 animate-pulse">
               <Eye className="w-3.5 h-3.5" />
               <span>À valider</span>
             </div>
           ) : order.generatedContent ? (
-            <div className="flex items-center gap-1 text-emerald-400">
+            <div className="flex items-center gap-1 text-emerald-600">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Généré</span>
             </div>
@@ -126,8 +126,8 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
 
         {/* Question preview */}
         {order.user.profile?.specificQuestion && (
-          <div className="mt-3 p-2 rounded-lg bg-slate-900/50 border border-white/5">
-            <p className="text-xs text-slate-400 line-clamp-2">
+          <div className="mt-3 p-2 rounded-lg bg-desk-card border border-desk-border">
+            <p className="text-xs text-desk-muted line-clamp-2">
               &quot;{order.user.profile.specificQuestion}&quot;
             </p>
           </div>
@@ -136,7 +136,7 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
 
       {/* Hover action */}
       <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="flex items-center gap-1 text-xs text-amber-400">
+        <div className="flex items-center gap-1 text-xs text-amber-600">
           <span>Ouvrir</span>
           <ExternalLink className="w-3 h-3" />
         </div>
@@ -148,14 +148,14 @@ export function OrderCard({ order, isDragging }: OrderCardProps) {
 function getLevelBadgeColor(level: number): string {
   switch (level) {
     case 1:
-      return 'bg-emerald-500/20 text-emerald-400';
+      return 'bg-emerald-500/20 text-emerald-600';
     case 2:
-      return 'bg-blue-500/20 text-blue-400';
+      return 'bg-blue-500/20 text-blue-600';
     case 3:
-      return 'bg-purple-500/20 text-purple-400';
+      return 'bg-purple-500/20 text-purple-600';
     case 4:
-      return 'bg-amber-500/20 text-amber-400';
+      return 'bg-amber-500/20 text-amber-600';
     default:
-      return 'bg-slate-500/20 text-slate-400';
+      return 'bg-slate-500/20 text-slate-600';
   }
 }

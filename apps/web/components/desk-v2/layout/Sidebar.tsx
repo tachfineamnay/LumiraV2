@@ -62,10 +62,10 @@ export function Sidebar() {
       initial={false}
       animate={{ width: isCollapsed ? 72 : 240 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative flex flex-col bg-slate-900/50 border-r border-white/5"
+      className="relative flex flex-col bg-desk-surface border-r border-desk-border"
     >
       {/* Logo */}
-      <div className="h-16 flex items-center px-4 border-b border-white/5">
+      <div className="h-16 flex items-center px-4 border-b border-desk-border">
         <Link href="/admin" className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-white" />
@@ -76,7 +76,7 @@ export function Sidebar() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                className="font-semibold text-lg text-white"
+                className="font-semibold text-lg text-desk-text"
               >
                 Oracle Desk
               </motion.span>
@@ -100,12 +100,12 @@ export function Sidebar() {
                 group relative flex items-center gap-3 px-3 py-2.5 rounded-lg
                 transition-all duration-150
                 ${isActive 
-                  ? 'bg-amber-500/10 text-amber-400' 
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  ? 'bg-amber-500/10 text-amber-600' 
+                  : 'text-desk-muted hover:bg-desk-hover hover:text-desk-text'
                 }
               `}
             >
-              <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-amber-400' : ''}`} />
+              <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-amber-600' : ''}`} />
               
               <AnimatePresence>
                 {!isCollapsed && (
@@ -140,7 +140,7 @@ export function Sidebar() {
               {isActive && (
                 <motion.div
                   layoutId="sidebar-active"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-amber-400 rounded-r-full"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-amber-500 rounded-r-full"
                 />
               )}
             </Link>
@@ -151,9 +151,9 @@ export function Sidebar() {
       {/* Collapse toggle */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-slate-800 border border-white/10 
-                   flex items-center justify-center text-slate-400 hover:text-white
-                   transition-colors z-10"
+        className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-desk-surface border border-desk-border 
+                   flex items-center justify-center text-desk-muted hover:text-desk-text
+                   transition-colors z-10 shadow-sm"
       >
         {isCollapsed ? (
           <ChevronRight className="w-3.5 h-3.5" />
@@ -163,12 +163,12 @@ export function Sidebar() {
       </button>
 
       {/* Bottom section */}
-      <div className="p-3 border-t border-white/5">
+      <div className="p-3 border-t border-desk-border">
         <button
           onClick={handleLogout}
           className={`
             w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
-            text-slate-400 hover:bg-red-500/10 hover:text-red-400
+            text-desk-muted hover:bg-red-500/10 hover:text-red-600
             transition-all duration-150
           `}
         >
