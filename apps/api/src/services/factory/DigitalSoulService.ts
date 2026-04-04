@@ -11,13 +11,13 @@
  * @module services/factory/DigitalSoulService
  */
 
-import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VertexOracle, OracleResponse, UserProfile, OrderContext } from './VertexOracle';
 import { PdfFactory, ReadingPdfData } from './PdfFactory';
 import { AudioGenerationService } from './AudioGenerationService';
-import { PathActionType } from '@prisma/client';
+import { PathActionType, InsightCategory } from '@prisma/client';
 
 // S3 upload dependencies
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -120,10 +120,11 @@ export class DigitalSoulService {
                 throw new BadRequestException(`Order not ready for generation: ${order.status}`);
             }
 
-            await this.prisma.order.update({
-                where: { id: orderId },
-                data: { status: 'PROCESSING', errorLog: null },
-            });
+            // Atomic status transition to prevent concurrent processing
+            const locked = await this.acquireProcessingLock(orderId, validContentStatuses);
+            if (!locked) {
+                throw new ConflictException(`Order ${orderId} is already being processed by another request`);
+            }
 
             const user = order.user;
             const profile = user.profile;
@@ -367,15 +368,20 @@ export class DigitalSoulService {
             pdfUrl = `/api/readings/${order.orderNumber}/download`;
             this.logger.log(`☁️ PDF uploaded to S3: ${pdfKey}`);
             this.logger.log(`🔗 Access URL: ${pdfUrl}`);
-        } catch {
-            this.logger.warn(`⚠️ S3 upload failed, using fallback URL`);
-            pdfUrl = `/api/readings/${order.orderNumber}/download`;
+        } catch (error) {
+            const errorMsg = `S3 upload failed: ${error instanceof Error ? error.message : String(error)}`;
+            this.logger.error(`❌ ${errorMsg}`);
+            await this.saveErrorAndFail(orderId, errorMsg);
+            throw new BadRequestException(errorMsg);
         }
 
         // Get spiritualPath ID
         const spiritualPath = await this.prisma.spiritualPath.findUnique({
             where: { userId: user.id },
         });
+
+        // Upsert Insights from AI sections
+        await this.upsertInsightsFromSections(user.id, orderId, aiResponse);
 
         // Finalize order
         await this.prisma.order.update({
@@ -499,12 +505,12 @@ export class DigitalSoulService {
                 throw new BadRequestException(`Order ${orderId} is not in a valid state for generation: ${order.status}`);
             }
 
-            // Update order status to PROCESSING
-            await this.prisma.order.update({
-                where: { id: orderId },
-                data: { status: 'PROCESSING', errorLog: null },
-            });
-            this.logger.log(`   📝 Status updated to PROCESSING`);
+            // Atomic status transition to prevent concurrent processing
+            const locked = await this.acquireProcessingLock(orderId, validStatuses);
+            if (!locked) {
+                throw new ConflictException(`Order ${orderId} is already being processed by another request`);
+            }
+            this.logger.log(`   📝 Status updated to PROCESSING (lock acquired)`);
 
             const user = order.user;
             const profile = user.profile;
@@ -590,33 +596,7 @@ export class DigitalSoulService {
             // ==========================================================================
             this.logger.log(`\n🔍 STEP 3: Validating AI response...`);
             
-            const validationErrors: string[] = [];
-            
-            if (!aiResponse.pdf_content) {
-                validationErrors.push('Missing pdf_content');
-            } else {
-                if (!aiResponse.pdf_content.introduction || aiResponse.pdf_content.introduction.length < 50) {
-                    validationErrors.push('Introduction is empty or too short');
-                }
-                if (!aiResponse.pdf_content.sections || aiResponse.pdf_content.sections.length === 0) {
-                    validationErrors.push('No sections in pdf_content');
-                }
-                if (!aiResponse.pdf_content.conclusion || aiResponse.pdf_content.conclusion.length < 20) {
-                    validationErrors.push('Conclusion is empty or too short');
-                }
-            }
-            
-            if (!aiResponse.synthesis) {
-                validationErrors.push('Missing synthesis');
-            } else {
-                if (!aiResponse.synthesis.archetype) {
-                    validationErrors.push('Missing archetype in synthesis');
-                }
-            }
-            
-            if (!aiResponse.timeline || aiResponse.timeline.length === 0) {
-                validationErrors.push('Missing or empty timeline');
-            }
+            const validationErrors = this.validateAiResponse(aiResponse);
 
             if (validationErrors.length > 0) {
                 const errorMsg = `AI returned invalid content: ${validationErrors.join('; ')}`;
@@ -626,13 +606,6 @@ export class DigitalSoulService {
             }
 
             this.logger.log(`   ✅ Validation passed - all required fields present`);
-
-            // Save generated content to order
-            await this.prisma.order.update({
-                where: { id: orderId },
-                data: { generatedContent: aiResponse as object },
-            });
-            this.logger.log(`   💾 AI content saved to order.generatedContent`);
 
             // ==========================================================================
             // STEP 4: Database Updates (Transaction)
@@ -786,24 +759,25 @@ export class DigitalSoulService {
                 this.logger.log(`   🔗 Access URL: ${pdfUrl}`);
                 this.logger.log(`   ⏱️ S3 upload took: ${s3Elapsed}ms`);
             } catch (error) {
-                this.logger.warn(`\n⚠️ STEP 6 WARNING: S3 upload failed, using fallback`);
-                this.logger.warn(`   Error: ${error instanceof Error ? error.message : String(error)}`);
-                // Use local fallback URL
-                pdfUrl = `/api/readings/${order.orderNumber}/download`;
-                this.logger.log(`   🔗 Fallback URL: ${pdfUrl}`);
+                const errorMsg = `S3 upload failed: ${error instanceof Error ? error.message : String(error)}`;
+                this.logger.error(`\n❌ STEP 6 FAILED: ${errorMsg}`);
+                await this.saveErrorAndFail(orderId, errorMsg);
+                throw new BadRequestException(errorMsg);
             }
 
             // ==========================================================================
-            // STEP 7: Final Order Update
+            // STEP 7: Upsert Insights + Final Order Update
             // ==========================================================================
-            this.logger.log(`\n💾 STEP 7: Finalizing order...`);
+            this.logger.log(`\n💾 STEP 7: Upserting Insights and finalizing order...`);
+
+            await this.upsertInsightsFromSections(user.id, orderId, aiResponse);
 
             await this.prisma.order.update({
                 where: { id: orderId },
                 data: {
                     status: 'COMPLETED',
                     deliveredAt: new Date(),
-                    errorLog: null, // Clear any previous errors
+                    errorLog: null,
                     generatedContent: {
                         ...aiResponse,
                         pdfUrl,
@@ -897,5 +871,75 @@ export class DigitalSoulService {
         if (amountCents <= 5900) return { level: 2, productName: 'Mystique' };
         if (amountCents <= 9900) return { level: 3, productName: 'Profond' };
         return { level: 4, productName: 'Intégral' };
+    }
+
+    /**
+     * Atomic optimistic lock: transitions order to PROCESSING only if current status is in allowedStatuses.
+     * Returns true if lock acquired, false if another request got there first.
+     */
+    private async acquireProcessingLock(orderId: string, allowedStatuses: string[]): Promise<boolean> {
+        const result = await this.prisma.$executeRawUnsafe(
+            `UPDATE "Order" SET status = 'PROCESSING', "errorLog" = NULL, "updatedAt" = NOW()
+             WHERE id = $1 AND status = ANY($2::text[])`,
+            orderId,
+            allowedStatuses,
+        );
+        return result > 0;
+    }
+
+    /**
+     * Maps AI pdf_content.sections to Insight records (one per category).
+     * Each section.domain must match an InsightCategory enum value.
+     */
+    private async upsertInsightsFromSections(
+        userId: string,
+        orderId: string,
+        aiResponse: OracleResponse,
+    ): Promise<number> {
+        const validCategories = new Set([
+            'SPIRITUEL', 'RELATIONS', 'MISSION', 'CREATIVITE',
+            'EMOTIONS', 'TRAVAIL', 'SANTE', 'FINANCE',
+        ]);
+
+        const sections = aiResponse.pdf_content?.sections || [];
+        const matchedSections = sections.filter((s) =>
+            validCategories.has(s.domain?.toUpperCase()),
+        );
+
+        if (matchedSections.length === 0) {
+            this.logger.warn(`⚠️ No sections matched InsightCategory domains — skipping Insight upsert`);
+            return 0;
+        }
+
+        const operations = matchedSections.map((section) => {
+            const category = section.domain.toUpperCase() as InsightCategory;
+            // Short = first 300 chars of content, Full = entire content
+            const short = section.content.length > 300
+                ? section.content.slice(0, 297) + '...'
+                : section.content;
+
+            return this.prisma.insight.upsert({
+                where: { userId_category: { userId, category } },
+                create: {
+                    userId,
+                    orderId,
+                    category,
+                    short,
+                    full: section.content,
+                    viewedAt: null,
+                },
+                update: {
+                    orderId,
+                    short,
+                    full: section.content,
+                    viewedAt: null,
+                    updatedAt: new Date(),
+                },
+            });
+        });
+
+        await this.prisma.$transaction(operations);
+        this.logger.log(`   📊 Upserted ${operations.length} Insight records`);
+        return operations.length;
     }
 }

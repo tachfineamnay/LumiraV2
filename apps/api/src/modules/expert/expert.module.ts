@@ -8,7 +8,6 @@ import { AdminSettingsService } from './admin-settings.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { ExpertGateway } from './expert.gateway';
-import { PrismaService } from '../../prisma/prisma.service';
 import { IdGenerator } from '../../utils/IdGenerator';
 import { ServicesModule } from '../../services/services.module';
 
@@ -42,7 +41,6 @@ import { ServicesModule } from '../../services/services.module';
         ExpertAuthGuard,
         RolesGuard,
         ExpertGateway,
-        PrismaService,
         IdGenerator,
     ],
     exports: [ExpertService, ExpertGateway, IdGenerator],

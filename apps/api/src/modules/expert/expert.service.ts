@@ -1113,15 +1113,13 @@ MESSAGE DE L'EXPERT:`;
                 },
             });
 
-            // 2. Generate PDF and finalize
+            // 2. Generate PDF and finalize (sets status=COMPLETED + deliveredAt)
             const result = await this.digitalSoulService.finalizeWithPdf(orderId);
 
-            // 3. Update order with validation info
+            // 3. Append expert validation metadata (status already COMPLETED from finalizeWithPdf)
             await this.prisma.order.update({
                 where: { id: orderId },
                 data: {
-                    status: 'COMPLETED',
-                    deliveredAt: new Date(),
                     expertValidation: {
                         action: 'finalize',
                         finalizedBy: expert.id,
