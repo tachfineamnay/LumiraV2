@@ -3,7 +3,6 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState, Suspense } from "react";
-import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -15,91 +14,10 @@ import { HolisticWizard } from "../../components/onboarding/HolisticWizard";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 import { useSanctuaireAuth, isFirstVisitToken, setFirstVisitFlag, clearFirstVisitFlag } from "../../context/SanctuaireAuthContext";
 import {
-    User,
-    Eye,
-    Crown,
-    FileText,
-    ChevronRight,
-    Map,
     Loader2,
-    Star,
-    Lock,
     Sparkles,
     AlertCircle
 } from "lucide-react";
-
-// =============================================================================
-// DASHBOARD CARDS
-// =============================================================================
-
-interface DashboardCard {
-    title: string;
-    description: string;
-    icon: React.ComponentType<{ className?: string }>;
-    route: string;
-    requiredLevel: number;
-    requiredCapability: string;
-}
-
-const dashboardCards: DashboardCard[] = [
-    {
-        title: "Mon Profil",
-        description: "Votre identité et diagnostic holistique",
-        icon: User,
-        route: "/sanctuaire/profile",
-        requiredLevel: 0,
-        requiredCapability: "sanctuaire.sphere.profile",
-    },
-    {
-        title: "Mes Lectures",
-        description: "Accédez à vos lectures Oracle personnalisées",
-        icon: Eye,
-        route: "/sanctuaire/draws",
-        requiredLevel: 1,
-        requiredCapability: "sanctuaire.sphere.readings",
-    },
-    {
-        title: "Rituels Sacrés",
-        description: "Accédez aux rituels personnalisés et pratiques avancées",
-        icon: Map,
-        route: "/sanctuaire/rituals",
-        requiredLevel: 2,
-        requiredCapability: "sanctuaire.sphere.rituals",
-    },
-    {
-        title: "Mandala Personnel",
-        description: "Accédez à votre Mandala personnalisé en haute définition",
-        icon: Crown,
-        route: "/sanctuaire/mandala",
-        requiredLevel: 3,
-        requiredCapability: "sanctuaire.sphere.mandala",
-    },
-    {
-        title: "Synthèse Profonde",
-        description: "Accédez à l'analyse synthétique complète de votre parcours",
-        icon: FileText,
-        route: "/sanctuaire/synthesis",
-        requiredLevel: 3,
-        requiredCapability: "sanctuaire.sphere.synthesis",
-    },
-    {
-        title: "Guidance Sacrée",
-        description: "Accédez à la guidance personnalisée et au mentorat exclusif",
-        icon: Star,
-        route: "/sanctuaire/chat",
-        requiredLevel: 4,
-        requiredCapability: "sanctuaire.sphere.guidance",
-    },
-];
-
-const getLevelInfo = (level: number): { name: "Initié" | "Mystique" | "Profond" | "Intégral"; productId: "initie" | "mystique" | "profond" | "integrale" } => {
-    switch (level) {
-        case 2: return { name: "Mystique", productId: "mystique" };
-        case 3: return { name: "Profond", productId: "profond" };
-        case 4: return { name: "Intégral", productId: "integrale" };
-        default: return { name: "Initié", productId: "initie" };
-    }
-};
 
 // =============================================================================
 // AUTO-LOGIN HANDLER
@@ -299,7 +217,7 @@ function AutoLoginHandler() {
 // =============================================================================
 
 function DashboardContent() {
-    const { highestLevel, hasCapability, isLoading, orderCount } = useSanctuaire();
+    const { isLoading, orderCount } = useSanctuaire();
     const { profile, refetchData, user } = useSanctuaireAuth();
     const [showWizard, setShowWizard] = useState(false);
     const [hasDraft, setHasDraft] = useState(false);
@@ -477,7 +395,7 @@ function DashboardContent() {
             {/* 🪐 MANDALA NAVIGATION or ONBOARDING CTA */}
             <section className="relative w-full flex justify-center items-start py-8 mb-8 z-30">
                 {isOnboardingComplete ? (
-                    <div className="hidden lg:block">
+                    <div>
                         <MandalaNav />
                     </div>
                 ) : (
@@ -527,99 +445,6 @@ function DashboardContent() {
                 </motion.div>
             )}
 
-            {/* 🧩 DASHBOARD CARDS */}
-            <div className={`w-full relative z-10 transition-all duration-500 ${!isOnboardingComplete ? "blur-sm opacity-50 pointer-events-none select-none" : ""}`}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
-                    {dashboardCards.map((card, i) => {
-                        const Icon = card.icon;
-                        const levelInfo = getLevelInfo(card.requiredLevel);
-                        const isIntegral = card.requiredLevel === 4;
-                        const hasAccess = card.requiredLevel === 0 ||
-                            (hasCapability(card.requiredCapability) && highestLevel >= card.requiredLevel);
-
-                        if (!hasAccess) {
-                            return (
-                                <motion.div
-                                    key={card.title}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.4 + i * 0.08 }}
-                                >
-                                    <div className="h-full min-h-[180px] rounded-2xl bg-abyss-600/30 border border-white/[0.06] p-6 flex flex-col justify-between relative overflow-hidden">
-                                        <div className="absolute inset-0 bg-abyss-700/60 backdrop-blur-[2px] z-10" />
-
-                                        <div className="relative z-20">
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div className="w-12 h-12 rounded-xl bg-white/[0.03] flex items-center justify-center border border-white/[0.06]">
-                                                    <Icon className="w-6 h-6 text-stellar-500" />
-                                                </div>
-                                                <Lock className="w-5 h-5 text-horizon-400/60" />
-                                            </div>
-
-                                            <h3 className="text-lg font-playfair italic text-stellar-400 mb-2">
-                                                {card.title}
-                                            </h3>
-                                            <p className="text-stellar-500 text-sm leading-relaxed">
-                                                {card.description}
-                                            </p>
-                                        </div>
-
-                                        <div className="relative z-20 mt-4 pt-4 border-t border-white/[0.06]">
-                                            <div className="flex items-center justify-center gap-2 mb-3">
-                                                <Sparkles className="w-3 h-3 text-horizon-400/60" />
-                                                <span className="text-[10px] text-horizon-400 uppercase tracking-wider font-medium">
-                                                    Requiert niveau {levelInfo.name}
-                                                </span>
-                                                <Sparkles className="w-3 h-3 text-horizon-400/60" />
-                                            </div>
-                                            <Link href={`/commande?product=${levelInfo.productId}`}>
-                                                <button className="w-full py-3 rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-900 text-sm font-semibold hover:shadow-gold-glow hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">
-                                                    {isIntegral ? "Niveau Intégral" : "Débloquer"}
-                                                </button>
-                                            </Link>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            );
-                        }
-
-                        return (
-                            <motion.div
-                                key={card.title}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.4 + i * 0.08 }}
-                            >
-                                <Link href={card.route}>
-                                    <div className="h-full min-h-[180px] rounded-2xl glass-card p-6 flex flex-col justify-between group hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 cursor-pointer">
-                                        <div>
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-horizon-400/20 to-horizon-400/5 flex items-center justify-center group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(232,168,56,0.2)] transition-all duration-500 border border-horizon-400/20">
-                                                    <Icon className="w-6 h-6 text-horizon-400" />
-                                                </div>
-                                            </div>
-
-                                            <h3 className="text-lg font-playfair italic text-stellar-100 mb-2 group-hover:text-horizon-300 transition-colors">
-                                                {card.title}
-                                            </h3>
-                                            <p className="text-stellar-400 text-sm leading-relaxed">
-                                                {card.description}
-                                            </p>
-                                        </div>
-
-                                        <div className="mt-4 pt-4 border-t border-white/[0.06] flex justify-end items-center">
-                                            <span className="flex items-center gap-2 text-horizon-400 text-xs font-bold uppercase tracking-widest group-hover:text-horizon-300">
-                                                Accéder
-                                                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                                            </span>
-                                        </div>
-                                    </div>
-                                </Link>
-                            </motion.div>
-                        );
-                    })}
-                </div>
-            </div>
         </div>
         </>
     );
