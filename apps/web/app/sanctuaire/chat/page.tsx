@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, User, Bot, Loader2, MessageCircle, Crown } from "lucide-react";
 import { GlassCard } from "../../../components/ui/GlassCard";
 import { SubscriptionLock } from "../../../components/sanctuary/SubscriptionLock";
-import api from "../../../lib/api";
+import sanctuaireApi from "../../../lib/sanctuaireApi";
 
 interface Message {
     id: string;
@@ -43,7 +43,7 @@ export default function OracleChatPage() {
     useEffect(() => {
         const fetchQuota = async () => {
             try {
-                const { data } = await api.get('/client/chat/quota');
+                const { data } = await sanctuaireApi.get('/client/chat/quota');
                 setQuotaStatus({
                     isSubscribed: data.isSubscribed,
                     messagesRemaining: data.messagesRemaining,
@@ -84,7 +84,7 @@ export default function OracleChatPage() {
 
         try {
             // Call the real API endpoint
-            const { data } = await api.post('/client/chat', {
+            const { data } = await sanctuaireApi.post('/client/chat', {
                 message: userMessage,
                 sessionId: sessionId,
             });
@@ -169,7 +169,9 @@ export default function OracleChatPage() {
                     )}
                 </span>
                 {!quotaStatus.isSubscribed && (
-                    <Crown className="w-3.5 h-3.5 text-amber-400 ml-1" title="Passez premium pour des messages illimités" />
+                    <span title="Passez premium pour des messages illimités">
+                        <Crown className="w-3.5 h-3.5 text-amber-400 ml-1" />
+                    </span>
                 )}
             </motion.div>
         );

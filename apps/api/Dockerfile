@@ -17,7 +17,7 @@ COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 # Désactiver Husky pour le build
 ENV HUSKY=0 
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Copie du code source complet
 COPY --from=pruner /app/out/full/ .
@@ -39,7 +39,7 @@ ENV HUSKY=0
 RUN npm install -g pnpm
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --prod --no-frozen-lockfile --ignore-scripts
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 # RÉCUPÉRATION DES ARTIFACTS (CRUCIAL)
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
@@ -60,10 +60,10 @@ COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 # Scripts de maintenance (seed prod, etc.) - copie depuis pruner car turbo prune n'inclut pas /scripts
 COPY --from=pruner /app/scripts ./scripts
 
-# Install global prisma for runtime migrations
+# Install global prisma for runtime migrations (version aligned with @packages/database)
 RUN npm install -g prisma@5.22.0
 
 EXPOSE 3001
 
-# Run db:push before starting to sync schema (--accept-data-loss for schema changes like unique constraints)
-CMD ["/bin/sh", "-c", "prisma db push --schema=packages/database/prisma/schema.prisma --skip-generate --accept-data-loss && node apps/api/dist/main.js"]
+# Apply pending migrations before starting the API
+CMD ["/bin/sh", "-c", "prisma migrate deploy --schema=packages/database/prisma/schema.prisma && node apps/api/dist/main.js"]

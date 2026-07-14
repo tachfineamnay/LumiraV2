@@ -8,7 +8,7 @@ import { StepBriefing } from './StepBriefing';
 import { StepRevision } from './StepRevision';
 import { useSocket } from '../hooks/useSocket';
 import { Order, OracleResponse, LEVEL_CONFIG } from '../types';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -19,7 +19,6 @@ import {
   X,
   History,
   RotateCcw,
-  Lock,
   Trash2,
 } from 'lucide-react';
 import { ConfirmModal } from '../shared/ConfirmModal';
@@ -116,7 +115,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
     const poll = async () => {
       try {
-        const { data } = await api.get(`/expert/orders/${orderId}`);
+        const { data } = await expertApi.get(`/expert/orders/${orderId}`);
         pollErrorCountRef.current = 0;
         
         const hasNewContent = data.generatedContent && !order?.generatedContent;
@@ -142,9 +141,10 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         }
         
         pollIntervalRef.current = setTimeout(poll, getPollingInterval());
-      } catch (err: any) {
+      } catch (err: unknown) {
         pollErrorCountRef.current++;
-        console.warn(`Polling error (attempt ${pollErrorCountRef.current}):`, err?.response?.status || err);
+        const error = err as { response?: { status?: number } };
+        console.warn(`Polling error (attempt ${pollErrorCountRef.current}):`, error?.response?.status || err);
         
         if (pollErrorCountRef.current >= 5) {
           console.error('Too many polling errors, stopping');
@@ -173,7 +173,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   // Fetch order data
   const fetchOrder = useCallback(async () => {
     try {
-      const { data } = await api.get(`/expert/orders/${orderId}`);
+      const { data } = await expertApi.get(`/expert/orders/${orderId}`);
       setOrder(data);
       
       if (data.generatedContent) {
@@ -193,7 +193,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   // Load versions
   const loadVersions = useCallback(async () => {
     try {
-      const { data } = await api.get(`/expert/orders/${orderId}/versions`);
+      const { data } = await expertApi.get(`/expert/orders/${orderId}/versions`);
       setVersions(data.versions || []);
     } catch (err) {
       console.error('Failed to load versions:', err);
@@ -221,7 +221,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const handleLaunch = async (expertPrompt: string, expertInstructions?: string) => {
     setIsGenerating(true);
     try {
-      await api.post('/expert/process-order', {
+      await expertApi.post('/expert/process-order', {
         orderId,
         expertPrompt,
         expertInstructions,
@@ -230,13 +230,14 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       await fetchOrder();
       setStep('revision');
       setIsGenerating(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string; response?: { data?: { message?: string } } };
       // If timeout or network error, generation may still be running
-      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
         toast.info('Génération en cours...', { description: 'L\'Oracle travaille, veuillez patienter.' });
         // Keep isGenerating true → polling will pick up
       } else {
-        toast.error('Erreur lors du lancement', { description: err?.response?.data?.message || err?.message });
+        toast.error('Erreur lors du lancement', { description: error?.response?.data?.message || error?.message });
         setIsGenerating(false);
       }
     }
@@ -245,7 +246,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const handleRegenerate = async () => {
     setIsRegenerating(true);
     try {
-      await api.post(`/expert/orders/${orderId}/regenerate`);
+      await expertApi.post(`/expert/orders/${orderId}/regenerate`);
       toast.info('Régénération lancée...');
       setStep('briefing');
     } catch {
@@ -257,7 +258,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const handleSeal = async () => {
     setIsSealing(true);
     try {
-      await api.post(`/expert/orders/${orderId}/finalize`, { finalContent: editorContent });
+      await expertApi.post(`/expert/orders/${orderId}/finalize`, { finalContent: editorContent });
       toast.success('Lecture scellée et envoyée au client !');
       router.push('/admin/board');
     } catch {
@@ -269,7 +270,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
   const handleRestoreVersion = async (index: number) => {
     try {
-      await api.post(`/expert/orders/${orderId}/versions/${index}/restore`);
+      await expertApi.post(`/expert/orders/${orderId}/versions/${index}/restore`);
       toast.success('Version restaurée');
       fetchOrder();
       setShowVersions(false);
@@ -530,7 +531,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         onConfirm={async () => {
           try {
             setIsDeletingOrder(true);
-            await api.delete(`/expert/orders/${orderId}`);
+            await expertApi.delete(`/expert/orders/${orderId}`);
             toast.success('Commande supprimée');
             router.push('/admin/board');
           } catch (err) {

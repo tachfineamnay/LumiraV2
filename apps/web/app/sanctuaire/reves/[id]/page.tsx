@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Moon, ArrowLeft, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import api from '../../../../lib/api';
+import sanctuaireApi from '../../../../lib/sanctuaireApi';
 
 // =============================================================================
 // EMOTION CONFIG
@@ -61,7 +61,7 @@ export default function DreamDetailPage() {
 
         const fetchDream = async () => {
             try {
-                const res = await api.get(`/dreams/${dreamId}`);
+                const res = await sanctuaireApi.get(`/dreams/${dreamId}`);
                 const d = res.data;
                 setDream(d);
 

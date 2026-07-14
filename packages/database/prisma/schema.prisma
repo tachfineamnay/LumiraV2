@@ -122,6 +122,7 @@ model User {
   @@index([email])
   @@index([refId])
   @@index([status])
+  @@index([subscriptionStatus])
   @@index([createdAt(sort: Desc)])
 }
 
@@ -221,6 +222,11 @@ model Order {
   @@index([status])
   @@index([createdAt(sort: Desc)])
   @@index([paymentIntentId])
+  @@index([userId, status])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([userEmail, status, paidAt(sort: Desc)])
 }
 
 model OrderFile {
@@ -236,6 +242,7 @@ model OrderFile {
   uploadedAt  DateTime @default(now())
 
   @@index([orderId])
+  @@index([orderId, type])
 }
 
 model ProductOrder {

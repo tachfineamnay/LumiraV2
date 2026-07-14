@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Moon, Plus, Loader2, Sparkles, Calendar, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import api from '../../../lib/api';
+import sanctuaireApi from '../../../lib/sanctuaireApi';
 
 // =============================================================================
 // TYPES
@@ -48,7 +48,7 @@ export default function DreamJournalPage() {
     useEffect(() => {
         const fetchDreams = async () => {
             try {
-                const res = await api.get('/dreams');
+                const res = await sanctuaireApi.get('/dreams');
                 setDreams(res.data.dreams ?? []);
             } catch {
                 setError('Impossible de charger vos rêves.');

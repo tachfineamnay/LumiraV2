@@ -22,6 +22,7 @@ import {
 import { useSanctuaire } from '../../../context/SanctuaireContext';
 import { ReadingViewerModal } from '../../../components/sanctuary/ReadingViewerModal';
 import { MysticAudioPlayer } from '../../../components/ui/MysticAudioPlayer';
+import sanctuaireApi from '../../../lib/sanctuaireApi';
 
 // =============================================================================
 // TYPES
@@ -172,29 +173,17 @@ export default function DrawsPage() {
 
     // Fetch user's readings
     const fetchReadings = useCallback(async () => {
-        const token = localStorage.getItem('sanctuaire_token');
-        if (!token) {
-            setLoading(false);
-            return;
-        }
-
         try {
             setLoading(true);
-            const res = await fetch(`${apiUrl}/api/client/readings`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                setReadings(data.readings || []);
-                setPendingReadings(data.pending || []);
-            }
+            const { data } = await sanctuaireApi.get('/client/readings');
+            setReadings(data.readings || []);
+            setPendingReadings(data.pending || []);
         } catch (error) {
             console.error('Failed to fetch readings:', error);
         } finally {
             setLoading(false);
         }
-    }, [apiUrl]);
+    }, []);
 
     useEffect(() => {
         fetchReadings();

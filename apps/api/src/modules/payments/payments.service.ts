@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { OrdersService } from '../orders/orders.service';
@@ -6,21 +6,27 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { SpiritualPathBatchService } from '../../services/factory/SpiritualPathBatchService';
 import { NotificationsService } from '../notifications/notifications.service';
+import { IdGenerator } from '../../utils/IdGenerator';
+import { CheckoutIntentDto } from './dto/checkout-intent.dto';
 
-export interface CheckoutIntentDto {
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone?: string;
-    productLevel: string;
-    amountCents: number;
-}
+export { CheckoutIntentDto };
+
+/** Server-side product catalog — never trust client amounts */
+const CHECKOUT_CATALOG: Record<string, { amountCents: number; name: string }> = {
+    '1': { amountCents: 2900, name: 'Cercle des Initiés' },
+    '2': { amountCents: 2900, name: 'Cercle des Initiés' },
+    '3': { amountCents: 2900, name: 'Cercle des Initiés' },
+    '4': { amountCents: 2900, name: 'Cercle des Initiés' },
+    initie: { amountCents: 2900, name: 'Cercle des Initiés' },
+    subscription: { amountCents: 2900, name: 'Cercle des Initiés' },
+};
 
 export interface UpsellAddon {
     type: string;
     name: string;
     amount: number;
     paidAt?: Date;
+    paymentIntentId?: string;
 }
 
 export interface CreateUpsellIntentDto {
@@ -38,6 +44,7 @@ export class PaymentsService {
         private prisma: PrismaService,
         private notificationsService: NotificationsService,
         private spiritualPathBatchService: SpiritualPathBatchService,
+        private idGenerator: IdGenerator,
     ) {
         this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY')!, {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,15 +52,29 @@ export class PaymentsService {
         });
     }
 
-    async createPaymentIntent(orderId: string, amount: number, currency: string = 'eur') {
+    async createPaymentIntent(orderId: string, currency: string = 'eur') {
+        const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            select: { amount: true, status: true },
+        });
+        
+        if (!order) {
+            throw new BadRequestException('Order not found');
+        }
+        
+        if (order.status !== 'PENDING') {
+            throw new BadRequestException('Order is not in PENDING status');
+        }
+        
         const paymentIntent = await this.stripe.paymentIntents.create({
-            amount,
+            amount: order.amount,
             currency,
             metadata: { orderId },
         });
 
-        await this.ordersService.update(orderId, {
-            paymentIntentId: paymentIntent.id,
+        await this.prisma.order.update({
+            where: { id: orderId },
+            data: { paymentIntentId: paymentIntent.id },
         });
 
         return {
@@ -64,22 +85,23 @@ export class PaymentsService {
 
     /**
      * Creates a PaymentIntent and pre-creates User/Order with PENDING status.
-     * This ensures the user can authenticate immediately after frontend payment confirmation.
-     * The webhook will update the order status from PENDING to PAID.
+     * Amount is resolved server-side from productLevel — never from the client.
      */
     async createCheckoutIntent(dto: CheckoutIntentDto) {
         const normalizedEmail = dto.email.toLowerCase().trim();
-        this.logger.log(`[CheckoutIntent] Starting for email: ${normalizedEmail}`);
-        
-        // 1. Upsert User immediately
-        const user = await this.prisma.user.upsert({
-            where: { email: normalizedEmail },
-            update: {
-                firstName: dto.firstName,
-                lastName: dto.lastName,
-                phone: dto.phone || null,
-            },
-            create: {
+        const productKey = dto.productLevel.toLowerCase().trim();
+        const catalogEntry = CHECKOUT_CATALOG[productKey];
+        if (!catalogEntry) {
+            throw new BadRequestException(`Unknown productLevel: ${dto.productLevel}`);
+        }
+        const amountCents = catalogEntry.amountCents;
+
+        this.logger.log(`[CheckoutIntent] Starting for email: ${normalizedEmail}, amount=${amountCents}`);
+
+        // 1. Create user if missing — never overwrite PII on existing accounts
+        const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+        const user = existing ?? await this.prisma.user.create({
+            data: {
                 email: normalizedEmail,
                 firstName: dto.firstName,
                 lastName: dto.lastName,
@@ -87,52 +109,61 @@ export class PaymentsService {
                 totalOrders: 0,
             },
         });
-        
-        this.logger.log(`[CheckoutIntent] User upserted: ${user.id} for email: ${normalizedEmail}`);
 
-        // 3. Generate order number
+        this.logger.log(`[CheckoutIntent] User ready: ${user.id} for email: ${normalizedEmail}`);
+
         const orderNumber = await this.generateOrderNumber();
 
-        // 4. Create Order with PENDING status (will be updated to PAID by webhook)
+        // 2. Create PaymentIntent first — only persist order after Stripe accepts
+        let paymentIntent: Stripe.PaymentIntent;
+        try {
+            paymentIntent = await this.stripe.paymentIntents.create({
+                amount: amountCents,
+                currency: 'eur',
+                automatic_payment_methods: { enabled: true },
+                metadata: {
+                    email: normalizedEmail,
+                    firstName: dto.firstName,
+                    lastName: dto.lastName,
+                    phone: dto.phone || '',
+                    productLevel: productKey,
+                    expectedAmount: String(amountCents),
+                },
+            });
+        } catch (err) {
+            this.logger.error(`[CheckoutIntent] Stripe PI creation failed: ${err instanceof Error ? err.message : String(err)}`);
+            throw new BadRequestException('Unable to create payment intent');
+        }
+
+        // 3. Create Order linked to PI
         const order = await this.prisma.order.create({
             data: {
                 orderNumber,
                 userId: user.id,
                 userEmail: normalizedEmail,
                 userName: `${dto.firstName} ${dto.lastName}`.trim(),
-                amount: dto.amountCents,
+                amount: amountCents,
                 currency: 'eur',
                 status: 'PENDING',
+                paymentIntentId: paymentIntent.id,
                 formData: { phone: dto.phone || '' } as Prisma.JsonObject,
             },
         });
 
-        this.logger.log(`[CheckoutIntent] Order created: ${order.id}, status: ${order.status}, amount: ${order.amount}, email: ${normalizedEmail}`);
-
-        // 5. Create PaymentIntent with orderId in metadata
-        const paymentIntent = await this.stripe.paymentIntents.create({
-            amount: dto.amountCents,
-            currency: 'eur',
-            automatic_payment_methods: { enabled: true },
+        // 4. Attach orderId to PI metadata
+        await this.stripe.paymentIntents.update(paymentIntent.id, {
             metadata: {
-                orderId: order.id, // Now we have an orderId for the legacy flow
-                email: dto.email,
-                firstName: dto.firstName,
-                lastName: dto.lastName,
-                phone: dto.phone || '',
-                productLevel: dto.productLevel,
+                ...paymentIntent.metadata,
+                orderId: order.id,
             },
         });
 
-        // 6. Link PaymentIntent to Order
-        await this.prisma.order.update({
-            where: { id: order.id },
-            data: { paymentIntentId: paymentIntent.id },
-        });
+        this.logger.log(`[CheckoutIntent] Order created: ${order.id}, PI: ${paymentIntent.id}`);
 
         return {
             clientSecret: paymentIntent.client_secret,
             paymentIntentId: paymentIntent.id,
+            amountCents,
         };
     }
 
@@ -148,70 +179,77 @@ export class PaymentsService {
             throw new BadRequestException(`Invalid Stripe signature: ${errorMessage}`);
         }
 
-        // Idempotency check
-        const processed = await this.prisma.processedEvent.findUnique({
+        // Idempotency: skip if already successfully processed
+        const alreadyDone = await this.prisma.processedEvent.findUnique({
             where: { eventId: event.id },
         });
-        if (processed) {
+        if (alreadyDone) {
             this.logger.log(`Event ${event.id} already processed`);
             return { received: true };
         }
 
-        switch (event.type) {
-            case 'payment_intent.succeeded': {
-                const paymentIntent = event.data.object as Stripe.PaymentIntent;
-                await this.handlePaymentSucceeded(paymentIntent);
-                break;
-            }
-
-            // ----------------------------------------------------------------
-            // V2 — One-time checkout (29€ access payment)
-            // ----------------------------------------------------------------
-
-            case 'checkout.session.completed': {
-                const session = event.data.object as Stripe.Checkout.Session;
-                if (session.payment_status === 'paid') {
-                    await this.handleCheckoutSessionCompleted(session);
+        try {
+            switch (event.type) {
+                case 'payment_intent.succeeded': {
+                    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+                    await this.handlePaymentSucceeded(paymentIntent);
+                    break;
                 }
-                break;
+
+                case 'checkout.session.completed': {
+                    const session = event.data.object as Stripe.Checkout.Session;
+                    if (session.payment_status === 'paid') {
+                        await this.handleCheckoutSessionCompleted(session);
+                    }
+                    break;
+                }
+
+                case 'customer.subscription.created': {
+                    const subscription = event.data.object as Stripe.Subscription;
+                    await this.handleSubscriptionCreated(subscription);
+                    break;
+                }
+
+                case 'customer.subscription.updated': {
+                    const subscription = event.data.object as Stripe.Subscription;
+                    await this.handleSubscriptionUpdated(subscription);
+                    break;
+                }
+
+                case 'customer.subscription.deleted': {
+                    const subscription = event.data.object as Stripe.Subscription;
+                    await this.handleSubscriptionDeleted(subscription);
+                    break;
+                }
+
+                case 'invoice.paid': {
+                    const invoice = event.data.object as Stripe.Invoice;
+                    await this.handleInvoicePaid(invoice);
+                    break;
+                }
             }
 
-            // ----------------------------------------------------------------
-            // V2 — Subscription lifecycle events
-            // ----------------------------------------------------------------
-
-            case 'customer.subscription.created': {
-                const subscription = event.data.object as Stripe.Subscription;
-                await this.handleSubscriptionCreated(subscription);
-                break;
+            // Mark processed only after handlers succeed — Stripe can retry on failure
+            try {
+                await this.prisma.processedEvent.create({
+                    data: {
+                        eventId: event.id,
+                        eventType: event.type,
+                        data: event.data.object as unknown as Prisma.InputJsonValue,
+                    },
+                });
+            } catch (err: unknown) {
+                // Concurrent duplicate delivery after successful processing
+                if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+                    this.logger.log(`Event ${event.id} already marked processed (race)`);
+                    return { received: true };
+                }
+                throw err;
             }
-
-            case 'customer.subscription.updated': {
-                const subscription = event.data.object as Stripe.Subscription;
-                await this.handleSubscriptionUpdated(subscription);
-                break;
-            }
-
-            case 'customer.subscription.deleted': {
-                const subscription = event.data.object as Stripe.Subscription;
-                await this.handleSubscriptionDeleted(subscription);
-                break;
-            }
-
-            case 'invoice.paid': {
-                const invoice = event.data.object as Stripe.Invoice;
-                await this.handleInvoicePaid(invoice);
-                break;
-            }
+        } catch (err) {
+            this.logger.error(`Webhook handler failed for ${event.id}: ${err instanceof Error ? err.message : String(err)}`);
+            throw err;
         }
-
-        await this.prisma.processedEvent.create({
-            data: {
-                eventId: event.id,
-                eventType: event.type,
-                data: event.data.object as unknown as Prisma.InputJsonValue,
-            },
-        });
 
         return { received: true };
     }
@@ -461,7 +499,7 @@ export class PaymentsService {
     // =========================================================================
 
     private async handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-        const { orderId, checkoutFlow, email, firstName, lastName, phone, productLevel, isUpsell, upsellType } = paymentIntent.metadata;
+        const { orderId, checkoutFlow, email, firstName, lastName, phone, productLevel, isUpsell, upsellType, expectedAmount } = paymentIntent.metadata;
 
         // Handle UPSELL payment
         if (isUpsell === 'true' && orderId && upsellType) {
@@ -470,16 +508,59 @@ export class PaymentsService {
             return;
         }
 
+        // Assert paid amount matches catalog expectation when present
+        if (expectedAmount && paymentIntent.amount !== Number(expectedAmount)) {
+            this.logger.error(
+                `[PaymentIntent] Amount mismatch for ${paymentIntent.id}: expected ${expectedAmount}, got ${paymentIntent.amount}`,
+            );
+            throw new BadRequestException('Payment amount does not match expected catalog price');
+        }
+        if (productLevel) {
+            const catalogEntry = CHECKOUT_CATALOG[productLevel.toLowerCase()];
+            if (catalogEntry && paymentIntent.amount !== catalogEntry.amountCents) {
+                this.logger.error(
+                    `[PaymentIntent] Catalog amount mismatch for ${paymentIntent.id}: expected ${catalogEntry.amountCents}, got ${paymentIntent.amount}`,
+                );
+                throw new BadRequestException('Payment amount does not match product catalog');
+            }
+        }
+
         // Legacy flow: orderId already exists (from createCheckoutIntent)
         if (orderId) {
-            const order = await this.prisma.order.update({
-                where: { id: orderId },
+            const existingOrder = await this.prisma.order.findUnique({ where: { id: orderId } });
+            if (existingOrder && paymentIntent.amount !== existingOrder.amount) {
+                this.logger.error(
+                    `[PaymentIntent] Order amount mismatch for ${orderId}: order=${existingOrder.amount}, pi=${paymentIntent.amount}`,
+                );
+                throw new BadRequestException('Payment amount does not match order');
+            }
+
+            const result = await this.prisma.order.updateMany({
+                where: { 
+                    id: orderId,
+                    status: { notIn: ['PAID', 'COMPLETED'] }
+                },
                 data: {
                     status: 'PAID',
                     paidAt: new Date(),
                 },
+            });
+            
+            if (result.count === 0) {
+                this.logger.log(`Order ${orderId} already PAID or COMPLETED, skipping duplicate webhook`);
+                return;
+            }
+            
+            const order = await this.prisma.order.findUnique({
+                where: { id: orderId },
                 include: { user: true }
             });
+            
+            if (!order) {
+                this.logger.error(`Order ${orderId} not found after update`);
+                return;
+            }
+            
             this.logger.log(`Order ${orderId} marked as PAID`);
 
             try {
@@ -535,22 +616,27 @@ export class PaymentsService {
 
         // New checkout flow: create User and Order from metadata
         if (checkoutFlow === 'true' && email) {
-            // 1. Upsert User
-            const user = await this.prisma.user.upsert({
-                where: { email },
-                update: {
-                    totalOrders: { increment: 1 },
-                    lastOrderAt: new Date(),
-                },
-                create: {
-                    email,
-                    firstName: firstName || '',
-                    lastName: lastName || '',
-                    phone: phone || null,
-                    totalOrders: 1,
-                    lastOrderAt: new Date(),
-                },
-            });
+            // 1. Upsert User — create-only semantics for PII
+            const normalizedEmail = email.toLowerCase().trim();
+            const existingUser = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+            const user = existingUser
+                ? await this.prisma.user.update({
+                    where: { id: existingUser.id },
+                    data: {
+                        totalOrders: { increment: 1 },
+                        lastOrderAt: new Date(),
+                    },
+                })
+                : await this.prisma.user.create({
+                    data: {
+                        email: normalizedEmail,
+                        firstName: firstName || '',
+                        lastName: lastName || '',
+                        phone: phone || null,
+                        totalOrders: 1,
+                        lastOrderAt: new Date(),
+                    },
+                });
 
             // 3. Generate order number
             const orderNumber = await this.generateOrderNumber();
@@ -560,7 +646,7 @@ export class PaymentsService {
                 data: {
                     orderNumber,
                     userId: user.id,
-                    userEmail: email,
+                    userEmail: normalizedEmail,
                     userName: `${firstName} ${lastName}`.trim(),
                     amount: paymentIntent.amount,
                     currency: paymentIntent.currency,
@@ -585,20 +671,7 @@ export class PaymentsService {
     }
 
     private async generateOrderNumber(): Promise<string> {
-        const date = new Date();
-        const year = date.getFullYear().toString().slice(-2);
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
-        const datePrefix = `LU${year}${month}${day}`;
-
-        const count = await this.prisma.order.count({
-            where: {
-                orderNumber: { startsWith: datePrefix },
-            },
-        });
-
-        const sequence = (count + 1).toString().padStart(3, '0');
-        return `${datePrefix}${sequence}`;
+        return this.idGenerator.generateOrderNumber();
     }
 
     // =========================
@@ -634,19 +707,28 @@ export class PaymentsService {
     }
 
     /**
-     * Get order with upsell eligibility info
+     * Get order with upsell eligibility info (minimal public DTO — no full user PII)
      */
-    async getOrderForUpsell(orderId: string) {
+    async getOrderForUpsell(orderId: string, requestingUserId?: string) {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
-            include: { user: true }
+            select: {
+                id: true,
+                status: true,
+                userId: true,
+                amount: true,
+                addons: true,
+            },
         });
 
         if (!order) {
             return null;
         }
 
-        // Check eligibility: order must be PAID and not already have this addon
+        if (requestingUserId && order.userId !== requestingUserId) {
+            throw new ForbiddenException('Not authorized for this order');
+        }
+
         const existingAddons = (order.addons as unknown as UpsellAddon[] | null) || [];
         const availableUpsells = Object.entries(this.UPSELL_PRODUCTS)
             .filter(([type]) => !existingAddons.some(a => a.type === type))
@@ -656,7 +738,9 @@ export class PaymentsService {
             }));
 
         return {
-            order,
+            orderId: order.id,
+            status: order.status,
+            amount: order.amount,
             availableUpsells,
             isEligible: order.status === 'PAID' && availableUpsells.length > 0
         };
@@ -665,29 +749,33 @@ export class PaymentsService {
     /**
      * Create PaymentIntent for upsell addon (one-click if payment method saved)
      */
-    async createUpsellIntent(orderId: string, addonType: string) {
+    async createUpsellIntent(orderId: string, addonType: string, requestingUserId?: string) {
         const order = await this.prisma.order.findUnique({
             where: { id: orderId },
             include: { user: true }
         });
 
         if (!order) {
-            throw new Error('Order not found');
+            throw new NotFoundException('Order not found');
+        }
+
+        if (requestingUserId && order.userId !== requestingUserId) {
+            throw new ForbiddenException('Not authorized for this order');
         }
 
         if (order.status !== 'PAID') {
-            throw new Error('Order must be paid before upsell');
+            throw new BadRequestException('Order must be paid before upsell');
         }
 
         const product = this.UPSELL_PRODUCTS[addonType];
         if (!product) {
-            throw new Error('Invalid upsell product');
+            throw new BadRequestException('Invalid upsell product');
         }
 
         // Check if addon already purchased
         const existingAddons = (order.addons as unknown as UpsellAddon[] | null) || [];
         if (existingAddons.some(a => a.type === addonType)) {
-            throw new Error('Addon already purchased');
+            throw new BadRequestException('Addon already purchased');
         }
 
         // Try to get saved payment method from Stripe customer
@@ -760,10 +848,10 @@ export class PaymentsService {
     /**
      * Confirm upsell after successful payment (called by webhook or direct confirmation)
      */
-    async confirmUpsell(orderId: string, addonType: string, paymentIntentId: string) {
+    async confirmUpsell(orderId: string, addonType: string, paymentIntentId: string, requestingUserId?: string) {
         const product = this.UPSELL_PRODUCTS[addonType];
         if (!product) {
-            throw new Error('Invalid upsell product');
+            throw new BadRequestException('Invalid upsell product');
         }
 
         const order = await this.prisma.order.findUnique({
@@ -771,17 +859,54 @@ export class PaymentsService {
         });
 
         if (!order) {
-            throw new Error('Order not found');
+            throw new NotFoundException('Order not found');
+        }
+
+        if (requestingUserId && order.userId !== requestingUserId) {
+            throw new ForbiddenException('Not authorized for this order');
+        }
+
+        // Verify payment succeeded with Stripe
+        const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
+        if (paymentIntent.status !== 'succeeded') {
+            throw new BadRequestException(`Payment not confirmed. Status: ${paymentIntent.status}`);
+        }
+
+        // Bind PI metadata to this order + upsell type
+        if (paymentIntent.metadata?.orderId !== orderId) {
+            throw new BadRequestException('PaymentIntent is not bound to this order');
+        }
+        if (paymentIntent.metadata?.isUpsell !== 'true') {
+            throw new BadRequestException('PaymentIntent is not an upsell payment');
+        }
+        if (paymentIntent.metadata?.upsellType && paymentIntent.metadata.upsellType !== addonType) {
+            throw new BadRequestException('PaymentIntent upsell type mismatch');
+        }
+        
+        // Verify payment amount matches product
+        if (paymentIntent.amount !== product.amount) {
+            throw new BadRequestException(`Payment amount mismatch. Expected: ${product.amount}, Got: ${paymentIntent.amount}`);
         }
 
         const existingAddons = (order.addons as unknown as UpsellAddon[] | null) || [];
-        
+
+        // Idempotent: already confirmed
+        if (existingAddons.some(a => a.type === addonType || a.paymentIntentId === paymentIntentId)) {
+            return {
+                success: true,
+                order,
+                addon: existingAddons.find(a => a.type === addonType)!,
+                alreadyConfirmed: true,
+            };
+        }
+
         // Add the new addon
         const newAddon: UpsellAddon = {
             type: addonType,
             name: product.name,
             amount: product.amount,
-            paidAt: new Date()
+            paidAt: new Date(),
+            paymentIntentId,
         };
 
         const updatedAddons = [...existingAddons, newAddon];

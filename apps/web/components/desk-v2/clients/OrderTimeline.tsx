@@ -18,7 +18,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { LevelBadge } from '../shared/LevelBadge';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { ClientFullData, ClientOrder } from './types';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 
 interface OrderTimelineProps {
@@ -42,7 +42,7 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
   const handleRegenerate = async (orderId: string) => {
     try {
       setRegeneratingOrder(orderId);
-      await api.post(`/expert/orders/${orderId}/generate`);
+      await expertApi.post(`/expert/orders/${orderId}/generate`);
       toast.success('Régénération lancée', { description: 'La lecture sera bientôt disponible' });
       // Refresh after a few seconds
       setTimeout(onRefresh, 3000);
@@ -58,7 +58,7 @@ export function OrderTimeline({ client, onRefresh }: OrderTimelineProps) {
     if (!deleteTarget) return;
     try {
       setIsDeleting(true);
-      await api.delete(`/expert/orders/${deleteTarget.id}`);
+      await expertApi.delete(`/expert/orders/${deleteTarget.id}`);
       toast.success('Commande supprimée', { description: deleteTarget.orderNumber });
       setDeleteTarget(null);
       onRefresh();
@@ -298,7 +298,7 @@ function OrderItem({
             </button>
 
             {!hasPdf && isCompleted && (
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-600 rounded-lg text-xs"
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-600 rounded-lg text-xs">
                 <AlertCircle className="w-3.5 h-3.5" />
                 PDF non disponible
               </div>

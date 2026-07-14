@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DeskLayout } from '@/components/desk-v2/layout/DeskLayout';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 
 export default function DeskV2Layout({
   children,
@@ -24,11 +24,11 @@ export default function DeskV2Layout({
       }
 
       try {
-        await api.get('/expert/verify', {
+        await expertApi.get('/expert/verify', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setIsAuthenticated(true);
-      } catch (_error) {
+      } catch {
         localStorage.removeItem('expert_token');
         router.push('/admin/login');
       } finally {

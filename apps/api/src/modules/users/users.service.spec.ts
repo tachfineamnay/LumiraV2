@@ -44,6 +44,7 @@ describe('UsersService', () => {
                 findMany: jest.fn(),
                 upsert: jest.fn(),
                 update: jest.fn(),
+                create: jest.fn(),
             },
             expert: {
                 findUnique: jest.fn(),
@@ -169,44 +170,50 @@ describe('UsersService', () => {
             expect(result).toBeTruthy();
         });
 
-        it('should accept PENDING orders with amount > 0 (awaiting webhook)', async () => {
+        it('should reject PENDING orders with amount > 0 (awaiting webhook)', async () => {
             prisma.user.findUnique.mockResolvedValue(mockUser);
-            prisma.order.findFirst.mockResolvedValue({ id: 'order-1', status: 'PENDING', amount: 2900 });
+            prisma.order.findFirst.mockResolvedValue(null);
+            prisma.order.findMany.mockResolvedValue([{ id: 'order-1', status: 'PENDING', amount: 2900, createdAt: new Date() }]);
 
             const result = await service.findUserWithPaidOrder('marie@test.com');
-            expect(result).toBeTruthy();
+            expect(result).toBeNull();
+        });
+
+        it('should reject PENDING orders with amount 0 (no free bypass)', async () => {
+            prisma.user.findUnique.mockResolvedValue(mockUser);
+            prisma.order.findFirst.mockResolvedValue(null);
+            prisma.order.findMany.mockResolvedValue([{ id: 'order-1', status: 'PENDING', amount: 0, createdAt: new Date() }]);
+
+            const result = await service.findUserWithPaidOrder('marie@test.com');
+            expect(result).toBeNull();
         });
     });
 
     // =========================================================================
-    // upsertByEmail
+    // upsertByEmail / createIfNotExists
     // =========================================================================
 
     describe('upsertByEmail', () => {
-        it('should upsert user with normalized email', async () => {
-            prisma.user.upsert.mockResolvedValue(mockUser);
+        it('should create user with normalized email when missing', async () => {
+            prisma.user.findUnique.mockResolvedValue(null);
+            prisma.user.create.mockResolvedValue(mockUser);
 
             await service.upsertByEmail('MARIE@Test.com', 'Marie', 'Dubois', '+33612345678');
 
-            expect(prisma.user.upsert).toHaveBeenCalledWith(
+            expect(prisma.user.create).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: { email: 'marie@test.com' },
-                    create: expect.objectContaining({ email: 'marie@test.com', firstName: 'Marie' }),
-                    update: expect.objectContaining({ firstName: 'Marie', lastName: 'Dubois' }),
+                    data: expect.objectContaining({ email: 'marie@test.com', firstName: 'Marie' }),
                 }),
             );
         });
 
-        it('should set phone to null when not provided', async () => {
-            prisma.user.upsert.mockResolvedValue(mockUser);
+        it('should not overwrite existing user PII', async () => {
+            prisma.user.findUnique.mockResolvedValue(mockUser);
 
-            await service.upsertByEmail('marie@test.com', 'Marie', 'Dubois');
+            const result = await service.upsertByEmail('marie@test.com', 'Hacker', 'Name', '+100');
 
-            expect(prisma.user.upsert).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    create: expect.objectContaining({ phone: null }),
-                }),
-            );
+            expect(prisma.user.create).not.toHaveBeenCalled();
+            expect(result).toEqual(mockUser);
         });
     });
 

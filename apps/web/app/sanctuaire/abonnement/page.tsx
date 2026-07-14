@@ -16,7 +16,7 @@ import {
     ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
-import api from '../../../lib/api';
+import sanctuaireApi from '../../../lib/sanctuaireApi';
 
 // =============================================================================
 // TYPES
@@ -68,7 +68,7 @@ export default function AbonnementPage() {
 
     const fetchStatus = useCallback(async () => {
         try {
-            const res = await api.get('/subscriptions/status');
+            const res = await sanctuaireApi.get('/subscriptions/status');
             setData(res.data);
         } catch {
             setError('Impossible de charger les informations d\'abonnement.');
@@ -85,7 +85,7 @@ export default function AbonnementPage() {
         setActionLoading('cancel');
         setShowConfirm(false);
         try {
-            await api.post('/subscriptions/cancel');
+            await sanctuaireApi.post('/subscriptions/cancel');
             await fetchStatus();
         } catch {
             setError('Erreur lors de l\'annulation. Veuillez réessayer.');
@@ -97,7 +97,7 @@ export default function AbonnementPage() {
     const handleResume = async () => {
         setActionLoading('resume');
         try {
-            await api.post('/subscriptions/resume');
+            await sanctuaireApi.post('/subscriptions/resume');
             await fetchStatus();
         } catch {
             setError('Erreur lors de la reprise. Veuillez réessayer.');

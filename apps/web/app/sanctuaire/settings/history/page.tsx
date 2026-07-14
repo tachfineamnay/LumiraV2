@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import React from "react";
-import { Scroll, Construction } from "lucide-react";
+import { Scroll } from "lucide-react";
 import { GlassCard } from "../../../../components/ui/GlassCard";
 
 export default function HistorySettingsPage() {

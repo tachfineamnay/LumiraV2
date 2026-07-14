@@ -1,23 +1,7 @@
-import axios from 'axios';
+/**
+ * @deprecated Use sanctuaireApi for Sanctuaire routes or expertApi for admin/desk routes.
+ * Kept for backward compatibility — uses sanctuaire token only (no expert_token priority).
+ */
+import sanctuaireApi from './sanctuaireApi';
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-const api = axios.create({
-    baseURL: `${apiUrl}/api`,
-});
-
-api.interceptors.request.use((config) => {
-    if (typeof window !== 'undefined') {
-        // Check for expert_token first (admin routes), then sanctuaire/lumira token
-        const expertToken = localStorage.getItem('expert_token');
-        const lumiraToken = localStorage.getItem('sanctuaire_token') || localStorage.getItem('lumira_token');
-        const token = expertToken || lumiraToken;
-        
-        if (token && !config.headers.Authorization) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-    }
-    return config;
-});
-
-export default api;
+export default sanctuaireApi;

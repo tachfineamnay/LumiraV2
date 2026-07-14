@@ -31,6 +31,10 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
+      - name: Audit dependencies (high severity)
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
+
       - name: Type Check
         run: pnpm typecheck
 
@@ -42,3 +46,35 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: pnpm exec playwright test
+        env:
+          CI: true

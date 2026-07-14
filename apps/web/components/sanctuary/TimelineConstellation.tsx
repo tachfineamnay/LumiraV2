@@ -10,7 +10,6 @@ import {
     Sparkles,
     MessageCircle,
     X,
-    ChevronRight,
     Loader2,
 } from 'lucide-react';
 

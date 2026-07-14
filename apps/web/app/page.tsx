@@ -3,11 +3,14 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Mandala } from "../components/ui/Mandala";
 import { useRef } from "react";
-import { Crown, Sparkles, MessageCircle, BookOpen, Moon, Star, Check, ShieldCheck, FileText, Headphones, Palette, Compass, PenLine } from "lucide-react";
+import { Crown, Sparkles, MessageCircle, Star, Check, ShieldCheck, FileText, Headphones, Palette, Compass, PenLine, ChevronDown } from "lucide-react";
 import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
 import { TestimonialsCarousel } from "../components/landing/TestimonialsCarousel";
 import { HowItWorks } from "../components/landing/HowItWorks";
+import { WhatYouGet } from "../components/landing/WhatYouGet";
+import { BeforeAfterSection } from "../components/landing/BeforeAfterSection";
+import { FinalCTA } from "../components/landing/FinalCTA";
 import { SUBSCRIPTION } from "../lib/products";
 import Link from "next/link";
 
@@ -21,8 +24,6 @@ export default function Home() {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
 
-  // Products are now imported from lib/products.ts
-
   return (
     <main ref={containerRef} className="relative bg-cosmic-void min-h-screen overflow-x-hidden starfield">
       <Header />
@@ -32,16 +33,19 @@ export default function Home() {
         <Mandala />
       </div>
 
+      {/* ═══════════════════════════════════════
+          HERO — L'ACCROCHE ÉMOTIONNELLE
+      ═══════════════════════════════════════ */}
       <section className="relative min-h-[110vh] flex flex-col items-center justify-center text-center px-4 pt-32 pb-20 overflow-hidden z-10 selection:bg-cosmic-gold/20">
 
-        {/* Subtle noise overlay specifically for Hero focus */}
-        <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none mix-blend-overlay"></div>
+        {/* Subtle noise overlay for Hero focus */}
+        <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none mix-blend-overlay" />
 
         <motion.div
           style={{ opacity: heroOpacity, scale: heroScale }}
           className="relative max-w-[1600px] mx-auto w-full flex flex-col items-center"
         >
-          {/* Social Proof - Stark & Clean */}
+          {/* Social Proof — en français */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -49,15 +53,16 @@ export default function Home() {
             className="mb-12 flex items-center gap-4"
           >
             <div className="flex -space-x-3">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/20 backdrop-blur-md" /> // Abstract avatars
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/20 backdrop-blur-md" />
               ))}
             </div>
             <p className="text-cosmic-ethereal/60 text-xs tracking-[0.2em] uppercase font-medium">
-              Join 2,500+ Awakened Souls
+              2 500+ âmes déjà éveillées · Note 4.9/5
             </p>
           </motion.div>
 
+          {/* Main Title */}
           <motion.div
             initial={{ opacity: 0, y: 50, filter: 'blur(20px)' }}
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
@@ -86,63 +91,111 @@ export default function Home() {
               Lumira
             </motion.h1>
 
-            {/* Supporting Text */}
-            <motion.p
+            {/* Tagline — message clair et vendeur */}
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8, duration: 1 }}
-              className="mt-12 text-lg md:text-xl text-cosmic-ethereal/80 max-w-lg mx-auto font-light leading-relaxed tracking-wide"
+              className="mt-12 max-w-xl mx-auto"
             >
-              Cartographie vibratoire & Algorithmes sacrés. <br />
-              <span className="text-white/50 text-sm mt-3 block uppercase tracking-[0.2em]">L'architecture de votre âme, décodée.</span>
-            </motion.p>
+              <p className="text-xl md:text-2xl text-white/85 font-light leading-relaxed tracking-wide">
+                Ce que les autres mettent des années à comprendre sur eux-mêmes —
+              </p>
+              <p className="text-xl md:text-2xl text-cosmic-gold/90 font-light leading-relaxed tracking-wide mt-2">
+                Lumira vous le révèle en 24 heures.
+              </p>
+              <p className="text-white/40 text-sm mt-5 uppercase tracking-[0.2em]">
+                Analyse vibratoire · Intelligence IA · Expert humain
+              </p>
+            </motion.div>
           </motion.div>
 
-          {/* CTA Group - The Portal Entry */}
+          {/* CTA Group */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 1, duration: 1 }}
-            className="mt-20 flex flex-col items-center gap-6"
+            className="mt-16 flex flex-col items-center gap-6"
           >
             <Link href="#niveaux" className="group relative pointer-events-auto">
-              <div className="absolute inset-0 bg-cosmic-gold/30 rounded-full blur-[50px] opacity-0 group-hover:opacity-70 transition-opacity duration-700 scale-150"></div>
+              <div className="absolute inset-0 bg-cosmic-gold/30 rounded-full blur-[50px] opacity-0 group-hover:opacity-70 transition-opacity duration-700 scale-150" />
               <div className="relative px-16 py-6 rounded-full border border-white/10 bg-white/[0.02] backdrop-blur-2xl text-white tracking-[0.25em] text-xs uppercase font-bold group-hover:bg-white/[0.08] group-hover:border-cosmic-gold/50 transition-all duration-500 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.05)] group-hover:shadow-[0_0_30px_rgba(255,215,0,0.2)]">
-                <span className="relative z-10 group-hover:text-cosmic-gold transition-colors duration-500">Ouvrir le Portail</span>
-                <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-cosmic-gold to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-500 opacity-50"></div>
+                <span className="relative z-10 group-hover:text-cosmic-gold transition-colors duration-500">Découvrir ma lecture</span>
+                <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-cosmic-gold to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-500 opacity-50" />
               </div>
             </Link>
 
-            {/* Micro Stats - Minimalist */}
-            <div className="flex items-center gap-8 mt-8 opacity-50 hover:opacity-100 transition-opacity duration-500">
+            {/* Micro Stats */}
+            <div className="flex items-center gap-8 mt-6 opacity-50 hover:opacity-100 transition-opacity duration-500">
               <div className="flex flex-col items-center">
                 <span className="text-white font-playfair text-xl italic">4.9</span>
                 <span className="text-[10px] text-white/40 uppercase tracking-widest">Note Moyenne</span>
               </div>
-              <div className="w-px h-8 bg-white/10"></div>
+              <div className="w-px h-8 bg-white/10" />
               <div className="flex flex-col items-center">
                 <span className="text-white font-playfair text-xl italic">24h</span>
-                <span className="text-[10px] text-white/40 uppercase tracking-widest">Délai Analyse</span>
+                <span className="text-[10px] text-white/40 uppercase tracking-widest">Livraison Garantie</span>
+              </div>
+              <div className="w-px h-8 bg-white/10" />
+              <div className="flex flex-col items-center">
+                <span className="text-white font-playfair text-xl italic">29€</span>
+                <span className="text-[10px] text-white/40 uppercase tracking-widest">Pour tout accéder</span>
               </div>
             </div>
           </motion.div>
         </motion.div>
 
-        {/* Scroll Indicator - Floating Line */}
+        {/* Scroll Indicator */}
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 100 }}
-          transition={{ delay: 2, duration: 1.5 }}
-          className="absolute bottom-0 left-1/2 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent"
-        />
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 2.5, duration: 1.5 }}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/20"
+        >
+          <span className="text-[9px] uppercase tracking-[0.3em]">Découvrir</span>
+          <ChevronDown className="w-4 h-4 animate-bounce" />
+        </motion.div>
       </section>
 
-      {/* 🧩 HOW IT WORKS */}
+      {/* ═══════════════════════════════════════
+          PROOF OF CONCEPT — Ce que c'est vraiment
+      ═══════════════════════════════════════ */}
+      <section className="relative py-24 z-10">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="font-playfair italic text-3xl md:text-5xl text-white/80 leading-relaxed max-w-3xl mx-auto">
+              "Lumira, c'est comme si quelqu'un avait lu en vous —
+              <span className="text-amber-300/90"> et avait osé vous dire la vérité."</span>
+            </h2>
+            <div className="mt-8 flex items-center justify-center gap-4 text-white/30 text-xs uppercase tracking-widest">
+              <div className="w-12 h-px bg-white/10" />
+              <span>Retour de nos premiers utilisateurs</span>
+              <div className="w-12 h-px bg-white/10" />
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════
+          HOW IT WORKS — Process simplifié
+      ═══════════════════════════════════════ */}
       <HowItWorks />
 
-      {/* 🏛️ SINGLE OFFER (Pricing) */}
+      {/* ═══════════════════════════════════════
+          WHAT YOU GET — Les livrables en détail
+      ═══════════════════════════════════════ */}
+      <WhatYouGet />
+
+      {/* ═══════════════════════════════════════
+          PRICING — L'offre
+      ═══════════════════════════════════════ */}
       <section id="niveaux" className="py-24 relative z-10">
         <div className="max-w-5xl mx-auto px-6">
+
           {/* Section Header */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -151,15 +204,14 @@ export default function Home() {
             className="text-center mb-16"
           >
             <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">
-              Ce Que Vous Recevez
+              L'offre de lancement
             </span>
             <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-6xl text-cosmic-divine mt-4 mb-6">
-              Une Expérience Complète
+              Tout. Pour le prix d'un déjeuner.
             </h2>
             <p className="text-cosmic-ethereal max-w-2xl mx-auto text-lg leading-relaxed font-light">
-              Intelligence artificielle avancée + révision par un expert humain.
-              <br />
-              <span className="text-white/60">Chaque lecture est unique, profonde et vérifiée.</span>
+              Nous aurions pu facturer chaque livrable séparément. Nous avons choisi l'accès complet
+              à <span className="text-white/80 font-medium">29€/mois</span> — parce que votre transformation ne devrait pas avoir de prix d'entrée prohibitif.
             </p>
           </motion.div>
 
@@ -186,11 +238,12 @@ export default function Home() {
                       </span>
                     </div>
                     <div className="flex items-baseline gap-2">
+                      <span className="text-2xl text-white/30 line-through font-light">97€</span>
                       <span className="text-5xl md:text-6xl font-playfair italic text-white">{SUBSCRIPTION.price}€</span>
                       <span className="text-lg text-white/40">/mois</span>
                     </div>
                     <p className="mt-2 text-white/50 text-sm">
-                      Sans engagement · Annulation en un clic
+                      Sans engagement · Annulation en un clic · Offre de lancement
                     </p>
                   </div>
                   <div className="flex flex-col items-start md:items-end gap-3">
@@ -199,7 +252,7 @@ export default function Home() {
                       className="group/btn relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-bold text-base hover:from-amber-400 hover:to-amber-500 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)]"
                     >
                       <Sparkles className="w-5 h-5" />
-                      Commencer mon voyage
+                      Commencer mon voyage — {SUBSCRIPTION.price}€
                     </Link>
                     <div className="flex items-center gap-1.5 text-emerald-400/70 text-xs">
                       <ShieldCheck className="w-3.5 h-3.5" />
@@ -260,7 +313,7 @@ export default function Home() {
               <div className="p-6 md:px-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-white/40 text-xs">
                 <div className="flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5 text-emerald-400/60" />
-                  <span>Accès immédiat</span>
+                  <span>Accès immédiat au sanctuaire</span>
                 </div>
                 <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
                 <div className="flex items-center gap-1.5">
@@ -275,7 +328,7 @@ export default function Home() {
                 <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
                 <div className="flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5 text-emerald-400/60" />
-                  <span>Révisée par un expert</span>
+                  <span>Révisée par un expert humain</span>
                 </div>
               </div>
             </div>
@@ -283,8 +336,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 🌟 TESTIMONIALS CAROUSEL */}
+      {/* ═══════════════════════════════════════
+          BEFORE / AFTER — La transformation
+      ═══════════════════════════════════════ */}
+      <BeforeAfterSection />
+
+      {/* ═══════════════════════════════════════
+          TESTIMONIALS — Preuve sociale
+      ═══════════════════════════════════════ */}
       <TestimonialsCarousel />
+
+      {/* ═══════════════════════════════════════
+          FINAL CTA — Le closing
+      ═══════════════════════════════════════ */}
+      <FinalCTA />
 
       <Footer />
     </main>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { ActivityItem } from '../types';
 
 interface UseActivityOptions {
@@ -18,7 +18,7 @@ export function useActivity({ limit = 10, autoFetch = true }: UseActivityOptions
     setIsLoading(true);
     setError(null);
     try {
-      const { data } = await api.get<{ activities: ActivityItem[] }>(`/expert/activity?limit=${limit}`);
+      const { data } = await expertApi.get<{ activities: ActivityItem[] }>(`/expert/activity?limit=${limit}`);
       setItems(data.activities);
     } catch (err) {
       console.error('Failed to fetch activity:', err);

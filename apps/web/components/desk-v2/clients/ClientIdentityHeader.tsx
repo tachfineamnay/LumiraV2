@@ -23,11 +23,9 @@ import {
   Pencil,
   Loader2,
 } from 'lucide-react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 import { Avatar } from '../shared/Avatar';
-import { LevelBadge } from '../shared/LevelBadge';
-import { Badge } from '../shared/Badge';
 import { ClientFullData } from './types';
 
 interface ClientIdentityHeaderProps {
@@ -303,7 +301,7 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      await api.patch(`/expert/clients/${client.id}`, form);
+      await expertApi.patch(`/expert/clients/${client.id}`, form);
       toast.success('Informations mises à jour');
       onSaved();
     } catch (err) {
@@ -404,7 +402,7 @@ function EditableTags({ clientId, tags, onRefresh }: { clientId: string; tags: s
 
   const saveTags = async (updatedTags: string[]) => {
     try {
-      await api.patch(`/expert/clients/${clientId}`, { tags: updatedTags });
+      await expertApi.patch(`/expert/clients/${clientId}`, { tags: updatedTags });
       onRefresh?.();
     } catch (err) {
       toast.error('Erreur lors de la mise à jour des tags');

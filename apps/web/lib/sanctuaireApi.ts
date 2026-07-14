@@ -4,18 +4,12 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 /**
  * Axios instance for Sanctuaire (client portal) API calls.
- * Uses 'sanctuaire_token' for authentication.
+ * Browser requests go through the Next.js BFF (/api/bff) which attaches
+ * the httpOnly session cookie. Server-side calls hit the API directly.
  */
 const sanctuaireApi = axios.create({
-    baseURL: `${apiUrl}/api`,
-});
-
-sanctuaireApi.interceptors.request.use((config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('sanctuaire_token') : null;
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+    baseURL: typeof window !== 'undefined' ? '/api/bff' : `${apiUrl}/api`,
+    withCredentials: true,
 });
 
 export default sanctuaireApi;

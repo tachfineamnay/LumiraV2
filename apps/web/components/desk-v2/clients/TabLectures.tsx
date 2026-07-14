@@ -19,7 +19,7 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { LevelBadge } from '../shared/LevelBadge';
 import { Badge } from '../shared/Badge';
 import { ClientFullData, ClientOrder } from './types';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 
 interface TabLecturesProps {
@@ -40,7 +40,7 @@ export function TabLectures({ client, onRefresh }: TabLecturesProps) {
   const handleRegenerate = async (orderId: string) => {
     try {
       setRegeneratingOrder(orderId);
-      await api.post(`/expert/orders/${orderId}/generate`);
+      await expertApi.post(`/expert/orders/${orderId}/generate`);
       toast.success('Régénération lancée', { description: 'La lecture sera bientôt disponible' });
       setTimeout(onRefresh, 3000);
     } catch (error) {

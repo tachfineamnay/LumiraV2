@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
@@ -21,6 +21,7 @@ import { ReadingsModule } from "./modules/readings/readings.module";
 import { ServicesModule } from "./services/services.module";
 import { SubscriptionsModule } from "./modules/subscriptions/subscriptions.module";
 import { DreamsModule } from "./modules/dreams/dreams.module";
+import { RequestIdMiddleware } from "./middleware/request-id.middleware";
 
 @Module({
   imports: [
@@ -60,4 +61,8 @@ import { DreamsModule } from "./modules/dreams/dreams.module";
     },
   ]
 })
-export class AppModule { }
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

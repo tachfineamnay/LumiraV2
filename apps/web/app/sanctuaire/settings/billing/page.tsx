@@ -3,9 +3,8 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState } from "react";
-import { CreditCard, ExternalLink, Check, Zap } from "lucide-react";
+import { ExternalLink, Check, Zap } from "lucide-react";
 import { GlassCard } from "../../../../components/ui/GlassCard";
-import axios from "axios";
 
 export default function BillingSettingsPage() {
     const [isLoading, setIsLoading] = useState(false);

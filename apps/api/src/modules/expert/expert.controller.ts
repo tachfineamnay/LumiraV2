@@ -148,6 +148,23 @@ export class ExpertController {
         return this.expertService.assignOrder(id, expert.id);
     }
 
+    @Patch('orders/:id/status')
+    async updateOrderStatus(
+        @Param('id') id: string,
+        @Body() body: { status: string },
+    ) {
+        return this.expertService.updateOrderStatus(id, body.status);
+    }
+
+    @Patch('orders/:id/draft')
+    async saveOrderDraft(
+        @Param('id') id: string,
+        @Body() body: { content: string },
+        @CurrentExpert() expert: Expert,
+    ) {
+        return this.expertService.saveOrderDraft(id, body.content, expert.id);
+    }
+
     @Delete('orders/:id')
     @HttpCode(HttpStatus.NO_CONTENT)
     async deleteOrder(@Param('id') id: string) {

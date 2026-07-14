@@ -22,7 +22,7 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 import { ClientFullData } from './types';
 
@@ -299,7 +299,7 @@ function EditableNotes({ clientId, initialNotes, onSaved }: { clientId: string; 
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      await api.patch(`/expert/clients/${clientId}`, { notes });
+      await expertApi.patch(`/expert/clients/${clientId}`, { notes });
       toast.success('Notes mises à jour');
       setIsEditing(false);
       onSaved?.();

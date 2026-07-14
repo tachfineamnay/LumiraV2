@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import type { DeskStats } from '../types';
 
 interface UseStatsOptions {
@@ -27,7 +27,7 @@ export function useStats(options: UseStatsOptions = {}) {
 
   const fetchStats = useCallback(async () => {
     try {
-      const { data } = await api.get('/expert/stats');
+      const { data } = await expertApi.get('/expert/stats');
       setStats({
         pendingCount: data.pendingOrders || 0,
         processingCount: data.processingOrders || 0,

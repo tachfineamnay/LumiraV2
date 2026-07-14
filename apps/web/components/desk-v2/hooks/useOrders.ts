@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import type { Order, OrderStatus, KanbanColumnId } from '../types';
 
 interface UseOrdersOptions {
@@ -32,10 +32,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
     try {
       // Fetch all order types - use Promise.allSettled to handle partial failures
       const results = await Promise.allSettled([
-        api.get('/expert/orders/paid'),
-        api.get('/expert/orders/processing'),
-        api.get('/expert/orders/validation'),
-        api.get('/expert/orders/history?limit=20'),
+        expertApi.get('/expert/orders/paid'),
+        expertApi.get('/expert/orders/processing'),
+        expertApi.get('/expert/orders/validation'),
+        expertApi.get('/expert/orders/history?limit=20'),
       ]);
 
       // Extract data safely, fallback to empty array if endpoint fails (e.g., 404)

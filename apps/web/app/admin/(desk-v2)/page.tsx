@@ -12,13 +12,12 @@ import { TrendingUp, Calendar } from 'lucide-react';
 
 export default function DashboardPage() {
   const { stats, isLoading, updateStats } = useStats();
-  const { items: activityItems, isLoading: activityLoading, addItem } = useActivity({ limit: 10 });
+  const { items: activityItems, isLoading: activityLoading } = useActivity({ limit: 10 });
   const [greeting, setGreeting] = useState('');
 
   // Real-time stats updates via WebSocket
   useSocket({
     onStatsUpdate: updateStats,
-    onNewActivity: addItem,
   });
 
   // Dynamic greeting based on time

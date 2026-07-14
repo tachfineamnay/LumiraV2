@@ -22,7 +22,7 @@ import {
     TestTube,
     Info,
 } from "lucide-react";
-import api from "@/lib/api";
+import expertApi from "@/lib/expertApi";
 import { cn } from "@/lib/utils";
 
 // =============================================================================
@@ -212,7 +212,7 @@ function PromptEditor({
         }
         setLoadingHistory(true);
         try {
-            const { data } = await api.get(`/expert/settings/prompts/${promptKey}/history`);
+            const { data } = await expertApi.get(`/expert/settings/prompts/${promptKey}/history`);
             setHistory(data);
             setShowHistory(true);
         } catch (err) {
@@ -224,9 +224,9 @@ function PromptEditor({
 
     const restoreVersion = async (version: number) => {
         try {
-            await api.post(`/expert/settings/prompts/${promptKey}/restore/${version}`);
+            await expertApi.post(`/expert/settings/prompts/${promptKey}/restore/${version}`);
             // Reload history and update value
-            const { data: newHistory } = await api.get(
+            const { data: newHistory } = await expertApi.get(
                 `/expert/settings/prompts/${promptKey}/history`
             );
             setHistory(newHistory);
@@ -451,14 +451,14 @@ function CredentialsTab() {
     } | null>(null);
 
     useEffect(() => {
-        api.get("/expert/settings/status").then(({ data }) => setConfigStatus(data));
+        expertApi.get("/expert/settings/status").then(({ data }) => setConfigStatus(data));
     }, []);
 
     const testConnection = async () => {
         setTesting(true);
         setTestResult(null);
         try {
-            const { data } = await api.post("/expert/settings/vertex-test");
+            const { data } = await expertApi.post("/expert/settings/vertex-test");
             setTestResult(data);
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string } } };
@@ -475,7 +475,7 @@ function CredentialsTab() {
         setTestingOpenAI(true);
         setOpenaiTestResult(null);
         try {
-            const { data } = await api.post("/expert/settings/openai-test");
+            const { data } = await expertApi.post("/expert/settings/openai-test");
             setOpenaiTestResult(data);
         } catch (err: unknown) {
             const error = err as { response?: { data?: { error?: string } } };
@@ -656,7 +656,7 @@ function CredentialsTab() {
                         et/ou{" "}
                         <code className="px-1 py-0.5 bg-desk-card rounded text-xs">OPENAI_API_KEY</code>{" "}
                         dans votre configuration de déploiement (Coolify, .env, etc.) puis redémarrez
-                        l&apos;API.
+                        l&apos;expertApi.
                     </p>
                 </div>
             </GlassCard>
@@ -1173,9 +1173,9 @@ export default function SettingsPage() {
         const loadData = async () => {
             try {
                 const [promptsRes, defaultsRes, configRes] = await Promise.all([
-                    api.get("/expert/settings/prompts"),
-                    api.get("/expert/settings/prompts/defaults"),
-                    api.get("/expert/settings/model-config"),
+                    expertApi.get("/expert/settings/prompts"),
+                    expertApi.get("/expert/settings/prompts/defaults"),
+                    expertApi.get("/expert/settings/model-config"),
                 ]);
                 setPrompts(promptsRes.data);
                 setDefaults(defaultsRes.data);
@@ -1193,9 +1193,9 @@ export default function SettingsPage() {
         async (key: string, value: string, comment?: string) => {
             setSaving(true);
             try {
-                await api.put(`/expert/settings/prompts/${key}`, { value, comment });
+                await expertApi.put(`/expert/settings/prompts/${key}`, { value, comment });
                 // Reload prompts
-                const { data } = await api.get("/expert/settings/prompts");
+                const { data } = await expertApi.get("/expert/settings/prompts");
                 setPrompts(data);
             } catch (err) {
                 console.error("Failed to save prompt", err);
@@ -1209,9 +1209,9 @@ export default function SettingsPage() {
     const handleResetPrompt = useCallback(async (key: string) => {
         setSaving(true);
         try {
-            await api.post(`/expert/settings/prompts/${key}/reset`);
+            await expertApi.post(`/expert/settings/prompts/${key}/reset`);
             // Reload prompts
-            const { data } = await api.get("/expert/settings/prompts");
+            const { data } = await expertApi.get("/expert/settings/prompts");
             setPrompts(data);
         } catch (err) {
             console.error("Failed to reset prompt", err);
@@ -1223,9 +1223,9 @@ export default function SettingsPage() {
     const handleSaveModelConfig = useCallback(async (config: Partial<ModelConfig>) => {
         setSaving(true);
         try {
-            await api.put("/expert/settings/model-config", config);
+            await expertApi.put("/expert/settings/model-config", config);
             // Reload config
-            const { data } = await api.get("/expert/settings/model-config");
+            const { data } = await expertApi.get("/expert/settings/model-config");
             setModelConfig(data);
         } catch (err) {
             console.error("Failed to save model config", err);

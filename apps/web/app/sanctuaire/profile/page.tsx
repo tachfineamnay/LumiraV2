@@ -2,9 +2,9 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import axios from "axios";
+import sanctuaireApi from "../../../lib/sanctuaireApi";
 import {
     User,
     Mail,
@@ -50,16 +50,6 @@ export default function ProfilePage() {
     const [palmPhoto, setPalmPhoto] = useState<string | null>(null);
     const [photosChanged, setPhotosChanged] = useState(false);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
-    // Get token from localStorage
-    const getToken = useCallback(() => {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("sanctuaire_token");
-        }
-        return null;
-    }, []);
-
     // Initialize photos from profile
     React.useEffect(() => {
         if (profile) {
@@ -70,19 +60,12 @@ export default function ProfilePage() {
 
     // Handle photo save
     const handleSavePhotos = async () => {
-        const token = getToken();
-        if (!token) return;
-
         setIsSaving(true);
         try {
-            await axios.patch(
-                `${API_URL}/api/users/profile`,
-                {
-                    facePhotoUrl: facePhoto,
-                    palmPhotoUrl: palmPhoto,
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await sanctuaireApi.patch('/users/profile', {
+                facePhotoUrl: facePhoto,
+                palmPhotoUrl: palmPhoto,
+            });
             await refetchData();
             setIsEditingPhotos(false);
             setPhotosChanged(false);

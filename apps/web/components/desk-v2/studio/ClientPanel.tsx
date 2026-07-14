@@ -24,7 +24,7 @@ interface ClientPanelProps {
   compact?: boolean;
 }
 
-export function ClientPanel({ order, compact = false }: ClientPanelProps) {
+export function ClientPanel({ order }: ClientPanelProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(['profile', 'question']);
   const { user } = order;
   const profile = user.profile;

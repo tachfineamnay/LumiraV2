@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import api from '@/lib/api';
+import sanctuaireApi from '@/lib/sanctuaireApi';
 
 export interface ClientNotification {
     id: string;
@@ -42,7 +42,7 @@ export function useClientNotifications({
 
     const fetchNotifications = useCallback(async (showNewToast = true) => {
         try {
-            const { data } = await api.get<{
+            const { data } = await sanctuaireApi.get<{
                 notifications: ClientNotification[];
                 unreadCount: number;
             }>('/client/notifications?limit=10');
@@ -109,7 +109,7 @@ export function useClientNotifications({
 
     const markAsRead = useCallback(async (notificationId: string) => {
         try {
-            await api.patch(`/client/notifications/${notificationId}/read`);
+            await sanctuaireApi.patch(`/client/notifications/${notificationId}/read`);
             setNotifications(prev =>
                 prev.map(n => n.id === notificationId ? { ...n, read: true, readAt: new Date().toISOString() } : n)
             );
@@ -121,7 +121,7 @@ export function useClientNotifications({
 
     const markAllAsRead = useCallback(async () => {
         try {
-            await api.post('/client/notifications/read-all');
+            await sanctuaireApi.post('/client/notifications/read-all');
             setNotifications(prev => prev.map(n => ({ ...n, read: true, readAt: new Date().toISOString() })));
             setUnreadCount(0);
         } catch (error) {

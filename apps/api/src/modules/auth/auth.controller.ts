@@ -13,12 +13,6 @@ export class AuthController {
         private authService: AuthService,
     ) { }
 
-    @Post('login/client')
-    async loginClient(@Body() loginDto: LoginClientDto) {
-        const user = await this.authService.validateClient(loginDto.email);
-        return this.authService.login(user, 'client');
-    }
-
     @UseGuards(LocalAuthGuard)
     @Post('login/expert')
     async loginExpert(@Request() req, @Body() dto: LoginExpertDto) {
@@ -28,15 +22,8 @@ export class AuthController {
     }
 
     /**
-     * POST /api/auth/sanctuaire-v2
-     * Passwordless authentication for Sanctuaire clients.
-     * Validates email against paid orders.
-     * Rate limited: 5 attempts per 60 seconds.
-     */
-    /**
      * POST /api/auth/sanctuaire/register
-     * Pre-registers a Sanctuaire client (upsert by email) and returns a JWT.
-     * Allows unauthenticated access to the checkout endpoint before payment.
+     * Pre-registers a Sanctuaire client (create-if-missing). Does NOT return a JWT.
      * Rate limited: 10 attempts per 60 seconds.
      */
     @Post('sanctuaire/register')

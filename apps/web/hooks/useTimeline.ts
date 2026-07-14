@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
+import sanctuaireApi from '../lib/sanctuaireApi';
 import type { PathStep } from '../components/sanctuary/TimelineConstellation';
 
 interface SpiritualPathData {
@@ -23,8 +24,6 @@ export function useTimeline(options: UseTimelineOptions = {}) {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
     // Calculate current day based on path start date
     const getCurrentDay = useCallback(() => {
         if (!spiritualPath?.startedAt) return 1;
@@ -35,37 +34,17 @@ export function useTimeline(options: UseTimelineOptions = {}) {
         return Math.min(diffDays, 30);
     }, [spiritualPath?.startedAt]);
 
-    // Fetch spiritual path
+    // Fetch spiritual path via BFF (httpOnly cookie)
     const fetchPath = useCallback(async () => {
-        const token = localStorage.getItem('sanctuaire_token');
-        if (!token) {
-            setIsLoading(false);
-            return;
-        }
-
         try {
-            const res = await fetch(`${apiUrl}/api/client/spiritual-path`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const res = await sanctuaireApi.get('/client/spiritual-path');
+            const data = res.data;
 
-            if (!res.ok) {
-                if (res.status === 404) {
-                    // No path yet - this is normal for new users
-                    setSpiritualPath(null);
-                    return;
-                }
-                throw new Error('Failed to fetch spiritual path');
-            }
-
-            const data = await res.json();
-            
-            // Handle backend response structure
             if (data.exists === false) {
                 setSpiritualPath(null);
                 return;
             }
-            
-            // Set the spiritual path data (exists: true is stripped)
+
             setSpiritualPath({
                 id: data.id,
                 archetype: data.archetype,
@@ -74,36 +53,26 @@ export function useTimeline(options: UseTimelineOptions = {}) {
                 startedAt: data.startedAt,
                 steps: data.steps || [],
             });
-        } catch (err) {
-            const error = err instanceof Error ? err : new Error('Unknown error');
-            setError(error);
+        } catch (err: unknown) {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            if (status === 404) {
+                setSpiritualPath(null);
+            } else if (status === 401) {
+                setSpiritualPath(null);
+            } else {
+                const error = err instanceof Error ? err : new Error('Unknown error');
+                setError(error);
+            }
         } finally {
             setIsLoading(false);
         }
-    }, [apiUrl]);
+    }, []);
 
     // Complete a step
     const completeStep = useCallback(async (stepId: string) => {
-        const token = localStorage.getItem('sanctuaire_token');
-        if (!token) {
-            toast.error('Session expirée');
-            return;
-        }
-
         try {
-            const res = await fetch(`${apiUrl}/api/client/spiritual-path/steps/${stepId}/complete`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
+            await sanctuaireApi.post(`/client/spiritual-path/steps/${stepId}/complete`);
 
-            if (!res.ok) {
-                throw new Error('Failed to complete step');
-            }
-
-            // Update local state
             setSpiritualPath(prev => {
                 if (!prev) return null;
                 return {
@@ -117,16 +86,18 @@ export function useTimeline(options: UseTimelineOptions = {}) {
             });
 
             toast.success('Étape complétée ! 🌟');
-        } catch (err) {
-            toast.error('Erreur lors de la complétion');
-            throw err;
+        } catch {
+            toast.error('Session expirée ou erreur');
         }
-    }, [apiUrl]);
+    }, []);
 
-    // Initial fetch
     useEffect(() => {
         fetchPath();
-    }, [fetchPath]);
+        if (options.autoRefresh) {
+            const interval = setInterval(fetchPath, 60000);
+            return () => clearInterval(interval);
+        }
+    }, [fetchPath, options.autoRefresh]);
 
     return {
         spiritualPath,

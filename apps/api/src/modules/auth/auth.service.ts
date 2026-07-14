@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcryptjs';
@@ -11,7 +12,12 @@ export class AuthService {
     constructor(
         private usersService: UsersService,
         private jwtService: JwtService,
+        private configService: ConfigService,
     ) { }
+
+    private get sanctuaireTokenExpiry(): string {
+        return this.configService.get<string>('JWT_EXPIRATION', '30d');
+    }
 
     async validateExpert(email: string, pass: string): Promise<ExpertWithoutPassword | null> {
         const expert = await this.usersService.findExpertByEmail(email);
@@ -100,7 +106,7 @@ export class AuthService {
             level: entitlements.highestLevel,
         };
 
-        const token = this.jwtService.sign(payload, { expiresIn: '30d' });
+        const token = this.jwtService.sign(payload, { expiresIn: this.sanctuaireTokenExpiry });
 
     return {
             success: true,
@@ -118,13 +124,11 @@ export class AuthService {
 
     /**
      * Pre-register a Sanctuaire client before Stripe checkout.
-     * Creates or updates the user record and returns a JWT so the
-     * checkout endpoint (which requires auth) can be reached immediately.
+     * Creates the user if missing; never issues a JWT (payment proves ownership).
+     * Existing users are returned as-is without PII overwrite.
      */
     async registerSanctuaire(dto: { email: string; firstName: string; lastName: string; phone?: string }): Promise<{
         success: true;
-        token: string;
-        access_token: string;
         user: {
             id: string;
             email: string;
@@ -133,27 +137,15 @@ export class AuthService {
             phone: string | null;
         };
     }> {
-        const user = await this.usersService.upsertByEmail(
+        const user = await this.usersService.createIfNotExists(
             dto.email,
             dto.firstName,
             dto.lastName,
             dto.phone,
         );
 
-        const payload = {
-            email: user.email,
-            sub: user.id,
-            userId: user.id,
-            role: 'CLIENT',
-            level: 0,
-        };
-
-        const token = this.jwtService.sign(payload, { expiresIn: '30d' });
-
         return {
             success: true,
-            token,
-            access_token: token,
             user: {
                 id: user.id,
                 email: user.email,

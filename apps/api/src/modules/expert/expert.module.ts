@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { ExpertController } from './expert.controller';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
@@ -26,13 +25,6 @@ import { ServicesModule } from '../../services/services.module';
                 },
             }),
         }),
-        ThrottlerModule.forRoot([
-            {
-                name: 'default',
-                ttl: 900000, // 15 minutes
-                limit: 10,
-            },
-        ]),
     ],
     controllers: [ExpertController],
     providers: [

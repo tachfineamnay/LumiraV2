@@ -9,7 +9,7 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 import { ClientIdentityHeader } from '@/components/desk-v2/clients/ClientIdentityHeader';
 import { ClientTabs } from '@/components/desk-v2/clients/ClientTabs';
@@ -33,7 +33,7 @@ export default function ClientDetailPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const { data } = await api.get(`/expert/clients/${clientId}/full`);
+      const { data } = await expertApi.get(`/expert/clients/${clientId}/full`);
       setClient(data);
     } catch (err) {
       console.error('Failed to fetch client:', err);
@@ -122,7 +122,7 @@ export default function ClientDetailPage() {
         onConfirm={async () => {
           try {
             setIsDeletingClient(true);
-            await api.delete(`/expert/clients/${clientId}`);
+            await expertApi.delete(`/expert/clients/${clientId}`);
             toast.success('Client supprimé');
             router.push('/admin/clients');
           } catch (err) {
@@ -146,7 +146,7 @@ export default function ClientDetailPage() {
           if (!statusAction) return;
           try {
             setIsChangingStatus(true);
-            await api.patch(`/expert/clients/${clientId}/status`, { status: statusAction });
+            await expertApi.patch(`/expert/clients/${clientId}/status`, { status: statusAction });
             toast.success(
               statusAction === 'BANNED' ? 'Client banni' :
               statusAction === 'SUSPENDED' ? 'Client suspendu' :

@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Shield, CreditCard, Crown, Sparkles, Check, ArrowRight } from 'lucide-react';
 import { CheckoutHeader, CheckoutForm, CheckoutFormData, StripePayment, TrustBadges } from '../../components/checkout';
 import { SUBSCRIPTION } from '../../lib/products';
-import api from '../../lib/api';
-import Link from 'next/link';
+import sanctuaireApi from '../../lib/sanctuaireApi';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
@@ -21,7 +20,7 @@ interface ConnectedUser {
 }
 
 function CheckoutContent() {
-    // Get connected user from Sanctuaire token (if any)
+    // Get connected user from Sanctuaire session (if any)
     const [connectedUser, setConnectedUser] = useState<ConnectedUser | null>(null);
     const [formData, setFormData] = useState<CheckoutFormData | null>(null);
     const [isFormValid, setIsFormValid] = useState(false);
@@ -30,16 +29,11 @@ function CheckoutContent() {
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [step, setStep] = useState<'form' | 'payment'>('form');
 
-    // Try to fetch connected user from Sanctuaire on mount
+    // Try to fetch connected user from Sanctuaire session cookies on mount
     useEffect(() => {
         const fetchConnectedUser = async () => {
-            const token = localStorage.getItem('sanctuaire_token') || localStorage.getItem('lumira_token');
-            if (!token) return;
-
             try {
-                const response = await api.get('/users/profile', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const response = await sanctuaireApi.get('/users/profile');
                 if (response.data) {
                     setConnectedUser({
                         email: response.data.email,
@@ -72,13 +66,12 @@ function CheckoutContent() {
 
         try {
             // Create checkout intent — this creates User + Order + PaymentIntent on the backend
-            const response = await api.post('/payments/checkout-intent', {
+            const response = await sanctuaireApi.post('/payments/checkout-intent', {
                 email: formData.email,
                 firstName: formData.firstName,
                 lastName: formData.lastName,
                 phone: formData.phone || undefined,
                 productLevel: '4',
-                amountCents: 2900,
             });
 
             const secret = response.data?.clientSecret;

@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Landing Page', () => {
-    test('should display main title and tagline', async ({ page }) => {
+    test('should display brand and portal CTA', async ({ page }) => {
         await page.goto('/');
-        await expect(page.locator('h1')).toContainText('LUMIRA');
-        await expect(page.getByText('La nouvelle fondation de la cartographie vibratoire spirituelle')).toBeVisible();
+        await expect(page.locator('h1').filter({ hasText: 'Oracle' })).toBeVisible();
+        await expect(page.locator('h1').filter({ hasText: 'Lumira' })).toBeVisible();
+        await expect(page.getByText('Ouvrir le Portail')).toBeVisible();
     });
 
     test('should display single subscription offer at 29€', async ({ page }) => {
@@ -18,9 +19,9 @@ test.describe('Landing Page', () => {
         await expect(page.getByText('29')).toBeVisible();
     });
 
-    test('CTA navigates to /commande', async ({ page }) => {
+    test('CTA opens portal / subscription section', async ({ page }) => {
         await page.goto('/');
-        const cta = page.getByRole('link', { name: /commencer|découvrir|s'abonner|accéder/i }).first();
+        const cta = page.getByRole('link', { name: /ouvrir le portail|commencer mon voyage/i }).first();
         await expect(cta).toBeVisible();
     });
 });

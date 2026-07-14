@@ -21,7 +21,7 @@ import {
   ArrowDown,
   RotateCcw,
 } from 'lucide-react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { cn } from '@/lib/utils';
 
 // =============================================================================
@@ -100,12 +100,6 @@ const SUBSCRIPTION_BADGES: Record<string, { label: string; className: string }> 
   PAST_DUE: { label: 'Impayé', className: 'bg-orange-500/15 text-orange-600 border-orange-500/30' },
   CANCELED: { label: 'Annulé', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
   EXPIRED: { label: 'Expiré', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
-};
-
-const STATUS_BADGES: Record<string, { label: string; className: string }> = {
-  ACTIVE: { label: 'Actif', className: 'bg-emerald-500/15 text-emerald-600' },
-  BANNED: { label: 'Banni', className: 'bg-red-500/15 text-red-600' },
-  SUSPENDED: { label: 'Suspendu', className: 'bg-orange-500/15 text-orange-600' },
 };
 
 // =============================================================================
@@ -244,7 +238,7 @@ export default function ClientsPage() {
 
   // Fetch stats on mount
   useEffect(() => {
-    api.get<ClientsStats>('/expert/clients/stats')
+    expertApi.get<ClientsStats>('/expert/clients/stats')
       .then(({ data }) => setStats(data))
       .catch(() => {});
   }, []);
@@ -267,7 +261,7 @@ export default function ClientsPage() {
       if (filters.sortBy) params.set('sortBy', filters.sortBy);
       if (filters.sortOrder) params.set('sortOrder', filters.sortOrder);
 
-      const { data } = await api.get<PaginatedResponse>(`/expert/clients?${params}`);
+      const { data } = await expertApi.get<PaginatedResponse>(`/expert/clients?${params}`);
       setClients(data.data || []);
       setTotalPages(data.totalPages);
       setTotalClients(data.total);

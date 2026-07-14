@@ -11,7 +11,6 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
-  DragOverEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { KanbanColumn } from './KanbanColumn';
@@ -20,7 +19,7 @@ import { useOrders } from '../hooks/useOrders';
 import { useSocket } from '../hooks/useSocket';
 import { useExpertAuth } from '@/context/ExpertAuthContext';
 import { KANBAN_COLUMNS, Order, KanbanColumnId } from '../types';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
 
@@ -114,7 +113,7 @@ export function KanbanBoard() {
   // Claim an order
   const handleClaim = async (orderId: string) => {
     try {
-      await api.post(`/expert/orders/${orderId}/assign`);
+      await expertApi.post(`/expert/orders/${orderId}/assign`);
       // Optimistic update will come via socket order:claimed event
     } catch (error: unknown) {
       const msg = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -133,7 +132,7 @@ export function KanbanBoard() {
     }
   };
 
-  const handleDragOver = (_event: DragOverEvent) => {
+  const handleDragOver = () => {
     // Optional: Add visual feedback during drag
   };
 
@@ -175,10 +174,19 @@ export function KanbanBoard() {
     const newStatus = getStatusForColumn(destColumn);
     if (!newStatus) return;
 
+    // Block drag back to PAID (webhook-only status)
+    if (destColumn === 'paid') {
+      moveOrder(activeId, destColumn, sourceColumn);
+      toast.error('Impossible de revenir en « Nouvelles »', {
+        description: 'Le statut PAID est géré uniquement après paiement.',
+      });
+      return;
+    }
+
     try {
       // Call API to update status
       if (destColumn === 'processing') {
-        await api.post(`/expert/orders/${activeId}/generate`);
+        await expertApi.post(`/expert/orders/${activeId}/generate`);
         toast.success('Génération lancée');
       } else if (destColumn === 'completed') {
         // Guard: order must be AWAITING_VALIDATION before finalizing
@@ -190,11 +198,11 @@ export function KanbanBoard() {
           });
           return;
         }
-        await api.post(`/expert/orders/${activeId}/finalize`);
+        await expertApi.post(`/expert/orders/${activeId}/finalize`);
         toast.success('Commande scellée');
       } else {
         // Just update status
-        await api.patch(`/expert/orders/${activeId}/status`, { status: newStatus });
+        await expertApi.patch(`/expert/orders/${activeId}/status`, { status: newStatus });
       }
     } catch (error) {
       // Revert on error

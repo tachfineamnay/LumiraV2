@@ -1,46 +1,65 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Order, Prisma } from '@prisma/client';
 import { CreateOrderDto, UpdateOrderDto } from './dto/order.dto';
-
+import { IdGenerator } from '../../utils/IdGenerator';
 import { NotificationsService } from '../notifications/notifications.service';
+
+/** Server catalog for guest/authenticated order creation — never trust client totals */
+const ORDER_AMOUNT_CENTS = 2900;
+
+/**
+ * Expert/desk may move workflow statuses, but PAID is webhook-only.
+ * Schema uses REFUNDED (not CANCELLED).
+ */
+const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+    PENDING: ['REFUNDED'],
+    PAID: ['PROCESSING'],
+    PROCESSING: ['AWAITING_VALIDATION', 'FAILED'],
+    AWAITING_VALIDATION: ['COMPLETED', 'PROCESSING'],
+    COMPLETED: [],
+    FAILED: ['PROCESSING'],
+    REFUNDED: [],
+};
 
 @Injectable()
 export class OrdersService {
     constructor(
         private prisma: PrismaService,
         private notificationsService: NotificationsService,
+        private idGenerator: IdGenerator,
     ) { }
 
     async create(createOrderDto: CreateOrderDto, authenticatedUserId?: string): Promise<Order> {
-        // 1. Resolve or Create User
         let userId = authenticatedUserId;
         if (!userId) {
-            const user = await this.prisma.user.upsert({
-                where: { email: createOrderDto.email },
-                update: {},
-                create: {
-                    email: createOrderDto.email,
-                    firstName: createOrderDto.firstName,
-                    lastName: createOrderDto.lastName,
-                },
-            });
-            userId = user.id;
+            const normalizedEmail = createOrderDto.email.toLowerCase().trim();
+            const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+            if (existing) {
+                userId = existing.id;
+            } else {
+                const user = await this.prisma.user.create({
+                    data: {
+                        email: normalizedEmail,
+                        firstName: createOrderDto.firstName,
+                        lastName: createOrderDto.lastName,
+                    },
+                });
+                userId = user.id;
+            }
         }
 
-        // 2. Generate order number
         const orderNumber = await this.generateOrderNumber();
-
-        // 3. Extract form data
-        const { email, firstName, lastName, totalAmount, ...formData } = createOrderDto;
+        const { email, firstName, lastName, totalAmount: _ignored, ...formData } = createOrderDto;
+        void _ignored;
 
         return this.prisma.order.create({
             data: {
                 orderNumber,
                 userId,
-                userEmail: email,
+                userEmail: email.toLowerCase().trim(),
                 userName: `${firstName} ${lastName}`,
-                amount: totalAmount,
+                amount: ORDER_AMOUNT_CENTS,
                 formData: formData as Prisma.JsonObject,
                 status: 'PENDING',
             },
@@ -54,11 +73,23 @@ export class OrdersService {
         });
     }
 
-    async findOne(id: string): Promise<Order> {
+    async findAllForDesk(): Promise<Order[]> {
+        return this.prisma.order.findMany({
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+
+    async findOne(id: string, requestingUserId?: string, role?: string): Promise<Order> {
+        const where: Prisma.OrderWhereUniqueInput =
+            role === 'CLIENT' && requestingUserId
+                ? { id, userId: requestingUserId }
+                : { id };
+
         const order = await this.prisma.order.findUnique({
-            where: { id },
+            where,
             include: { files: true },
         });
+
         if (!order) {
             throw new NotFoundException(`Order with ID ${id} not found`);
         }
@@ -66,6 +97,29 @@ export class OrdersService {
     }
 
     async update(id: string, updateOrderDto: UpdateOrderDto) {
+        const currentOrder = await this.prisma.order.findUnique({
+            where: { id },
+            select: { status: true },
+        });
+
+        if (!currentOrder) {
+            throw new NotFoundException(`Order with ID ${id} not found`);
+        }
+
+        if (updateOrderDto.status === 'PAID') {
+            throw new ForbiddenException('PAID status can only be set by the payment webhook');
+        }
+
+        if (updateOrderDto.status && updateOrderDto.status !== currentOrder.status) {
+            const allowedTransitions = VALID_STATUS_TRANSITIONS[currentOrder.status] || [];
+            if (!allowedTransitions.includes(updateOrderDto.status)) {
+                throw new BadRequestException(
+                    `Cannot transition order from ${currentOrder.status} to ${updateOrderDto.status}. ` +
+                    `Allowed transitions: ${allowedTransitions.join(', ') || 'none'}`
+                );
+            }
+        }
+
         const order = await this.prisma.order.update({
             where: { id },
             data: updateOrderDto as Prisma.OrderUpdateInput,
@@ -80,34 +134,19 @@ export class OrdersService {
     }
 
     private async generateOrderNumber(): Promise<string> {
-        const date = new Date();
-        const year = date.getFullYear().toString().slice(-2);
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
-        const datePrefix = `LU${year}${month}${day}`;
-
-        const count = await this.prisma.order.count({
-            where: {
-                orderNumber: {
-                    startsWith: datePrefix,
-                },
-            },
-        });
-
-        const sequence = (count + 1).toString().padStart(3, '0');
-        return `${datePrefix}${sequence}`;
+        return this.idGenerator.generateOrderNumber();
     }
 
     /**
-     * Get most recent PAID order by email (for upsell flow)
-     * Only returns orders paid within the last hour to prevent abuse
+     * Get most recent PAID order for the authenticated user (upsell flow).
+     * Requires ownership — never lookup by email alone.
      */
-    async findRecentByEmail(email: string): Promise<Order | null> {
+    async findRecentForUser(userId: string): Promise<Order | null> {
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        
+
         return this.prisma.order.findFirst({
             where: {
-                userEmail: email.toLowerCase().trim(),
+                userId,
                 status: 'PAID',
                 paidAt: { gte: oneHourAgo }
             },

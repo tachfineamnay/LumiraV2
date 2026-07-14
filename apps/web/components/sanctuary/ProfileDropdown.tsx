@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { User, ChevronDown, BookOpen, Plus, LogOut, Settings, Crown, CreditCard } from "lucide-react";
+import { User, ChevronDown, BookOpen, Plus, LogOut, Crown, CreditCard } from "lucide-react";
 import { useSanctuaireAuth } from "../../context/SanctuaireAuthContext";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 
@@ -12,7 +12,8 @@ interface ProfileDropdownProps {
     userLevel?: number;
 }
 
-export const ProfileDropdown = ({ }: ProfileDropdownProps) => {
+export function ProfileDropdown(_props: ProfileDropdownProps) {
+    void _props;
     const [isOpen, setIsOpen] = useState(false);
     const router = useRouter();
     const { user, logout } = useSanctuaireAuth();
@@ -135,4 +136,4 @@ export const ProfileDropdown = ({ }: ProfileDropdownProps) => {
             </AnimatePresence>
         </div>
     );
-};
+}

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Moon, ArrowLeft, Sparkles, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import api from '../../../../lib/api';
+import sanctuaireApi from '../../../../lib/sanctuaireApi';
 
 // =============================================================================
 // EMOTIONS
@@ -98,7 +98,7 @@ export default function NewDreamPage() {
         setError(null);
 
         try {
-            const res = await api.post('/dreams', {
+            const res = await sanctuaireApi.post('/dreams', {
                 content,
                 ...(emotion ? { emotion } : {}),
             });

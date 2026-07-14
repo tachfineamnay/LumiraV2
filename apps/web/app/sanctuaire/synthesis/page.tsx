@@ -21,6 +21,7 @@ import { InsightModal } from "../../../components/insights/InsightModal";
 import { SoulMirror, ArchetypeCard, SynthesisContent } from "../../../components/sanctuary/synthesis";
 import { useSanctuaire } from "../../../context/SanctuaireContext";
 import { useInsights, type CategoryWithInsight } from "../../../hooks/useInsights";
+import sanctuaireApi from "../../../lib/sanctuaireApi";
 
 // =============================================================================
 // TYPES
@@ -197,33 +198,20 @@ export default function SynthesisPage() {
     // Fetch spiritual path and user profile
     useEffect(() => {
         const fetchData = async () => {
-            const token = localStorage.getItem('sanctuaire_token');
-            if (!token) {
-                setIsLoadingData(false);
-                return;
-            }
-
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
             try {
-                // Fetch spiritual path
-                const pathRes = await fetch(`${apiUrl}/api/client/spiritual-path`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const [pathResult, profileResult] = await Promise.allSettled([
+                    sanctuaireApi.get('/client/spiritual-path'),
+                    sanctuaireApi.get('/client/profile'),
+                ]);
 
-                if (pathRes.ok) {
-                    const pathData = await pathRes.json();
-                    setSpiritualPath(pathData);
+                if (pathResult.status === 'fulfilled' && pathResult.value.data) {
+                    setSpiritualPath(pathResult.value.data);
                 }
-
-                // Fetch user profile
-                const profileRes = await fetch(`${apiUrl}/api/client/profile`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-
-                if (profileRes.ok) {
-                    const profileData = await profileRes.json();
-                    setUserProfile(profileData);
+                if (profileResult.status === 'fulfilled' && profileResult.value.data) {
+                    setUserProfile(profileResult.value.data);
+                }
+                if (pathResult.status === 'rejected' && profileResult.status === 'rejected') {
+                    setDataError('Erreur lors du chargement');
                 }
             } catch (err) {
                 console.error('Failed to fetch synthesis data:', err);

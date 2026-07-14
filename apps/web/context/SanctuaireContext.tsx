@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import sanctuaireApi from '../lib/sanctuaireApi';
 import { useSanctuaireAuth } from './SanctuaireAuthContext';
 
 // =============================================================================
@@ -71,8 +71,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [error, setError] = useState<string | null>(null);
 
     const fetchEntitlements = useCallback(async () => {
-        const token = localStorage.getItem('sanctuaire_token');
-        if (!token || !user) {
+        if (!isAuthenticated || !user) {
             setData(null);
             setIsLoading(false);
             return;
@@ -86,10 +85,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             let isSubscribed = false;
             let subscriptionStatus: string | null = null;
             try {
-                const subResponse = await axios.get(
-                    `${process.env.NEXT_PUBLIC_API_URL}/api/subscriptions/status`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
+                const subResponse = await sanctuaireApi.get('/subscriptions/status');
                 subscriptionStatus = subResponse.data?.subscription?.status ?? null;
                 isSubscribed = subscriptionStatus === 'ACTIVE';
             } catch {
@@ -97,10 +93,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             }
 
             // Also fetch legacy entitlements for backward compat
-            const response = await axios.get(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/users/entitlements`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const response = await sanctuaireApi.get('/users/entitlements');
 
             const legacy = response.data;
             // If subscribed, treat as full access (highestLevel = 4, all capabilities)
@@ -124,7 +117,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         } finally {
             setIsLoading(false);
         }
-    }, [user]);
+    }, [user, isAuthenticated]);
 
     // Fetch entitlements when auth state changes
     useEffect(() => {

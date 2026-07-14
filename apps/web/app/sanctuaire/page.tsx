@@ -6,11 +6,12 @@ import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import axios from "axios";
 import { MandalaNav } from "../../components/sanctuary/MandalaNav";
 import { CosmicNotification } from "../../components/sanctuary/CosmicNotification";
 import { ExpertValidationBanner } from "../../components/sanctuary/ExpertValidationBanner";
 import { HolisticWizard } from "../../components/onboarding/HolisticWizard";
+import { HolisticDiagnosticData } from "../../lib/holisticSchema";
+import sanctuaireApi from "../../lib/sanctuaireApi";
 import { useSanctuaire } from "../../context/SanctuaireContext";
 import { useSanctuaireAuth, isFirstVisitToken, setFirstVisitFlag, clearFirstVisitFlag } from "../../context/SanctuaireAuthContext";
 import {
@@ -161,39 +162,30 @@ function AutoLoginHandler() {
                 }}
                 onComplete={async (data) => {
                     try {
-                        const authToken = localStorage.getItem("sanctuaire_token");
-                        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-                        
-                        if (authToken) {
-                            // Map wizard fields to API expected fields
-                            const profileData = {
-                                birthDate: data.birthDate,
-                                birthTime: data.birthTime || null,
-                                birthPlace: data.birthPlace,
-                                facePhotoUrl: data.facePhoto || null,
-                                palmPhotoUrl: data.palmPhoto || null,
-                                highs: data.highs,
-                                lows: data.lows,
-                                strongSide: data.strongSide,
-                                weakSide: data.weakSide,
-                                strongZone: data.strongZone,
-                                weakZone: data.weakZone,
-                                deliveryStyle: data.deliveryStyle,
-                                pace: data.pace,
-                                ailments: data.ailments || null,
-                                specificQuestion: data.specificQuestion || null,
-                                objective: data.objective || null,
-                                fears: data.fears || null,
-                                rituals: data.rituals || null,
-                                profileCompleted: true,
-                            };
-                            
-                            await axios.patch(
-                                `${API_URL}/api/users/profile`,
-                                profileData,
-                                { headers: { Authorization: `Bearer ${authToken}` } }
-                            );
-                        }
+                        // Map wizard fields to API expected fields
+                        const profileData = {
+                            birthDate: data.birthDate,
+                            birthTime: data.birthTime || null,
+                            birthPlace: data.birthPlace,
+                            facePhotoUrl: data.facePhoto || null,
+                            palmPhotoUrl: data.palmPhoto || null,
+                            highs: data.highs,
+                            lows: data.lows,
+                            strongSide: data.strongSide,
+                            weakSide: data.weakSide,
+                            strongZone: data.strongZone,
+                            weakZone: data.weakZone,
+                            deliveryStyle: data.deliveryStyle,
+                            pace: data.pace,
+                            ailments: data.ailments || null,
+                            specificQuestion: data.specificQuestion || null,
+                            objective: data.objective || null,
+                            fears: data.fears || null,
+                            rituals: data.rituals || null,
+                            profileCompleted: true,
+                        };
+
+                        await sanctuaireApi.patch('/users/profile', profileData);
                     } catch (error) {
                         console.error("Failed to save holistic diagnostic:", error);
                     } finally {
@@ -253,41 +245,32 @@ function DashboardContent() {
     const hasOrders = orderCount > 0;
 
     // Handle wizard completion
-    const handleWizardComplete = async (data: any) => {
+    const handleWizardComplete = async (data: HolisticDiagnosticData) => {
         try {
-            const token = localStorage.getItem("sanctuaire_token");
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-            
-            if (token) {
-                const profileData = {
-                    birthDate: data.birthDate,
-                    birthTime: data.birthTime || null,
-                    birthPlace: data.birthPlace,
-                    facePhotoUrl: data.facePhoto || null,
-                    palmPhotoUrl: data.palmPhoto || null,
-                    highs: data.highs,
-                    lows: data.lows,
-                    strongSide: data.strongSide,
-                    weakSide: data.weakSide,
-                    strongZone: data.strongZone,
-                    weakZone: data.weakZone,
-                    deliveryStyle: data.deliveryStyle,
-                    pace: data.pace,
-                    ailments: data.ailments || null,
-                    specificQuestion: data.specificQuestion || null,
-                    objective: data.objective || null,
-                    fears: data.fears || null,
-                    rituals: data.rituals || null,
-                    profileCompleted: true,
-                };
-                
-                await axios.patch(
-                    `${API_URL}/api/users/profile`,
-                    profileData,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-            }
-            
+            const profileData = {
+                birthDate: data.birthDate,
+                birthTime: data.birthTime || null,
+                birthPlace: data.birthPlace,
+                facePhotoUrl: data.facePhoto || null,
+                palmPhotoUrl: data.palmPhoto || null,
+                highs: data.highs,
+                lows: data.lows,
+                strongSide: data.strongSide,
+                weakSide: data.weakSide,
+                strongZone: data.strongZone,
+                weakZone: data.weakZone,
+                deliveryStyle: data.deliveryStyle,
+                pace: data.pace,
+                ailments: data.ailments || null,
+                specificQuestion: data.specificQuestion || null,
+                objective: data.objective || null,
+                fears: data.fears || null,
+                rituals: data.rituals || null,
+                profileCompleted: true,
+            };
+
+            await sanctuaireApi.patch('/users/profile', profileData);
+
             localStorage.removeItem('holistic_wizard_draft');
             localStorage.removeItem('holistic_wizard_email');
             
@@ -465,17 +448,13 @@ function SubscriptionSuccessHandler() {
         if (searchParams.get('subscription') !== 'success') return;
 
         setActivating(true);
-        const token = localStorage.getItem('sanctuaire_token');
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
         let attempts = 0;
         const maxAttempts = 8; // 16 seconds max
 
         const poll = setInterval(async () => {
             attempts++;
             try {
-                const res = await axios.get(`${API_URL}/api/subscriptions/status`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const res = await sanctuaireApi.get('/subscriptions/status');
                 const status = res.data?.subscription?.status;
                 if (status === 'ACTIVE') {
                     clearInterval(poll);

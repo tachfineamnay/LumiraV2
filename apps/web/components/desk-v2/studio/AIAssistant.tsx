@@ -11,7 +11,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 
 interface Message {
@@ -69,7 +69,7 @@ export function AIAssistant({ orderId, clientContext, onInsertText }: AIAssistan
     setIsLoading(true);
 
     try {
-      const { data } = await api.post(`/expert/orders/${orderId}/chat`, {
+      const { data } = await expertApi.post(`/expert/orders/${orderId}/chat`, {
         message: content,
         context: clientContext,
       });

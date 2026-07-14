@@ -12,15 +12,20 @@ interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
     constructor(private configService: ConfigService) {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+            throw new Error('JWT_SECRET environment variable is required');
+        }
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
-            secretOrKey: configService.get<string>('JWT_SECRET') || 'defaultSecret',
+            secretOrKey: secret,
         });
     }
 
     async validate(payload: JwtPayload) {
         return {
+            id: payload.sub,
             userId: payload.sub,
             email: payload.email,
             role: payload.role

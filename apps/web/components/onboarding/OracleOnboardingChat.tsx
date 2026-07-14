@@ -4,7 +4,6 @@ import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "axios";
 import {
     Sparkles,
     Calendar,
@@ -27,6 +26,7 @@ import {
     type IntentionData,
 } from "../../lib/onboardingSchema";
 import { useSanctuaireAuth } from "../../context/SanctuaireAuthContext";
+import sanctuaireApi from "../../lib/sanctuaireApi";
 
 // =============================================================================
 // TYPES
@@ -520,59 +520,30 @@ export const OracleOnboardingChat = ({ onComplete }: OracleOnboardingChatProps) 
     const [currentStep, setCurrentStep] = useState<Step>(0);
     const { refetchData } = useSanctuaireAuth();
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
-    // Get token from localStorage
-    const getToken = useCallback(() => {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("sanctuaire_token");
-        }
-        return null;
-    }, []);
-
     // Save birth data
     const saveBirthData = useCallback(async (data: BirthData) => {
-        const token = getToken();
-        if (!token) return;
-
-        await axios.patch(
-            `${API_URL}/api/users/profile`,
-            {
-                birthDate: data.birthDate,
-                birthTime: data.birthTime || null,
-                birthPlace: data.birthPlace,
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-    }, [API_URL, getToken]);
+        await sanctuaireApi.patch('/users/profile', {
+            birthDate: data.birthDate,
+            birthTime: data.birthTime || null,
+            birthPlace: data.birthPlace,
+        });
+    }, []);
 
     // Save intention
     const saveIntention = useCallback(async (data: IntentionData) => {
-        const token = getToken();
-        if (!token) return;
-
-        await axios.patch(
-            `${API_URL}/api/users/profile`,
-            { specificQuestion: data.spiritualQuestion },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-    }, [API_URL, getToken]);
+        await sanctuaireApi.patch('/users/profile', {
+            specificQuestion: data.spiritualQuestion,
+        });
+    }, []);
 
     // Save photos
     const savePhotos = useCallback(async (facePhoto: string | null, palmPhoto: string | null) => {
-        const token = getToken();
-        if (!token) return;
-
-        await axios.patch(
-            `${API_URL}/api/users/profile`,
-            {
-                facePhotoUrl: facePhoto,
-                palmPhotoUrl: palmPhoto,
-                profileCompleted: true,
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-    }, [API_URL, getToken]);
+        await sanctuaireApi.patch('/users/profile', {
+            facePhotoUrl: facePhoto,
+            palmPhotoUrl: palmPhoto,
+            profileCompleted: true,
+        });
+    }, []);
 
     // Handle completion
     const handleComplete = useCallback(async () => {

@@ -25,7 +25,7 @@ import {
   Save,
   Cloud,
 } from 'lucide-react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 
 interface TiptapEditorProps {
@@ -58,7 +58,7 @@ export function TiptapEditor({
     
     setSaveStatus('saving');
     try {
-      await api.patch(`/expert/orders/${orderId}/draft`, { content });
+      await expertApi.patch(`/expert/orders/${orderId}/draft`, { content });
       lastSavedContent.current = content;
       setSaveStatus('saved');
     } catch (error) {
@@ -150,7 +150,7 @@ export function TiptapEditor({
     setShowAIMenu(false);
 
     try {
-      const { data } = await api.post(`/expert/orders/${orderId}/refine`, {
+      const { data } = await expertApi.post(`/expert/orders/${orderId}/refine`, {
         instruction: action,
         selectedText,
       });

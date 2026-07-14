@@ -4,6 +4,7 @@ import {
     BadRequestException,
     UnauthorizedException,
     ConflictException,
+    ForbiddenException,
     Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -89,23 +90,24 @@ export class ExpertService {
     // ========================
 
     async login(dto: LoginExpertDto): Promise<{ accessToken: string; refreshToken: string; expert: Omit<Expert, 'password'> }> {
+        const normalizedEmail = dto.email.toLowerCase().trim();
         const expert = await this.prisma.expert.findUnique({
-            where: { email: dto.email },
+            where: { email: normalizedEmail },
         });
 
         if (!expert) {
-            this.logger.warn(`🔐 Login failed: expert not found - ${dto.email}`);
+            this.logger.warn(`🔐 Login failed: expert not found - ${normalizedEmail}`);
             throw new UnauthorizedException('Email ou mot de passe incorrect');
         }
 
         if (!expert.isActive) {
-            this.logger.warn(`🔐 Login failed: expert inactive - ${dto.email}`);
+            this.logger.warn(`🔐 Login failed: expert inactive - ${normalizedEmail}`);
             throw new UnauthorizedException('Compte désactivé');
         }
 
         const isPasswordValid = await bcrypt.compare(dto.password, expert.password);
         if (!isPasswordValid) {
-            this.logger.warn(`🔐 Login failed: invalid password - ${dto.email}`);
+            this.logger.warn(`🔐 Login failed: invalid password - ${normalizedEmail}`);
             throw new UnauthorizedException('Email ou mot de passe incorrect');
         }
 
@@ -481,47 +483,129 @@ export class ExpertService {
     }
 
     async assignOrder(orderId: string, expertId: string): Promise<Order> {
-        const order = await this.prisma.order.findUnique({
-            where: { id: orderId },
-        });
-
-        if (!order) {
-            throw new NotFoundException('Commande non trouvée');
-        }
-
-        // Allow re-assignment if already assigned (ADMIN use-case)
-        if (!['PENDING', 'PAID', 'PROCESSING'].includes(order.status)) {
-            throw new BadRequestException('Cette commande ne peut pas être prise');
-        }
-
         const expert = await this.prisma.expert.findUnique({
             where: { id: expertId },
             select: { name: true },
         });
+        
+        if (!expert) {
+            throw new NotFoundException('Expert non trouvé');
+        }
+
+        // Atomic assignment with optimistic locking
+        const result = await this.prisma.order.updateMany({
+            where: {
+                id: orderId,
+                status: { in: ['PAID', 'AWAITING_VALIDATION'] },
+            },
+            data: {
+                status: 'PROCESSING',
+            },
+        });
+
+        if (result.count === 0) {
+            const existing = await this.prisma.order.findUnique({
+                where: { id: orderId },
+                select: { status: true, expertReview: true },
+            });
+            
+            if (!existing) {
+                throw new NotFoundException('Commande non trouvée');
+            }
+            
+            if (existing.status === 'PROCESSING') {
+                throw new ConflictException('Cette commande est déjà assignée');
+            }
+            
+            throw new BadRequestException(`Cette commande ne peut pas être prise (statut: ${existing.status})`);
+        }
 
         const updatedOrder = await this.prisma.order.update({
             where: { id: orderId },
             data: {
-                status: 'PROCESSING',
                 expertReview: {
                     assignedBy: expertId,
-                    assignedName: expert?.name || 'Expert',
+                    assignedName: expert.name,
                     assignedAt: new Date().toISOString(),
                 },
             },
         });
 
-        this.logger.log(`📋 Order ${order.orderNumber} assigned to expert ${expertId}`);
+        this.logger.log(`📋 Order ${updatedOrder.orderNumber} assigned to expert ${expertId}`);
 
         // Notify all connected experts in real-time
         this.gateway.notifyOrderClaimed({
             orderId: updatedOrder.id,
-            orderNumber: order.orderNumber,
+            orderNumber: updatedOrder.orderNumber,
             expertId,
             expertName: expert?.name || 'Expert',
         });
 
         return updatedOrder;
+    }
+
+    /**
+     * Desk status update with transition guards.
+     * PAID is webhook-only and cannot be set here.
+     */
+    async updateOrderStatus(orderId: string, status: string): Promise<Order> {
+        if (status === 'PAID') {
+            throw new ForbiddenException('PAID status can only be set by the payment webhook');
+        }
+
+        const EXPERT_TRANSITIONS: Record<string, string[]> = {
+            PAID: ['PROCESSING'],
+            PROCESSING: ['AWAITING_VALIDATION', 'FAILED'],
+            AWAITING_VALIDATION: ['COMPLETED', 'PROCESSING'],
+            FAILED: ['PROCESSING'],
+            COMPLETED: [],
+            REFUNDED: [],
+            PENDING: [],
+        };
+
+        const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        const allowed = EXPERT_TRANSITIONS[order.status] || [];
+        if (!allowed.includes(status)) {
+            throw new BadRequestException(
+                `Cannot transition from ${order.status} to ${status}. Allowed: ${allowed.join(', ') || 'none'}`,
+            );
+        }
+
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: { status: status as Order['status'] },
+        });
+    }
+
+    /**
+     * Autosave studio draft content into generatedContent.
+     */
+    async saveOrderDraft(orderId: string, content: string, expertId: string): Promise<Order> {
+        const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+        if (!order) {
+            throw new NotFoundException('Commande non trouvée');
+        }
+
+        if (!['PROCESSING', 'AWAITING_VALIDATION', 'FAILED'].includes(order.status)) {
+            throw new BadRequestException(`Cannot save draft for order in status ${order.status}`);
+        }
+
+        const existing = (order.generatedContent as Record<string, unknown>) || {};
+        return this.prisma.order.update({
+            where: { id: orderId },
+            data: {
+                generatedContent: {
+                    ...existing,
+                    lecture: content,
+                    draftSavedAt: new Date().toISOString(),
+                    draftSavedBy: expertId,
+                },
+            },
+        });
     }
 
     async deleteOrder(orderId: string): Promise<void> {

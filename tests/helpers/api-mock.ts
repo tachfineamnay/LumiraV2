@@ -1,6 +1,6 @@
 /**
  * Playwright API Mocking helpers for Sanctuaire E2E tests.
- * Intercepts network requests to simulate backend responses.
+ * Intercepts BFF (/api/bff/*) + session routes after httpOnly migration.
  */
 import { Page, Route } from '@playwright/test';
 import {
@@ -11,17 +11,22 @@ import {
     createTestSpiritualPath,
     createTestSubscription,
     createTestEntitlements,
-    createTestChatMessages,
     createTestDream,
     type TestUser,
-    type TestSubscription,
-    type InsightCategory,
 } from './fixtures-factory';
 
-const API_BASE = 'http://localhost:3001/api';
+const BFF = '**/api/bff';
+
+async function fulfillJson(route: Route, body: unknown, status = 200) {
+    await route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+    });
+}
 
 // =============================================================================
-// AUTH MOCK — Simulates authenticated Sanctuaire session
+// AUTH MOCK — Simulates authenticated Sanctuaire session (httpOnly cookie)
 // =============================================================================
 
 export interface MockAuthOptions {
@@ -32,7 +37,7 @@ export interface MockAuthOptions {
 }
 
 /**
- * Injects auth token + mocks all initial data-loading API calls.
+ * Sets session cookie + mocks BFF data-loading calls.
  * Call BEFORE navigating to /sanctuaire pages.
  */
 export async function mockSanctuaireAuth(page: Page, options: MockAuthOptions = {}) {
@@ -43,82 +48,83 @@ export async function mockSanctuaireAuth(page: Page, options: MockAuthOptions = 
     const order = hasOrders ? createTestOrder({ userId: user.id, email: user.email }) : null;
     const entitlements = createTestEntitlements(subscribed);
 
-    // Inject token before navigation
-    await page.addInitScript(() => {
-        localStorage.setItem('sanctuaire_token', 'mock-jwt-token-valid');
+    // httpOnly session cookie (Playwright can set httpOnly cookies)
+    await page.context().addCookies([
+        {
+            name: 'sanctuaire_token',
+            value: 'mock-jwt-token-valid',
+            url: 'http://localhost:3000',
+            httpOnly: true,
+            sameSite: 'Lax',
+            path: '/',
+        },
+    ]);
+
+    // Session probe used by SanctuaireAuthContext bootstrap
+    await page.route('**/api/auth/sanctuaire/session', async (route: Route) => {
+        if (route.request().method() === 'GET') {
+            await fulfillJson(route, { authenticated: true });
+            return;
+        }
+        if (route.request().method() === 'POST') {
+            await fulfillJson(route, { ok: true });
+            return;
+        }
+        if (route.request().method() === 'DELETE') {
+            await fulfillJson(route, { ok: true });
+            return;
+        }
+        await route.continue();
     });
 
-    // Mock: POST /auth/sanctuaire-v2 (login)
-    await page.route(`${API_BASE}/auth/sanctuaire-v2`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                success: true,
-                token: 'mock-jwt-token-valid',
-                user: {
-                    id: user.id,
-                    email: user.email,
-                    firstName: user.firstName,
-                    lastName: user.lastName,
-                    phone: user.phone,
-                    level: entitlements.highestLevel,
-                },
-            }),
+    // Login via BFF
+    await page.route(`${BFF}/auth/sanctuaire-v2`, async (route: Route) => {
+        await fulfillJson(route, {
+            success: true,
+            token: 'mock-jwt-token-valid',
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                phone: user.phone,
+                level: entitlements.highestLevel,
+            },
         });
     });
 
-    // Mock: GET /users/profile
-    await page.route(`${API_BASE}/users/profile`, async (route: Route) => {
+    await page.route(`${BFF}/users/profile`, async (route: Route) => {
         if (route.request().method() === 'GET') {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({
-                    id: user.id,
-                    email: user.email,
-                    firstName: user.firstName,
-                    lastName: user.lastName,
-                    phone: user.phone,
-                    profile,
-                    stats: { totalOrders: hasOrders ? 1 : 0, completedOrders: hasOrders ? 1 : 0 },
-                }),
+            await fulfillJson(route, {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                phone: user.phone,
+                profile,
+                stats: { totalOrders: hasOrders ? 1 : 0, completedOrders: hasOrders ? 1 : 0 },
             });
         } else {
-            await route.continue();
+            await fulfillJson(route, { success: true });
         }
     });
 
-    // Mock: GET /users/entitlements
-    await page.route(`${API_BASE}/users/entitlements`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(entitlements),
-        });
+    await page.route(`${BFF}/users/entitlements`, async (route: Route) => {
+        await fulfillJson(route, entitlements);
     });
 
-    // Mock: GET /users/orders/completed
-    await page.route(`${API_BASE}/users/orders/completed`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(order ? [order] : []),
-        });
+    await page.route(`${BFF}/users/orders/completed`, async (route: Route) => {
+        await fulfillJson(route, order ? [order] : []);
     });
 
-    // Mock: GET /subscriptions/status
     const sub = subscribed ? createTestSubscription(user.id, 'ACTIVE') : null;
-    await page.route(`${API_BASE}/subscriptions/status`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(
-                sub
-                    ? { hasSubscription: true, subscription: sub }
-                    : { hasSubscription: false, subscription: null },
-            ),
-        });
+    await page.route(`${BFF}/subscriptions/status`, async (route: Route) => {
+        await fulfillJson(
+            route,
+            sub
+                ? { hasSubscription: true, subscription: sub }
+                : { hasSubscription: false, subscription: null },
+        );
     });
 
     return { user, profile, order, entitlements, subscription: sub };
@@ -163,27 +169,17 @@ export async function mockInsightsApi(page: Page, options: MockInsightsOptions =
         isNew: i.viewedAt === null,
     }));
 
-    // Mock: GET /insights
-    await page.route(`${API_BASE}/insights`, async (route: Route) => {
+    await page.route(`${BFF}/insights`, async (route: Route) => {
         if (route.request().method() === 'GET') {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({ categories, metadata: INSIGHT_METADATA }),
-            });
+            await fulfillJson(route, { categories, metadata: INSIGHT_METADATA });
         } else {
             await route.continue();
         }
     });
 
-    // Mock: PATCH /insights/:category/view
-    await page.route(/\/api\/insights\/\w+\/view/, async (route: Route) => {
+    await page.route(/\/api\/bff\/insights\/\w+\/view/, async (route: Route) => {
         if (route.request().method() === 'PATCH') {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({ success: true, viewedAt: new Date().toISOString() }),
-            });
+            await fulfillJson(route, { success: true, viewedAt: new Date().toISOString() });
         } else {
             await route.continue();
         }
@@ -199,24 +195,14 @@ export async function mockInsightsApi(page: Page, options: MockInsightsOptions =
 export async function mockSpiritualPathApi(page: Page, userId: string = 'user-1') {
     const path = createTestSpiritualPath(userId);
 
-    // Mock: GET /client/spiritual-path
-    await page.route(`${API_BASE}/client/spiritual-path`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                exists: true,
-                ...path,
-            }),
-        });
+    await page.route(`${BFF}/client/spiritual-path`, async (route: Route) => {
+        await fulfillJson(route, { exists: true, ...path });
     });
 
-    // Mock: POST /client/spiritual-path/steps/:stepId/complete
-    await page.route(/\/api\/client\/spiritual-path\/steps\/[\w-]+\/complete/, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ success: true, step: { isCompleted: true, completedAt: new Date().toISOString() } }),
+    await page.route(/\/api\/bff\/client\/spiritual-path\/steps\/[\w-]+\/complete/, async (route: Route) => {
+        await fulfillJson(route, {
+            success: true,
+            step: { isCompleted: true, completedAt: new Date().toISOString() },
         });
     });
 
@@ -235,39 +221,29 @@ export interface MockChatOptions {
 export async function mockChatApi(page: Page, options: MockChatOptions = {}) {
     const { subscribed = true, messagesUsed = 0 } = options;
 
-    // Mock: GET /client/chat/quota
-    await page.route(`${API_BASE}/client/chat/quota`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                hasAccess: true,
-                isUnlimited: subscribed,
-                quota: subscribed ? -1 : 3,
-                used: messagesUsed,
-                remaining: subscribed ? -1 : Math.max(0, 3 - messagesUsed),
-            }),
+    await page.route(`${BFF}/client/chat/quota`, async (route: Route) => {
+        await fulfillJson(route, {
+            hasAccess: true,
+            isUnlimited: subscribed,
+            quota: subscribed ? -1 : 3,
+            used: messagesUsed,
+            remaining: subscribed ? -1 : Math.max(0, 3 - messagesUsed),
         });
     });
 
-    // Mock: POST /client/chat
-    await page.route(`${API_BASE}/client/chat`, async (route: Route) => {
+    await page.route(`${BFF}/client/chat`, async (route: Route) => {
         if (route.request().method() === 'POST') {
             if (!subscribed && messagesUsed >= 3) {
-                await route.fulfill({
-                    status: 403,
-                    contentType: 'application/json',
-                    body: JSON.stringify({ error: 'QUOTA_EXCEEDED', message: 'Quota de messages dépassé.' }),
-                });
+                await fulfillJson(
+                    route,
+                    { error: 'QUOTA_EXCEEDED', message: 'Quota de messages dépassé.' },
+                    403,
+                );
             } else {
-                await route.fulfill({
-                    status: 200,
-                    contentType: 'application/json',
-                    body: JSON.stringify({
-                        message: 'Chère âme, votre question touche à l\'essence même de votre chemin spirituel.',
-                        role: 'assistant',
-                        sessionId: 'session-mock-1',
-                    }),
+                await fulfillJson(route, {
+                    message: 'Chère âme, votre question touche à l\'essence même de votre chemin spirituel.',
+                    role: 'assistant',
+                    sessionId: 'session-mock-1',
                 });
             }
         } else {
@@ -289,31 +265,23 @@ export async function mockDreamsApi(page: Page, userId: string = 'user-1') {
         symbols: ['eau', 'île', 'voyage'],
     });
 
-    // Mock: GET /dreams
-    await page.route(`${API_BASE}/dreams`, async (route: Route) => {
+    await page.route(`${BFF}/dreams`, async (route: Route) => {
         if (route.request().method() === 'GET') {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify([dream1, dream2]),
-            });
+            await fulfillJson(route, [dream1, dream2]);
         } else if (route.request().method() === 'POST') {
-            // POST /dreams — create new dream
-            await route.fulfill({
-                status: 201,
-                contentType: 'application/json',
-                body: JSON.stringify(
-                    createTestDream(userId, {
-                        id: `dream-new-${Date.now()}`,
-                        content: 'Nouveau rêve créé.',
-                        interpretation: {
-                            summary: 'Interprétation fraîche de votre rêve.',
-                            symbols: ['lumière'],
-                            guidance: 'Suivez votre intuition.',
-                        },
-                    }),
-                ),
-            });
+            await fulfillJson(
+                route,
+                createTestDream(userId, {
+                    id: `dream-new-${Date.now()}`,
+                    content: 'Nouveau rêve créé.',
+                    interpretation: {
+                        summary: 'Interprétation fraîche de votre rêve.',
+                        symbols: ['lumière'],
+                        guidance: 'Suivez votre intuition.',
+                    },
+                }),
+                201,
+            );
         }
     });
 
@@ -328,16 +296,12 @@ export async function mockDrawsApi(page: Page, userId: string = 'user-1') {
     const order1 = createTestOrder({ userId, status: 'COMPLETED' });
     const order2 = createTestOrder({ userId, status: 'PROCESSING' });
 
-    // Mock: GET /users/orders/completed (also used by draws page)
-    // Already mocked via mockSanctuaireAuth — this adds reading-specific routes
+    await page.route(`${BFF}/client/readings`, async (route: Route) => {
+        await fulfillJson(route, [order1, order2]);
+    });
 
-    // Mock: GET /readings/:orderNumber/download
-    await page.route(/\/api\/readings\/[\w-]+\/download/, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ url: 'https://s3.example.com/readings/test-reading.pdf' }),
-        });
+    await page.route(/\/api\/bff\/readings\/[\w-]+\/download/, async (route: Route) => {
+        await fulfillJson(route, { url: 'https://s3.example.com/readings/test-reading.pdf' });
     });
 
     return [order1, order2];
@@ -347,23 +311,13 @@ export async function mockDrawsApi(page: Page, userId: string = 'user-1') {
 // SUBSCRIPTION MANAGEMENT MOCK
 // =============================================================================
 
-export async function mockSubscriptionManagementApi(page: Page, userId: string = 'user-1') {
-    // Mock: POST /subscriptions/cancel
-    await page.route(`${API_BASE}/subscriptions/cancel`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ status: 'ACTIVE', cancelAtPeriodEnd: true }),
-        });
+export async function mockSubscriptionManagementApi(page: Page, _userId: string = 'user-1') {
+    await page.route(`${BFF}/subscriptions/cancel`, async (route: Route) => {
+        await fulfillJson(route, { status: 'ACTIVE', cancelAtPeriodEnd: true });
     });
 
-    // Mock: POST /subscriptions/resume
-    await page.route(`${API_BASE}/subscriptions/resume`, async (route: Route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ status: 'ACTIVE', cancelAtPeriodEnd: false }),
-        });
+    await page.route(`${BFF}/subscriptions/resume`, async (route: Route) => {
+        await fulfillJson(route, { status: 'ACTIVE', cancelAtPeriodEnd: false });
     });
 }
 

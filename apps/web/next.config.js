@@ -3,12 +3,6 @@ const nextConfig = {
     reactStrictMode: true,
     transpilePackages: ["@packages/ui", "@packages/shared", "@packages/database"],
     output: 'standalone',
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
-    typescript: {
-        ignoreBuildErrors: true,
-    },
     // Proxy /api/readings/* requests to the NestJS API backend
     async rewrites() {
         return [

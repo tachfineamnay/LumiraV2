@@ -12,15 +12,17 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
 
   async findByEmail(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
+    const normalizedEmail = email.toLowerCase().trim();
     return this.prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       include: { profile: true },
     });
   }
 
   async findExpertByEmail(email: string): Promise<Expert | null> {
+    const normalizedEmail = email.toLowerCase().trim();
     return this.prisma.expert.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
   }
 
@@ -58,8 +60,27 @@ export class UsersService {
     };
   }
 
-  findAll(): Promise<User[]> {
-    return this.prisma.user.findMany();
+  async findAll(skip = 0, take = 20): Promise<{ users: User[]; total: number }> {
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          subscriptionStatus: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.user.count(),
+    ]);
+    
+    return { users, total };
   }
 
   async findById(id: string): Promise<User | null> {
@@ -71,7 +92,7 @@ export class UsersService {
   /**
    * Find a user by email only if they have at least one paid/valid order.
    * Used for Sanctuaire passwordless authentication.
-   * Also accepts PENDING orders for paid products (awaiting webhook confirmation).
+   * PENDING orders never grant access (prevents pay-what-you-want / amount-0 bypass).
    */
   async findUserWithPaidOrder(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
     const normalizedEmail = email.toLowerCase().trim();
@@ -90,17 +111,12 @@ export class UsersService {
     
     console.log(`[findUserWithPaidOrder] Found user: ${user.id}`);
 
-    // Check if user has at least one paid/valid order
-    // Include PENDING orders for paid products (they will be updated to PAID by webhook)
-    // Also include FAILED orders - these are paid orders where generation failed, user should still have access
+    // Check if user has at least one paid/valid order.
+    // FAILED orders are included — paid orders where generation failed, user should still have access.
     const paidOrder = await this.prisma.order.findFirst({
       where: {
         userId: user.id,
-        OR: [
-          { status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] } },
-          { status: 'PENDING', amount: 0 }, // Free orders
-          { status: 'PENDING', amount: { gt: 0 } }, // Paid orders awaiting webhook confirmation
-        ],
+        status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] },
       },
     });
 
@@ -121,8 +137,33 @@ export class UsersService {
   }
 
   /**
+   * Create user if missing. Never overwrites PII on existing accounts.
+   */
+  async createIfNotExists(
+    email: string,
+    firstName: string,
+    lastName: string,
+    phone?: string,
+  ): Promise<User> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existing) {
+      return existing;
+    }
+    return this.prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        firstName,
+        lastName,
+        phone: phone ?? null,
+      },
+    });
+  }
+
+  /**
    * Find or create a user by email (upsert).
    * Used for pre-registration before Stripe checkout.
+   * Existing users are NOT overwritten (prevents profile takeover by email).
    */
   async upsertByEmail(
     email: string,
@@ -130,12 +171,7 @@ export class UsersService {
     lastName: string,
     phone?: string,
   ): Promise<User> {
-    const normalizedEmail = email.toLowerCase().trim();
-    return this.prisma.user.upsert({
-      where: { email: normalizedEmail },
-      update: { firstName, lastName, ...(phone !== undefined && { phone }) },
-      create: { email: normalizedEmail, firstName, lastName, phone: phone ?? null },
-    });
+    return this.createIfNotExists(email, firstName, lastName, phone);
   }
 
   /**
@@ -163,10 +199,9 @@ export class UsersService {
     });
 
     // Check if any order would pass auth
-    const wouldAuth = orders.some(o => 
+    const wouldAuth = orders.some(o =>
       ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'].includes(o.status) ||
-      (o.status === 'PENDING' && o.amount === 0) ||
-      (o.status === 'PENDING' && o.amount > 0)
+      (o.status === 'PENDING' && o.amount === 0)
     );
 
     return { email, user, orders, wouldAuth };

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import axios, { AxiosError } from 'axios';
+import { AxiosError } from 'axios';
+import sanctuaireApi from '../lib/sanctuaireApi';
 
 // =============================================================================
 // TYPES
@@ -111,7 +112,20 @@ const FIRST_VISIT_KEY = 'sanctuaire_first_visit';
 const COOLDOWN_KEY = 'sanctuaire_auth_cooldown';
 const COOLDOWN_DURATION = 60; // seconds
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+async function persistSanctuaireSession(token: string) {
+    const response = await fetch('/api/auth/sanctuaire/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+    });
+    if (!response.ok) {
+        throw new Error('Failed to persist session cookie');
+    }
+}
+
+async function clearSanctuaireSession() {
+    await fetch('/api/auth/sanctuaire/session', { method: 'DELETE' });
+}
 
 // =============================================================================
 // DEFAULT CONTEXT
@@ -172,15 +186,41 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
     // Error state
     const [error, setError] = useState<string | null>(null);
 
-    // Check for existing token on mount
+    // Check for existing session on mount
     useEffect(() => {
-        const savedToken = localStorage.getItem(TOKEN_KEY);
-        if (savedToken) {
-            setToken(savedToken);
-            initializeFromToken(savedToken);
-        } else {
-            setIsLoading(false);
-        }
+        const bootstrapAuth = async () => {
+            const legacyToken = localStorage.getItem(TOKEN_KEY);
+            if (legacyToken) {
+                localStorage.removeItem(TOKEN_KEY);
+                try {
+                    await persistSanctuaireSession(legacyToken);
+                } catch {
+                    setIsLoading(false);
+                    return;
+                }
+                setToken('session');
+                await initializeFromToken('session');
+                return;
+            }
+
+            // Probe session cookie without forcing unauthenticated 401 chatter
+            try {
+                const probe = await fetch('/api/auth/sanctuaire/session', { method: 'GET' });
+                const data = await probe.json().catch(() => ({ authenticated: false }));
+                if (!data?.authenticated) {
+                    setIsLoading(false);
+                    return;
+                }
+            } catch {
+                setIsLoading(false);
+                return;
+            }
+
+            setToken('session');
+            await initializeFromToken('session');
+        };
+
+        bootstrapAuth().catch(() => setIsLoading(false));
 
         // Check for cooldown
         const cooldownEnd = sessionStorage.getItem(COOLDOWN_KEY);
@@ -211,29 +251,23 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
     }, [cooldownRemaining]);
 
     // Initialize from existing token
-    const initializeFromToken = async (authToken: string) => {
+    const initializeFromToken = async (_authToken: string) => {
         try {
-            // Fetch user data in parallel
-            const headers = { Authorization: `Bearer ${authToken}` };
-
-            // Fetch profile and entitlements — required for auth; 401 means invalid token
             const [profileRes, entitlementsRes] = await Promise.all([
-                axios.get(`${API_URL}/api/users/profile`, { headers }),
-                axios.get(`${API_URL}/api/users/entitlements`, { headers }),
+                sanctuaireApi.get('/users/profile'),
+                sanctuaireApi.get('/users/entitlements'),
             ]);
 
-            // Orders may not exist yet for new subscribers — treat 404/error as empty array
             let ordersData: unknown[] = [];
             try {
-                const ordersRes = await axios.get(`${API_URL}/api/users/orders/completed`, { headers });
+                const ordersRes = await sanctuaireApi.get('/users/orders/completed');
                 ordersData = ordersRes.data;
             } catch (ordersErr: unknown) {
-                const status = (ordersErr as any)?.response?.status;
+                const status = (ordersErr as { response?: { status?: number } })?.response?.status;
                 if (status === 401) {
-                    handleLogout();
+                    await handleLogout();
                     return;
                 }
-                // 404 or empty — new subscriber with no completed orders yet
             }
 
             // Set user from profile
@@ -287,16 +321,20 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
         }
 
         try {
-            const response = await axios.post(`${API_URL}/api/auth/sanctuaire-v2`, {
+            // Login via BFF so cookie can be set same-origin after
+            const response = await sanctuaireApi.post('/auth/sanctuaire-v2', {
                 email: email.toLowerCase().trim(),
             });
 
             const { token: newToken, user: userData } = response.data;
 
-            // Store token
-            localStorage.setItem(TOKEN_KEY, newToken);
+            try {
+                await persistSanctuaireSession(newToken);
+            } catch {
+                return { success: false, error: 'Impossible d\'établir la session sécurisée.' };
+            }
             sessionStorage.setItem(EMAIL_SESSION_KEY, email);
-            setToken(newToken);
+            setToken('session');
 
             // Set user data
             setUser(userData);
@@ -306,7 +344,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
             const isFirstVisit = sessionStorage.getItem(FIRST_VISIT_KEY) === 'true';
 
             // Initialize full data
-            await initializeFromToken(newToken);
+            await initializeFromToken('session');
 
             return { success: true, isFirstVisit };
         } catch (err) {
@@ -345,7 +383,8 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
     }, [cooldownRemaining]);
 
     // Logout
-    const handleLogout = useCallback(() => {
+    const handleLogout = useCallback(async () => {
+        await clearSanctuaireSession();
         localStorage.removeItem(TOKEN_KEY);
         sessionStorage.removeItem(EMAIL_SESSION_KEY);
         sessionStorage.removeItem(FIRST_VISIT_KEY);

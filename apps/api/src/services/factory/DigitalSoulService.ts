@@ -121,7 +121,9 @@ export class DigitalSoulService {
             }
 
             // Atomic status transition to prevent concurrent processing
-            const locked = await this.acquireProcessingLock(orderId, validContentStatuses);
+            // Only transition FROM non-PROCESSING states TO PROCESSING
+            const lockableStatuses = ['PAID', 'AWAITING_VALIDATION', 'FAILED'];
+            const locked = await this.acquireProcessingLock(orderId, lockableStatuses);
             if (!locked) {
                 throw new ConflictException(`Order ${orderId} is already being processed by another request`);
             }
@@ -499,8 +501,8 @@ export class DigitalSoulService {
             this.logger.log(`   📦 Status: ${order.status}`);
             this.logger.log(`   💰 Amount: ${order.amount} (level resolved at context build)`);
 
-            // Allow PAID, PENDING (admin force), PROCESSING, and FAILED (retry)
-            const validStatuses = ['PAID', 'PENDING', 'PROCESSING', 'FAILED'];
+            // Allow PAID, PROCESSING, and FAILED (retry) — never unpaid PENDING
+            const validStatuses = ['PAID', 'PROCESSING', 'FAILED'];
             if (!validStatuses.includes(order.status)) {
                 throw new BadRequestException(`Order ${orderId} is not in a valid state for generation: ${order.status}`);
             }

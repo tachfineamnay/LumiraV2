@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, Request, UseGuards, NotFoundException } from "@nestjs/common";
+import { Controller, Get, Patch, Body, Request, UseGuards, NotFoundException, ForbiddenException, Query, ParseIntPipe, DefaultValuePipe } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 
@@ -7,8 +7,18 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  @UseGuards(JwtAuthGuard)
+  findAll(
+    @Request() req,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'EXPERT') {
+      throw new ForbiddenException('Admin or Expert access required');
+    }
+    
+    const skip = (page - 1) * limit;
+    return this.usersService.findAll(skip, limit);
   }
 
   /**

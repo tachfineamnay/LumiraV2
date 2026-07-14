@@ -110,6 +110,9 @@ importers:
       handlebars:
         specifier: ^4.7.8
         version: 4.7.8
+      helmet:
+        specifier: ^8.2.0
+        version: 8.2.0
       nodemailer:
         specifier: ^7.0.12
         version: 7.0.12
@@ -156,6 +159,9 @@ importers:
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
+      '@types/helmet':
+        specifier: ^4.0.0
+        version: 4.0.0
       '@types/jest':
         specifier: ^29.5.12
         version: 29.5.14
@@ -3850,6 +3856,13 @@ packages:
       '@types/node': 20.19.27
     dev: true
 
+  /@types/helmet@4.0.0:
+    resolution: {integrity: sha512-ONIn/nSNQA57yRge3oaMQESef/6QhoeX7llWeDli0UZIfz8TQMkfNPTXA8VnnyeA1WUjG2pGqdjEIueYonMdfQ==}
+    deprecated: This is a stub types definition. helmet provides its own type definitions, so you do not need this installed.
+    dependencies:
+      helmet: 8.2.0
+    dev: true
+
   /@types/http-errors@2.0.5:
     resolution: {integrity: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==}
     dev: true
@@ -7375,6 +7388,10 @@ packages:
     requiresBuild: true
     dev: false
     optional: true
+
+  /helmet@8.2.0:
+    resolution: {integrity: sha512-DRgTIUgnWcJ62KyarxxziuqYxKGnR6Rgg19BlbucN/dpmJbl1XOit6qvoOX0ZT+HhWe5OUVhU/a1zpGyc1xA0Q==}
+    engines: {node: '>=18.0.0'}
 
   /html-escaper@2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}

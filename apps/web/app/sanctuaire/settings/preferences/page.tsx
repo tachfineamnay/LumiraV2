@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect } from "react";
 import { Volume2, Check, Loader2 } from "lucide-react";
 import { GlassCard } from "../../../../components/ui/GlassCard";
-import api from "../../../../lib/api";
+import sanctuaireApi from "../../../../lib/sanctuaireApi";
 
 type VoiceOption = "FEMININE" | "MASCULINE";
 
@@ -17,7 +17,7 @@ export default function PreferencesPage() {
 
     // Load current preference
     useEffect(() => {
-        api.get("/api/client/profile")
+        sanctuaireApi.get("/client/profile")
             .then((res) => {
                 const voice = res.data?.profile?.preferredVoice;
                 if (voice === "MASCULINE" || voice === "FEMININE") {
@@ -33,7 +33,7 @@ export default function PreferencesPage() {
         setSaving(true);
         setSaved(false);
         try {
-            await api.patch("/api/client/voice-preference", { voice });
+            await sanctuaireApi.patch("/client/voice-preference", { voice });
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         } catch {

@@ -16,7 +16,7 @@ import {
   Loader2,
   Download,
 } from 'lucide-react';
-import api from '@/lib/api';
+import expertApi from '@/lib/expertApi';
 import { LEVEL_CONFIG } from '@/components/desk-v2/types';
 
 interface ArchivedOrder {
@@ -60,7 +60,7 @@ export default function ArchivePage() {
         status: 'COMPLETED',
         ...(searchQuery && { search: searchQuery }),
       });
-      const { data } = await api.get<PaginatedResponse>(`/expert/orders/history?${params}`);
+      const { data } = await expertApi.get<PaginatedResponse>(`/expert/orders/history?${params}`);
       setOrders(data.data);
       setTotalPages(data.totalPages);
       setTotalOrders(data.total);

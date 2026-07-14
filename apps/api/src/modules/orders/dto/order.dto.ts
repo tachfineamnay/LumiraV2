@@ -14,8 +14,9 @@ export class CreateOrderDto {
     lastName: string;
 
     @IsNumber()
-    @IsNotEmpty()
-    totalAmount: number;
+    @IsOptional()
+    /** @deprecated Ignored — amount is set server-side */
+    totalAmount?: number;
 
     @IsString()
     @IsOptional()
@@ -43,8 +44,4 @@ export class UpdateOrderDto {
     @IsString()
     @IsOptional()
     status?: string;
-
-    @IsString()
-    @IsOptional()
-    paymentIntentId?: string;
 }

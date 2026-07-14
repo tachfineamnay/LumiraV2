@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -38,10 +39,18 @@ describe('AuthService', () => {
             findUserWithPaidOrder: jest.fn(),
             getEntitlements: jest.fn(),
             upsertByEmail: jest.fn(),
+            createIfNotExists: jest.fn(),
         };
 
         jwtService = {
             sign: jest.fn().mockReturnValue('mock-jwt-token'),
+        };
+
+        const configService = {
+            get: jest.fn((key: string, defaultValue?: string) => {
+                if (key === 'JWT_EXPIRATION') return '30d';
+                return defaultValue;
+            }),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -49,6 +58,7 @@ describe('AuthService', () => {
                 AuthService,
                 { provide: UsersService, useValue: usersService },
                 { provide: JwtService, useValue: jwtService },
+                { provide: ConfigService, useValue: configService },
             ],
         }).compile();
 
@@ -131,8 +141,8 @@ describe('AuthService', () => {
     // =========================================================================
 
     describe('registerSanctuaire', () => {
-        it('should upsert user and return JWT', async () => {
-            usersService.upsertByEmail!.mockResolvedValue(mockUser as any);
+        it('should create user without issuing a JWT', async () => {
+            usersService.createIfNotExists = jest.fn().mockResolvedValue(mockUser as any);
 
             const result = await service.registerSanctuaire({
                 email: 'marie@test.com',
@@ -141,13 +151,13 @@ describe('AuthService', () => {
             });
 
             expect(result.success).toBe(true);
-            expect(result.token).toBeDefined();
-            expect(result.access_token).toBeDefined();
             expect(result.user.email).toBe('marie@test.com');
+            expect((result as any).token).toBeUndefined();
+            expect(jwtService.sign).not.toHaveBeenCalled();
         });
 
-        it('should normalize and upsert by email', async () => {
-            usersService.upsertByEmail!.mockResolvedValue(mockUser as any);
+        it('should create-if-missing by email', async () => {
+            usersService.createIfNotExists = jest.fn().mockResolvedValue(mockUser as any);
 
             await service.registerSanctuaire({
                 email: 'marie@test.com',
@@ -156,26 +166,11 @@ describe('AuthService', () => {
                 phone: '+33612345678',
             });
 
-            expect(usersService.upsertByEmail).toHaveBeenCalledWith(
+            expect(usersService.createIfNotExists).toHaveBeenCalledWith(
                 'marie@test.com',
                 'Marie',
                 'Dubois',
                 '+33612345678',
-            );
-        });
-
-        it('should sign JWT with level 0 for pre-checkout users', async () => {
-            usersService.upsertByEmail!.mockResolvedValue(mockUser as any);
-
-            await service.registerSanctuaire({
-                email: 'marie@test.com',
-                firstName: 'Marie',
-                lastName: 'Dubois',
-            });
-
-            expect(jwtService.sign).toHaveBeenCalledWith(
-                expect.objectContaining({ level: 0, role: 'CLIENT' }),
-                { expiresIn: '30d' },
             );
         });
     });

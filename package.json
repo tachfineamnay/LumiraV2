@@ -11,6 +11,7 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test -- --passWithNoTests",
+    "test:e2e": "playwright test",
     "typecheck": "turbo run typecheck",
     "type-check": "pnpm typecheck",
     "clean": "turbo run clean",
