@@ -46,9 +46,40 @@ function AutoLoginHandler() {
 
   const email = searchParams.get('email');
   const token = searchParams.get('token');
+  const subscriptionSuccess = searchParams.get('subscription') === 'success';
   const isFirstVisit = isFirstVisitToken(token);
 
-  // Handle auto-login from URL params
+  // Already authenticated after confirm-checkout — open onboarding / clean URL
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
+    if (autoLoginState !== 'idle') return;
+    if (!email && !isFirstVisit && !subscriptionSuccess) return;
+
+    if ((isFirstVisit || subscriptionSuccess) && !profile?.profileCompleted) {
+      setFirstVisitFlag(true);
+      setShowOnboarding(true);
+      setAutoLoginState('success');
+      return;
+    }
+
+    // Authenticated, no onboarding needed — clean redirect params
+    if (email || token || subscriptionSuccess) {
+      setAutoLoginState('success');
+      router.replace('/sanctuaire');
+    }
+  }, [
+    authLoading,
+    isAuthenticated,
+    autoLoginState,
+    email,
+    token,
+    isFirstVisit,
+    subscriptionSuccess,
+    profile?.profileCompleted,
+    router,
+  ]);
+
+  // Handle auto-login from URL params (no session yet — e.g. soft fallback)
   useEffect(() => {
     if (!email || authLoading || isAuthenticated) return;
     if (autoLoginState !== 'idle') return;
@@ -57,7 +88,7 @@ function AutoLoginHandler() {
       setAutoLoginState('authenticating');
 
       // Set first visit flag if applicable
-      if (isFirstVisit) {
+      if (isFirstVisit || subscriptionSuccess) {
         setFirstVisitFlag(true);
       }
 
@@ -66,18 +97,15 @@ function AutoLoginHandler() {
       if (result.success) {
         setAutoLoginState('success');
         // Show onboarding for first visit ONLY if profile is NOT completed
-        // This prevents re-showing onboarding if user has already completed it
-        if (result.isFirstVisit) {
+        if (result.isFirstVisit || isFirstVisit || subscriptionSuccess) {
           setShowOnboarding(true);
-          // Don't clean URL yet - will be done when onboarding completes
         } else {
-          // Clean URL params only if not showing onboarding
           router.replace('/sanctuaire');
         }
       } else {
-        // Retry with exponential backoff (2s, 4s, 8s)
-        if (retryCount < 3 && !result.isRateLimited) {
-          const delay = Math.pow(2, retryCount + 1) * 1000;
+        // Retry with exponential backoff (2s, 4s, 8s) — webhook may still be processing
+        if (retryCount < 5 && !result.isRateLimited) {
+          const delay = Math.pow(2, Math.min(retryCount + 1, 4)) * 1000;
           setRetryCount((prev) => prev + 1);
           setTimeout(() => {
             setAutoLoginState('idle');
@@ -85,7 +113,6 @@ function AutoLoginHandler() {
         } else {
           setAutoLoginState('error');
           setAutoLoginError(result.error);
-          // Redirect to login after 3 failed attempts
           setTimeout(() => {
             router.push(`/sanctuaire/login?email=${encodeURIComponent(email)}`);
           }, 3000);
@@ -104,6 +131,7 @@ function AutoLoginHandler() {
     retryCount,
     router,
     isFirstVisit,
+    subscriptionSuccess,
   ]);
 
   // Show loading during auto-login
