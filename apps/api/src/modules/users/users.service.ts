@@ -1,15 +1,11 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 import { User, Expert, UserProfile } from '@prisma/client';
-import {
-  aggregateCapabilities,
-  getHighestLevel,
-  EntitlementsResponse,
-} from '@packages/shared';
+import { aggregateCapabilities, getHighestLevel, EntitlementsResponse } from '@packages/shared';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async findByEmail(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
     const normalizedEmail = email.toLowerCase().trim();
@@ -52,7 +48,9 @@ export class UsersService {
   /**
    * Get basic entitlements (maxLevel + capabilities) - legacy format
    */
-  async getBasicEntitlements(userId: string): Promise<{ maxLevel: number; capabilities: string[] }> {
+  async getBasicEntitlements(
+    userId: string,
+  ): Promise<{ maxLevel: number; capabilities: string[] }> {
     const { highestLevel, capabilities } = await this.getEntitlements(userId);
     return {
       maxLevel: highestLevel,
@@ -79,7 +77,7 @@ export class UsersService {
       }),
       this.prisma.user.count(),
     ]);
-    
+
     return { users: users as unknown as User[], total };
   }
 
@@ -94,10 +92,10 @@ export class UsersService {
    * Used for Sanctuaire passwordless authentication.
    * PENDING orders never grant access (prevents pay-what-you-want / amount-0 bypass).
    */
-  async findUserWithPaidOrder(email: string): Promise<(User & { profile: UserProfile | null }) | null> {
+  async findUserWithPaidOrder(
+    email: string,
+  ): Promise<(User & { profile: UserProfile | null }) | null> {
     const normalizedEmail = email.toLowerCase().trim();
-    console.log(`[findUserWithPaidOrder] Looking for user with email: ${normalizedEmail}`);
-    
     // First find the user
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -105,11 +103,8 @@ export class UsersService {
     });
 
     if (!user) {
-      console.log(`[findUserWithPaidOrder] No user found with email: ${normalizedEmail}`);
       return null;
     }
-    
-    console.log(`[findUserWithPaidOrder] Found user: ${user.id}`);
 
     // Check if user has at least one paid/valid order.
     // FAILED orders are included — paid orders where generation failed, user should still have access.
@@ -121,17 +116,8 @@ export class UsersService {
     });
 
     if (!paidOrder) {
-      console.log(`[findUserWithPaidOrder] No valid order found for user: ${user.id}`);
-      // Log all orders for debugging
-      const allOrders = await this.prisma.order.findMany({
-        where: { userId: user.id },
-        select: { id: true, status: true, amount: true, createdAt: true },
-      });
-      console.log(`[findUserWithPaidOrder] User's orders:`, JSON.stringify(allOrders));
       return null;
     }
-    
-    console.log(`[findUserWithPaidOrder] Found valid order: ${paidOrder.id} (status: ${paidOrder.status}, amount: ${paidOrder.amount})`);
 
     return user;
   }
@@ -199,9 +185,10 @@ export class UsersService {
     });
 
     // Check if any order would pass auth
-    const wouldAuth = orders.some(o =>
-      ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'].includes(o.status) ||
-      (o.status === 'PENDING' && o.amount === 0)
+    const wouldAuth = orders.some(
+      (o) =>
+        ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'].includes(o.status) ||
+        (o.status === 'PENDING' && o.amount === 0),
     );
 
     return { email, user, orders, wouldAuth };
@@ -240,13 +227,15 @@ export class UsersService {
   /**
    * Get user's completed/delivered orders for Sanctuaire
    */
-  async getCompletedOrders(userId: string): Promise<Array<{
-    id: string;
-    orderNumber: string;
-    status: string;
-    deliveredAt: Date | null;
-    createdAt: Date;
-  }>> {
+  async getCompletedOrders(userId: string): Promise<
+    Array<{
+      id: string;
+      orderNumber: string;
+      status: string;
+      deliveredAt: Date | null;
+      createdAt: Date;
+    }>
+  > {
     return this.prisma.order.findMany({
       where: {
         userId,
@@ -266,27 +255,30 @@ export class UsersService {
   /**
    * Update or create user profile data
    */
-  async updateProfile(userId: string, data: {
-    birthDate?: string;
-    birthTime?: string;
-    birthPlace?: string;
-    specificQuestion?: string;
-    objective?: string;
-    facePhotoUrl?: string;
-    palmPhotoUrl?: string;
-    highs?: string;
-    lows?: string;
-    strongSide?: string;
-    weakSide?: string;
-    strongZone?: string;
-    weakZone?: string;
-    deliveryStyle?: string;
-    pace?: number;
-    ailments?: string;
-    fears?: string;
-    rituals?: string;
-    profileCompleted?: boolean;
-  }): Promise<{ success: boolean; profile: UserProfile }> {
+  async updateProfile(
+    userId: string,
+    data: {
+      birthDate?: string;
+      birthTime?: string;
+      birthPlace?: string;
+      specificQuestion?: string;
+      objective?: string;
+      facePhotoUrl?: string;
+      palmPhotoUrl?: string;
+      highs?: string;
+      lows?: string;
+      strongSide?: string;
+      weakSide?: string;
+      strongZone?: string;
+      weakZone?: string;
+      deliveryStyle?: string;
+      pace?: number;
+      ailments?: string;
+      fears?: string;
+      rituals?: string;
+      profileCompleted?: boolean;
+    },
+  ): Promise<{ success: boolean; profile: UserProfile }> {
     // Upsert the profile (create if not exists, update if exists)
     const profile = await this.prisma.userProfile.upsert({
       where: { userId },
@@ -332,7 +324,7 @@ export class UsersService {
         ...(data.ailments !== undefined && { ailments: data.ailments }),
         ...(data.fears !== undefined && { fears: data.fears }),
         ...(data.rituals !== undefined && { rituals: data.rituals }),
-        ...(data.profileCompleted !== undefined && { 
+        ...(data.profileCompleted !== undefined && {
           profileCompleted: data.profileCompleted,
           ...(data.profileCompleted && { submittedAt: new Date() }),
         }),

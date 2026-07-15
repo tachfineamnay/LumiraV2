@@ -67,7 +67,7 @@ interface EntitlementsData {
 }
 
 type AuthResult =
-  | { success: true; isFirstVisit: boolean }
+  | { success: true; isFirstVisit?: boolean; message?: string }
   | { success: false; error: string; isRateLimited?: boolean; retryAfter?: number };
 
 interface SanctuaireAuthContextType {
@@ -76,6 +76,7 @@ interface SanctuaireAuthContextType {
   isLoading: boolean;
   user: SanctuaireUser | null;
   authenticateWithEmail: (email: string) => Promise<AuthResult>;
+  consumeMagicLink: (token: string) => Promise<AuthResult>;
   /**
    * Re-probe the session cookie and re-initialize auth state.
    * Use this for post-checkout auto-login when the cookie was already set
@@ -143,6 +144,7 @@ const defaultContext: SanctuaireAuthContextType = {
   isLoading: true,
   user: null,
   authenticateWithEmail: async () => ({ success: false, error: 'Not initialized' }),
+  consumeMagicLink: async () => ({ success: false, error: 'Not initialized' }),
   retrySessionProbe: async () => false,
   logout: () => {},
   capabilities: [],
@@ -352,7 +354,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
     }
   }, [cooldownRemaining]);
 
-  // Authenticate with email
+  // Request a magic link. This endpoint never authenticates the browser.
   const authenticateWithEmail = useCallback(
     async (email: string): Promise<AuthResult> => {
       if (cooldownRemaining > 0) {
@@ -365,32 +367,15 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       }
 
       try {
-        // Login via BFF so cookie can be set same-origin after
         const response = await sanctuaireApi.post('/auth/sanctuaire-v2', {
           email: email.toLowerCase().trim(),
         });
-
-        const { token: newToken, user: userData } = response.data;
-
-        try {
-          await persistSanctuaireSession(newToken);
-        } catch {
-          return { success: false, error: "Impossible d'établir la session sécurisée." };
-        }
-        sessionStorage.setItem(EMAIL_SESSION_KEY, email);
-        setToken('session');
-
-        // Set user data
-        setUser(userData);
-        setIsAuthenticated(true);
-
-        // Check for first visit
-        const isFirstVisit = sessionStorage.getItem(FIRST_VISIT_KEY) === 'true';
-
-        // Initialize full data
-        await initializeFromToken();
-
-        return { success: true, isFirstVisit };
+        return {
+          success: true,
+          message:
+            response.data?.message ||
+            'Si un accès existe pour cette adresse, un lien de connexion vient d’être envoyé.',
+        };
       } catch (err) {
         const axiosError = err as AxiosError<{ message?: string; error?: string }>;
 
@@ -408,15 +393,6 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
           };
         }
 
-        // Handle auth error (401)
-        if (axiosError.response?.status === 401) {
-          const message =
-            axiosError.response.data?.message ||
-            axiosError.response.data?.error ||
-            'Aucune commande trouvée pour cet email';
-          return { success: false, error: message };
-        }
-
         // Handle 404
         if (axiosError.response?.status === 404) {
           return { success: false, error: 'Erreur technique. Contactez le support.' };
@@ -426,7 +402,39 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
         return { success: false, error: 'Erreur de connexion. Veuillez réessayer.' };
       }
     },
-    [cooldownRemaining, initializeFromToken, setUser, setIsAuthenticated, setToken],
+    [cooldownRemaining],
+  );
+
+  const consumeMagicLink = useCallback(
+    async (magicToken: string): Promise<AuthResult> => {
+      try {
+        const response = await sanctuaireApi.post('/auth/sanctuaire/consume-link', {
+          token: magicToken,
+        });
+        const { token: newToken } = response.data;
+        if (!newToken) {
+          return { success: false, error: "Impossible d'établir la session sécurisée." };
+        }
+
+        await persistSanctuaireSession(newToken);
+        setToken('session');
+        await initializeFromToken();
+        return {
+          success: true,
+          isFirstVisit: sessionStorage.getItem(FIRST_VISIT_KEY) === 'true',
+        };
+      } catch (err) {
+        const axiosError = err as AxiosError<{ message?: string; error?: string }>;
+        if (axiosError.response?.status === 401) {
+          return {
+            success: false,
+            error: 'Ce lien de connexion est invalide, expiré ou a déjà été utilisé.',
+          };
+        }
+        return { success: false, error: 'Erreur de connexion. Veuillez demander un nouveau lien.' };
+      }
+    },
+    [initializeFromToken],
   );
 
   // Re-probe session cookie (no email OTP) — for post-checkout auto-login
@@ -474,6 +482,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       isLoading,
       user,
       authenticateWithEmail,
+      consumeMagicLink,
       retrySessionProbe,
       logout: handleLogout,
       capabilities,
@@ -495,6 +504,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       isLoading,
       user,
       authenticateWithEmail,
+      consumeMagicLink,
       retrySessionProbe,
       handleLogout,
       capabilities,

@@ -176,10 +176,10 @@ export function WhatYouGet() {
               <span className="font-playfair italic text-4xl text-white/30 line-through">197€</span>
               <span className="font-playfair italic text-5xl text-white">29€</span>
               <span className="text-amber-400 text-sm font-bold uppercase tracking-widest">
-                / mois
+                accès à vie
               </span>
             </div>
-            <p className="text-white/30 text-xs mt-2">Sans engagement · Annulation en un clic</p>
+            <p className="text-white/30 text-xs mt-2">Paiement unique · Aucun renouvellement</p>
           </div>
           <div className="text-right">
             <p className="text-white/40 text-sm font-light max-w-sm leading-relaxed">

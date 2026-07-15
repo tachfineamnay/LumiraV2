@@ -1354,15 +1354,23 @@ Génère le contenu affiné:
         const startTime = Date.now();
 
         // Race between operation and timeout
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`[${agent}] Timeout after ${timeoutMs}ms`)), timeoutMs);
+          timeoutHandle = setTimeout(
+            () => reject(new Error(`[${agent}] Timeout after ${timeoutMs}ms`)),
+            timeoutMs,
+          );
         });
 
-        const result = await Promise.race([operation(), timeoutPromise]);
-        const elapsed = Date.now() - startTime;
+        try {
+          const result = await Promise.race([operation(), timeoutPromise]);
+          const elapsed = Date.now() - startTime;
 
-        this.logger.log(`⏱️ [${agent}] Response in ${elapsed}ms`);
-        return result;
+          this.logger.log(`⏱️ [${agent}] Response in ${elapsed}ms`);
+          return result;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         this.logger.error(`❌ [${agent}] Attempt ${attempt} failed: ${lastError.message}`);

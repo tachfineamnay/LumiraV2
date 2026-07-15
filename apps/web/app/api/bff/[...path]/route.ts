@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SANCTUAIRE_TOKEN_COOKIE } from '@/lib/auth-cookies';
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const apiUrl =
+  process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 /** Only proxy Sanctuaire-safe API prefixes through the BFF */
 const ALLOWED_PREFIXES = [
   'auth/me',
   'auth/sanctuaire-v2',
+  'auth/sanctuaire/consume-link',
   'users/',
   'client/',
   'dreams',

@@ -171,7 +171,7 @@ export default function Home() {
               <div className="flex flex-col items-center">
                 <span className="text-white font-playfair text-lg md:text-xl italic">29€</span>
                 <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">
-                  / mois
+                  accès à vie
                 </span>
               </div>
             </div>
@@ -243,8 +243,8 @@ export default function Home() {
             </h2>
             <p className="text-cosmic-ethereal max-w-2xl mx-auto text-lg leading-relaxed font-light">
               Nous aurions pu facturer chaque livrable séparément. Nous avons choisi l'accès complet
-              à <span className="text-white/80 font-medium">29€/mois</span> — parce que votre
-              transformation ne devrait pas avoir de prix d'entrée prohibitif.
+              à <span className="text-white/80 font-medium">29€ une seule fois</span> — parce que
+              votre transformation ne devrait pas avoir de prix d'entrée prohibitif.
             </p>
           </motion.div>
 
@@ -274,10 +274,10 @@ export default function Home() {
                       <span className="text-5xl md:text-6xl font-playfair italic text-white">
                         {SUBSCRIPTION.price}€
                       </span>
-                      <span className="text-lg text-white/40">/mois</span>
+                      <span className="text-lg text-white/40">paiement unique</span>
                     </div>
                     <p className="mt-2 text-white/50 text-sm">
-                      Sans engagement · Annulation en un clic · Offre de lancement
+                      Accès à vie · Aucun renouvellement · Offre de lancement
                     </p>
                   </div>
                   <div className="flex flex-col items-start md:items-end gap-3">

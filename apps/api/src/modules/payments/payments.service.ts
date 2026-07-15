@@ -111,7 +111,7 @@ export class PaymentsService {
       throw new BadRequestException('Unable to resolve buyer email from payment');
     }
 
-    return this.authService.authenticateSanctuaire(email);
+    return this.authService.issueSanctuaireSessionForVerifiedPayment(email);
   }
 
   private async resolveEmailFromPaymentIntent(

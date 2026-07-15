@@ -8,7 +8,7 @@ const nextConfig = {
     return [
       {
         source: '/api/readings/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'https://api.oraclelumira.com'}/api/readings/:path*`,
+        destination: `${process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.oraclelumira.com'}/api/readings/:path*`,
       },
     ];
   },

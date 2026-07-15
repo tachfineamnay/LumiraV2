@@ -15,11 +15,10 @@ import sanctuaireApi from '../../lib/sanctuaireApi';
 import { useSanctuaire } from '../../context/SanctuaireContext';
 import {
   useSanctuaireAuth,
-  isFirstVisitToken,
   setFirstVisitFlag,
   clearFirstVisitFlag,
 } from '../../context/SanctuaireAuthContext';
-import { Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 
 // =============================================================================
 // AUTO-LOGIN HANDLER
@@ -29,211 +28,36 @@ function AutoLoginHandler() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const {
-    authenticateWithEmail,
-    retrySessionProbe,
     isAuthenticated,
     isLoading: authLoading,
     refetchData,
     profile,
     user,
   } = useSanctuaireAuth();
-
-  const [autoLoginState, setAutoLoginState] = useState<
-    'idle' | 'authenticating' | 'success' | 'error'
-  >('idle');
-  const [autoLoginError, setAutoLoginError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const onboardingRequested = searchParams.get('onboarding') === '1';
 
-  const email = searchParams.get('email');
-  const token = searchParams.get('token');
-  const subscriptionSuccess = searchParams.get('subscription') === 'success';
-  const onboardingParam = searchParams.get('onboarding') === '1';
-  const isFirstVisit = isFirstVisitToken(token);
-  const sessionFirstVisit =
-    typeof window !== 'undefined' && sessionStorage.getItem('sanctuaire_first_visit') === 'true';
-  const shouldOpenOnboarding =
-    onboardingParam || isFirstVisit || subscriptionSuccess || sessionFirstVisit;
-
-  // Already authenticated after confirm-checkout — open onboarding / clean URL
+  // Payment confirmation has already created the httpOnly session. URL query
+  // parameters may request onboarding but must never authenticate a visitor.
   useEffect(() => {
-    if (authLoading || !isAuthenticated) return;
-    if (autoLoginState !== 'idle') return;
-
-    // Cookie session from checkout: open wizard if profile incomplete
-    if (shouldOpenOnboarding && !profile?.profileCompleted) {
-      setFirstVisitFlag(true);
-      setShowOnboarding(true);
-      setAutoLoginState('success');
-      // Keep URL params while wizard is open (avoids remount wiping local state)
+    if (authLoading || !onboardingRequested) return;
+    if (!isAuthenticated) {
+      router.replace('/sanctuaire/login');
       return;
     }
-
-    // Authenticated, profile already done — clean redirect params
-    if (email || token || subscriptionSuccess || onboardingParam) {
-      setAutoLoginState('success');
-      router.replace('/sanctuaire');
+    if (!profile?.profileCompleted) {
+      setFirstVisitFlag(true);
+      setShowOnboarding(true);
+      return;
     }
-  }, [
-    authLoading,
-    isAuthenticated,
-    autoLoginState,
-    email,
-    token,
-    onboardingParam,
-    subscriptionSuccess,
-    shouldOpenOnboarding,
-    profile?.profileCompleted,
-    router,
-  ]);
-
-  // Handle auto-login from URL params (no session yet — cookie may not be read yet after checkout)
-  useEffect(() => {
-    if (!email || authLoading || isAuthenticated) return;
-    if (autoLoginState !== 'idle') return;
-
-    const performAutoLogin = async () => {
-      setAutoLoginState('authenticating');
-
-      if (shouldOpenOnboarding) {
-        setFirstVisitFlag(true);
-      }
-
-      // --- POST-CHECKOUT PATH ---
-      // If this is a first-visit after payment (fv_ token or onboarding=1),
-      // the httpOnly cookie was ALREADY set by payment-success via persistSanctuaireSession.
-      // We must re-probe the cookie instead of calling authenticateWithEmail
-      // (which would trigger an email OTP / contact request to the client).
-      if (isFirstVisit || onboardingParam) {
-        const MAX_PROBE_RETRIES = 6;
-        for (let attempt = 0; attempt < MAX_PROBE_RETRIES; attempt++) {
-          if (attempt > 0) {
-            // Wait before retrying: 500ms, 1s, 1.5s, 2s, 2.5s
-            await new Promise((res) => setTimeout(res, 500 * attempt));
-          }
-          const ok = await retrySessionProbe();
-          if (ok) {
-            // Cookie is now recognized — isAuthenticated will flip via context update;
-            // the first useEffect above will open onboarding once it sees isAuthenticated=true.
-            setAutoLoginState('success');
-            setShowOnboarding(true);
-            return;
-          }
-        }
-        // Cookie still not found after retries — redirect to login page (no email sent)
-        setAutoLoginState('error');
-        setAutoLoginError(
-          'Votre session a expiré. Veuillez vous reconnecter avec votre email de commande.',
-        );
-        setTimeout(() => {
-          router.push(`/sanctuaire/login?email=${encodeURIComponent(email)}`);
-        }, 3000);
-        return;
-      }
-
-      // --- RETURNING USER PATH ---
-      // Not a first-visit checkout: use email-based auth for returning users
-      const result = await authenticateWithEmail(email);
-
-      if (result.success) {
-        setAutoLoginState('success');
-        // Always try to open onboarding for post-checkout; render gates on !profileCompleted
-        if (result.isFirstVisit || shouldOpenOnboarding) {
-          setShowOnboarding(true);
-        } else {
-          router.replace('/sanctuaire');
-        }
-      } else {
-        // Retry with exponential backoff (2s, 4s, 8s) — webhook may still be processing
-        if (retryCount < 5 && !result.isRateLimited) {
-          const delay = Math.pow(2, Math.min(retryCount + 1, 4)) * 1000;
-          setRetryCount((prev) => prev + 1);
-          setTimeout(() => {
-            setAutoLoginState('idle');
-          }, delay);
-        } else {
-          setAutoLoginState('error');
-          setAutoLoginError(result.error);
-          setTimeout(() => {
-            router.push(`/sanctuaire/login?email=${encodeURIComponent(email)}`);
-          }, 3000);
-        }
-      }
-    };
-
-    performAutoLogin();
-  }, [
-    email,
-    token,
-    authLoading,
-    isAuthenticated,
-    autoLoginState,
-    authenticateWithEmail,
-    retrySessionProbe,
-    retryCount,
-    router,
-    shouldOpenOnboarding,
-    isFirstVisit,
-    onboardingParam,
-  ]);
-
-  // Show loading during auto-login
-  if (autoLoginState === 'authenticating') {
-    return (
-      <div className="fixed inset-0 bg-abyss-700/95 backdrop-blur-xl z-50 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center gap-6 text-center px-4"
-        >
-          <div className="relative w-20 h-20">
-            <div className="absolute inset-0 bg-horizon-400/20 rounded-full blur-xl animate-pulse" />
-            <div className="relative w-full h-full bg-gradient-to-br from-horizon-400 to-horizon-500 rounded-full flex items-center justify-center">
-              <Loader2 className="w-10 h-10 text-abyss-800 animate-spin" />
-            </div>
-          </div>
-          <div>
-            <h2 className="text-xl font-playfair italic text-stellar-200 mb-2">
-              Préparation de votre Sanctuaire...
-            </h2>
-            <p className="text-stellar-500 text-sm">
-              {retryCount > 0 ? `Tentative ${retryCount + 1}/3...` : 'Authentification en cours...'}
-            </p>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // Show error during auto-login failure
-  if (autoLoginState === 'error') {
-    return (
-      <div className="fixed inset-0 bg-abyss-700/95 backdrop-blur-xl z-50 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center gap-6 text-center px-4 max-w-md"
-        >
-          <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center border border-rose-500/20">
-            <AlertCircle className="w-8 h-8 text-rose-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-playfair italic text-stellar-200 mb-2">
-              Erreur d&apos;authentification
-            </h2>
-            <p className="text-rose-300 text-sm mb-4">{autoLoginError}</p>
-            <p className="text-stellar-500 text-xs">Redirection vers la page de connexion...</p>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
+    router.replace('/sanctuaire');
+  }, [authLoading, onboardingRequested, isAuthenticated, profile?.profileCompleted, router]);
 
   // Onboarding modal - force display until profile is completed (server state as source of truth)
   if (showOnboarding && !profile?.profileCompleted) {
     return (
       <HolisticWizard
-        userEmail={email || user?.email}
+        userEmail={user?.email}
         onClose={() => {
           // User closed wizard to prepare (photos, etc.) - draft is auto-saved by HolisticWizard
           setShowOnboarding(false);
@@ -518,84 +342,6 @@ function DashboardContent() {
 }
 
 // =============================================================================
-// SUBSCRIPTION SUCCESS HANDLER
-// Polls /subscriptions/status after Stripe redirect until ACTIVE or timeout
-// =============================================================================
-
-function SubscriptionSuccessHandler() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { refetch } = useSanctuaire();
-  const { isAuthenticated, isLoading: authLoading } = useSanctuaireAuth();
-  const [activating, setActivating] = useState(false);
-
-  useEffect(() => {
-    // Only for real Stripe Subscription Checkout returns — never one-time order onboarding
-    if (searchParams.get('subscription') !== 'success') return;
-    if (searchParams.get('onboarding') === '1') return;
-    if (isFirstVisitToken(searchParams.get('token'))) return;
-    if (authLoading || !isAuthenticated) return;
-
-    setActivating(true);
-    let attempts = 0;
-    const maxAttempts = 8; // 16 seconds max
-
-    const poll = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await sanctuaireApi.get('/subscriptions/status');
-        const status = res.data?.subscription?.status;
-        if (status === 'ACTIVE') {
-          clearInterval(poll);
-          setActivating(false);
-          refetch();
-          toast.success('Abonnement activé !', { description: 'Bienvenue dans votre Sanctuaire.' });
-          router.replace('/sanctuaire');
-        }
-      } catch {
-        // ignore transient errors
-      }
-      if (attempts >= maxAttempts) {
-        clearInterval(poll);
-        setActivating(false);
-        refetch();
-        router.replace('/sanctuaire');
-      }
-    }, 2000);
-
-    return () => clearInterval(poll);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, isAuthenticated]);
-
-  if (!activating) return null;
-
-  return (
-    <div className="fixed inset-0 bg-abyss-700/90 backdrop-blur-xl z-50 flex items-center justify-center">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center gap-6 text-center px-4"
-      >
-        <div className="relative w-20 h-20">
-          <div className="absolute inset-0 bg-horizon-400/20 rounded-full blur-xl animate-pulse" />
-          <div className="relative w-full h-full bg-gradient-to-br from-horizon-400 to-horizon-500 rounded-full flex items-center justify-center">
-            <Loader2 className="w-10 h-10 text-abyss-800 animate-spin" />
-          </div>
-        </div>
-        <div>
-          <h2 className="text-xl font-playfair italic text-stellar-200 mb-2">
-            Activation en cours...
-          </h2>
-          <p className="text-stellar-500 text-sm">
-            Votre abonnement est en cours d&apos;activation.
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-// =============================================================================
 // MAIN COMPONENT
 // =============================================================================
 
@@ -611,7 +357,6 @@ export default function SanctuaireDashboard() {
         </div>
       }
     >
-      <SubscriptionSuccessHandler />
       <AutoLoginHandler />
       <DashboardContent />
     </Suspense>

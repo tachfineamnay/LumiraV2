@@ -11,12 +11,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AiRoutingService, UpsertRoutingRuleDto } from './ai-routing.service';
-import { ExpertAuthGuard } from '../expert/guards/expert-auth.guard';
+import { ExpertAuthGuard, RolesGuard } from '../expert/guards';
+import { Roles } from '../expert/decorators';
 
 import { ProductLevel } from '@prisma/client';
 
 @Controller('settings/ai-routing')
-@UseGuards(ExpertAuthGuard)
+@UseGuards(ExpertAuthGuard, RolesGuard)
+@Roles('ADMIN')
 export class AiRoutingController {
   private readonly logger = new Logger(AiRoutingController.name);
 

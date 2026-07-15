@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Lock } from 'lucide-react';
@@ -12,59 +12,32 @@ interface SanctuaireGuardProps {
   fallback?: React.ReactNode;
 }
 
-function hasPostCheckoutBypass(searchParams: URLSearchParams): boolean {
-  const email = searchParams.get('email');
-  const token = searchParams.get('token');
-  const onboarding = searchParams.get('onboarding') === '1';
-  const subscriptionSuccess = searchParams.get('subscription') === 'success';
-
-  // Fresh checkout / soft fallback: email + first-visit token or onboarding flag
-  if (email && (onboarding || (token && token.startsWith('fv_')))) {
-    return true;
-  }
-  // Legacy email+token combo
-  if (email && token) {
-    return true;
-  }
-  // Real Stripe subscription Checkout return
-  if (subscriptionSuccess) {
-    return true;
-  }
-  return false;
-}
-
 /**
  * Client-side route guard for Sanctuaire protected pages.
  * Redirects unauthenticated users to the login page.
  */
 export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fallback }) => {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { isAuthenticated, isLoading } = useSanctuaireAuth();
   const [shouldRedirect, setShouldRedirect] = useState(false);
 
-  const hasAutoLoginParams = hasPostCheckoutBypass(searchParams);
-
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && !hasAutoLoginParams) {
+    if (!isLoading && !isAuthenticated) {
       setShouldRedirect(true);
       const redirectTarget =
         typeof window !== 'undefined' && window.location.pathname.startsWith('/sanctuaire')
           ? `${window.location.pathname}${window.location.search}`
           : '/sanctuaire';
-      const email = searchParams.get('email');
       const params = new URLSearchParams({ redirect: redirectTarget });
-      if (email) params.set('email', email);
       const loginUrl = `/sanctuaire/login?${params.toString()}`;
       const timer = setTimeout(() => {
         router.push(loginUrl);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, isAuthenticated, router, hasAutoLoginParams, searchParams]);
+  }, [isLoading, isAuthenticated, router]);
 
-  // Fast path: authenticated or post-checkout / auto-login params — never show Accès Protégé
-  if (isAuthenticated || hasAutoLoginParams) {
+  if (isAuthenticated) {
     return <>{children}</>;
   }
 

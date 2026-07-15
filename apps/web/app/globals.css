@@ -7,6 +7,11 @@
     --foreground-rgb: 248, 250, 252;
     --background-start-rgb: 4, 6, 16;
     --background-end-rgb: 12, 18, 37;
+    /* Network-independent fallbacks: local deployments must build and boot
+       without reaching Google Fonts. */
+    --font-inter:
+      ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-playfair: Georgia, 'Times New Roman', serif;
   }
 
   body {

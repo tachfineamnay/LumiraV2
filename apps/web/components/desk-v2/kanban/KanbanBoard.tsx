@@ -175,43 +175,36 @@ export function KanbanBoard() {
       return;
     }
 
-    // Optimistic update
-    moveOrder(activeId, sourceColumn, destColumn);
-
-    // Get the new status based on destination column
-    const newStatus = getStatusForColumn(destColumn);
-    if (!newStatus) return;
-
-    // Block drag back to PAID (webhook-only status)
+    // PAID is webhook-only and validation/completion require Studio actions.
     if (destColumn === 'paid') {
-      moveOrder(activeId, destColumn, sourceColumn);
       toast.error('Impossible de revenir en « Nouvelles »', {
         description: 'Le statut PAID est géré uniquement après paiement.',
       });
       return;
     }
+    if (destColumn === 'validation') {
+      toast.info('La validation est alimentée automatiquement', {
+        description: 'Lancez la génération : la lecture apparaîtra ici une fois prête.',
+      });
+      return;
+    }
+    if (destColumn === 'completed') {
+      toast.info('Finalisation dans le Studio', {
+        description: 'Ouvrez la lecture, vérifiez le contenu, puis scellez-la depuis le Studio.',
+      });
+      return;
+    }
+    if (destColumn !== 'processing' || !['paid', 'validation'].includes(sourceColumn)) {
+      toast.error('Transition non autorisée');
+      return;
+    }
+
+    // Optimistic rendering while the server holds the generation lease.
+    moveOrder(activeId, sourceColumn, destColumn);
 
     try {
-      // Call API to update status
-      if (destColumn === 'processing') {
-        await expertApi.post(`/expert/orders/${activeId}/generate`);
-        toast.success('Génération lancée');
-      } else if (destColumn === 'completed') {
-        // Guard: order must be AWAITING_VALIDATION before finalizing
-        const sourceOrder = filteredOrders[sourceColumn]?.find((o) => o.id === activeId);
-        if (sourceOrder?.status !== 'AWAITING_VALIDATION') {
-          moveOrder(activeId, destColumn, sourceColumn);
-          toast.error('Impossible de sceller', {
-            description: "La lecture doit d'abord être générée et passer en validation.",
-          });
-          return;
-        }
-        await expertApi.post(`/expert/orders/${activeId}/finalize`);
-        toast.success('Commande scellée');
-      } else {
-        // Just update status
-        await expertApi.patch(`/expert/orders/${activeId}/status`, { status: newStatus });
-      }
+      await expertApi.post(`/expert/orders/${activeId}/generate`);
+      toast.success('Génération lancée');
     } catch (error) {
       // Revert on error
       moveOrder(activeId, destColumn, sourceColumn);
@@ -303,19 +296,4 @@ export function KanbanBoard() {
       </div>
     </div>
   );
-}
-
-function getStatusForColumn(column: KanbanColumnId): string | null {
-  switch (column) {
-    case 'paid':
-      return 'PAID';
-    case 'processing':
-      return 'PROCESSING';
-    case 'validation':
-      return 'AWAITING_VALIDATION';
-    case 'completed':
-      return 'COMPLETED';
-    default:
-      return null;
-  }
 }

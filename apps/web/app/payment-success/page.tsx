@@ -12,7 +12,6 @@ import {
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const emailParam = searchParams.get('email') || '';
   const paymentIntentId =
     searchParams.get('payment_intent') || searchParams.get('payment_intent_id') || '';
   const redirectStatus = searchParams.get('redirect_status');
@@ -33,15 +32,6 @@ function PaymentSuccessContent() {
       }
 
       if (!paymentIntentId) {
-        // Legacy fallback: redirect with email if present
-        if (emailParam) {
-          setStatus('confirmed');
-          setTimeout(() => {
-            // Hard nav so httpOnly cookie + sessionStorage are reliable
-            window.location.href = buildSanctuairePostCheckoutUrl(emailParam);
-          }, 800);
-          return;
-        }
         setStatus('error');
         setErrorMessage(
           'Impossible de retrouver votre paiement. Connectez-vous avec votre email de commande.',
@@ -50,22 +40,14 @@ function PaymentSuccessContent() {
       }
 
       try {
-        const { email } = await completeCheckoutSession(paymentIntentId);
+        await completeCheckoutSession(paymentIntentId);
         setStatus('confirmed');
         setTimeout(() => {
           // Hard nav ensures Set-Cookie from confirm is included on Sanctuaire load
-          window.location.href = buildSanctuairePostCheckoutUrl(email);
+          window.location.href = buildSanctuairePostCheckoutUrl();
         }, 800);
       } catch (err) {
         console.error('[PaymentSuccess] confirm failed:', err);
-        // Soft fallback: email auto-login (webhook may have fulfilled)
-        if (emailParam) {
-          setStatus('confirmed');
-          setTimeout(() => {
-            window.location.href = buildSanctuairePostCheckoutUrl(emailParam);
-          }, 800);
-          return;
-        }
         setStatus('error');
         setErrorMessage(
           "Paiement reçu, mais l'accès automatique a échoué. Connectez-vous avec votre email de commande.",
@@ -74,7 +56,7 @@ function PaymentSuccessContent() {
     };
 
     void finalize();
-  }, [paymentIntentId, redirectStatus, emailParam, router]);
+  }, [paymentIntentId, redirectStatus]);
 
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center">
@@ -152,13 +134,7 @@ function PaymentSuccessContent() {
               </h1>
               <p className="text-cosmic-stardust text-sm mb-6">{errorMessage}</p>
               <button
-                onClick={() =>
-                  router.push(
-                    emailParam
-                      ? `/sanctuaire/login?email=${encodeURIComponent(emailParam)}`
-                      : '/sanctuaire/login',
-                  )
-                }
+                onClick={() => router.push('/sanctuaire/login')}
                 className="px-6 py-3 rounded-xl bg-cosmic-gold/20 border border-cosmic-gold/40 text-cosmic-gold text-sm font-medium hover:bg-cosmic-gold/30 transition-colors"
               >
                 Se connecter au Sanctuaire

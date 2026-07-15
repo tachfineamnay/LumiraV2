@@ -27,10 +27,14 @@ services:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        API_INTERNAL_URL: http://api:3001
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - API_INTERNAL_URL=http://api:3001
       - JWT_SECRET=${JWT_SECRET:-dev-only-change-me-in-production-64chars-minimum!!}
     depends_on:
       - api
@@ -49,6 +53,12 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-only-change-me-in-production-64chars-minimum!!}
       - JWT_EXPIRATION=30d
       - WEB_URL=http://localhost:3000
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-noreply@oraclelumira.local}
       - NODE_ENV=development
     depends_on:
       - postgres

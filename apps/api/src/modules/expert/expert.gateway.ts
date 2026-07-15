@@ -20,7 +20,7 @@ interface ExpertSocket extends Socket {
 @WebSocketGateway({
   namespace: '/expert',
   cors: {
-    origin: '*',
+    origin: process.env.WEB_URL || 'http://localhost:3000',
     credentials: true,
   },
 })
@@ -38,9 +38,10 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: ExpertSocket) {
     try {
-      const token = client.handshake.auth?.token || 
-                    client.handshake.headers?.authorization?.replace('Bearer ', '');
-      
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.replace('Bearer ', '');
+
       if (!token) {
         this.logger.warn(`Connection rejected: No token provided`);
         client.disconnect();
@@ -53,16 +54,16 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       client.expertId = payload.sub;
       client.expertEmail = payload.email;
-      
+
       this.connectedExperts.set(client.id, client);
-      
+
       // Join expert-specific room
       client.join(`expert:${payload.sub}`);
       // Join global experts room
       client.join('experts');
 
       this.logger.log(`✅ Expert connected: ${payload.email} (${client.id})`);
-      
+
       // Send connection confirmation
       client.emit('connected', {
         expertId: payload.sub,
@@ -72,7 +73,9 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Broadcast online count to all experts
       this.broadcastOnlineCount();
     } catch (error) {
-      this.logger.warn(`Connection rejected: Invalid token - ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.warn(
+        `Connection rejected: Invalid token - ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       client.disconnect();
     }
   }
@@ -158,11 +161,7 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * Broadcast when order is sealed/finalized
    */
-  notifyOrderSealed(order: {
-    id: string;
-    orderNumber: string;
-    sealedBy: string;
-  }) {
+  notifyOrderSealed(order: { id: string; orderNumber: string; sealedBy: string }) {
     this.logger.log(`🔒 Order sealed: ${order.orderNumber} by ${order.sealedBy}`);
     this.server.to('experts').emit('order:sealed', {
       ...order,
@@ -182,7 +181,7 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     // Leave previous order room if any
     const rooms = Array.from(client.rooms);
-    rooms.forEach(room => {
+    rooms.forEach((room) => {
       if (room.startsWith('order:')) {
         client.leave(room);
       }
@@ -190,7 +189,7 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Join new order room
     client.join(`order:${data.orderId}`);
-    
+
     // Notify others that this expert is viewing the order
     this.server.to(`order:${data.orderId}`).emit('order:viewer-joined', {
       orderId: data.orderId,
@@ -210,7 +209,7 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { orderId: string },
   ) {
     client.leave(`order:${data.orderId}`);
-    
+
     this.server.to(`order:${data.orderId}`).emit('order:viewer-left', {
       orderId: data.orderId,
       expertId: client.expertId,
@@ -223,7 +222,8 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('editor:cursor')
   handleEditorCursor(
     @ConnectedSocket() client: ExpertSocket,
-    @MessageBody() data: { orderId: string; position: number; selection?: { from: number; to: number } },
+    @MessageBody()
+    data: { orderId: string; position: number; selection?: { from: number; to: number } },
   ) {
     // Broadcast to other experts viewing the same order
     client.to(`order:${data.orderId}`).emit('editor:cursor-update', {

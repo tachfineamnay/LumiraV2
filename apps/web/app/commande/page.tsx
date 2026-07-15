@@ -107,16 +107,10 @@ function CheckoutContent() {
     setPaymentError(null);
 
     try {
-      const { email } = await completeCheckoutSession(paymentIntentId);
-      window.location.href = buildSanctuairePostCheckoutUrl(email);
+      await completeCheckoutSession(paymentIntentId);
+      window.location.href = buildSanctuairePostCheckoutUrl();
     } catch (err) {
       console.error('[Checkout] Post-payment session failed:', err);
-      // Fallback: still try auto-login via email params (webhook may catch up)
-      const email = formData?.email;
-      if (email) {
-        window.location.href = buildSanctuairePostCheckoutUrl(email);
-        return;
-      }
       setPaymentError(
         "Paiement reçu, mais l'accès au Sanctuaire a échoué. Utilisez votre email de commande pour vous connecter.",
       );

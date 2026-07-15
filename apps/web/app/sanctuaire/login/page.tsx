@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,6 +12,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const {
     authenticateWithEmail,
+    consumeMagicLink,
     isAuthenticated,
     isLoading: authLoading,
     cooldownRemaining,
@@ -21,6 +22,9 @@ function LoginContent() {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const consumedLinkRef = useRef(false);
+  const magicToken = searchParams.get('token');
 
   // Pre-fill email from URL params (from redirect)
   useEffect(() => {
@@ -45,9 +49,22 @@ function LoginContent() {
     }
   }, [isAuthenticated, authLoading, router, safeRedirect]);
 
+  useEffect(() => {
+    if (!magicToken || authLoading || isAuthenticated || consumedLinkRef.current) return;
+    consumedLinkRef.current = true;
+    setIsSubmitting(true);
+    void consumeMagicLink(magicToken).then((result) => {
+      if (!result.success) {
+        setError(result.error);
+        setIsSubmitting(false);
+      }
+    });
+  }, [magicToken, authLoading, isAuthenticated, consumeMagicLink]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setMessage(null);
 
     if (!email.trim()) {
       setError('Veuillez entrer votre email');
@@ -59,7 +76,11 @@ function LoginContent() {
     const result = await authenticateWithEmail(email);
 
     if (result.success) {
-      router.push(safeRedirect);
+      setMessage(
+        result.message ||
+          'Si un accès existe pour cette adresse, un lien de connexion vient d’être envoyé.',
+      );
+      setIsSubmitting(false);
     } else {
       setError(result.error);
       setIsSubmitting(false);
@@ -169,6 +190,17 @@ function LoginContent() {
                   <p className="text-sm text-rose-300">{error}</p>
                 </motion.div>
               )}
+              {message && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl"
+                >
+                  <Mail className="w-5 h-5 text-emerald-300 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-emerald-200">{message}</p>
+                </motion.div>
+              )}
             </AnimatePresence>
 
             {/* Cooldown Timer */}
@@ -200,12 +232,12 @@ function LoginContent() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Connexion...</span>
+                  <span>Vérification...</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-5 h-5" />
-                  <span>Accéder au Sanctuaire</span>
+                  <span>Recevoir un lien sécurisé</span>
                 </>
               )}
             </motion.button>
@@ -213,7 +245,7 @@ function LoginContent() {
 
           {/* Helper Text */}
           <p className="text-center text-stellar-500 text-xs mt-6">
-            Utilisez l&apos;email de votre commande
+            Utilisez l&apos;email de votre commande. Le lien est valable 15 minutes.
           </p>
         </motion.div>
 

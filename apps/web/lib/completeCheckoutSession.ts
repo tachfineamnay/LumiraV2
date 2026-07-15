@@ -22,7 +22,7 @@ async function persistSanctuaireSession(token: string) {
  * 1. Confirm with API (marks order PAID + issues Sanctuaire JWT)
  * 2. Persist httpOnly session cookie
  * 3. Mark first visit for onboarding
- * Returns the buyer email for optional redirect params.
+ * Returns the buyer email for analytics and UI only.
  */
 export async function completeCheckoutSession(paymentIntentId: string): Promise<{ email: string }> {
   const response = await sanctuaireApi.post('/payments/confirm-checkout', {
@@ -47,15 +47,9 @@ export async function completeCheckoutSession(paymentIntentId: string): Promise<
 
 /**
  * Redirect into Sanctuaire after one-time checkout.
- * Uses onboarding=1 + fv_ token — never subscription=success (that triggers
- * the subscription-activation poller and strips auth params).
+ * The authenticated session is already stored in an httpOnly cookie. Do not
+ * include any credential-like or identity data in the redirect URL.
  */
-export function buildSanctuairePostCheckoutUrl(email: string): string {
-  const firstVisitToken = `fv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-  const params = new URLSearchParams({
-    email,
-    token: firstVisitToken,
-    onboarding: '1',
-  });
-  return `/sanctuaire?${params.toString()}`;
+export function buildSanctuairePostCheckoutUrl(): string {
+  return '/sanctuaire?onboarding=1';
 }
