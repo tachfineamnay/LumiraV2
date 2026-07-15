@@ -1,296 +1,324 @@
-"use client";
+'use client';
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, User, Bot, Loader2, MessageCircle, Crown } from "lucide-react";
-import { GlassCard } from "../../../components/ui/GlassCard";
-import { SubscriptionLock } from "../../../components/sanctuary/SubscriptionLock";
-import sanctuaireApi from "../../../lib/sanctuaireApi";
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Send, Sparkles, User, Bot, Loader2, MessageCircle, Crown } from 'lucide-react';
+import { GlassCard } from '../../../components/ui/GlassCard';
+import { SubscriptionLock } from '../../../components/sanctuary/SubscriptionLock';
+import sanctuaireApi from '../../../lib/sanctuaireApi';
 
 interface Message {
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    timestamp: Date;
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
 }
 
 interface QuotaStatus {
-    isSubscribed: boolean;
-    messagesRemaining: number;
-    messagesUsed: number;
-    total: number;
+  isSubscribed: boolean;
+  messagesRemaining: number;
+  messagesUsed: number;
+  total: number;
 }
 
 export default function OracleChatPage() {
-    const [input, setInput] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
-    const [sessionId, setSessionId] = useState<string | null>(null);
-    const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
-    const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: "1",
-            role: "assistant",
-            content: "Salutations, âme voyageuse. Je suis l'Oracle de Lumira. Quelle question brûle en vous aujourd'hui ?",
-            timestamp: new Date(),
-        },
-    ]);
-    const scrollRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      role: 'assistant',
+      content:
+        "Salutations, âme voyageuse. Je suis l'Oracle de Lumira. Quelle question brûle en vous aujourd'hui ?",
+      timestamp: new Date(),
+    },
+  ]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Fetch initial quota status
-    useEffect(() => {
-        const fetchQuota = async () => {
-            try {
-                const { data } = await sanctuaireApi.get('/client/chat/quota');
-                setQuotaStatus({
-                    isSubscribed: data.isSubscribed,
-                    messagesRemaining: data.messagesRemaining,
-                    messagesUsed: data.messagesUsed,
-                    total: data.quota,
-                });
-                // Check if already exceeded
-                if (!data.isSubscribed && data.messagesRemaining <= 0 && data.messagesUsed > 0) {
-                    setIsQuotaExceeded(true);
-                }
-            } catch (err) {
-                console.error('Failed to fetch quota:', err);
-            }
-        };
-        fetchQuota();
-    }, []);
-
-    useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollIntoView({ behavior: "smooth" });
+  // Fetch initial quota status
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const { data } = await sanctuaireApi.get('/client/chat/quota');
+        setQuotaStatus({
+          isSubscribed: data.isSubscribed,
+          messagesRemaining: data.messagesRemaining,
+          messagesUsed: data.messagesUsed,
+          total: data.quota,
+        });
+        // Check if already exceeded
+        if (!data.isSubscribed && data.messagesRemaining <= 0 && data.messagesUsed > 0) {
+          setIsQuotaExceeded(true);
         }
-    }, [messages]);
+      } catch (err) {
+        console.error('Failed to fetch quota:', err);
+      }
+    };
+    fetchQuota();
+  }, []);
 
-    const handleSend = async () => {
-        if (!input.trim() || isQuotaExceeded) return;
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
-        const userMsg: Message = {
-            id: Date.now().toString(),
-            role: "user",
-            content: input,
-            timestamp: new Date(),
-        };
+  const handleSend = async () => {
+    if (!input.trim() || isQuotaExceeded) return;
 
-        setMessages((prev) => [...prev, userMsg]);
-        const userMessage = input;
-        setInput("");
-        setIsLoading(true);
-
-        try {
-            // Call the real API endpoint
-            const { data } = await sanctuaireApi.post('/client/chat', {
-                message: userMessage,
-                sessionId: sessionId,
-            });
-
-            // Update session ID for conversation continuity
-            if (data.sessionId) {
-                setSessionId(data.sessionId);
-            }
-
-            // Update quota status from response
-            if (data.quota) {
-                setQuotaStatus({
-                    isSubscribed: data.quota.isSubscribed,
-                    messagesRemaining: data.quota.messagesRemaining,
-                    messagesUsed: data.quota.messagesUsed,
-                    total: data.quota.total,
-                });
-            }
-
-            const aiMsg: Message = {
-                id: (Date.now() + 1).toString(),
-                role: "assistant",
-                content: data.response,
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, aiMsg]);
-        } catch (error: unknown) {
-            console.error('Chat error:', error);
-            
-            // Check if quota exceeded (403 with QUOTA_EXCEEDED code)
-            const axiosError = error as { response?: { status?: number; data?: { code?: string; quotaStatus?: { messagesUsed: number; quota: number } } } };
-            if (axiosError.response?.status === 403 && axiosError.response?.data?.code === 'QUOTA_EXCEEDED') {
-                setIsQuotaExceeded(true);
-                if (axiosError.response.data.quotaStatus) {
-                    setQuotaStatus({
-                        isSubscribed: false,
-                        messagesRemaining: 0,
-                        messagesUsed: axiosError.response.data.quotaStatus.messagesUsed,
-                        total: axiosError.response.data.quotaStatus.quota,
-                    });
-                }
-                return; // Don't show error message, show lock instead
-            }
-            
-            const errorMsg: Message = {
-                id: (Date.now() + 1).toString(),
-                role: "assistant",
-                content: "Les astres sont momentanément voilés... Veuillez réessayer dans quelques instants.",
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, errorMsg]);
-        } finally {
-            setIsLoading(false);
-        }
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input,
+      timestamp: new Date(),
     };
 
-    // Quota indicator component
-    const QuotaIndicator = () => {
-        if (!quotaStatus || quotaStatus.isSubscribed) return null;
-        
-        const remaining = quotaStatus.messagesRemaining;
-        const isLow = remaining <= 1 && remaining > 0;
-        
-        return (
-            <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-                    remaining === 0
-                        ? 'bg-red-500/20 border border-red-500/30 text-red-300'
-                        : isLow
-                        ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
-                        : 'bg-white/10 border border-white/10 text-white/60'
-                }`}
-            >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span>
-                    {remaining === 0 ? (
-                        'Quota épuisé'
-                    ) : (
-                        <>Messages restants : <span className="font-bold">{remaining}</span></>
-                    )}
-                </span>
-                {!quotaStatus.isSubscribed && (
-                    <span title="Passez premium pour des messages illimités">
-                        <Crown className="w-3.5 h-3.5 text-amber-400 ml-1" />
-                    </span>
-                )}
-            </motion.div>
-        );
-    };
+    setMessages((prev) => [...prev, userMsg]);
+    const userMessage = input;
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      // Call the real API endpoint
+      const { data } = await sanctuaireApi.post('/client/chat', {
+        message: userMessage,
+        sessionId: sessionId,
+      });
+
+      // Update session ID for conversation continuity
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+      }
+
+      // Update quota status from response
+      if (data.quota) {
+        setQuotaStatus({
+          isSubscribed: data.quota.isSubscribed,
+          messagesRemaining: data.quota.messagesRemaining,
+          messagesUsed: data.quota.messagesUsed,
+          total: data.quota.total,
+        });
+      }
+
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (error: unknown) {
+      console.error('Chat error:', error);
+
+      // Check if quota exceeded (403 with QUOTA_EXCEEDED code)
+      const axiosError = error as {
+        response?: {
+          status?: number;
+          data?: { code?: string; quotaStatus?: { messagesUsed: number; quota: number } };
+        };
+      };
+      if (
+        axiosError.response?.status === 403 &&
+        axiosError.response?.data?.code === 'QUOTA_EXCEEDED'
+      ) {
+        setIsQuotaExceeded(true);
+        if (axiosError.response.data.quotaStatus) {
+          setQuotaStatus({
+            isSubscribed: false,
+            messagesRemaining: 0,
+            messagesUsed: axiosError.response.data.quotaStatus.messagesUsed,
+            total: axiosError.response.data.quotaStatus.quota,
+          });
+        }
+        return; // Don't show error message, show lock instead
+      }
+
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content:
+          'Les astres sont momentanément voilés... Veuillez réessayer dans quelques instants.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Quota indicator component
+  const QuotaIndicator = () => {
+    if (!quotaStatus || quotaStatus.isSubscribed) return null;
+
+    const remaining = quotaStatus.messagesRemaining;
+    const isLow = remaining <= 1 && remaining > 0;
 
     return (
-        <div className="w-full min-h-screen p-4 md:p-8 flex flex-col items-center justify-center relative">
-            {/* 🌌 Background Elements */}
-            <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
-                <div className="absolute top-20 right-20 w-96 h-96 bg-purple-900/20 rounded-full blur-[100px]" />
-                <div className="absolute bottom-20 left-20 w-96 h-96 bg-amber-900/10 rounded-full blur-[100px]" />
-            </div>
-
-            <GlassCard className="w-full max-w-4xl h-[800px] flex flex-col relative z-10 border-white/10 !p-0 overflow-hidden">
-                {/* 🏷️ Header */}
-                <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-900/20 flex items-center justify-center border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-                            <Sparkles className="w-6 h-6 text-indigo-300 animate-pulse-slow" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-playfair italic text-white">L'Oracle de Lumira</h1>
-                            <p className="text-xs text-indigo-200/50 uppercase tracking-widest flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                Connecté au Flux
-                            </p>
-                        </div>
-                    </div>
-                    
-                    {/* Quota indicator in header */}
-                    <QuotaIndicator />
-                </div>
-
-                {/* 📜 Chat Area */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                    <AnimatePresence>
-                        {messages.map((msg) => (
-                            <motion.div
-                                key={msg.id}
-                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                transition={{ duration: 0.3 }}
-                                className={`flex items-start gap-4 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-                            >
-                                {/* Avatar */}
-                                <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center border ${msg.role === "assistant"
-                                        ? "bg-indigo-900/20 border-indigo-500/30"
-                                        : "bg-amber-900/20 border-amber-500/30"
-                                    }`}>
-                                    {msg.role === "assistant" ? <Bot className="w-5 h-5 text-indigo-300" /> : <User className="w-5 h-5 text-amber-300" />}
-                                </div>
-
-                                {/* Bubble */}
-                                <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed shadow-lg backdrop-blur-sm ${msg.role === "assistant"
-                                        ? "bg-white/5 border border-indigo-500/20 text-indigo-100 rounded-tl-none"
-                                        : "bg-gradient-to-br from-amber-900/40 to-amber-950/40 border border-amber-500/20 text-amber-100 rounded-tr-none"
-                                    }`}>
-                                    {msg.content}
-                                    <div className={`text-[10px] mt-2 opacity-40 uppercase tracking-wider font-bold text-right`}>
-                                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
-
-                    {isLoading && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex items-center gap-3 text-indigo-300/50 text-xs uppercase tracking-widest pl-14"
-                        >
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            L'Oracle consulte les astres...
-                        </motion.div>
-                    )}
-                    <div ref={scrollRef} />
-                </div>
-
-                {/* ⌨️ Input Area or Lock */}
-                {isQuotaExceeded ? (
-                    <div className="p-6 border-t border-white/5">
-                        <SubscriptionLock 
-                            messagesUsed={quotaStatus?.messagesUsed || 3} 
-                            quota={quotaStatus?.total || 3}
-                            variant="chat"
-                        />
-                    </div>
-                ) : (
-                    <div className="p-6 pt-4 border-t border-white/5 bg-white/5">
-                        <div className="relative group">
-                            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                            <div className="relative flex items-center gap-2 bg-cosmic-void/80 border border-white/10 rounded-xl p-2 pr-2 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/30 transition-all">
-                                <input
-                                    type="text"
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                                    placeholder="Posez votre question à l'univers..."
-                                    className="flex-1 bg-transparent border-none text-white placeholder-white/30 text-sm px-4 py-3 focus:ring-0 focus:outline-none font-medium"
-                                    disabled={isLoading}
-                                />
-                                <button
-                                    onClick={handleSend}
-                                    disabled={!input.trim() || isLoading}
-                                    className="p-3 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 text-white hover:shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Envoyer le message"
-                                    aria-label="Envoyer le message"
-                                >
-                                    <Send className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-                        <p className="text-center text-[10px] text-white/20 mt-3">
-                            L'Oracle offre des guidances spirituelles. Interprétez ses messages avec votre propre intuition.
-                        </p>
-                    </div>
-                )}
-            </GlassCard>
-        </div>
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+          remaining === 0
+            ? 'bg-red-500/20 border border-red-500/30 text-red-300'
+            : isLow
+              ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
+              : 'bg-white/10 border border-white/10 text-white/60'
+        }`}
+      >
+        <MessageCircle className="w-3.5 h-3.5" />
+        <span>
+          {remaining === 0 ? (
+            'Quota épuisé'
+          ) : (
+            <>
+              Messages restants : <span className="font-bold">{remaining}</span>
+            </>
+          )}
+        </span>
+        {!quotaStatus.isSubscribed && (
+          <span title="Passez premium pour des messages illimités">
+            <Crown className="w-3.5 h-3.5 text-amber-400 ml-1" />
+          </span>
+        )}
+      </motion.div>
     );
+  };
+
+  return (
+    <div className="w-full flex flex-col items-center justify-start md:justify-center p-3 md:p-8 min-h-screen relative">
+      {/* 🌌 Background Elements */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+        <div className="absolute top-20 right-20 w-96 h-96 bg-purple-900/20 rounded-full blur-[100px]" />
+        <div className="absolute bottom-20 left-20 w-96 h-96 bg-amber-900/10 rounded-full blur-[100px]" />
+      </div>
+
+      <GlassCard
+        className="w-full max-w-4xl flex flex-col relative z-10 border-white/10 !p-0 overflow-hidden"
+        style={{ height: 'calc(100svh - 6rem)' }}
+      >
+        {/* 🏷️ Header */}
+        <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-900/20 flex items-center justify-center border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+              <Sparkles className="w-6 h-6 text-indigo-300 animate-pulse-slow" />
+            </div>
+            <div>
+              <h1 className="text-xl font-playfair italic text-white">L'Oracle de Lumira</h1>
+              <p className="text-xs text-indigo-200/50 uppercase tracking-widest flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                Connecté au Flux
+              </p>
+            </div>
+          </div>
+
+          {/* Quota indicator in header */}
+          <QuotaIndicator />
+        </div>
+
+        {/* 📜 Chat Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          <AnimatePresence>
+            {messages.map((msg) => (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.3 }}
+                className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+              >
+                {/* Avatar */}
+                <div
+                  className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center border ${
+                    msg.role === 'assistant'
+                      ? 'bg-indigo-900/20 border-indigo-500/30'
+                      : 'bg-amber-900/20 border-amber-500/30'
+                  }`}
+                >
+                  {msg.role === 'assistant' ? (
+                    <Bot className="w-5 h-5 text-indigo-300" />
+                  ) : (
+                    <User className="w-5 h-5 text-amber-300" />
+                  )}
+                </div>
+
+                {/* Bubble */}
+                <div
+                  className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed shadow-lg backdrop-blur-sm ${
+                    msg.role === 'assistant'
+                      ? 'bg-white/5 border border-indigo-500/20 text-indigo-100 rounded-tl-none'
+                      : 'bg-gradient-to-br from-amber-900/40 to-amber-950/40 border border-amber-500/20 text-amber-100 rounded-tr-none'
+                  }`}
+                >
+                  {msg.content}
+                  <div
+                    className={`text-[10px] mt-2 opacity-40 uppercase tracking-wider font-bold text-right`}
+                  >
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {isLoading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-3 text-indigo-300/50 text-xs uppercase tracking-widest pl-14"
+            >
+              <Loader2 className="w-4 h-4 animate-spin" />
+              L'Oracle consulte les astres...
+            </motion.div>
+          )}
+          <div ref={scrollRef} />
+        </div>
+
+        {/* ⌨️ Input Area or Lock */}
+        {isQuotaExceeded ? (
+          <div className="p-6 border-t border-white/5">
+            <SubscriptionLock
+              messagesUsed={quotaStatus?.messagesUsed || 3}
+              quota={quotaStatus?.total || 3}
+              variant="chat"
+            />
+          </div>
+        ) : (
+          <div className="p-6 pt-4 border-t border-white/5 bg-white/5">
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="relative flex items-center gap-2 bg-cosmic-void/80 border border-white/10 rounded-xl p-2 pr-2 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/30 transition-all">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="Posez votre question à l'univers..."
+                  className="flex-1 bg-transparent border-none text-white placeholder-white/30 text-sm px-4 py-3 focus:ring-0 focus:outline-none font-medium"
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || isLoading}
+                  className="p-3 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 text-white hover:shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Envoyer le message"
+                  aria-label="Envoyer le message"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <p className="text-center text-[10px] text-white/20 mt-3">
+              L'Oracle offre des guidances spirituelles. Interprétez ses messages avec votre propre
+              intuition.
+            </p>
+          </div>
+        )}
+      </GlassCard>
+    </div>
+  );
 }

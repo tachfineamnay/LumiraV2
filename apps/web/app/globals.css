@@ -15,16 +15,31 @@
       /* Milky way glow - subtle teal at top */
       radial-gradient(ellipse 120% 60% at 50% -20%, rgba(15, 61, 80, 0.25) 0%, transparent 60%),
       /* Soft horizon warmth at bottom */
-      radial-gradient(ellipse 100% 40% at 50% 110%, rgba(232, 168, 56, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 100% 40% at 50% 110%, rgba(232, 168, 56, 0.08) 0%, transparent 50%),
       /* Central serenity glow */
-      radial-gradient(circle at 50% 50%, rgba(20, 82, 102, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(20, 82, 102, 0.1) 0%, transparent 50%),
       /* Deep abyss gradient */
-      linear-gradient(180deg, #040610 0%, #080C1A 25%, #0C1225 50%, #101830 100%);
-    color: #F8FAFC;
+        linear-gradient(180deg, #040610 0%, #080c1a 25%, #0c1225 50%, #101830 100%);
+    color: #f8fafc;
     overflow-x: hidden;
     font-size: 16px;
     letter-spacing: -0.01em;
     min-height: 100vh;
+    /* Mobile: remove tap highlight, improve scroll */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  /* Mobile scroll improvements */
+  * {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox mobile */
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
   }
 
   h1,
@@ -34,12 +49,11 @@
   h5,
   h6 {
     @apply font-playfair;
-    font-feature-settings: "salt", "ss01";
+    font-feature-settings: 'salt', 'ss01';
   }
 }
 
 @layer components {
-
   /* === STARFIELD - More subtle and peaceful === */
   .starfield {
     position: relative;
@@ -66,8 +80,8 @@
   /* === BUTTONS === */
   .btn-royal {
     @apply relative overflow-hidden px-16 py-6 rounded-full font-inter font-semibold text-lg;
-    background: linear-gradient(135deg, #E8A838, #F4B942, #FFCC5C);
-    color: #0C1225;
+    background: linear-gradient(135deg, #e8a838, #f4b942, #ffcc5c);
+    color: #0c1225;
     box-shadow: 0 0 40px rgba(232, 168, 56, 0.25);
     transition: all 500ms;
   }
@@ -97,15 +111,27 @@
   /* === GLASS CARDS - Sublime & Peaceful === */
   .glass-card {
     @apply backdrop-blur-xl rounded-2xl transition-all duration-500;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      rgba(255, 255, 255, 0.01) 100%
+    );
     border: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: 0 8px 32px rgba(4, 6, 16, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    box-shadow:
+      0 8px 32px rgba(4, 6, 16, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .glass-card:hover {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
     border-color: rgba(232, 168, 56, 0.15);
-    box-shadow: 0 12px 40px rgba(4, 6, 16, 0.5), 0 0 30px rgba(232, 168, 56, 0.05);
+    box-shadow:
+      0 12px 40px rgba(4, 6, 16, 0.5),
+      0 0 30px rgba(232, 168, 56, 0.05);
   }
 
   /* Sidebar Glass */
@@ -128,19 +154,20 @@
 }
 
 @layer utilities {
-
   /* === WIZARD COSMIC BACKGROUND === */
   .wizard-cosmic-gradient {
-    background: 
+    background:
       radial-gradient(ellipse 120% 60% at 50% -20%, rgba(15, 61, 80, 0.3) 0%, transparent 60%),
       radial-gradient(ellipse 100% 40% at 50% 110%, rgba(232, 168, 56, 0.12) 0%, transparent 50%),
       radial-gradient(circle at 50% 50%, rgba(20, 82, 102, 0.15) 0%, transparent 50%),
-      linear-gradient(180deg, #040610 0%, #080C1A 25%, #0C1225 50%, #101830 100%);
+      linear-gradient(180deg, #040610 0%, #080c1a 25%, #0c1225 50%, #101830 100%);
   }
 
   /* === TEXT EFFECTS === */
   .text-glow-hero {
-    text-shadow: 0 0 40px rgba(232, 168, 56, 0.25), 0 0 80px rgba(232, 168, 56, 0.1);
+    text-shadow:
+      0 0 40px rgba(232, 168, 56, 0.25),
+      0 0 80px rgba(232, 168, 56, 0.1);
   }
 
   .text-glow-gold {
@@ -154,12 +181,12 @@
   /* Gradient Text */
   .text-gradient-gold {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #E8A838, #F4B942, #FFCC5C);
+    background-image: linear-gradient(135deg, #e8a838, #f4b942, #ffcc5c);
   }
 
   .text-gradient-serenity {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #145266, #2D8AA0, #4BA8BE);
+    background-image: linear-gradient(135deg, #145266, #2d8aa0, #4ba8be);
   }
 
   /* Safe area for mobile bottom nav */
@@ -169,14 +196,14 @@
 
   /* === AVATAR GLOW === */
   .avatar-glow {
-    box-shadow: 
+    box-shadow:
       0 0 20px rgba(232, 168, 56, 0.3),
       0 0 40px rgba(232, 168, 56, 0.15),
       inset 0 0 20px rgba(232, 168, 56, 0.1);
   }
 
   .avatar-glow-serenity {
-    box-shadow: 
+    box-shadow:
       0 0 20px rgba(45, 138, 160, 0.3),
       0 0 40px rgba(45, 138, 160, 0.15),
       inset 0 0 20px rgba(45, 138, 160, 0.1);
@@ -185,17 +212,25 @@
   /* === PREMIUM CARD ENHANCEMENTS === */
   .card-premium {
     @apply rounded-2xl backdrop-blur-xl transition-all duration-500;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.01) 100%
+    );
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 
+    box-shadow:
       0 8px 32px rgba(4, 6, 16, 0.5),
       inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .card-premium:hover {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
     border-color: rgba(232, 168, 56, 0.2);
-    box-shadow: 
+    box-shadow:
       0 16px 48px rgba(4, 6, 16, 0.6),
       0 0 40px rgba(232, 168, 56, 0.08),
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -221,11 +256,14 @@
   }
 
   @keyframes btnPulse {
-    0%, 100% {
+    0%,
+    100% {
       box-shadow: 0 0 20px rgba(232, 168, 56, 0.3);
     }
     50% {
-      box-shadow: 0 0 40px rgba(232, 168, 56, 0.5), 0 0 60px rgba(232, 168, 56, 0.2);
+      box-shadow:
+        0 0 40px rgba(232, 168, 56, 0.5),
+        0 0 60px rgba(232, 168, 56, 0.2);
     }
   }
 
@@ -277,7 +315,9 @@
   .glass-desk:hover {
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 0.7) 100%);
     border-color: rgba(251, 191, 36, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(251, 191, 36, 0.1);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 20px rgba(251, 191, 36, 0.1);
   }
 
   /* === SHIMMER ANIMATION (AI Processing) === */
