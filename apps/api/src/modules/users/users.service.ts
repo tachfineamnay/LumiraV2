@@ -80,7 +80,7 @@ export class UsersService {
       this.prisma.user.count(),
     ]);
     
-    return { users, total };
+    return { users: users as unknown as User[], total };
   }
 
   async findById(id: string): Promise<User | null> {

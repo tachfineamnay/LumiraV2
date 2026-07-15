@@ -106,7 +106,7 @@ export class AuthService {
             level: entitlements.highestLevel,
         };
 
-        const token = this.jwtService.sign(payload, { expiresIn: this.sanctuaireTokenExpiry });
+        const token = this.jwtService.sign(payload, { expiresIn: this.sanctuaireTokenExpiry as any });
 
     return {
             success: true,
