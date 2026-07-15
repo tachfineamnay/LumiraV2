@@ -5,10 +5,11 @@ import { OrdersModule } from '../orders/orders.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ServicesModule } from '../../services/services.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { IdGenerator } from '../../utils/IdGenerator';
 
 @Module({
     imports: [OrdersModule, PrismaModule, NotificationsModule, ServicesModule],
     controllers: [PaymentsController],
-    providers: [PaymentsService],
+    providers: [PaymentsService, IdGenerator],
 })
 export class PaymentsModule { }
