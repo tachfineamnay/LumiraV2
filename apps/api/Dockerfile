@@ -65,5 +65,5 @@ RUN npm install -g prisma@5.22.0
 
 EXPOSE 3001
 
-# Apply pending migrations before starting the API
-CMD ["/bin/sh", "-c", "prisma migrate deploy --schema=packages/database/prisma/schema.prisma && node apps/api/dist/main.js"]
+# Apply pending migrations before starting the API (Resolve init migration to baseline existing DB)
+CMD ["/bin/sh", "-c", "prisma migrate resolve --applied 20250617000000_init --schema=packages/database/prisma/schema.prisma || true; prisma migrate deploy --schema=packages/database/prisma/schema.prisma && node apps/api/dist/main.js"]
