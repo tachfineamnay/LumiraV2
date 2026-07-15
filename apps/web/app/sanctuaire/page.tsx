@@ -47,23 +47,29 @@ function AutoLoginHandler() {
   const email = searchParams.get('email');
   const token = searchParams.get('token');
   const subscriptionSuccess = searchParams.get('subscription') === 'success';
+  const onboardingParam = searchParams.get('onboarding') === '1';
   const isFirstVisit = isFirstVisitToken(token);
+  const sessionFirstVisit =
+    typeof window !== 'undefined' && sessionStorage.getItem('sanctuaire_first_visit') === 'true';
+  const shouldOpenOnboarding =
+    onboardingParam || isFirstVisit || subscriptionSuccess || sessionFirstVisit;
 
   // Already authenticated after confirm-checkout — open onboarding / clean URL
   useEffect(() => {
     if (authLoading || !isAuthenticated) return;
     if (autoLoginState !== 'idle') return;
-    if (!email && !isFirstVisit && !subscriptionSuccess) return;
 
-    if ((isFirstVisit || subscriptionSuccess) && !profile?.profileCompleted) {
+    // Cookie session from checkout: open wizard if profile incomplete
+    if (shouldOpenOnboarding && !profile?.profileCompleted) {
       setFirstVisitFlag(true);
       setShowOnboarding(true);
       setAutoLoginState('success');
+      // Keep URL params while wizard is open (avoids remount wiping local state)
       return;
     }
 
-    // Authenticated, no onboarding needed — clean redirect params
-    if (email || token || subscriptionSuccess) {
+    // Authenticated, profile already done — clean redirect params
+    if (email || token || subscriptionSuccess || onboardingParam) {
       setAutoLoginState('success');
       router.replace('/sanctuaire');
     }
@@ -73,8 +79,9 @@ function AutoLoginHandler() {
     autoLoginState,
     email,
     token,
-    isFirstVisit,
+    onboardingParam,
     subscriptionSuccess,
+    shouldOpenOnboarding,
     profile?.profileCompleted,
     router,
   ]);
@@ -87,8 +94,7 @@ function AutoLoginHandler() {
     const performAutoLogin = async () => {
       setAutoLoginState('authenticating');
 
-      // Set first visit flag if applicable
-      if (isFirstVisit || subscriptionSuccess) {
+      if (shouldOpenOnboarding) {
         setFirstVisitFlag(true);
       }
 
@@ -96,8 +102,8 @@ function AutoLoginHandler() {
 
       if (result.success) {
         setAutoLoginState('success');
-        // Show onboarding for first visit ONLY if profile is NOT completed
-        if (result.isFirstVisit || isFirstVisit || subscriptionSuccess) {
+        // Always try to open onboarding for post-checkout; render gates on !profileCompleted
+        if (result.isFirstVisit || shouldOpenOnboarding) {
           setShowOnboarding(true);
         } else {
           router.replace('/sanctuaire');
@@ -130,8 +136,7 @@ function AutoLoginHandler() {
     authenticateWithEmail,
     retryCount,
     router,
-    isFirstVisit,
-    subscriptionSuccess,
+    shouldOpenOnboarding,
   ]);
 
   // Show loading during auto-login
@@ -483,10 +488,15 @@ function SubscriptionSuccessHandler() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { refetch } = useSanctuaire();
+  const { isAuthenticated, isLoading: authLoading } = useSanctuaireAuth();
   const [activating, setActivating] = useState(false);
 
   useEffect(() => {
+    // Only for real Stripe Subscription Checkout returns — never one-time order onboarding
     if (searchParams.get('subscription') !== 'success') return;
+    if (searchParams.get('onboarding') === '1') return;
+    if (isFirstVisitToken(searchParams.get('token'))) return;
+    if (authLoading || !isAuthenticated) return;
 
     setActivating(true);
     let attempts = 0;
@@ -517,7 +527,7 @@ function SubscriptionSuccessHandler() {
 
     return () => clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, isAuthenticated]);
 
   if (!activating) return null;
 

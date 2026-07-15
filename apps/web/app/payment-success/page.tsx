@@ -37,8 +37,9 @@ function PaymentSuccessContent() {
         if (emailParam) {
           setStatus('confirmed');
           setTimeout(() => {
-            router.push(buildSanctuairePostCheckoutUrl(emailParam));
-          }, 1500);
+            // Hard nav so httpOnly cookie + sessionStorage are reliable
+            window.location.href = buildSanctuairePostCheckoutUrl(emailParam);
+          }, 800);
           return;
         }
         setStatus('error');
@@ -52,16 +53,17 @@ function PaymentSuccessContent() {
         const { email } = await completeCheckoutSession(paymentIntentId);
         setStatus('confirmed');
         setTimeout(() => {
-          router.push(buildSanctuairePostCheckoutUrl(email));
-        }, 1500);
+          // Hard nav ensures Set-Cookie from confirm is included on Sanctuaire load
+          window.location.href = buildSanctuairePostCheckoutUrl(email);
+        }, 800);
       } catch (err) {
         console.error('[PaymentSuccess] confirm failed:', err);
         // Soft fallback: email auto-login (webhook may have fulfilled)
         if (emailParam) {
           setStatus('confirmed');
           setTimeout(() => {
-            router.push(buildSanctuairePostCheckoutUrl(emailParam));
-          }, 1500);
+            window.location.href = buildSanctuairePostCheckoutUrl(emailParam);
+          }, 800);
           return;
         }
         setStatus('error');

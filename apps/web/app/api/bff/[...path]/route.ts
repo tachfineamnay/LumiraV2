@@ -102,8 +102,13 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
     headers: responseHeaders,
   });
 
-  // Clear stale cookie on unauthorized
-  if (upstream.status === 401 && token) {
+  // Clear stale cookie on unauthorized — but never for probes that can 401
+  // before the client is fully hydrated (avoids wiping a fresh post-checkout cookie)
+  const pathKey = path.join('/');
+  const skipCookieClear =
+    pathKey === 'subscriptions/status' || pathKey.startsWith('subscriptions/');
+
+  if (upstream.status === 401 && token && !skipCookieClear) {
     response.cookies.set(SANCTUAIRE_TOKEN_COOKIE, '', {
       httpOnly: true,
       path: '/',

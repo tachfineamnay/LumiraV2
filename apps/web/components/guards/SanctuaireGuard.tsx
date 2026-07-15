@@ -12,6 +12,27 @@ interface SanctuaireGuardProps {
   fallback?: React.ReactNode;
 }
 
+function hasPostCheckoutBypass(searchParams: URLSearchParams): boolean {
+  const email = searchParams.get('email');
+  const token = searchParams.get('token');
+  const onboarding = searchParams.get('onboarding') === '1';
+  const subscriptionSuccess = searchParams.get('subscription') === 'success';
+
+  // Fresh checkout / soft fallback: email + first-visit token or onboarding flag
+  if (email && (onboarding || (token && token.startsWith('fv_')))) {
+    return true;
+  }
+  // Legacy email+token combo
+  if (email && token) {
+    return true;
+  }
+  // Real Stripe subscription Checkout return
+  if (subscriptionSuccess) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Client-side route guard for Sanctuaire protected pages.
  * Redirects unauthenticated users to the login page.
@@ -22,10 +43,7 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
   const { isAuthenticated, isLoading } = useSanctuaireAuth();
   const [shouldRedirect, setShouldRedirect] = useState(false);
 
-  const hasAutoLoginParams = Boolean(
-    (searchParams.get('email') && searchParams.get('token')) ||
-    searchParams.get('subscription') === 'success',
-  );
+  const hasAutoLoginParams = hasPostCheckoutBypass(searchParams);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !hasAutoLoginParams) {
@@ -34,22 +52,22 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
         typeof window !== 'undefined' && window.location.pathname.startsWith('/sanctuaire')
           ? `${window.location.pathname}${window.location.search}`
           : '/sanctuaire';
-      const loginUrl = `/sanctuaire/login?redirect=${encodeURIComponent(redirectTarget)}`;
-      // Small delay to show feedback before redirect
+      const email = searchParams.get('email');
+      const params = new URLSearchParams({ redirect: redirectTarget });
+      if (email) params.set('email', email);
+      const loginUrl = `/sanctuaire/login?${params.toString()}`;
       const timer = setTimeout(() => {
         router.push(loginUrl);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, isAuthenticated, router, hasAutoLoginParams]);
+  }, [isLoading, isAuthenticated, router, hasAutoLoginParams, searchParams]);
 
-  // Fast path: if authenticated or contains auto-login tokens, allow rendering
-  // This prevents the "Protected Access" screen from flickering during redirect
+  // Fast path: authenticated or post-checkout / auto-login params — never show Accès Protégé
   if (isAuthenticated || hasAutoLoginParams) {
     return <>{children}</>;
   }
 
-  // Loading state
   if (isLoading) {
     return (
       fallback || (
@@ -65,7 +83,6 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
     );
   }
 
-  // Redirecting state
   if (shouldRedirect) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -92,7 +109,6 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
     );
   }
 
-  // Authenticated - render children
   return <>{children}</>;
 };
 

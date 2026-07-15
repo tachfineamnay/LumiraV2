@@ -6,10 +6,14 @@ async function persistSanctuaireSession(token: string) {
   const response = await fetch('/api/auth/sanctuaire/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
     body: JSON.stringify({ token }),
   });
   if (!response.ok) {
-    throw new Error('Failed to persist session cookie');
+    const detail = await response.text().catch(() => '');
+    throw new Error(
+      `Failed to persist session cookie (${response.status})${detail ? `: ${detail}` : ''}`,
+    );
   }
 }
 
@@ -41,7 +45,17 @@ export async function completeCheckoutSession(paymentIntentId: string): Promise<
   return { email: user.email as string };
 }
 
+/**
+ * Redirect into Sanctuaire after one-time checkout.
+ * Uses onboarding=1 + fv_ token — never subscription=success (that triggers
+ * the subscription-activation poller and strips auth params).
+ */
 export function buildSanctuairePostCheckoutUrl(email: string): string {
   const firstVisitToken = `fv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-  return `/sanctuaire?email=${encodeURIComponent(email)}&token=${firstVisitToken}&subscription=success`;
+  const params = new URLSearchParams({
+    email,
+    token: firstVisitToken,
+    onboarding: '1',
+  });
+  return `/sanctuaire?${params.toString()}`;
 }
