@@ -52,26 +52,28 @@ function computeInitialStep(order: Order): StudioStep {
 
 export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const router = useRouter();
-  
+
   // Core state
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState('');
   const [step, setStep] = useState<StudioStep>('dossier');
-  
+
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSealing, setIsSealing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
-  
+
   // Version history
   const [showVersions, setShowVersions] = useState(false);
-  const [versions, setVersions] = useState<Array<{ content: string; timestamp: string; action: string }>>([]);
-  
+  const [versions, setVersions] = useState<
+    Array<{ content: string; timestamp: string; action: string }>
+  >([]);
+
   // Seal confirmation modal
   const [showSealConfirm, setShowSealConfirm] = useState(false);
-  
+
   // Delete confirmation
   const [showDeleteOrder, setShowDeleteOrder] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
@@ -117,21 +119,25 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       try {
         const { data } = await expertApi.get(`/expert/orders/${orderId}`);
         pollErrorCountRef.current = 0;
-        
+
         const hasNewContent = data.generatedContent && !order?.generatedContent;
-        const contentChanged = data.generatedContent?.pdf_content && 
-          !order?.generatedContent?.pdf_content;
+        const contentChanged =
+          data.generatedContent?.pdf_content && !order?.generatedContent?.pdf_content;
         const statusChanged = data.status !== order?.status;
-        
+
         if (hasNewContent || contentChanged || statusChanged) {
           setOrder(data);
           if (data.generatedContent) {
             setEditorContent(oracleResponseToHtml(data.generatedContent));
           }
-          
-          if (data.generatedContent?.pdf_content || data.status === 'COMPLETED' || data.status === 'AWAITING_VALIDATION') {
-            toast.success('Génération terminée !', { 
-              description: 'La lecture est prête pour révision' 
+
+          if (
+            data.generatedContent?.pdf_content ||
+            data.status === 'COMPLETED' ||
+            data.status === 'AWAITING_VALIDATION'
+          ) {
+            toast.success('Génération terminée !', {
+              description: 'La lecture est prête pour révision',
             });
             setIsGenerating(false);
             setIsRegenerating(false);
@@ -139,23 +145,26 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             return;
           }
         }
-        
+
         pollIntervalRef.current = setTimeout(poll, getPollingInterval());
       } catch (err: unknown) {
         pollErrorCountRef.current++;
         const error = err as { response?: { status?: number } };
-        console.warn(`Polling error (attempt ${pollErrorCountRef.current}):`, error?.response?.status || err);
-        
+        console.warn(
+          `Polling error (attempt ${pollErrorCountRef.current}):`,
+          error?.response?.status || err,
+        );
+
         if (pollErrorCountRef.current >= 5) {
           console.error('Too many polling errors, stopping');
-          toast.error('Erreur de synchronisation', { 
-            description: 'Rechargez la page pour voir l\'état actuel' 
+          toast.error('Erreur de synchronisation', {
+            description: "Rechargez la page pour voir l'état actuel",
           });
           setIsGenerating(false);
           setIsRegenerating(false);
           return;
         }
-        
+
         pollIntervalRef.current = setTimeout(poll, getPollingInterval());
       }
     };
@@ -175,11 +184,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     try {
       const { data } = await expertApi.get(`/expert/orders/${orderId}`);
       setOrder(data);
-      
+
       if (data.generatedContent) {
         setEditorContent(oracleResponseToHtml(data.generatedContent));
       }
-      
+
       setError(null);
       return data;
     } catch (err) {
@@ -231,13 +240,21 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       setStep('revision');
       setIsGenerating(false);
     } catch (err: unknown) {
-      const error = err as { code?: string; message?: string; response?: { data?: { message?: string } } };
+      const error = err as {
+        code?: string;
+        message?: string;
+        response?: { data?: { message?: string } };
+      };
       // If timeout or network error, generation may still be running
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        toast.info('Génération en cours...', { description: 'L\'Oracle travaille, veuillez patienter.' });
+        toast.info('Génération en cours...', {
+          description: "L'Oracle travaille, veuillez patienter.",
+        });
         // Keep isGenerating true → polling will pick up
       } else {
-        toast.error('Erreur lors du lancement', { description: error?.response?.data?.message || error?.message });
+        toast.error('Erreur lors du lancement', {
+          description: error?.response?.data?.message || error?.message,
+        });
         setIsGenerating(false);
       }
     }
@@ -280,13 +297,15 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   };
 
   const handleInsertText = (text: string) => {
-    setEditorContent(prev => prev + '\n\n' + text);
+    setEditorContent((prev) => prev + '\n\n' + text);
     toast.success('Texte inséré');
   };
 
   // Derived state
   const isReadOnly = order?.status === 'COMPLETED';
-  const levelConfig = order ? (LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1]) : LEVEL_CONFIG[1];
+  const levelConfig = order
+    ? LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1]
+    : LEVEL_CONFIG[1];
 
   // ========= LOADING / ERROR =========
 
@@ -321,57 +340,79 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   return (
     <div className="h-full flex flex-col bg-desk-bg">
       {/* ═══════════════ TOP BAR ═══════════════ */}
-      <div className="flex-shrink-0 px-4 py-3 bg-desk-surface border-b border-desk-border">
-        <div className="flex items-center justify-between">
-          {/* Left: back + client info */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/admin/board')}
-              title="Retour au board"
-              className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-500 
-                              flex items-center justify-center text-xs font-bold text-white">
-                {order.user.firstName?.[0]}{order.user.lastName?.[0]}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-desk-text">
-                    {order.user.firstName} {order.user.lastName}
-                  </span>
-                  <span className="text-lg">{levelConfig.icon}</span>
+      <div className="flex-shrink-0 px-3 sm:px-4 py-2.5 sm:py-3 bg-desk-surface border-b border-desk-border">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 md:gap-3">
+          {/* Row 1: back + client info + actions */}
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button
+                onClick={() => router.push('/admin/board')}
+                title="Retour au board"
+                aria-label="Retour au board"
+                className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors flex items-center justify-center flex-shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                  {order.user.firstName?.[0]}
+                  {order.user.lastName?.[0]}
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-mono text-amber-600">{order.orderNumber}</span>
-                  <span className="text-desk-subtle">•</span>
-                  <span className="text-desk-muted">{levelConfig.name}</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold text-desk-text text-sm sm:text-base truncate">
+                      {order.user.firstName} {order.user.lastName}
+                    </span>
+                    <span className="text-base sm:text-lg flex-shrink-0">{levelConfig.icon}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm min-w-0">
+                    <span className="font-mono text-amber-600 truncate">{order.orderNumber}</span>
+                    <span className="text-desk-subtle hidden sm:inline">•</span>
+                    <span className="text-desk-muted truncate hidden sm:inline">
+                      {levelConfig.name}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
+
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {isReadOnly && (
+                <span className="hidden sm:inline px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-600 border border-emerald-500/30">
+                  Livrée
+                </span>
+              )}
+              <button
+                onClick={() => setShowDeleteOrder(true)}
+                title="Supprimer la commande"
+                aria-label="Supprimer la commande"
+                className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-red-500/10 text-desk-muted hover:text-red-600 transition-colors flex items-center justify-center"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          {/* Center: Stepper */}
-          <div className="flex items-center gap-1">
+          {/* Row 2 (mobile) / center (desktop): Stepper */}
+          <div className="flex items-center justify-center gap-1 overflow-x-auto">
             {(['dossier', 'briefing', 'revision'] as StudioStep[]).map((s, i) => {
               const meta = STEP_META[s];
               const isCurrent = step === s;
               const isPast = STEP_META[step].num > meta.num;
-              
+
               return (
-                <div key={s} className="flex items-center gap-1">
+                <div key={s} className="flex items-center gap-1 flex-shrink-0">
                   {i > 0 && (
-                    <div className={`w-8 h-px ${isPast ? 'bg-amber-500/60' : 'bg-desk-border'}`} />
+                    <div
+                      className={`w-4 sm:w-8 h-px ${isPast ? 'bg-amber-500/60' : 'bg-desk-border'}`}
+                    />
                   )}
                   <button
                     onClick={() => {
-                      // Only allow navigating to past/current steps (not future beyond what's been reached)
                       if (isPast || isCurrent) setStep(s);
                     }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-full text-xs font-medium transition-all ${
                       isCurrent
                         ? 'bg-amber-500/20 text-amber-600 border border-amber-500/40'
                         : isPast
@@ -379,9 +420,15 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                           : 'bg-transparent text-desk-subtle cursor-default'
                     }`}
                   >
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      isCurrent ? 'bg-amber-500 text-slate-900' : isPast ? 'bg-desk-hover text-desk-muted' : 'bg-desk-card text-desk-subtle'
-                    }`}>
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        isCurrent
+                          ? 'bg-amber-500 text-slate-900'
+                          : isPast
+                            ? 'bg-desk-hover text-desk-muted'
+                            : 'bg-desk-card text-desk-subtle'
+                      }`}
+                    >
                       {meta.num}
                     </span>
                     <span className="hidden sm:inline">{meta.label}</span>
@@ -390,33 +437,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               );
             })}
           </div>
-
-          {/* Right: status + actions */}
-          <div className="flex items-center gap-2">
-            {isReadOnly && (
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-600 border border-emerald-500/30">
-                Livrée
-              </span>
-            )}
-            <button
-              onClick={() => setShowDeleteOrder(true)}
-              title="Supprimer la commande"
-              className="p-2 rounded-lg hover:bg-red-500/10 text-desk-muted hover:text-red-600 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </div>
 
       {/* ═══════════════ STEP CONTENT ═══════════════ */}
       <div className="flex-1 overflow-hidden">
-        {step === 'dossier' && (
-          <StepDossier
-            order={order}
-            onContinue={() => setStep('briefing')}
-          />
-        )}
+        {step === 'dossier' && <StepDossier order={order} onContinue={() => setStep('briefing')} />}
 
         {step === 'briefing' && (
           <StepBriefing
@@ -462,7 +488,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25 }}
               className="absolute right-0 top-0 h-full w-full max-w-md bg-desk-surface border-l border-desk-border"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-4 border-b border-desk-border">
                 <div className="flex items-center gap-3">
@@ -562,9 +588,9 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="w-full max-w-lg bg-desk-surface border border-desk-border rounded-2xl overflow-hidden shadow-2xl"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
-                <div className="relative bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 px-6 py-5 border-b border-desk-border">
+              <div className="relative bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 px-6 py-5 border-b border-desk-border">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                     <FileCheck className="w-7 h-7 text-emerald-600" />
@@ -581,7 +607,8 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
-                      Sera immédiatement envoyée au client par email et ne pourra plus être modifiée.
+                      Sera immédiatement envoyée au client par email et ne pourra plus être
+                      modifiée.
                     </p>
                   </div>
                 </div>
@@ -591,7 +618,9 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-desk-muted">Destinataire</span>
-                      <span className="text-desk-text font-medium">{order.user.firstName} {order.user.lastName}</span>
+                      <span className="text-desk-text font-medium">
+                        {order.user.firstName} {order.user.lastName}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-desk-muted">Email</span>
@@ -603,7 +632,9 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-desk-muted">Contenu</span>
-                      <span className="text-emerald-600">{editorContent.length > 0 ? '✓ Prêt' : '⚠ Vide'}</span>
+                      <span className="text-emerald-600">
+                        {editorContent.length > 0 ? '✓ Prêt' : '⚠ Vide'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -660,18 +691,23 @@ function oracleResponseToHtml(response: OracleResponse): string {
 
   if (response.pdf_content) {
     const { pdf_content } = response;
-    if (pdf_content.introduction) parts.push(`<h1>Introduction</h1>\n<p>${pdf_content.introduction}</p>`);
-    if (pdf_content.archetype_reveal) parts.push(`<h2>Révélation de l'Archétype</h2>\n<p>${pdf_content.archetype_reveal}</p>`);
+    if (pdf_content.introduction)
+      parts.push(`<h1>Introduction</h1>\n<p>${pdf_content.introduction}</p>`);
+    if (pdf_content.archetype_reveal)
+      parts.push(`<h2>Révélation de l'Archétype</h2>\n<p>${pdf_content.archetype_reveal}</p>`);
     if (pdf_content.sections) {
-      pdf_content.sections.forEach(s => parts.push(`<h2>${s.title}</h2>\n<p>${s.content}</p>`));
+      pdf_content.sections.forEach((s) => parts.push(`<h2>${s.title}</h2>\n<p>${s.content}</p>`));
     }
     if (pdf_content.karmic_insights?.length) {
-      parts.push(`<h2>Insights Karmiques</h2>\n<ul>${pdf_content.karmic_insights.map(i => `<li>${i}</li>`).join('')}</ul>`);
+      parts.push(
+        `<h2>Insights Karmiques</h2>\n<ul>${pdf_content.karmic_insights.map((i) => `<li>${i}</li>`).join('')}</ul>`,
+      );
     }
-    if (pdf_content.life_mission) parts.push(`<h2>Mission de Vie</h2>\n<p>${pdf_content.life_mission}</p>`);
+    if (pdf_content.life_mission)
+      parts.push(`<h2>Mission de Vie</h2>\n<p>${pdf_content.life_mission}</p>`);
     if (pdf_content.rituals?.length) {
       parts.push(`<h2>Rituels Recommandés</h2>`);
-      pdf_content.rituals.forEach(r => parts.push(`<h3>${r.name}</h3>\n<p>${r.description}</p>`));
+      pdf_content.rituals.forEach((r) => parts.push(`<h3>${r.name}</h3>\n<p>${r.description}</p>`));
     }
     if (pdf_content.conclusion) parts.push(`<h2>Conclusion</h2>\n<p>${pdf_content.conclusion}</p>`);
   }

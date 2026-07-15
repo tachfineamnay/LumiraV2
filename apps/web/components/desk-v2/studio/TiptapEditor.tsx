@@ -53,39 +53,45 @@ export function TiptapEditor({
   const lastSavedContent = useRef(initialContent);
 
   // Auto-save function
-  const saveContent = useCallback(async (content: string) => {
-    if (content === lastSavedContent.current || readOnly) return;
-    
-    setSaveStatus('saving');
-    try {
-      await expertApi.patch(`/expert/orders/${orderId}/draft`, { content });
-      lastSavedContent.current = content;
-      setSaveStatus('saved');
-    } catch (error) {
-      console.error('Auto-save failed:', error);
-      setSaveStatus('unsaved');
-      // Don't show toast for auto-save failures - just show status indicator
-    }
-  }, [orderId, readOnly]);
+  const saveContent = useCallback(
+    async (content: string) => {
+      if (content === lastSavedContent.current || readOnly) return;
+
+      setSaveStatus('saving');
+      try {
+        await expertApi.patch(`/expert/orders/${orderId}/draft`, { content });
+        lastSavedContent.current = content;
+        setSaveStatus('saved');
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+        setSaveStatus('unsaved');
+        // Don't show toast for auto-save failures - just show status indicator
+      }
+    },
+    [orderId, readOnly],
+  );
 
   // Debounced save on content change
-  const handleContentChange = useCallback((content: string) => {
-    onContentChange?.(content);
-    
-    if (content !== lastSavedContent.current) {
-      setSaveStatus('unsaved');
-      
-      // Clear existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+  const handleContentChange = useCallback(
+    (content: string) => {
+      onContentChange?.(content);
+
+      if (content !== lastSavedContent.current) {
+        setSaveStatus('unsaved');
+
+        // Clear existing timeout
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+
+        // Set new timeout for auto-save
+        saveTimeoutRef.current = setTimeout(() => {
+          saveContent(content);
+        }, AUTOSAVE_DELAY);
       }
-      
-      // Set new timeout for auto-save
-      saveTimeoutRef.current = setTimeout(() => {
-        saveContent(content);
-      }, AUTOSAVE_DELAY);
-    }
-  }, [onContentChange, saveContent]);
+    },
+    [onContentChange, saveContent],
+  );
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -104,7 +110,7 @@ export function TiptapEditor({
         },
       }),
       Placeholder.configure({
-        placeholder: 'Commencez à écrire ou utilisez l\'IA pour générer du contenu...',
+        placeholder: "Commencez à écrire ou utilisez l'IA pour générer du contenu...",
       }),
       Highlight.configure({
         multicolor: true,
@@ -131,55 +137,80 @@ export function TiptapEditor({
   }, [initialContent, editor]);
 
   // AI refinement actions
-  const refineContent = useCallback(async (action: string) => {
-    if (!editor) return;
+  const refineContent = useCallback(
+    async (action: string) => {
+      if (!editor) return;
 
-    const selectedText = editor.state.selection.empty
-      ? editor.getText()
-      : editor.state.doc.textBetween(
-          editor.state.selection.from,
-          editor.state.selection.to
-        );
+      const selectedText = editor.state.selection.empty
+        ? editor.getText()
+        : editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to);
 
-    if (!selectedText.trim()) {
-      toast.error('Sélectionnez du texte à affiner');
-      return;
-    }
-
-    setIsRefining(true);
-    setShowAIMenu(false);
-
-    try {
-      const { data } = await expertApi.post(`/expert/orders/${orderId}/refine`, {
-        instruction: action,
-        selectedText,
-      });
-
-      if (data.refinedText) {
-        if (editor.state.selection.empty) {
-          editor.commands.setContent(data.refinedText);
-        } else {
-          editor.commands.insertContentAt(
-            { from: editor.state.selection.from, to: editor.state.selection.to },
-            data.refinedText
-          );
-        }
-        toast.success('Texte affiné avec succès');
+      if (!selectedText.trim()) {
+        toast.error('Sélectionnez du texte à affiner');
+        return;
       }
-    } catch (error) {
-      toast.error('Erreur lors de l\'affinage');
-      console.error(error);
-    } finally {
-      setIsRefining(false);
-    }
-  }, [editor, orderId]);
+
+      setIsRefining(true);
+      setShowAIMenu(false);
+
+      try {
+        const { data } = await expertApi.post(`/expert/orders/${orderId}/refine`, {
+          instruction: action,
+          selectedText,
+        });
+
+        if (data.refinedText) {
+          if (editor.state.selection.empty) {
+            editor.commands.setContent(data.refinedText);
+          } else {
+            editor.commands.insertContentAt(
+              { from: editor.state.selection.from, to: editor.state.selection.to },
+              data.refinedText,
+            );
+          }
+          toast.success('Texte affiné avec succès');
+        }
+      } catch (error) {
+        toast.error("Erreur lors de l'affinage");
+        console.error(error);
+      } finally {
+        setIsRefining(false);
+      }
+    },
+    [editor, orderId],
+  );
 
   const AI_ACTIONS = [
-    { id: 'shorten', label: 'Raccourcir', icon: '✂️', action: 'Raccourcis ce texte tout en gardant l\'essentiel' },
-    { id: 'expand', label: 'Développer', icon: '📖', action: 'Développe et enrichis ce texte avec plus de détails spirituels' },
-    { id: 'mystify', label: 'Mystifier', icon: '🔮', action: 'Rends ce texte plus mystique et poétique' },
-    { id: 'simplify', label: 'Simplifier', icon: '💡', action: 'Simplifie ce texte pour le rendre plus accessible' },
-    { id: 'tone', label: 'Adoucir', icon: '🕊️', action: 'Adoucis le ton pour le rendre plus bienveillant' },
+    {
+      id: 'shorten',
+      label: 'Raccourcir',
+      icon: '✂️',
+      action: "Raccourcis ce texte tout en gardant l'essentiel",
+    },
+    {
+      id: 'expand',
+      label: 'Développer',
+      icon: '📖',
+      action: 'Développe et enrichis ce texte avec plus de détails spirituels',
+    },
+    {
+      id: 'mystify',
+      label: 'Mystifier',
+      icon: '🔮',
+      action: 'Rends ce texte plus mystique et poétique',
+    },
+    {
+      id: 'simplify',
+      label: 'Simplifier',
+      icon: '💡',
+      action: 'Simplifie ce texte pour le rendre plus accessible',
+    },
+    {
+      id: 'tone',
+      label: 'Adoucir',
+      icon: '🕊️',
+      action: 'Adoucis le ton pour le rendre plus bienveillant',
+    },
   ];
 
   if (!editor) return null;
@@ -187,9 +218,9 @@ export function TiptapEditor({
   return (
     <div className="flex flex-col h-full bg-desk-surface rounded-xl border border-desk-border overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 px-4 py-2 border-b border-desk-border bg-desk-card">
+      <div className="flex items-center gap-1 px-2 sm:px-4 py-2 border-b border-desk-border bg-desk-card overflow-x-auto flex-nowrap scrollbar-thin">
         {/* Formatting */}
-        <div className="flex items-center gap-0.5 pr-3 border-r border-desk-border">
+        <div className="flex items-center gap-0.5 pr-3 border-r border-desk-border flex-shrink-0">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBold().run()}
             isActive={editor.isActive('bold')}
@@ -207,7 +238,7 @@ export function TiptapEditor({
         </div>
 
         {/* Headings */}
-        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border">
+        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border flex-shrink-0">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             isActive={editor.isActive('heading', { level: 1 })}
@@ -232,7 +263,7 @@ export function TiptapEditor({
         </div>
 
         {/* Lists */}
-        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border">
+        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border flex-shrink-0">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             isActive={editor.isActive('bulletList')}
@@ -257,7 +288,7 @@ export function TiptapEditor({
         </div>
 
         {/* History */}
-        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border">
+        <div className="flex items-center gap-0.5 px-3 border-r border-desk-border flex-shrink-0">
           <ToolbarButton
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
@@ -275,11 +306,11 @@ export function TiptapEditor({
         </div>
 
         {/* Save Status Indicator */}
-        <div className="flex items-center gap-2 px-3 text-xs">
+        <div className="flex items-center gap-2 px-3 text-xs flex-shrink-0">
           {saveStatus === 'saving' && (
             <span className="flex items-center gap-1.5 text-amber-600">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Sauvegarde...</span>
+              <span className="hidden sm:inline">Sauvegarde...</span>
             </span>
           )}
           {saveStatus === 'saved' && (
@@ -303,9 +334,10 @@ export function TiptapEditor({
             className={`
               flex items-center gap-2 px-3 py-1.5 rounded-lg
               text-sm font-medium transition-all
-              ${showAIMenu 
-                ? 'bg-amber-500 text-slate-900' 
-                : 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20'
+              ${
+                showAIMenu
+                  ? 'bg-amber-500 text-slate-900'
+                  : 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20'
               }
             `}
           >
@@ -326,7 +358,7 @@ export function TiptapEditor({
                 className="absolute right-0 top-full mt-2 w-48 py-2 rounded-xl
                            bg-desk-surface border border-desk-border shadow-xl z-50"
               >
-                {AI_ACTIONS.map(action => (
+                {AI_ACTIONS.map((action) => (
                   <button
                     key={action.id}
                     onClick={() => refineContent(action.action)}
@@ -367,7 +399,7 @@ export function TiptapEditor({
             className="absolute top-16 right-4 z-40 flex items-center gap-1 p-1 rounded-lg 
                        bg-desk-surface border border-desk-border shadow-xl"
           >
-            {AI_ACTIONS.slice(0, 3).map(action => (
+            {AI_ACTIONS.slice(0, 3).map((action) => (
               <button
                 key={action.id}
                 onClick={() => refineContent(action.action)}
@@ -426,9 +458,10 @@ function ToolbarButton({ children, onClick, isActive, disabled, title }: Toolbar
       title={title}
       className={`
         p-2 rounded-lg transition-colors
-        ${isActive 
-          ? 'bg-amber-500/20 text-amber-600' 
-          : 'text-desk-muted hover:bg-desk-hover hover:text-desk-text'
+        ${
+          isActive
+            ? 'bg-amber-500/20 text-amber-600'
+            : 'text-desk-muted hover:bg-desk-hover hover:text-desk-text'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
       `}

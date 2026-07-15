@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import {
   Archive,
   Search,
-  Filter,
   ChevronLeft,
   ChevronRight,
   User,
@@ -84,55 +83,41 @@ export default function ArchivePage() {
   }, [searchQuery]);
 
   return (
-    <div className="p-5 space-y-4">
+    <div className="p-3 sm:p-5 space-y-4">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-lg font-semibold text-desk-text flex items-center gap-2">
-            <Archive className="w-5 h-5 text-emerald-600" />
-            Archives
-          </h1>
-          <p className="text-desk-muted text-sm mt-0.5">
-            {totalOrders} commande{totalOrders > 1 ? 's' : ''} terminée{totalOrders > 1 ? 's' : ''}
-          </p>
-        </div>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+        <h1 className="text-lg font-semibold text-desk-text flex items-center gap-2">
+          <Archive className="w-5 h-5 text-emerald-600" />
+          Archives
+        </h1>
+        <p className="text-desk-muted text-sm mt-0.5">
+          {totalOrders} commande{totalOrders > 1 ? 's' : ''} terminée{totalOrders > 1 ? 's' : ''}
+        </p>
       </motion.div>
 
-      {/* Search & Filters */}
+      {/* Search */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex items-center gap-4"
       >
-        <div className="relative flex-1 max-w-md">
+        <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-desk-subtle" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par numéro ou client..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg
+            className="w-full pl-10 pr-4 py-2.5 min-h-[44px] rounded-lg
                        bg-desk-card border border-desk-border
                        text-desk-text placeholder:text-desk-subtle
                        focus:outline-none focus:border-amber-500/50
                        transition-colors"
           />
         </div>
-        
-        <button className="flex items-center gap-2 px-3 py-2 rounded-lg
-                           bg-desk-card border border-desk-border
-                           text-desk-muted hover:text-desk-text transition-colors">
-          <Filter className="w-4 h-4" />
-          <span>Filtres</span>
-        </button>
       </motion.div>
 
-      {/* Orders Grid */}
+      {/* Orders list */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -150,8 +135,9 @@ export default function ArchivePage() {
           </div>
         ) : (
           orders.map((order, index) => {
-            const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
-            
+            const levelConfig =
+              LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
+
             return (
               <motion.div
                 key={order.id}
@@ -161,17 +147,17 @@ export default function ArchivePage() {
                 className="bg-desk-surface border border-desk-border rounded-lg p-3
                            hover:bg-desk-card transition-all group"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    {/* Status badge */}
-                    <div className="w-10 h-10 rounded-lg bg-emerald-500/15
-                                    flex items-center justify-center">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                    <div
+                      className="w-10 h-10 rounded-lg bg-emerald-500/15
+                                    flex items-center justify-center flex-shrink-0"
+                    >
                       <CheckCircle className="w-5 h-5 text-emerald-600" />
                     </div>
-                    
-                    {/* Order info */}
-                    <div>
-                      <div className="flex items-center gap-2">
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-amber-600 font-medium">
                           {order.orderNumber}
                         </span>
@@ -180,56 +166,60 @@ export default function ArchivePage() {
                           {levelConfig.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-desk-muted">
-                        <span className="flex items-center gap-1">
-                          <User className="w-3.5 h-3.5" />
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1 text-sm text-desk-muted min-w-0">
+                        <span className="flex items-center gap-1 truncate">
+                          <User className="w-3.5 h-3.5 flex-shrink-0" />
                           {order.user.firstName} {order.user.lastName}
                         </span>
-                        <span className="text-desk-subtle">•</span>
-                        <span>{order.user.email}</span>
+                        <span className="text-desk-subtle hidden sm:inline">•</span>
+                        <span className="truncate text-desk-subtle">{order.user.email}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right side info */}
-                  <div className="flex items-center gap-6">
-                    {/* Dates */}
-                    <div className="text-right">
+                  <div className="flex items-center justify-between md:justify-end gap-3 sm:gap-4">
+                    <div className="text-left md:text-right">
                       <div className="flex items-center gap-1.5 text-xs text-desk-subtle">
                         <Calendar className="w-3.5 h-3.5" />
-                        <span>Créée le {new Date(order.createdAt).toLocaleDateString('fr-FR')}</span>
+                        <span>
+                          Créée le {new Date(order.createdAt).toLocaleDateString('fr-FR')}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-emerald-600 mt-1">
                         <CheckCircle className="w-3.5 h-3.5" />
-                        <span>Livrée le {new Date(order.completedAt).toLocaleDateString('fr-FR')}</span>
+                        <span>
+                          Livrée le {new Date(order.completedAt).toLocaleDateString('fr-FR')}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Amount */}
-                    <div className="text-right min-w-[80px]">
-                      <span className="text-lg font-semibold text-desk-text">
-                        {(order.amount / 100).toFixed(0)}€
-                      </span>
-                    </div>
+                    <span className="text-lg font-semibold text-desk-text min-w-[48px] text-right">
+                      {(order.amount / 100).toFixed(0)}€
+                    </span>
 
-                    {/* Actions — always visible */}
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => {
-                          const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-                          window.open(`${apiBase}/api/readings/${order.orderNumber}/download`, '_blank');
+                          const apiBase =
+                            process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+                          window.open(
+                            `${apiBase}/api/readings/${order.orderNumber}/download`,
+                            '_blank',
+                          );
                         }}
                         title="Télécharger le PDF"
-                        className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-colors"
+                        aria-label="Télécharger le PDF"
+                        className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-colors flex items-center justify-center"
                       >
-                        <Download className="w-3.5 h-3.5" />
+                        <Download className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => router.push(`/admin/studio/${order.id}`)}
                         title="Voir les détails"
-                        className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-colors"
+                        aria-label="Voir les détails"
+                        className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-colors flex items-center justify-center"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -246,34 +236,34 @@ export default function ArchivePage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="flex items-center justify-between"
+          className="flex items-center justify-between gap-2"
         >
           <p className="text-sm text-desk-subtle">
             Page {page} sur {totalPages}
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg
+              className="flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg
                          bg-desk-card border border-desk-border
                          text-desk-muted hover:text-desk-text
                          disabled:opacity-50 disabled:cursor-not-allowed
                          transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
-              <span>Précédent</span>
+              <span className="hidden sm:inline">Précédent</span>
             </button>
             <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg
+              className="flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg
                          bg-desk-card border border-desk-border
                          text-desk-muted hover:text-desk-text
                          disabled:opacity-50 disabled:cursor-not-allowed
                          transition-colors"
             >
-              <span>Suivant</span>
+              <span className="hidden sm:inline">Suivant</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

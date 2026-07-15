@@ -82,11 +82,24 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const upstream = await fetch(targetUrl, init);
   const responseBody = await upstream.arrayBuffer();
 
+  const responseHeaders = new Headers();
+  responseHeaders.set('content-type', upstream.headers.get('content-type') || 'application/json');
+  const contentDisposition = upstream.headers.get('content-disposition');
+  if (contentDisposition) {
+    responseHeaders.set('content-disposition', contentDisposition);
+  }
+  const contentLength = upstream.headers.get('content-length');
+  if (contentLength) {
+    responseHeaders.set('content-length', contentLength);
+  }
+  const cacheControl = upstream.headers.get('cache-control');
+  if (cacheControl) {
+    responseHeaders.set('cache-control', cacheControl);
+  }
+
   const response = new NextResponse(responseBody, {
     status: upstream.status,
-    headers: {
-      'content-type': upstream.headers.get('content-type') || 'application/json',
-    },
+    headers: responseHeaders,
   });
 
   // Clear stale cookie on unauthorized

@@ -344,7 +344,7 @@ function DashboardContent() {
         />
       )}
 
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 md:py-8 flex flex-col items-center">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8 flex flex-col items-center">
         {/* 🏛️ WELCOME */}
         <div className="text-center mb-8 relative z-10">
           <motion.h1
@@ -441,7 +441,7 @@ function DashboardContent() {
                 </p>
                 <button
                   onClick={() => setShowWizard(true)}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-900 font-semibold hover:shadow-lg hover:shadow-horizon-400/25 transition-all"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[48px] rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-900 font-semibold hover:shadow-lg hover:shadow-horizon-400/25 transition-all"
                 >
                   <Sparkles className="w-5 h-5" />
                   Commencer le Diagnostic

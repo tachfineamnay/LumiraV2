@@ -30,9 +30,14 @@ export const SanctuaireGuard: React.FC<SanctuaireGuardProps> = ({ children, fall
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !hasAutoLoginParams) {
       setShouldRedirect(true);
+      const redirectTarget =
+        typeof window !== 'undefined' && window.location.pathname.startsWith('/sanctuaire')
+          ? `${window.location.pathname}${window.location.search}`
+          : '/sanctuaire';
+      const loginUrl = `/sanctuaire/login?redirect=${encodeURIComponent(redirectTarget)}`;
       // Small delay to show feedback before redirect
       const timer = setTimeout(() => {
-        router.push('/sanctuaire/login');
+        router.push(loginUrl);
       }, 1500);
       return () => clearTimeout(timer);
     }

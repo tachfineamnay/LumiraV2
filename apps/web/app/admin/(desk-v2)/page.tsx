@@ -39,17 +39,15 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="p-5 space-y-4">
+    <div className="p-3 sm:p-5 space-y-4">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2"
       >
         <div>
-          <h1 className="text-lg font-semibold text-desk-text">
-            {greeting}, Expert
-          </h1>
+          <h1 className="text-lg font-semibold text-desk-text">{greeting}, Expert</h1>
           <p className="text-desk-muted text-sm flex items-center gap-1.5 mt-0.5">
             <Calendar className="w-3.5 h-3.5" />
             {today}
@@ -57,8 +55,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick summary */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-          <TrendingUp className="w-4 h-4 text-emerald-600" />
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 self-start sm:self-auto">
+          <TrendingUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <span className="text-sm text-emerald-600 font-medium">
             {stats.completedToday} lectures aujourd&apos;hui
           </span>
@@ -67,7 +65,9 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <section>
-        <h2 className="text-xs font-medium text-desk-muted uppercase tracking-wide mb-2">Vue d&apos;ensemble</h2>
+        <h2 className="text-xs font-medium text-desk-muted uppercase tracking-wide mb-2">
+          Vue d&apos;ensemble
+        </h2>
         <StatsGrid stats={stats} isLoading={isLoading} />
       </section>
 
@@ -75,13 +75,17 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Activity Feed - 2 columns */}
         <div className="lg:col-span-2">
-          <h2 className="text-xs font-medium text-desk-muted uppercase tracking-wide mb-2">Activité récente</h2>
+          <h2 className="text-xs font-medium text-desk-muted uppercase tracking-wide mb-2">
+            Activité récente
+          </h2>
           <ActivityFeed items={activityItems} isLoading={activityLoading} />
         </div>
 
         {/* Quick Actions - 1 column */}
         <div>
-          <h2 className="text-xs font-medium text-desk-muted uppercase tracking-wide mb-2">Actions rapides</h2>
+          <h2 className="text-xs font-medium text-desk-muted uppercase tracking-wide mb-2">
+            Actions rapides
+          </h2>
           <QuickActions />
         </div>
       </div>

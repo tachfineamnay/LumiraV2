@@ -30,21 +30,26 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-6 space-y-6">
+        <div className="max-w-6xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
           {/* Hero card */}
-          <div className="bg-gradient-to-br from-amber-500/10 via-desk-surface/60 to-desk-surface/80 
-                          border border-desk-border rounded-2xl p-6">
-            <div className="flex items-start gap-5">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 
-                              flex items-center justify-center text-2xl font-bold text-white shrink-0">
-                {user.firstName?.[0]}{user.lastName?.[0]}
+          <div
+            className="bg-gradient-to-br from-amber-500/10 via-desk-surface/60 to-desk-surface/80 
+                          border border-desk-border rounded-2xl p-4 sm:p-6"
+          >
+            <div className="flex items-start gap-3 sm:gap-5">
+              <div
+                className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 
+                              flex items-center justify-center text-xl sm:text-2xl font-bold text-white shrink-0"
+              >
+                {user.firstName?.[0]}
+                {user.lastName?.[0]}
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="text-2xl font-bold text-desk-text">
+                <h1 className="text-xl sm:text-2xl font-bold text-desk-text truncate">
                   {user.firstName} {user.lastName}
                 </h1>
-                <p className="text-desk-muted mt-1">{user.email}</p>
-                <div className="flex items-center gap-3 mt-3">
+                <p className="text-desk-muted mt-1 text-sm truncate">{user.email}</p>
+                <div className="flex items-center gap-3 mt-3 flex-wrap">
                   <span className="text-xl">{levelConfig.icon}</span>
                   <span className="px-3 py-1 rounded-full text-sm font-medium bg-amber-500/20 text-amber-600 border border-amber-500/30">
                     {levelConfig.name}
@@ -67,16 +72,30 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
               >
                 <div className="space-y-3">
                   {profile?.birthDate && (
-                    <InfoLine icon={<Calendar className="w-4 h-4" />} label="Date" value={formatDate(profile.birthDate)} />
+                    <InfoLine
+                      icon={<Calendar className="w-4 h-4" />}
+                      label="Date"
+                      value={formatDate(profile.birthDate)}
+                    />
                   )}
                   {profile?.birthTime && (
-                    <InfoLine icon={<Clock className="w-4 h-4" />} label="Heure" value={profile.birthTime} />
+                    <InfoLine
+                      icon={<Clock className="w-4 h-4" />}
+                      label="Heure"
+                      value={profile.birthTime}
+                    />
                   )}
                   {profile?.birthPlace && (
-                    <InfoLine icon={<MapPin className="w-4 h-4" />} label="Lieu" value={profile.birthPlace} />
+                    <InfoLine
+                      icon={<MapPin className="w-4 h-4" />}
+                      label="Lieu"
+                      value={profile.birthPlace}
+                    />
                   )}
                   {!profile?.birthDate && !profile?.birthTime && !profile?.birthPlace && (
-                    <p className="text-sm text-desk-subtle italic">Aucune donnée de naissance renseignée</p>
+                    <p className="text-sm text-desk-subtle italic">
+                      Aucune donnée de naissance renseignée
+                    </p>
                   )}
                 </div>
               </DossierCard>
@@ -96,11 +115,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
 
               {/* Objective card */}
               {profile?.objective && (
-                <DossierCard
-                  icon={<Target className="w-5 h-5" />}
-                  title="Objectif"
-                  accent="blue"
-                >
+                <DossierCard icon={<Target className="w-5 h-5" />} title="Objectif" accent="blue">
                   <p className="text-desk-text leading-relaxed">{profile.objective}</p>
                 </DossierCard>
               )}
@@ -118,13 +133,17 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                   <div className="space-y-4">
                     {profile?.highs && (
                       <div>
-                        <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Points forts</span>
+                        <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                          Points forts
+                        </span>
                         <p className="text-desk-text mt-1 leading-relaxed">{profile.highs}</p>
                       </div>
                     )}
                     {profile?.lows && (
                       <div>
-                        <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Défis</span>
+                        <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">
+                          Défis
+                        </span>
                         <p className="text-desk-text mt-1 leading-relaxed">{profile.lows}</p>
                       </div>
                     )}
@@ -156,11 +175,7 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
 
               {/* Photos card */}
               {(profile?.facePhotoUrl || profile?.palmPhotoUrl || order.files.length > 0) && (
-                <DossierCard
-                  icon={<ImageIcon className="w-5 h-5" />}
-                  title="Photos"
-                  accent="slate"
-                >
+                <DossierCard icon={<ImageIcon className="w-5 h-5" />} title="Photos" accent="slate">
                   <div className="grid grid-cols-2 gap-3">
                     {profile?.facePhotoUrl && (
                       <PhotoCard url={profile.facePhotoUrl} label="Visage" />
@@ -168,8 +183,12 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                     {profile?.palmPhotoUrl && (
                       <PhotoCard url={profile.palmPhotoUrl} label="Paume" />
                     )}
-                    {order.files.map(file => (
-                      <PhotoCard key={file.id} url={file.url} label={file.type === 'FACE_PHOTO' ? 'Visage' : 'Paume'} />
+                    {order.files.map((file) => (
+                      <PhotoCard
+                        key={file.id}
+                        url={file.url}
+                        label={file.type === 'FACE_PHOTO' ? 'Visage' : 'Paume'}
+                      />
                     ))}
                   </div>
                 </DossierCard>
@@ -180,11 +199,11 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
       </div>
 
       {/* Bottom action bar */}
-      <div className="flex-shrink-0 px-6 py-4 bg-desk-surface border-t border-desk-border">
-        <div className="max-w-6xl mx-auto flex justify-end">
+      <div className="flex-shrink-0 px-3 sm:px-6 py-3 sm:py-4 bg-desk-surface border-t border-desk-border">
+        <div className="max-w-6xl mx-auto flex justify-stretch sm:justify-end">
           <button
             onClick={onContinue}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl
+            className="flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl w-full sm:w-auto
                        bg-gradient-to-r from-amber-500 to-amber-600
                        text-slate-900 font-semibold
                        hover:from-amber-400 hover:to-amber-500

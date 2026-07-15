@@ -4,12 +4,11 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function SettingsRootPage() {
-    const router = useRouter();
+  const router = useRouter();
 
-    useEffect(() => {
-        // Redirect to history as the first settings tab
-        router.push('/sanctuaire/settings/history');
-    }, [router]);
+  useEffect(() => {
+    router.replace('/sanctuaire/settings/preferences');
+  }, [router]);
 
-    return null;
+  return null;
 }

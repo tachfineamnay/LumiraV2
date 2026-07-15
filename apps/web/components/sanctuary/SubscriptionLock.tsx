@@ -10,10 +10,10 @@ interface SubscriptionLockProps {
   variant?: 'chat' | 'feature';
 }
 
-export function SubscriptionLock({ 
-  messagesUsed = 3, 
+export function SubscriptionLock({
+  messagesUsed = 3,
   quota = 3,
-  variant = 'chat' 
+  variant = 'chat',
 }: SubscriptionLockProps) {
   // Use quota for display when available
   const displayTotal = quota;
@@ -30,9 +30,9 @@ export function SubscriptionLock({
       <div className="relative z-10 text-center space-y-4">
         {/* Icon */}
         <motion.div
-          animate={{ 
+          animate={{
             scale: [1, 1.05, 1],
-            rotate: [0, 5, -5, 0]
+            rotate: [0, 5, -5, 0],
           }}
           transition={{ duration: 3, repeat: Infinity }}
           className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-600/20 border border-amber-500/30"
@@ -41,17 +41,19 @@ export function SubscriptionLock({
         </motion.div>
 
         {/* Title */}
-        <h3 className="text-xl font-playfair italic text-amber-100">
-          L'Oracle doit se reposer...
-        </h3>
+        <h3 className="text-xl font-playfair italic text-amber-100">L'Oracle doit se reposer...</h3>
 
         {/* Description */}
         <p className="text-sm text-white/60 max-w-sm mx-auto leading-relaxed">
           {variant === 'chat' ? (
             <>
-              Vous avez utilisé vos <span className="text-amber-400 font-semibold">{messagesUsed}/{displayTotal}</span> messages 
-              gratuits. Rejoignez le <span className="text-amber-400 font-semibold">Cercle des Initiés</span> pour 
-              des échanges illimités avec l'Oracle.
+              Vous avez utilisé vos{' '}
+              <span className="text-amber-400 font-semibold">
+                {messagesUsed}/{displayTotal}
+              </span>{' '}
+              messages gratuits. Rejoignez le{' '}
+              <span className="text-amber-400 font-semibold">Cercle des Initiés</span> pour des
+              échanges illimités avec l'Oracle.
             </>
           ) : (
             <>
@@ -68,7 +70,7 @@ export function SubscriptionLock({
             { icon: Sparkles, label: 'Guidances exclusives' },
             { icon: Crown, label: 'Accès prioritaire' },
           ].map(({ icon: Icon, label }) => (
-            <div 
+            <div
               key={label}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-white/70"
             >
@@ -80,17 +82,15 @@ export function SubscriptionLock({
 
         {/* CTA Button */}
         <Link
-          href="/sanctuaire/settings/billing"
-          className="inline-flex items-center gap-2 mt-4 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-semibold hover:from-amber-400 hover:to-amber-500 transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+          href="/sanctuaire/abonnement"
+          className="inline-flex items-center gap-2 mt-4 px-6 py-3 min-h-[48px] rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-semibold hover:from-amber-400 hover:to-amber-500 transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)]"
         >
           <Crown className="w-4 h-4" />
           Rejoindre le Cercle
         </Link>
 
         {/* Subtle reminder */}
-        <p className="text-[10px] text-white/30 pt-2">
-          Annulation possible à tout moment
-        </p>
+        <p className="text-[10px] text-white/30 pt-2">Annulation possible à tout moment</p>
       </div>
     </motion.div>
   );

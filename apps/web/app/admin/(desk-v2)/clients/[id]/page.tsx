@@ -3,12 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { 
-  ArrowLeft, 
-  Loader2, 
-  AlertCircle,
-  RefreshCw,
-} from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 import { ClientIdentityHeader } from '@/components/desk-v2/clients/ClientIdentityHeader';
@@ -79,7 +74,7 @@ export default function ClientDetailPage() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="p-6 space-y-6"
+      className="p-3 sm:p-6 space-y-4 sm:space-y-6"
     >
       {/* Back navigation */}
       <div className="flex items-center gap-4">
@@ -91,9 +86,7 @@ export default function ClientDetailPage() {
         >
           <ArrowLeft className="w-5 h-5 text-desk-muted" />
         </button>
-        <h1 className="text-xl font-semibold text-desk-text">
-          Dossier d&apos;Âme
-        </h1>
+        <h1 className="text-xl font-semibold text-desk-text">Dossier d&apos;Âme</h1>
         <button
           onClick={fetchClient}
           className="ml-auto p-2 hover:bg-desk-hover rounded-lg transition-colors"
@@ -148,9 +141,11 @@ export default function ClientDetailPage() {
             setIsChangingStatus(true);
             await expertApi.patch(`/expert/clients/${clientId}/status`, { status: statusAction });
             toast.success(
-              statusAction === 'BANNED' ? 'Client banni' :
-              statusAction === 'SUSPENDED' ? 'Client suspendu' :
-              'Client réactivé'
+              statusAction === 'BANNED'
+                ? 'Client banni'
+                : statusAction === 'SUSPENDED'
+                  ? 'Client suspendu'
+                  : 'Client réactivé',
             );
             setStatusAction(null);
             fetchClient();
@@ -162,21 +157,25 @@ export default function ClientDetailPage() {
           }
         }}
         title={
-          statusAction === 'BANNED' ? 'Bannir le client' :
-          statusAction === 'SUSPENDED' ? 'Suspendre le client' :
-          'Réactiver le client'
+          statusAction === 'BANNED'
+            ? 'Bannir le client'
+            : statusAction === 'SUSPENDED'
+              ? 'Suspendre le client'
+              : 'Réactiver le client'
         }
         description={
           statusAction === 'BANNED'
             ? `Bannir ${client.firstName} ${client.lastName} ? Le client ne pourra plus accéder à son compte.`
             : statusAction === 'SUSPENDED'
-            ? `Suspendre ${client.firstName} ${client.lastName} ? L'accès sera temporairement bloqué.`
-            : `Réactiver ${client.firstName} ${client.lastName} ? L'accès sera restauré.`
+              ? `Suspendre ${client.firstName} ${client.lastName} ? L'accès sera temporairement bloqué.`
+              : `Réactiver ${client.firstName} ${client.lastName} ? L'accès sera restauré.`
         }
         confirmLabel={
-          statusAction === 'BANNED' ? 'Bannir' :
-          statusAction === 'SUSPENDED' ? 'Suspendre' :
-          'Réactiver'
+          statusAction === 'BANNED'
+            ? 'Bannir'
+            : statusAction === 'SUSPENDED'
+              ? 'Suspendre'
+              : 'Réactiver'
         }
         variant={statusAction === 'ACTIVE' ? 'warning' : 'danger'}
         isLoading={isChangingStatus}

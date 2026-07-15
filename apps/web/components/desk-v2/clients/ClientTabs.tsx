@@ -2,13 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  User,
-  BookOpen,
-  Sparkles,
-  Compass,
-  Brain,
-} from 'lucide-react';
+import { User, BookOpen, Sparkles, Compass, Brain } from 'lucide-react';
 import { ClientFullData } from './types';
 import { TabProfil } from './TabProfil';
 import { TabLectures } from './TabLectures';
@@ -35,8 +29,18 @@ export function ClientTabs({ client, onRefresh }: ClientTabsProps) {
 
   const tabs: Tab[] = [
     { id: 'profil', label: 'Profil', icon: <User className="w-4 h-4" /> },
-    { id: 'lectures', label: 'Lectures', icon: <BookOpen className="w-4 h-4" />, count: client.orders.length },
-    { id: 'insights', label: 'Insights & Audio', icon: <Sparkles className="w-4 h-4" />, count: client.insights.length },
+    {
+      id: 'lectures',
+      label: 'Lectures',
+      icon: <BookOpen className="w-4 h-4" />,
+      count: client.orders.length,
+    },
+    {
+      id: 'insights',
+      label: 'Insights',
+      icon: <Sparkles className="w-4 h-4" />,
+      count: client.insights.length,
+    },
     { id: 'parcours', label: 'Parcours', icon: <Compass className="w-4 h-4" /> },
     { id: 'intelligence', label: 'Intelligence', icon: <Brain className="w-4 h-4" /> },
   ];
@@ -44,26 +48,30 @@ export function ClientTabs({ client, onRefresh }: ClientTabsProps) {
   return (
     <div className="bg-desk-surface border border-desk-border rounded-xl overflow-hidden shadow-sm">
       {/* Tab Bar */}
-      <div className="flex border-b border-desk-border overflow-x-auto">
+      <div className="flex border-b border-desk-border overflow-x-auto scrollbar-thin">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`
-              flex-1 flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-medium transition-colors whitespace-nowrap min-w-[140px]
-              ${activeTab === tab.id
-                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-500/5'
-                : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover'
+              flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 sm:py-3.5
+              text-sm font-medium transition-colors whitespace-nowrap min-w-[100px] sm:min-w-[120px] min-h-[48px]
+              ${
+                activeTab === tab.id
+                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-500/5'
+                  : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover'
               }
             `}
           >
             {tab.icon}
             <span>{tab.label}</span>
             {tab.count !== undefined && tab.count > 0 && (
-              <span className={`
+              <span
+                className={`
                 px-1.5 py-0.5 text-xs rounded-full
                 ${activeTab === tab.id ? 'bg-amber-500/20 text-amber-600' : 'bg-desk-card text-desk-muted'}
-              `}>
+              `}
+              >
                 {tab.count}
               </span>
             )}
@@ -77,7 +85,7 @@ export function ClientTabs({ client, onRefresh }: ClientTabsProps) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
-        className="p-5"
+        className="p-3 sm:p-5"
       >
         {activeTab === 'profil' && <TabProfil client={client} onRefresh={onRefresh} />}
         {activeTab === 'lectures' && <TabLectures client={client} onRefresh={onRefresh} />}

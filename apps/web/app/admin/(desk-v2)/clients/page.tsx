@@ -130,7 +130,9 @@ function StatCard({
     >
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-5`} />
       <div className="relative flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center ${iconColor}`}>
+        <div
+          className={`w-9 h-9 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center ${iconColor}`}
+        >
           {icon}
         </div>
         <div>
@@ -158,7 +160,7 @@ function FilterPill({
         'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
         active
           ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
-          : 'bg-desk-card text-desk-muted border-desk-border hover:border-desk-border hover:text-desk-text'
+          : 'bg-desk-card text-desk-muted border-desk-border hover:border-desk-border hover:text-desk-text',
       )}
     >
       {label}
@@ -182,14 +184,15 @@ function SortableHeader({
   align?: 'left' | 'center' | 'right';
 }) {
   const isActive = currentSort === field;
-  const alignClass = align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start';
+  const alignClass =
+    align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start';
 
   return (
     <th
       className={cn(
         'px-3 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none group',
         align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left',
-        isActive ? 'text-amber-600' : 'text-desk-subtle hover:text-desk-text'
+        isActive ? 'text-amber-600' : 'text-desk-subtle hover:text-desk-text',
       )}
       onClick={() => onSort(field)}
     >
@@ -238,7 +241,8 @@ export default function ClientsPage() {
 
   // Fetch stats on mount
   useEffect(() => {
-    expertApi.get<ClientsStats>('/expert/clients/stats')
+    expertApi
+      .get<ClientsStats>('/expert/clients/stats')
       .then(({ data }) => setStats(data))
       .catch(() => {});
   }, []);
@@ -323,19 +327,14 @@ export default function ClientsPage() {
   }, [page, totalPages]);
 
   return (
-    <div className="p-5 space-y-3">
+    <div className="p-3 sm:p-5 space-y-3">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-lg font-semibold text-desk-text flex items-center gap-2">
           <Users className="w-5 h-5 text-amber-600" />
           Clients
         </h1>
-        <p className="text-desk-muted text-sm mt-0.5">
-          Gestion et suivi de vos clients
-        </p>
+        <p className="text-desk-muted text-sm mt-0.5">Gestion et suivi de vos clients</p>
       </motion.div>
 
       {/* Stats Cards */}
@@ -381,7 +380,7 @@ export default function ClientsPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex items-center gap-3"
+        className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
       >
         <div className="relative flex-1 max-w-lg">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-desk-subtle" />
@@ -390,7 +389,7 @@ export default function ClientsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher par nom, email ou réf..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg bg-desk-card border border-desk-border
+            className="w-full pl-10 pr-4 py-2.5 min-h-[44px] rounded-lg bg-desk-card border border-desk-border
                        text-desk-text placeholder:text-desk-subtle focus:outline-none focus:border-amber-500/50 transition-colors"
           />
           {searchQuery && (
@@ -403,38 +402,40 @@ export default function ClientsPage() {
           )}
         </div>
 
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors',
-            showFilters || activeFilterCount > 0
-              ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
-              : 'bg-desk-card border-desk-border text-desk-muted hover:text-desk-text'
-          )}
-        >
-          <Filter className="w-4 h-4" />
-          <span>Filtres</span>
-          {activeFilterCount > 0 && (
-            <span className="ml-1 w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={cn(
+              'flex items-center gap-2 px-3 py-2.5 min-h-[44px] rounded-lg border transition-colors flex-1 sm:flex-initial justify-center',
+              showFilters || activeFilterCount > 0
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+                : 'bg-desk-card border-desk-border text-desk-muted hover:text-desk-text',
+            )}
+          >
+            <Filter className="w-4 h-4" />
+            <span>Filtres</span>
+            {activeFilterCount > 0 && (
+              <span className="ml-1 w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
 
-        {/* Page size selector */}
-        <select
-          value={pageSize}
-          onChange={(e) => {
-            setPageSize(Number(e.target.value));
-            setPage(1);
-          }}
-          className="px-3 py-2 rounded-lg bg-desk-card border border-desk-border
-                     text-desk-text text-sm focus:outline-none focus:border-amber-500/50 transition-colors"
-        >
-          <option value={10}>10 / page</option>
-          <option value={20}>20 / page</option>
-          <option value={50}>50 / page</option>
-        </select>
+          {/* Page size selector */}
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+            className="px-3 py-2.5 min-h-[44px] rounded-lg bg-desk-card border border-desk-border
+                       text-desk-text text-sm focus:outline-none focus:border-amber-500/50 transition-colors"
+          >
+            <option value={10}>10 / page</option>
+            <option value={20}>20 / page</option>
+            <option value={50}>50 / page</option>
+          </select>
+        </div>
       </motion.div>
 
       {/* Filter Panel */}
@@ -455,10 +456,26 @@ export default function ClientsPage() {
                     Statut Client
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <FilterPill label="Tous" active={!filters.status} onClick={() => setFilters((p) => ({ ...p, status: '' }))} />
-                    <FilterPill label="Actif" active={filters.status === 'ACTIVE'} onClick={() => updateFilter('status', 'ACTIVE')} />
-                    <FilterPill label="Banni" active={filters.status === 'BANNED'} onClick={() => updateFilter('status', 'BANNED')} />
-                    <FilterPill label="Suspendu" active={filters.status === 'SUSPENDED'} onClick={() => updateFilter('status', 'SUSPENDED')} />
+                    <FilterPill
+                      label="Tous"
+                      active={!filters.status}
+                      onClick={() => setFilters((p) => ({ ...p, status: '' }))}
+                    />
+                    <FilterPill
+                      label="Actif"
+                      active={filters.status === 'ACTIVE'}
+                      onClick={() => updateFilter('status', 'ACTIVE')}
+                    />
+                    <FilterPill
+                      label="Banni"
+                      active={filters.status === 'BANNED'}
+                      onClick={() => updateFilter('status', 'BANNED')}
+                    />
+                    <FilterPill
+                      label="Suspendu"
+                      active={filters.status === 'SUSPENDED'}
+                      onClick={() => updateFilter('status', 'SUSPENDED')}
+                    />
                   </div>
                 </div>
 
@@ -468,11 +485,31 @@ export default function ClientsPage() {
                     Abonnement
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <FilterPill label="Tous" active={!filters.subscriptionStatus} onClick={() => setFilters((p) => ({ ...p, subscriptionStatus: '' }))} />
-                    <FilterPill label="Actif" active={filters.subscriptionStatus === 'ACTIVE'} onClick={() => updateFilter('subscriptionStatus', 'ACTIVE')} />
-                    <FilterPill label="Inactif" active={filters.subscriptionStatus === 'INACTIVE'} onClick={() => updateFilter('subscriptionStatus', 'INACTIVE')} />
-                    <FilterPill label="Annulé" active={filters.subscriptionStatus === 'CANCELED'} onClick={() => updateFilter('subscriptionStatus', 'CANCELED')} />
-                    <FilterPill label="Impayé" active={filters.subscriptionStatus === 'PAST_DUE'} onClick={() => updateFilter('subscriptionStatus', 'PAST_DUE')} />
+                    <FilterPill
+                      label="Tous"
+                      active={!filters.subscriptionStatus}
+                      onClick={() => setFilters((p) => ({ ...p, subscriptionStatus: '' }))}
+                    />
+                    <FilterPill
+                      label="Actif"
+                      active={filters.subscriptionStatus === 'ACTIVE'}
+                      onClick={() => updateFilter('subscriptionStatus', 'ACTIVE')}
+                    />
+                    <FilterPill
+                      label="Inactif"
+                      active={filters.subscriptionStatus === 'INACTIVE'}
+                      onClick={() => updateFilter('subscriptionStatus', 'INACTIVE')}
+                    />
+                    <FilterPill
+                      label="Annulé"
+                      active={filters.subscriptionStatus === 'CANCELED'}
+                      onClick={() => updateFilter('subscriptionStatus', 'CANCELED')}
+                    />
+                    <FilterPill
+                      label="Impayé"
+                      active={filters.subscriptionStatus === 'PAST_DUE'}
+                      onClick={() => updateFilter('subscriptionStatus', 'PAST_DUE')}
+                    />
                   </div>
                 </div>
 
@@ -482,9 +519,21 @@ export default function ClientsPage() {
                     Commandes
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <FilterPill label="Tous" active={!filters.hasOrders} onClick={() => setFilters((p) => ({ ...p, hasOrders: '' }))} />
-                    <FilterPill label="Avec commandes" active={filters.hasOrders === 'true'} onClick={() => updateFilter('hasOrders', 'true')} />
-                    <FilterPill label="Sans commandes" active={filters.hasOrders === 'false'} onClick={() => updateFilter('hasOrders', 'false')} />
+                    <FilterPill
+                      label="Tous"
+                      active={!filters.hasOrders}
+                      onClick={() => setFilters((p) => ({ ...p, hasOrders: '' }))}
+                    />
+                    <FilterPill
+                      label="Avec commandes"
+                      active={filters.hasOrders === 'true'}
+                      onClick={() => updateFilter('hasOrders', 'true')}
+                    />
+                    <FilterPill
+                      label="Sans commandes"
+                      active={filters.hasOrders === 'false'}
+                      onClick={() => updateFilter('hasOrders', 'false')}
+                    />
                   </div>
                 </div>
               </div>
@@ -498,7 +547,10 @@ export default function ClientsPage() {
                   <input
                     type="date"
                     value={filters.dateFrom}
-                    onChange={(e) => { setFilters((p) => ({ ...p, dateFrom: e.target.value })); setPage(1); }}
+                    onChange={(e) => {
+                      setFilters((p) => ({ ...p, dateFrom: e.target.value }));
+                      setPage(1);
+                    }}
                     className="px-3 py-1.5 rounded-lg bg-desk-card border border-desk-border text-desk-text text-sm
                                focus:outline-none focus:border-amber-500/50 transition-colors"
                   />
@@ -510,7 +562,10 @@ export default function ClientsPage() {
                   <input
                     type="date"
                     value={filters.dateTo}
-                    onChange={(e) => { setFilters((p) => ({ ...p, dateTo: e.target.value })); setPage(1); }}
+                    onChange={(e) => {
+                      setFilters((p) => ({ ...p, dateTo: e.target.value }));
+                      setPage(1);
+                    }}
                     className="px-3 py-1.5 rounded-lg bg-desk-card border border-desk-border text-desk-text text-sm
                                focus:outline-none focus:border-amber-500/50 transition-colors"
                   />
@@ -540,11 +595,14 @@ export default function ClientsPage() {
             : 'Aucun résultat'}
         </span>
         {activeFilterCount > 0 && (
-          <span className="text-amber-600">{activeFilterCount} filtre{activeFilterCount > 1 ? 's' : ''} actif{activeFilterCount > 1 ? 's' : ''}</span>
+          <span className="text-amber-600">
+            {activeFilterCount} filtre{activeFilterCount > 1 ? 's' : ''} actif
+            {activeFilterCount > 1 ? 's' : ''}
+          </span>
         )}
       </div>
 
-      {/* Clients Table */}
+      {/* Clients list — cards (mobile) + table (lg+) */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -560,136 +618,217 @@ export default function ClientsPage() {
             <Users className="w-16 h-16 text-desk-subtle mb-4" />
             <p className="text-desk-muted">Aucun client trouvé</p>
             {activeFilterCount > 0 && (
-              <button onClick={resetFilters} className="mt-2 text-sm text-amber-600 hover:text-amber-500 transition-colors">
+              <button
+                onClick={resetFilters}
+                className="mt-2 text-sm text-amber-600 hover:text-amber-500 transition-colors"
+              >
                 Réinitialiser les filtres
               </button>
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-desk-border">
-                  <SortableHeader
-                    label="Client"
-                    field="firstName"
-                    currentSort={filters.sortBy}
-                    currentOrder={filters.sortOrder}
-                    onSort={handleSort}
-                  />
-                  <th className="text-left px-3 py-2 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
-                    Email
-                  </th>
-                  <SortableHeader
-                    label="Inscrit le"
-                    field="createdAt"
-                    currentSort={filters.sortBy}
-                    currentOrder={filters.sortOrder}
-                    onSort={handleSort}
-                  />
-                  <SortableHeader
-                    label="Commandes"
-                    field="totalOrders"
-                    currentSort={filters.sortBy}
-                    currentOrder={filters.sortOrder}
-                    onSort={handleSort}
-                    align="center"
-                  />
-                  <SortableHeader
-                    label="Total dépensé"
-                    field="totalSpent"
-                    currentSort={filters.sortBy}
-                    currentOrder={filters.sortOrder}
-                    onSort={handleSort}
-                    align="right"
-                  />
-                  <th className="text-center px-3 py-2 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
-                    Abonnement
-                  </th>
-                  <th className="w-12" />
-                </tr>
-              </thead>
-              <tbody>
-                {clients.map((client, index) => {
-                  const subBadge = SUBSCRIPTION_BADGES[client.subscriptionStatus] || SUBSCRIPTION_BADGES.INACTIVE;
-                  const ordersBadgeColor =
-                    client.totalOrders === 0
-                      ? 'bg-desk-card text-desk-subtle'
-                      : client.totalOrders <= 2
-                        ? 'bg-blue-500/10 text-blue-600'
-                        : 'bg-amber-500/10 text-amber-600';
-
-                  return (
-                    <motion.tr
-                      key={client.id}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.02 }}
-                      onClick={() => router.push(`/admin/clients/${client.id}`)}
-                      className="border-b border-desk-border hover:bg-desk-card transition-colors group cursor-pointer"
-                    >
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-amber-500
-                                          flex items-center justify-center text-xs font-bold text-white shrink-0">
-                            {client.firstName?.[0]?.toUpperCase() || '?'}{client.lastName?.[0]?.toUpperCase() || ''}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-desk-text font-medium truncate">
-                              {client.firstName || 'Sans nom'} {client.lastName || ''}
-                            </p>
-                            {client.refId && (
-                              <p className="text-[11px] text-desk-subtle font-mono">{client.refId}</p>
+          <>
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-desk-border">
+              {clients.map((client, index) => {
+                const subBadge =
+                  SUBSCRIPTION_BADGES[client.subscriptionStatus] || SUBSCRIPTION_BADGES.INACTIVE;
+                return (
+                  <motion.button
+                    key={client.id}
+                    type="button"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.02 }}
+                    onClick={() => router.push(`/admin/clients/${client.id}`)}
+                    className="w-full text-left p-4 hover:bg-desk-card transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                        {client.firstName?.[0]?.toUpperCase() || '?'}
+                        {client.lastName?.[0]?.toUpperCase() || ''}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-desk-text font-medium truncate">
+                            {client.firstName || 'Sans nom'} {client.lastName || ''}
+                          </p>
+                          <span
+                            className={cn(
+                              'inline-flex px-2 py-0.5 rounded-lg text-[10px] font-medium border flex-shrink-0',
+                              subBadge.className,
                             )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2 text-desk-muted">
-                          <span className="text-sm truncate max-w-[200px]">{client.email}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2 text-desk-muted">
-
-                          <span className="text-sm whitespace-nowrap">
-                            {new Date(client.createdAt).toLocaleDateString('fr-FR')}
+                          >
+                            {subBadge.label}
                           </span>
                         </div>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-sm font-medium', ordersBadgeColor)}>
-                          <ShoppingBag className="w-3.5 h-3.5" />
-                          {client.totalOrders}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {client.totalSpent > 0 ? (
-                          <span className="text-desk-text font-medium text-sm">{formatCurrency(client.totalSpent)}</span>
-                        ) : (
-                          <span className="text-desk-subtle">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={cn('inline-flex px-2.5 py-1 rounded-lg text-xs font-medium border', subBadge.className)}>
-                          {subBadge.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/admin/clients/${client.id}`); }}
-                          title="Voir le profil"
-                          className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-all"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <p className="text-sm text-desk-muted truncate mt-0.5">{client.email}</p>
+                        <div className="flex items-center gap-3 mt-2 text-xs text-desk-subtle">
+                          <span className="flex items-center gap-1">
+                            <ShoppingBag className="w-3 h-3" />
+                            {client.totalOrders}
+                          </span>
+                          {client.totalSpent > 0 && (
+                            <span className="text-desk-text font-medium">
+                              {formatCurrency(client.totalSpent)}
+                            </span>
+                          )}
+                          <span>{new Date(client.createdAt).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-desk-border">
+                    <SortableHeader
+                      label="Client"
+                      field="firstName"
+                      currentSort={filters.sortBy}
+                      currentOrder={filters.sortOrder}
+                      onSort={handleSort}
+                    />
+                    <th className="text-left px-3 py-2 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
+                      Email
+                    </th>
+                    <SortableHeader
+                      label="Inscrit le"
+                      field="createdAt"
+                      currentSort={filters.sortBy}
+                      currentOrder={filters.sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Commandes"
+                      field="totalOrders"
+                      currentSort={filters.sortBy}
+                      currentOrder={filters.sortOrder}
+                      onSort={handleSort}
+                      align="center"
+                    />
+                    <SortableHeader
+                      label="Total dépensé"
+                      field="totalSpent"
+                      currentSort={filters.sortBy}
+                      currentOrder={filters.sortOrder}
+                      onSort={handleSort}
+                      align="right"
+                    />
+                    <th className="text-center px-3 py-2 text-xs font-semibold text-desk-subtle uppercase tracking-wider">
+                      Abonnement
+                    </th>
+                    <th className="w-12" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {clients.map((client, index) => {
+                    const subBadge =
+                      SUBSCRIPTION_BADGES[client.subscriptionStatus] ||
+                      SUBSCRIPTION_BADGES.INACTIVE;
+                    const ordersBadgeColor =
+                      client.totalOrders === 0
+                        ? 'bg-desk-card text-desk-subtle'
+                        : client.totalOrders <= 2
+                          ? 'bg-blue-500/10 text-blue-600'
+                          : 'bg-amber-500/10 text-amber-600';
+
+                    return (
+                      <motion.tr
+                        key={client.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.02 }}
+                        onClick={() => router.push(`/admin/clients/${client.id}`)}
+                        className="border-b border-desk-border hover:bg-desk-card transition-colors group cursor-pointer"
+                      >
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className="w-8 h-8 rounded-lg bg-amber-500
+                                            flex items-center justify-center text-xs font-bold text-white shrink-0"
+                            >
+                              {client.firstName?.[0]?.toUpperCase() || '?'}
+                              {client.lastName?.[0]?.toUpperCase() || ''}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-desk-text font-medium truncate">
+                                {client.firstName || 'Sans nom'} {client.lastName || ''}
+                              </p>
+                              {client.refId && (
+                                <p className="text-[11px] text-desk-subtle font-mono">
+                                  {client.refId}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2 text-desk-muted">
+                            <span className="text-sm truncate max-w-[200px]">{client.email}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2 text-desk-muted">
+                            <span className="text-sm whitespace-nowrap">
+                              {new Date(client.createdAt).toLocaleDateString('fr-FR')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-sm font-medium',
+                              ordersBadgeColor,
+                            )}
+                          >
+                            <ShoppingBag className="w-3.5 h-3.5" />
+                            {client.totalOrders}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {client.totalSpent > 0 ? (
+                            <span className="text-desk-text font-medium text-sm">
+                              {formatCurrency(client.totalSpent)}
+                            </span>
+                          ) : (
+                            <span className="text-desk-subtle">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span
+                            className={cn(
+                              'inline-flex px-2.5 py-1 rounded-lg text-xs font-medium border',
+                              subBadge.className,
+                            )}
+                          >
+                            {subBadge.label}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/admin/clients/${client.id}`);
+                            }}
+                            title="Voir le profil"
+                            className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-subtle hover:text-desk-text transition-all"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </motion.div>
 
@@ -723,7 +862,7 @@ export default function ClientsPage() {
                   'w-9 h-9 rounded-lg text-sm font-medium transition-colors',
                   num === page
                     ? 'bg-amber-500/10 text-amber-600 border border-amber-500/30'
-                    : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover'
+                    : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover',
                 )}
               >
                 {num}

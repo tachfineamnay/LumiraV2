@@ -18,7 +18,14 @@ interface OrderCardProps {
   onClaim?: (orderId: string) => void;
 }
 
-export function OrderCard({ order, isDragging, currentExpertId, columnId, viewers = [], onClaim }: OrderCardProps) {
+export function OrderCard({
+  order,
+  isDragging,
+  currentExpertId,
+  columnId,
+  viewers = [],
+  onClaim,
+}: OrderCardProps) {
   const router = useRouter();
 
   const {
@@ -36,7 +43,7 @@ export function OrderCard({ order, isDragging, currentExpertId, columnId, viewer
   };
 
   const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
-  const timeAgo = formatDistanceToNow(new Date(order.createdAt), { 
+  const timeAgo = formatDistanceToNow(new Date(order.createdAt), {
     addSuffix: true,
     locale: fr,
   });
@@ -64,24 +71,25 @@ export function OrderCard({ order, isDragging, currentExpertId, columnId, viewer
       style={style}
       className={`
         group relative rounded-xl border transition-all duration-200
-        ${isBeingDragged 
-          ? 'bg-desk-surface border-amber-500/50 shadow-xl shadow-amber-500/10 scale-105 rotate-2 cursor-grabbing z-50' 
-          : isAssignedToOther
-            ? 'bg-desk-surface/60 border-desk-border opacity-60 cursor-pointer'
-            : isAssignedToMe
-              ? 'bg-desk-surface border-emerald-500/40 ring-1 ring-emerald-500/20 cursor-pointer'
-              : 'bg-desk-surface border-desk-border hover:border-desk-border hover:bg-desk-card cursor-pointer'
+        ${
+          isBeingDragged
+            ? 'bg-desk-surface border-amber-500/50 shadow-xl shadow-amber-500/10 scale-105 rotate-2 cursor-grabbing z-50'
+            : isAssignedToOther
+              ? 'bg-desk-surface/60 border-desk-border opacity-60 cursor-pointer'
+              : isAssignedToMe
+                ? 'bg-desk-surface border-emerald-500/40 ring-1 ring-emerald-500/20 cursor-pointer'
+                : 'bg-desk-surface border-desk-border hover:border-desk-border hover:bg-desk-card cursor-pointer'
         }
       `}
       onClick={!isBeingDragged ? handleClick : undefined}
     >
-      {/* Drag handle */}
+      {/* Drag handle — always visible on touch, hover-reveal on md+ */}
       <div
         {...attributes}
         {...listeners}
-        className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100
-                   hover:bg-desk-hover cursor-grab active:cursor-grabbing transition-opacity"
-        onClick={e => e.stopPropagation()}
+        className="absolute top-2 right-2 p-2 min-w-[36px] min-h-[36px] rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100
+                   hover:bg-desk-hover cursor-grab active:cursor-grabbing transition-opacity flex items-center justify-center"
+        onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="w-4 h-4 text-desk-subtle" />
       </div>
@@ -97,10 +105,12 @@ export function OrderCard({ order, isDragging, currentExpertId, columnId, viewer
                 {order.orderNumber}
               </span>
             </div>
-            <span className={`
+            <span
+              className={`
               inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
               ${getLevelBadgeColor(order.level)}
-            `}>
+            `}
+            >
               {levelConfig.name}
             </span>
             {/* Assignment badge */}
@@ -124,17 +134,18 @@ export function OrderCard({ order, isDragging, currentExpertId, columnId, viewer
 
         {/* Client info */}
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 
-                          flex items-center justify-center text-xs font-medium text-white">
-            {order.user.firstName?.[0]}{order.user.lastName?.[0]}
+          <div
+            className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 
+                          flex items-center justify-center text-xs font-medium text-white"
+          >
+            {order.user.firstName?.[0]}
+            {order.user.lastName?.[0]}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-desk-text truncate">
               {order.user.firstName} {order.user.lastName}
             </div>
-            <div className="text-xs text-desk-subtle truncate">
-              {order.user.email}
-            </div>
+            <div className="text-xs text-desk-subtle truncate">{order.user.email}</div>
           </div>
         </div>
 
@@ -170,11 +181,11 @@ export function OrderCard({ order, isDragging, currentExpertId, columnId, viewer
         {columnId === 'paid' && !assignedBy && onClaim && (
           <button
             onClick={handleClaim}
-            className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg
-                       bg-amber-500/10 text-amber-600 text-xs font-medium
+            className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-lg
+                       bg-amber-500/10 text-amber-600 text-sm font-medium
                        hover:bg-amber-500/20 transition-colors"
           >
-            <Hand className="w-3.5 h-3.5" />
+            <Hand className="w-4 h-4" />
             Prendre cette commande
           </button>
         )}
@@ -183,7 +194,7 @@ export function OrderCard({ order, isDragging, currentExpertId, columnId, viewer
         {viewers.length > 0 && (
           <div className="mt-2 flex items-center gap-1.5">
             <div className="flex -space-x-1.5">
-              {viewers.slice(0, 3).map(v => (
+              {viewers.slice(0, 3).map((v) => (
                 <div
                   key={v.expertId}
                   title={v.expertEmail}

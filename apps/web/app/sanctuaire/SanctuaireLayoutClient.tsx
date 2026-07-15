@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SanctuaireAuthProvider, useSanctuaireAuth } from '../../context/SanctuaireAuthContext';
@@ -8,13 +8,9 @@ import { SanctuaireProvider, useSanctuaire } from '../../context/SanctuaireConte
 import { SanctuaireGuard } from '../../components/guards/SanctuaireGuard';
 import { SanctuaireSidebar } from '../../components/sanctuary/SanctuaireSidebar';
 import { MobileBottomNav } from '../../components/sanctuary/MobileBottomNav';
+import { PROFILE_MENU_NAV } from '@/lib/sanctuaireNav';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, User as UserIcon, LogOut, ChevronDown, Eye, ShoppingBag, Crown } from 'lucide-react';
-import { useState } from 'react';
-
-// =============================================================================
-// LAYOUT CONTENT
-// =============================================================================
+import { Home, LogOut, ChevronDown, Crown } from 'lucide-react';
 
 function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, logout, isAuthenticated } = useSanctuaireAuth();
@@ -22,13 +18,10 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const pathname = usePathname();
 
-  // Don't show layout chrome for login page
   const isLoginPage = pathname === '/sanctuaire/login';
-
   const userName = user ? `${user.firstName} ${user.lastName}` : 'Explorateur';
   const userInitial = user?.firstName?.[0]?.toUpperCase() || 'U';
 
-  // Login page renders without layout chrome
   if (isLoginPage) {
     return <>{children}</>;
   }
@@ -36,18 +29,15 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <SanctuaireGuard>
       <div className="min-h-screen bg-abyss-700 text-stellar-100 selection:bg-horizon-400/20 starfield">
-        {/* 🏛️ SIDEBAR - Desktop Only */}
         <SanctuaireSidebar />
 
-        {/* 📱 MAIN WRAPPER */}
         <div className="lg:ml-64 min-h-screen flex flex-col">
-          {/* 🔝 TOP BAR */}
-          <header className="sticky top-0 z-40 p-4 flex justify-between items-center backdrop-blur-xl bg-abyss-700/80 border-b border-white/[0.04]">
-            {/* Left: Home (Mobile) */}
+          <header className="sticky top-0 z-40 p-3 sm:p-4 flex justify-between items-center backdrop-blur-xl bg-abyss-700/80 border-b border-white/[0.04]">
             <div className="flex items-center gap-3 lg:hidden">
               <Link
-                href="/"
-                className="w-9 h-9 rounded-xl bg-abyss-500/50 border border-white/[0.06] flex items-center justify-center hover:bg-abyss-400/50 transition-all duration-300 flex-shrink-0"
+                href="/sanctuaire"
+                aria-label="Accueil Sanctuaire"
+                className="w-10 h-10 rounded-xl bg-abyss-500/50 border border-white/[0.06] flex items-center justify-center hover:bg-abyss-400/50 transition-all duration-300 flex-shrink-0"
               >
                 <Home className="w-4 h-4 text-stellar-400" />
               </Link>
@@ -56,51 +46,55 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
 
-            {/* Center spacer */}
             <div className="flex-1" />
 
-            {/* Right: Level Badge + Profile */}
-            <div className="flex items-center gap-3">
-              {/* Subscription Badge */}
+            <div className="flex items-center gap-2 sm:gap-3">
               <div className="hidden sm:block">
                 {entitlementsLoading ? (
                   <div className="px-4 py-2 rounded-full bg-abyss-500/50 animate-pulse">
                     <span className="text-xs text-stellar-500">Chargement...</span>
                   </div>
                 ) : isSubscribed ? (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md">
+                  <Link
+                    href="/sanctuaire/abonnement"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md hover:border-amber-400/50 transition-colors"
+                  >
                     <Crown className="w-4 h-4 text-amber-400" />
                     <span className="text-xs font-bold uppercase tracking-widest text-amber-400">
                       Initié
                     </span>
-                  </div>
+                  </Link>
                 ) : (
                   <Link
                     href="/commande"
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 hover:border-amber-500/40 transition-colors"
                   >
                     <span className="text-xs font-bold uppercase tracking-widest text-amber-400/70">
-                      S'abonner
+                      S&apos;abonner
                     </span>
                   </Link>
                 )}
               </div>
 
-              {/* Profile Dropdown */}
               {isAuthenticated && (
                 <div className="relative">
                   <button
+                    type="button"
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl bg-abyss-500/50 border border-white/[0.06] hover:bg-abyss-400/50 transition-all duration-300"
+                    aria-expanded={isProfileOpen}
+                    aria-haspopup="menu"
+                    className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 min-h-[44px] rounded-xl bg-abyss-500/50 border border-white/[0.06] hover:bg-abyss-400/50 transition-all duration-300"
                   >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-horizon-300 to-horizon-500 flex items-center justify-center text-abyss-800 font-bold text-sm">
                       {userInitial}
                     </div>
-                    <span className="text-sm font-medium hidden md:block text-stellar-300">
+                    <span className="text-sm font-medium hidden md:block text-stellar-300 max-w-[120px] truncate">
                       {userName}
                     </span>
                     <ChevronDown
-                      className={`w-4 h-4 text-stellar-500 transition-transform duration-300 ${isProfileOpen ? 'rotate-180' : ''}`}
+                      className={`w-4 h-4 text-stellar-500 transition-transform duration-300 ${
+                        isProfileOpen ? 'rotate-180' : ''
+                      }`}
                     />
                   </button>
 
@@ -110,23 +104,24 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                         <div
                           className="fixed inset-0 z-40"
                           onClick={() => setIsProfileOpen(false)}
+                          aria-hidden
                         />
 
                         <motion.div
+                          role="menu"
                           initial={{ opacity: 0, y: 10, scale: 0.95 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
                           className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-72 z-50 bg-abyss-600/95 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-abyss overflow-hidden"
                         >
-                          {/* User Info */}
                           <div className="p-4 border-b border-white/[0.04] bg-gradient-to-br from-horizon-400/5 to-transparent">
                             <div className="flex items-center gap-3 mb-3">
-                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-horizon-300 to-horizon-500 flex items-center justify-center text-abyss-800 font-bold text-lg">
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-horizon-300 to-horizon-500 flex items-center justify-center text-abyss-800 font-bold text-lg flex-shrink-0">
                                 {userInitial}
                               </div>
-                              <div>
-                                <p className="font-medium text-stellar-100">{userName}</p>
-                                <p className="text-xs text-stellar-500">{user?.email}</p>
+                              <div className="min-w-0">
+                                <p className="font-medium text-stellar-100 truncate">{userName}</p>
+                                <p className="text-xs text-stellar-500 truncate">{user?.email}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -145,55 +140,35 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                             </div>
                           </div>
 
-                          {/* Links */}
                           <nav className="p-2">
-                            <Link
-                              href="/sanctuaire/profile"
-                              onClick={() => setIsProfileOpen(false)}
-                              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors"
-                            >
-                              <UserIcon className="w-5 h-5 text-horizon-400" />
-                              <div>
-                                <span className="text-sm text-stellar-100">Mon Profil</span>
-                                <span className="block text-[10px] text-stellar-500">
-                                  Gérer mon identité
-                                </span>
-                              </div>
-                            </Link>
-
-                            <Link
-                              href="/sanctuaire/draws"
-                              onClick={() => setIsProfileOpen(false)}
-                              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors"
-                            >
-                              <Eye className="w-5 h-5 text-serenity-400" />
-                              <div>
-                                <span className="text-sm text-stellar-100">Mes Lectures</span>
-                                <span className="block text-[10px] text-stellar-500">
-                                  Historique des tirages
-                                </span>
-                              </div>
-                            </Link>
-
-                            <Link
-                              href="/commande"
-                              onClick={() => setIsProfileOpen(false)}
-                              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl hover:bg-white/5 transition-colors"
-                            >
-                              <ShoppingBag className="w-5 h-5 text-horizon-300" />
-                              <div>
-                                <span className="text-sm text-stellar-100">Nouvelle Lecture</span>
-                                <span className="block text-[10px] text-stellar-500">
-                                  Commander maintenant
-                                </span>
-                              </div>
-                            </Link>
+                            {PROFILE_MENU_NAV.map((item) => {
+                              const Icon = item.icon;
+                              return (
+                                <Link
+                                  key={item.key}
+                                  href={item.route}
+                                  role="menuitem"
+                                  onClick={() => setIsProfileOpen(false)}
+                                  className="flex items-center gap-3 w-full px-4 py-3 min-h-[48px] rounded-xl hover:bg-white/5 transition-colors"
+                                >
+                                  <Icon className="w-5 h-5 text-horizon-400 flex-shrink-0" />
+                                  <div className="min-w-0">
+                                    <span className="text-sm text-stellar-100">{item.label}</span>
+                                    {item.sublabel && (
+                                      <span className="block text-[10px] text-stellar-500">
+                                        {item.sublabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </Link>
+                              );
+                            })}
                           </nav>
 
-                          {/* Logout */}
                           <div className="p-2 border-t border-white/[0.04]">
                             <button
-                              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-colors text-rose-400 hover:bg-rose-400/10"
+                              type="button"
+                              className="flex items-center gap-3 w-full px-4 py-3 min-h-[48px] rounded-xl transition-colors text-rose-400 hover:bg-rose-400/10"
                               onClick={() => {
                                 logout();
                                 setIsProfileOpen(false);
@@ -212,20 +187,14 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          {/* 🌌 MAIN CONTENT */}
-          <main className="flex-1 pb-24 lg:pb-8">{children}</main>
+          <main className="flex-1 pb-28 lg:pb-8 min-w-0">{children}</main>
         </div>
 
-        {/* 📱 MOBILE BOTTOM NAV */}
         <MobileBottomNav />
       </div>
     </SanctuaireGuard>
   );
 }
-
-// =============================================================================
-// LAYOUT EXPORT
-// =============================================================================
 
 export default function SanctuaireLayoutClient({ children }: { children: React.ReactNode }) {
   return (

@@ -3,16 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Search,
-  Kanban,
-  Settings,
-  FileText,
-  Zap,
-  Moon,
-  ArrowRight,
-  X,
-} from 'lucide-react';
+import { Search, Kanban, Settings, FileText, Zap, Moon, ArrowRight, X } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 
 interface CommandItem {
@@ -40,7 +31,7 @@ export function CommandPalette() {
       id: 'nav-dashboard',
       icon: <Zap className="w-4 h-4" />,
       label: 'Dashboard',
-      description: 'Vue d\'ensemble',
+      description: "Vue d'ensemble",
       shortcut: 'G D',
       action: () => router.push('/admin'),
       category: 'navigation',
@@ -68,12 +59,12 @@ export function CommandPalette() {
       id: 'action-theme',
       icon: <Moon className="w-4 h-4" />,
       label: 'Basculer thème',
-      description: 'Changer l\'apparence',
+      description: "Changer l'apparence",
       action: () => console.log('Toggle theme'),
       category: 'actions',
     },
     // Orders (dynamic)
-    ...orders.paid.slice(0, 5).map(order => ({
+    ...orders.paid.slice(0, 5).map((order) => ({
       id: `order-${order.id}`,
       icon: <FileText className="w-4 h-4" />,
       label: order.orderNumber,
@@ -86,17 +77,17 @@ export function CommandPalette() {
   // Filter commands based on query
   const filteredCommands = query
     ? commands.filter(
-        cmd =>
+        (cmd) =>
           cmd.label.toLowerCase().includes(query.toLowerCase()) ||
-          cmd.description?.toLowerCase().includes(query.toLowerCase())
+          cmd.description?.toLowerCase().includes(query.toLowerCase()),
       )
     : commands;
 
   // Group by category
   const grouped = {
-    navigation: filteredCommands.filter(c => c.category === 'navigation'),
-    actions: filteredCommands.filter(c => c.category === 'actions'),
-    orders: filteredCommands.filter(c => c.category === 'orders'),
+    navigation: filteredCommands.filter((c) => c.category === 'navigation'),
+    actions: filteredCommands.filter((c) => c.category === 'actions'),
+    orders: filteredCommands.filter((c) => c.category === 'orders'),
   };
 
   // Keyboard shortcuts + custom event from Header search button
@@ -105,7 +96,7 @@ export function CommandPalette() {
       // ⌘K to open
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setIsOpen(prev => !prev);
+        setIsOpen((prev) => !prev);
       }
 
       // Escape to close
@@ -114,7 +105,7 @@ export function CommandPalette() {
       }
     };
 
-    const handleToggle = () => setIsOpen(prev => !prev);
+    const handleToggle = () => setIsOpen((prev) => !prev);
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('lumira:palette:toggle', handleToggle);
@@ -138,17 +129,17 @@ export function CommandPalette() {
     (e: React.KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(i => Math.min(i + 1, filteredCommands.length - 1));
+        setSelectedIndex((i) => Math.min(i + 1, filteredCommands.length - 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex(i => Math.max(i - 1, 0));
+        setSelectedIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
         filteredCommands[selectedIndex]?.action();
         setIsOpen(false);
       }
     },
-    [filteredCommands, selectedIndex]
+    [filteredCommands, selectedIndex],
   );
 
   const executeCommand = (command: CommandItem) => {
@@ -175,7 +166,7 @@ export function CommandPalette() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ duration: 0.15 }}
-            className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-xl z-50"
+            className="fixed top-[12%] sm:top-[20%] left-1/2 -translate-x-1/2 w-full max-w-xl z-50 px-3 sm:px-4"
           >
             <div className="bg-desk-surface rounded-2xl border border-desk-border shadow-2xl overflow-hidden">
               {/* Search input */}
@@ -185,7 +176,7 @@ export function CommandPalette() {
                   ref={inputRef}
                   type="text"
                   value={query}
-                  onChange={e => {
+                  onChange={(e) => {
                     setQuery(e.target.value);
                     setSelectedIndex(0);
                   }}
@@ -293,9 +284,7 @@ function CommandGroup({ title, items, selectedIndex, onSelect, startIndex }: Com
               ${isSelected ? 'bg-amber-500/10 text-amber-600' : 'text-desk-muted hover:bg-desk-hover'}
             `}
           >
-            <span className={isSelected ? 'text-amber-600' : 'text-desk-subtle'}>
-              {item.icon}
-            </span>
+            <span className={isSelected ? 'text-amber-600' : 'text-desk-subtle'}>{item.icon}</span>
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{item.label}</div>
               {item.description && (

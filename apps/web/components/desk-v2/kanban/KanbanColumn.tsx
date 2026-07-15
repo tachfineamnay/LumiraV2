@@ -1,10 +1,7 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion } from 'framer-motion';
 import { OrderCard } from './OrderCard';
 import { KanbanColumn as KanbanColumnType, Order } from '../types';
@@ -46,7 +43,14 @@ const COLUMN_COLORS = {
   },
 };
 
-export function KanbanColumn({ column, orders, isLoading, currentExpertId, orderViewers = {}, onClaim }: KanbanColumnProps) {
+export function KanbanColumn({
+  column,
+  orders,
+  isLoading,
+  currentExpertId,
+  orderViewers = {},
+  onClaim,
+}: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
@@ -57,14 +61,16 @@ export function KanbanColumn({ column, orders, isLoading, currentExpertId, order
 
   // Count orders assigned to current expert
   const myOrdersCount = currentExpertId
-    ? orders.filter(o => (o.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId).length
+    ? orders.filter(
+        (o) => (o.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId,
+      ).length
     : 0;
 
   return (
     <div
       ref={setNodeRef}
       className={`
-        w-80 flex-shrink-0 flex flex-col rounded-xl
+        w-[85vw] max-w-80 sm:w-80 flex-shrink-0 flex flex-col rounded-xl snap-center
         bg-desk-surface border transition-colors duration-200
         ${hasUrgentOrders ? 'border-amber-500/60 shadow-lg shadow-amber-500/10' : isOver ? `${colors.border} bg-desk-card` : 'border-desk-border'}
       `}
@@ -81,7 +87,9 @@ export function KanbanColumn({ column, orders, isLoading, currentExpertId, order
               </span>
             )}
           </div>
-          <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${colors.badge} ${hasUrgentOrders ? 'animate-pulse' : ''}`}>
+          <span
+            className={`px-2 py-0.5 rounded-full text-sm font-medium ${colors.badge} ${hasUrgentOrders ? 'animate-pulse' : ''}`}
+          >
             {orders.length}
           </span>
         </div>
@@ -93,19 +101,13 @@ export function KanbanColumn({ column, orders, isLoading, currentExpertId, order
       </div>
 
       {/* Cards */}
-      <SortableContext
-        items={orders.map(o => o.id)}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={orders.map((o) => o.id)} strategy={verticalListSortingStrategy}>
         <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px]">
           {isLoading ? (
             // Loading skeletons
             <>
-              {[1, 2, 3].map(i => (
-                <div
-                  key={i}
-                  className="h-32 rounded-lg bg-desk-card animate-pulse"
-                />
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-32 rounded-lg bg-desk-card animate-pulse" />
               ))}
             </>
           ) : orders.length === 0 ? (

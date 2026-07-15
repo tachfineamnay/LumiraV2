@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Mail, 
-  Phone, 
-  Calendar, 
+import {
+  Mail,
+  Phone,
+  Calendar,
   Crown,
   Sparkles,
   Star,
@@ -35,7 +35,17 @@ interface ClientIdentityHeaderProps {
   onRefresh?: () => void;
 }
 
-function KpiCard({ icon, value, label, color = 'stellar' }: { icon: React.ReactNode; value: string | number; label: string; color?: string }) {
+function KpiCard({
+  icon,
+  value,
+  label,
+  color = 'stellar',
+}: {
+  icon: React.ReactNode;
+  value: string | number;
+  label: string;
+  color?: string;
+}) {
   const colorMap: Record<string, string> = {
     amber: 'text-amber-600',
     emerald: 'text-emerald-600',
@@ -57,8 +67,16 @@ function KpiCard({ icon, value, label, color = 'stellar' }: { icon: React.ReactN
 
 function SubscriptionPill({ status }: { status: string }) {
   const config: Record<string, { label: string; bg: string; text: string }> = {
-    active: { label: 'Abonné Actif', bg: 'bg-emerald-500/20 border-emerald-500/30', text: 'text-emerald-600' },
-    canceling: { label: 'Résiliation en cours', bg: 'bg-amber-500/20 border-amber-500/30', text: 'text-amber-600' },
+    active: {
+      label: 'Abonné Actif',
+      bg: 'bg-emerald-500/20 border-emerald-500/30',
+      text: 'text-emerald-600',
+    },
+    canceling: {
+      label: 'Résiliation en cours',
+      bg: 'bg-amber-500/20 border-amber-500/30',
+      text: 'text-amber-600',
+    },
     expired: { label: 'Expiré', bg: 'bg-red-500/20 border-red-500/30', text: 'text-red-600' },
     none: { label: 'Non abonné', bg: 'bg-desk-hover border-desk-border', text: 'text-desk-muted' },
   };
@@ -70,7 +88,12 @@ function SubscriptionPill({ status }: { status: string }) {
   );
 }
 
-export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefresh }: ClientIdentityHeaderProps) {
+export function ClientIdentityHeader({
+  client,
+  onStatusChange,
+  onDelete,
+  onRefresh,
+}: ClientIdentityHeaderProps) {
   const { stats, akashicRecord } = client;
   const archetype = stats.archetype || akashicRecord?.archetype;
   const [showActions, setShowActions] = useState(false);
@@ -96,7 +119,7 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-desk-card to-desk-surface border border-desk-border p-6 shadow-sm"
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-desk-card to-desk-surface border border-desk-border p-4 sm:p-6 shadow-sm"
     >
       {stats.isVip && (
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5" />
@@ -108,7 +131,7 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
           {/* Avatar & Name */}
           <div className="flex items-center gap-4">
             <div className="relative">
-              <Avatar 
+              <Avatar
                 name={`${client.firstName} ${client.lastName}`}
                 src={client.profile?.facePhotoUrl || undefined}
                 size="xl"
@@ -121,33 +144,33 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
             </div>
 
             <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-desk-text">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-wrap">
+                <h2 className="text-xl sm:text-2xl font-bold text-desk-text truncate max-w-full">
                   {client.firstName} {client.lastName}
                 </h2>
                 <button
                   onClick={() => setShowEditModal(true)}
-                  className="p-1 rounded hover:bg-desk-hover text-desk-subtle hover:text-amber-600 transition-colors"
+                  className="p-1.5 min-w-[32px] min-h-[32px] rounded hover:bg-desk-hover text-desk-subtle hover:text-amber-600 transition-colors flex-shrink-0"
                   title="Modifier les informations"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 {stats.isVip && (
-                  <span className="px-2 py-0.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/30 rounded-full text-xs font-medium text-amber-600 flex items-center gap-1">
+                  <span className="px-2 py-0.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/30 rounded-full text-xs font-medium text-amber-600 flex items-center gap-1 flex-shrink-0">
                     <Star className="w-3 h-3" />
                     VIP
                   </span>
                 )}
               </div>
-              
-              <div className="flex items-center gap-4 mt-1 text-sm text-desk-muted">
-                <span className="flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5" />
-                  {client.email}
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-desk-muted">
+                <span className="flex items-center gap-1 min-w-0 max-w-full">
+                  <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate">{client.email}</span>
                 </span>
                 {client.phone && (
                   <span className="flex items-center gap-1">
-                    <Phone className="w-3.5 h-3.5" />
+                    <Phone className="w-3.5 h-3.5 flex-shrink-0" />
                     {client.phone}
                   </span>
                 )}
@@ -189,36 +212,51 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
                 <div className="absolute right-0 top-full mt-1 w-56 bg-desk-surface border border-desk-border rounded-xl shadow-lg z-50 py-1 overflow-hidden">
                   {onStatusChange && client.status !== 'BANNED' && (
                     <button
-                      onClick={() => { setShowActions(false); onStatusChange('BANNED'); }}
+                      onClick={() => {
+                        setShowActions(false);
+                        onStatusChange('BANNED');
+                      }}
                       className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-500/10 transition-colors"
                     >
                       <ShieldBan className="w-4 h-4" />
                       Bannir le client
                     </button>
                   )}
-                  {onStatusChange && client.status !== 'SUSPENDED' && client.status !== 'BANNED' && (
-                    <button
-                      onClick={() => { setShowActions(false); onStatusChange('SUSPENDED'); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-500/10 transition-colors"
-                    >
-                      <Pause className="w-4 h-4" />
-                      Suspendre le client
-                    </button>
-                  )}
-                  {onStatusChange && (client.status === 'BANNED' || client.status === 'SUSPENDED') && (
-                    <button
-                      onClick={() => { setShowActions(false); onStatusChange('ACTIVE'); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-500/10 transition-colors"
-                    >
-                      <Play className="w-4 h-4" />
-                      Réactiver le client
-                    </button>
-                  )}
+                  {onStatusChange &&
+                    client.status !== 'SUSPENDED' &&
+                    client.status !== 'BANNED' && (
+                      <button
+                        onClick={() => {
+                          setShowActions(false);
+                          onStatusChange('SUSPENDED');
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-500/10 transition-colors"
+                      >
+                        <Pause className="w-4 h-4" />
+                        Suspendre le client
+                      </button>
+                    )}
+                  {onStatusChange &&
+                    (client.status === 'BANNED' || client.status === 'SUSPENDED') && (
+                      <button
+                        onClick={() => {
+                          setShowActions(false);
+                          onStatusChange('ACTIVE');
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        <Play className="w-4 h-4" />
+                        Réactiver le client
+                      </button>
+                    )}
                   {onDelete && (
                     <>
                       <div className="border-t border-desk-border my-1" />
                       <button
-                        onClick={() => { setShowActions(false); onDelete(); }}
+                        onClick={() => {
+                          setShowActions(false);
+                          onDelete();
+                        }}
                         className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-500/10 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -256,7 +294,13 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
             icon={<Activity className="w-4 h-4" />}
             value={`${stats.engagementScore}/100`}
             label="Engagement"
-            color={stats.engagementScore >= 60 ? 'emerald' : stats.engagementScore >= 30 ? 'amber' : 'red'}
+            color={
+              stats.engagementScore >= 60
+                ? 'emerald'
+                : stats.engagementScore >= 30
+                  ? 'amber'
+                  : 'red'
+            }
           />
           <KpiCard
             icon={<UserCheck className="w-4 h-4" />}
@@ -268,7 +312,13 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
             icon={<Clock className="w-4 h-4" />}
             value={stats.daysSinceLastActivity !== null ? `${stats.daysSinceLastActivity}j` : '—'}
             label="Dernière activité"
-            color={stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 7 ? 'emerald' : stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 30 ? 'amber' : 'red'}
+            color={
+              stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 7
+                ? 'emerald'
+                : stats.daysSinceLastActivity !== null && stats.daysSinceLastActivity <= 30
+                  ? 'amber'
+                  : 'red'
+            }
           />
         </div>
 
@@ -281,7 +331,10 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
         <EditClientModal
           client={client}
           onClose={() => setShowEditModal(false)}
-          onSaved={() => { setShowEditModal(false); onRefresh?.(); }}
+          onSaved={() => {
+            setShowEditModal(false);
+            onRefresh?.();
+          }}
         />
       )}
     </motion.div>
@@ -289,7 +342,15 @@ export function ClientIdentityHeader({ client, onStatusChange, onDelete, onRefre
 }
 
 // Edit Client Info Modal
-function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData; onClose: () => void; onSaved: () => void }) {
+function EditClientModal({
+  client,
+  onClose,
+  onSaved,
+}: {
+  client: ClientFullData;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [form, setForm] = useState({
     firstName: client.firstName,
     lastName: client.lastName,
@@ -313,7 +374,10 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !isSaving && onClose()}>
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={() => !isSaving && onClose()}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -322,7 +386,12 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-desk-border">
           <h2 className="text-lg font-semibold text-desk-text">Modifier le client</h2>
-          <button onClick={onClose} disabled={isSaving} className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-muted" title="Fermer">
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="p-1.5 rounded-lg hover:bg-desk-hover text-desk-muted"
+            title="Fermer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -332,7 +401,7 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
               <label className="block text-xs font-medium text-desk-muted mb-1">Prénom</label>
               <input
                 value={form.firstName}
-                onChange={(e) => setForm(f => ({ ...f, firstName: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
                 placeholder="Prénom"
                 className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-sm text-desk-text focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
               />
@@ -341,7 +410,7 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
               <label className="block text-xs font-medium text-desk-muted mb-1">Nom</label>
               <input
                 value={form.lastName}
-                onChange={(e) => setForm(f => ({ ...f, lastName: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
                 placeholder="Nom"
                 className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-sm text-desk-text focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
               />
@@ -352,7 +421,7 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
             <input
               type="email"
               value={form.email}
-              onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
               placeholder="Email"
               className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-sm text-desk-text focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
             />
@@ -362,7 +431,7 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
             <input
               type="tel"
               value={form.phone}
-              onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
               placeholder="Optionnel"
               className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-sm text-desk-text placeholder:text-desk-subtle focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
             />
@@ -378,7 +447,9 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim()}
+            disabled={
+              isSaving || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim()
+            }
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium transition-colors disabled:opacity-50"
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -391,7 +462,15 @@ function EditClientModal({ client, onClose, onSaved }: { client: ClientFullData;
 }
 
 // Editable Tags Component
-function EditableTags({ clientId, tags, onRefresh }: { clientId: string; tags: string[]; onRefresh?: () => void }) {
+function EditableTags({
+  clientId,
+  tags,
+  onRefresh,
+}: {
+  clientId: string;
+  tags: string[];
+  onRefresh?: () => void;
+}) {
   const [isAdding, setIsAdding] = useState(false);
   const [newTag, setNewTag] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -412,7 +491,10 @@ function EditableTags({ clientId, tags, onRefresh }: { clientId: string; tags: s
 
   const handleAdd = () => {
     const tag = newTag.trim();
-    if (!tag || tags.includes(tag)) { setNewTag(''); return; }
+    if (!tag || tags.includes(tag)) {
+      setNewTag('');
+      return;
+    }
     saveTags([...tags, tag]);
     setNewTag('');
     setIsAdding(false);
@@ -426,7 +508,10 @@ function EditableTags({ clientId, tags, onRefresh }: { clientId: string; tags: s
     <div className="flex items-center gap-2 pt-3 border-t border-desk-border-subtle flex-wrap">
       <span className="text-xs text-desk-muted">Tags:</span>
       {tags.map((tag, i) => (
-        <span key={i} className="group/tag inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-medium text-blue-600">
+        <span
+          key={i}
+          className="group/tag inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-medium text-blue-600"
+        >
           {tag}
           <button
             onClick={() => handleRemove(i)}
@@ -444,9 +529,15 @@ function EditableTags({ clientId, tags, onRefresh }: { clientId: string; tags: s
           onChange={(e) => setNewTag(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleAdd();
-            if (e.key === 'Escape') { setIsAdding(false); setNewTag(''); }
+            if (e.key === 'Escape') {
+              setIsAdding(false);
+              setNewTag('');
+            }
           }}
-          onBlur={() => { if (newTag.trim()) handleAdd(); else setIsAdding(false); }}
+          onBlur={() => {
+            if (newTag.trim()) handleAdd();
+            else setIsAdding(false);
+          }}
           placeholder="Nouveau tag..."
           className="px-2 py-0.5 text-xs bg-desk-input border border-desk-border rounded-full w-24 focus:outline-none focus:ring-1 focus:ring-amber-500/30 text-desk-text"
         />

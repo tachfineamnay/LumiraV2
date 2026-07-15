@@ -32,11 +32,14 @@ export function KanbanBoard() {
   // Notify on initial load if orders are waiting for validation
   useEffect(() => {
     if (!isLoading && orders.validation.length > 0) {
-      toast.info(`${orders.validation.length} lecture${orders.validation.length > 1 ? 's' : ''} en attente de validation`, {
-        description: 'Des lectures sont prêtes pour votre approbation.',
-      });
+      toast.info(
+        `${orders.validation.length} lecture${orders.validation.length > 1 ? 's' : ''} en attente de validation`,
+        {
+          description: 'Des lectures sont prêtes pour votre approbation.',
+        },
+      );
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
   // Socket for real-time updates
@@ -69,7 +72,11 @@ export function KanbanBoard() {
     onOrderClaimed: (data) => {
       // Update the order's expertReview optimistically
       updateOrder(data.orderId, {
-        expertReview: { assignedBy: data.expertId, assignedName: data.expertName, assignedAt: data.timestamp },
+        expertReview: {
+          assignedBy: data.expertId,
+          assignedName: data.expertName,
+          assignedAt: data.timestamp,
+        },
       });
       if (data.expertId !== expert?.id) {
         toast.info(`${data.expertName} a pris la commande ${data.orderNumber}`);
@@ -86,17 +93,17 @@ export function KanbanBoard() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   // Filter orders by level
   const filteredOrders = useMemo(() => {
     if (!levelFilter) return orders;
     return {
-      paid: orders.paid.filter(o => o.level === levelFilter),
-      processing: orders.processing.filter(o => o.level === levelFilter),
-      validation: orders.validation.filter(o => o.level === levelFilter),
-      completed: orders.completed.filter(o => o.level === levelFilter),
+      paid: orders.paid.filter((o) => o.level === levelFilter),
+      processing: orders.processing.filter((o) => o.level === levelFilter),
+      validation: orders.validation.filter((o) => o.level === levelFilter),
+      completed: orders.completed.filter((o) => o.level === levelFilter),
     };
   }, [orders, levelFilter]);
 
@@ -116,7 +123,8 @@ export function KanbanBoard() {
       await expertApi.post(`/expert/orders/${orderId}/assign`);
       // Optimistic update will come via socket order:claimed event
     } catch (error: unknown) {
-      const msg = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      const msg = (error as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
       toast.error(msg || 'Impossible de prendre la commande');
       console.error(error);
     }
@@ -127,7 +135,7 @@ export function KanbanBoard() {
     const { active } = event;
     const column = findOrderColumn(active.id as string);
     if (column) {
-      const order = filteredOrders[column].find(o => o.id === active.id);
+      const order = filteredOrders[column].find((o) => o.id === active.id);
       setActiveOrder(order || null);
     }
   };
@@ -150,7 +158,7 @@ export function KanbanBoard() {
     let destColumn: KanbanColumnId | null = null;
 
     // Check if dropped on a column
-    if (KANBAN_COLUMNS.find(c => c.id === overId)) {
+    if (KANBAN_COLUMNS.find((c) => c.id === overId)) {
       destColumn = overId as KanbanColumnId;
     } else {
       // Dropped on another order - find its column
@@ -160,7 +168,7 @@ export function KanbanBoard() {
     if (!sourceColumn || !destColumn || sourceColumn === destColumn) return;
 
     // Block drag if assigned to another expert (unless admin)
-    const draggedOrder = filteredOrders[sourceColumn]?.find(o => o.id === activeId);
+    const draggedOrder = filteredOrders[sourceColumn]?.find((o) => o.id === activeId);
     const assignedBy = (draggedOrder?.expertReview as { assignedBy?: string })?.assignedBy;
     if (assignedBy && assignedBy !== expert?.id && expert?.role !== 'ADMIN') {
       toast.error('Commande déjà prise par un autre expert');
@@ -190,11 +198,11 @@ export function KanbanBoard() {
         toast.success('Génération lancée');
       } else if (destColumn === 'completed') {
         // Guard: order must be AWAITING_VALIDATION before finalizing
-        const sourceOrder = filteredOrders[sourceColumn]?.find(o => o.id === activeId);
+        const sourceOrder = filteredOrders[sourceColumn]?.find((o) => o.id === activeId);
         if (sourceOrder?.status !== 'AWAITING_VALIDATION') {
           moveOrder(activeId, destColumn, sourceColumn);
           toast.error('Impossible de sceller', {
-            description: 'La lecture doit d\'abord être générée et passer en validation.',
+            description: "La lecture doit d'abord être générée et passer en validation.",
           });
           return;
         }
@@ -215,31 +223,35 @@ export function KanbanBoard() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-6 py-4 flex items-center justify-between border-b border-desk-border">
-        <div>
-          <h1 className="text-xl font-semibold text-desk-text">Board</h1>
-          <p className="text-sm text-desk-muted mt-0.5">
+      <div className="px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-desk-border">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-desk-text">Board</h1>
+          <p className="text-sm text-desk-muted mt-0.5 hidden sm:block">
             Gérez vos commandes par glisser-déposer
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {/* Level filter */}
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-desk-card border border-desk-border">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-desk-card border border-desk-border overflow-x-auto max-w-full">
             <button
               onClick={() => setLevelFilter(null)}
-              className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                levelFilter === null ? 'bg-amber-500 text-slate-900' : 'text-desk-muted hover:text-desk-text'
+              className={`px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-md text-sm transition-colors flex-shrink-0 ${
+                levelFilter === null
+                  ? 'bg-amber-500 text-slate-900'
+                  : 'text-desk-muted hover:text-desk-text'
               }`}
             >
               Tous
             </button>
-            {[1, 2, 3, 4].map(level => (
+            {[1, 2, 3, 4].map((level) => (
               <button
                 key={level}
                 onClick={() => setLevelFilter(level)}
-                className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                  levelFilter === level ? 'bg-amber-500 text-slate-900' : 'text-desk-muted hover:text-desk-text'
+                className={`px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-md text-sm transition-colors flex-shrink-0 ${
+                  levelFilter === level
+                    ? 'bg-amber-500 text-slate-900'
+                    : 'text-desk-muted hover:text-desk-text'
                 }`}
               >
                 N{level}
@@ -252,7 +264,8 @@ export function KanbanBoard() {
             onClick={() => fetchOrders()}
             disabled={isLoading}
             title="Rafraîchir"
-            className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors"
+            aria-label="Rafraîchir"
+            className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors flex items-center justify-center flex-shrink-0"
           >
             <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -260,7 +273,7 @@ export function KanbanBoard() {
       </div>
 
       {/* Board */}
-      <div className="flex-1 overflow-x-auto p-6">
+      <div className="flex-1 overflow-x-auto p-3 sm:p-6 snap-x snap-mandatory sm:snap-none">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -268,8 +281,8 @@ export function KanbanBoard() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-4 h-full min-w-max">
-            {KANBAN_COLUMNS.map(column => (
+          <div className="flex gap-3 sm:gap-4 h-full min-w-max">
+            {KANBAN_COLUMNS.map((column) => (
               <KanbanColumn
                 key={column.id}
                 column={column}
@@ -284,9 +297,7 @@ export function KanbanBoard() {
 
           {/* Drag overlay */}
           <DragOverlay dropAnimation={null}>
-            {activeOrder && (
-              <OrderCard order={activeOrder} isDragging />
-            )}
+            {activeOrder && <OrderCard order={activeOrder} isDragging />}
           </DragOverlay>
         </DndContext>
       </div>
