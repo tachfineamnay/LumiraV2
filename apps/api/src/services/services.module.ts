@@ -1,11 +1,11 @@
 /**
  * @fileoverview Services Module - Factory Services for Oracle Lumira.
- * 
+ *
  * This module provides the core factory services:
  * - VertexOracle: Multi-Agent AI for reading generation
  * - PdfFactory: PDF generation via Gotenberg
  * - ContextDispatcher: Context-aware request orchestration
- * 
+ *
  * @module services/services.module
  */
 
@@ -20,30 +20,29 @@ import { DigitalSoulService } from './factory/DigitalSoulService';
 import { AudioGenerationService } from './factory/AudioGenerationService';
 import { AudioScriptService } from './factory/AudioScriptService';
 import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
+import { AiRoutingService } from '../modules/settings/ai-routing.service';
 
 @Module({
-    imports: [
-        ConfigModule,
-        PrismaModule,
-        ScheduleModule.forRoot(),
-    ],
-    providers: [
-        VertexOracle,
-        PdfFactory,
-        ContextDispatcher,
-        DigitalSoulService,
-        AudioScriptService,
-        AudioGenerationService,
-        SpiritualPathBatchService,
-    ],
-    exports: [
-        VertexOracle,
-        PdfFactory,
-        ContextDispatcher,
-        DigitalSoulService,
-        AudioScriptService,
-        AudioGenerationService,
-        SpiritualPathBatchService,
-    ],
+  imports: [ConfigModule, PrismaModule, ScheduleModule.forRoot()],
+  providers: [
+    VertexOracle,
+    PdfFactory,
+    ContextDispatcher,
+    DigitalSoulService,
+    AudioScriptService,
+    AudioGenerationService,
+    SpiritualPathBatchService,
+    AiRoutingService,
+  ],
+  exports: [
+    VertexOracle,
+    PdfFactory,
+    ContextDispatcher,
+    DigitalSoulService,
+    AudioScriptService,
+    AudioGenerationService,
+    SpiritualPathBatchService,
+    AiRoutingService,
+  ],
 })
 export class ServicesModule {}

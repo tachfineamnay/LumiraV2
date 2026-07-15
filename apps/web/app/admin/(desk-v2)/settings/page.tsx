@@ -79,7 +79,7 @@ interface ModelConfig {
   agentProviders: AgentProviders;
 }
 
-type TabId = 'credentials' | 'personality' | 'agents' | 'models';
+type TabId = 'credentials' | 'personality' | 'agents' | 'models' | 'routing';
 
 const AGENT_INFO: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
   SCRIBE: {
@@ -1103,6 +1103,393 @@ function ModelsTab({
 }
 
 // =============================================================================
+// TABS CONTENT: ROUTING MATRIX
+// =============================================================================
+
+type ProductLevel = 'INITIE' | 'MYSTIQUE' | 'PROFOND' | 'INTEGRALE';
+
+interface RoutingRule {
+  id?: string;
+  productLevel: ProductLevel;
+  agent: string;
+  mission: string;
+  provider: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  promptVersionId?: string | null;
+  note?: string | null;
+  isActive: boolean;
+}
+
+const PRODUCT_LABELS: Record<ProductLevel, string> = {
+  INITIE: 'Initié',
+  MYSTIQUE: 'Mystique',
+  PROFOND: 'Profond',
+  INTEGRALE: 'Intégrale',
+};
+
+const AGENTS_LIST = ['SCRIBE', 'GUIDE', 'EDITOR', 'CONFIDANT', 'ONIRIQUE', 'NARRATOR'];
+
+const MODEL_OPTIONS: Record<string, string[]> = {
+  gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+};
+
+const MISSION_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  SCRIBE: [
+    { value: 'DEFAULT', label: 'Défaut (Scribe)' },
+    { value: 'READING_GENERATION', label: 'Génération de lecture PDF' },
+  ],
+  GUIDE: [
+    { value: 'DEFAULT', label: 'Défaut (Guide)' },
+    { value: 'TIMELINE_BATCH', label: 'Batch 30 jours' },
+  ],
+  EDITOR: [
+    { value: 'DEFAULT', label: 'Défaut (Editor)' },
+    { value: 'CONTENT_REFINEMENT', label: 'Affinage expert' },
+  ],
+  CONFIDANT: [
+    { value: 'DEFAULT', label: 'Défaut (Confidant)' },
+    { value: 'CHAT_SESSION', label: 'Session de chat' },
+  ],
+  ONIRIQUE: [
+    { value: 'DEFAULT', label: 'Défaut (Onirique)' },
+    { value: 'DREAM_INTERPRETATION', label: 'Interprétation de rêve' },
+  ],
+  NARRATOR: [
+    { value: 'DEFAULT', label: 'Défaut (Narrator)' },
+    { value: 'AUDIO_NARRATION', label: 'Script audio TTS' },
+  ],
+};
+
+function RoutingTab() {
+  const [activeProduct, setActiveProduct] = useState<ProductLevel>('INITIE');
+  const [rules, setRules] = useState<RoutingRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingRuleId, setSavingRuleId] = useState<string | null>(null);
+
+  // Local state for rules being edited
+  const [editingRules, setEditingRules] = useState<Record<string, Partial<RoutingRule>>>({});
+
+  const fetchRules = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await expertApi.get('/settings/ai-routing');
+      setRules(data);
+
+      // Initialize editing states
+      const editState: Record<string, Partial<RoutingRule>> = {};
+      data.forEach((rule: RoutingRule) => {
+        const key = `${rule.productLevel}_${rule.agent}_${rule.mission}`;
+        editState[key] = { ...rule };
+      });
+      setEditingRules(editState);
+    } catch (err) {
+      console.error('Failed to fetch routing rules', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRules();
+  }, [fetchRules]);
+
+  const handleFieldChange = (
+    product: ProductLevel,
+    agent: string,
+    mission: string,
+    field: keyof RoutingRule,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    value: any,
+  ) => {
+    const key = `${product}_${agent}_${mission}`;
+    const current = editingRules[key] || {
+      productLevel: product,
+      agent,
+      mission,
+      provider: 'gemini',
+      model: 'gemini-2.5-flash',
+      temperature: 0.8,
+      maxTokens: 16384,
+      isActive: true,
+    };
+
+    const updated = { ...current, [field]: value };
+
+    // If provider changes, pick a default model for that provider
+    if (field === 'provider') {
+      updated.model = value === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash';
+    }
+
+    setEditingRules((prev) => ({
+      ...prev,
+      [key]: updated,
+    }));
+  };
+
+  const handleSaveRule = async (product: ProductLevel, agent: string, mission: string) => {
+    const key = `${product}_${agent}_${mission}`;
+    const ruleData = editingRules[key];
+    if (!ruleData) return;
+
+    setSavingRuleId(key);
+    try {
+      await expertApi.post('/settings/ai-routing', ruleData);
+      await fetchRules();
+    } catch (err) {
+      console.error('Failed to save routing rule', err);
+    } finally {
+      setSavingRuleId(null);
+    }
+  };
+
+  const handleResetRule = async (product: ProductLevel, agent: string, mission: string) => {
+    const key = `${product}_${agent}_${mission}`;
+    setSavingRuleId(key);
+    try {
+      // Find rule ID to delete
+      const existing = rules.find(
+        (r) => r.productLevel === product && r.agent === agent && r.mission === mission,
+      );
+      if (existing?.id) {
+        await expertApi.delete(`/settings/ai-routing/${existing.id}`);
+      }
+      await fetchRules();
+    } catch (err) {
+      console.error('Failed to reset routing rule', err);
+    } finally {
+      setSavingRuleId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Product Level Selector Tabs */}
+      <div className="flex border-b border-desk-border-subtle gap-2">
+        {(Object.keys(PRODUCT_LABELS) as ProductLevel[]).map((level) => (
+          <button
+            key={level}
+            onClick={() => setActiveProduct(level)}
+            className={cn(
+              'px-4 py-2 text-sm font-medium transition-all border-b-2 -mb-px',
+              activeProduct === level
+                ? 'border-amber-500 text-amber-600'
+                : 'border-transparent text-desk-muted hover:text-desk-text',
+            )}
+          >
+            {PRODUCT_LABELS[level]}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        {AGENTS_LIST.map((agent) => {
+          const agentInfo = AGENT_INFO[agent] || {
+            label: agent,
+            icon: <Bot className="w-4 h-4" />,
+            description: '',
+          };
+
+          const missions = MISSION_OPTIONS[agent] || [{ value: 'DEFAULT', label: 'Défaut' }];
+
+          return (
+            <GlassCard key={agent} className="p-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-4 border-b border-desk-border-subtle">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center text-amber-600">
+                    {agentInfo.icon}
+                  </div>
+                  <div>
+                    <h4 className="text-base font-semibold text-desk-text">{agentInfo.label}</h4>
+                    <p className="text-xs text-desk-muted">{agentInfo.description}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rules per Mission */}
+              <div className="space-y-6">
+                {missions.map((m) => {
+                  const ruleKey = `${activeProduct}_${agent}_${m.value}`;
+                  const isCustom = rules.some(
+                    (r) =>
+                      r.productLevel === activeProduct &&
+                      r.agent === agent &&
+                      r.mission === m.value &&
+                      r.isActive,
+                  );
+
+                  const localData = editingRules[ruleKey] || {
+                    productLevel: activeProduct,
+                    agent,
+                    mission: m.value,
+                    provider: 'gemini',
+                    model: 'gemini-2.5-flash',
+                    temperature: 0.8,
+                    maxTokens: 16384,
+                    isActive: false,
+                  };
+
+                  const isSaving = savingRuleId === ruleKey;
+
+                  return (
+                    <div
+                      key={m.value}
+                      className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end bg-desk-card p-4 rounded-xl border border-desk-border-subtle"
+                    >
+                      {/* Mission Info & Status */}
+                      <div className="lg:col-span-3 space-y-1.5">
+                        <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">
+                          Mission
+                        </span>
+                        <div className="text-sm font-medium text-desk-text">{m.label}</div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              'w-2.5 h-2.5 rounded-full',
+                              isCustom ? 'bg-emerald-500' : 'bg-desk-muted',
+                            )}
+                          />
+                          <span className="text-xs text-desk-muted">
+                            {isCustom ? 'Règle active' : 'Hérite du défaut global'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Config Fields */}
+                      <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {/* Provider Toggle */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-desk-muted font-medium">Provider</label>
+                          <div className="flex bg-desk-surface rounded-lg p-0.5 border border-desk-border">
+                            {['gemini', 'openai'].map((p) => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() =>
+                                  handleFieldChange(activeProduct, agent, m.value, 'provider', p)
+                                }
+                                className={cn(
+                                  'flex-1 text-center py-1 text-xs font-medium rounded-md transition-all capitalize',
+                                  localData.provider === p
+                                    ? p === 'gemini'
+                                      ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
+                                      : 'bg-blue-500/20 text-blue-600 border border-blue-500/30'
+                                    : 'text-desk-subtle hover:text-desk-text',
+                                )}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Model Selector */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-desk-muted font-medium">Modèle</label>
+                          <select
+                            value={localData.model || ''}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                activeProduct,
+                                agent,
+                                m.value,
+                                'model',
+                                e.target.value,
+                              )
+                            }
+                            className="w-full text-xs bg-desk-surface border border-desk-border rounded-lg p-1.5 text-desk-text focus:border-amber-500 outline-none"
+                          >
+                            {(MODEL_OPTIONS[localData.provider || 'gemini'] || []).map((mod) => (
+                              <option key={mod} value={mod}>
+                                {mod}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Temperature Slider */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-xs text-desk-muted font-medium">
+                            <span>Température</span>
+                            <span className="font-semibold text-desk-text">
+                              {localData.temperature ?? 0.8}
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={localData.temperature ?? 0.8}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                activeProduct,
+                                agent,
+                                m.value,
+                                'temperature',
+                                parseFloat(e.target.value),
+                              )
+                            }
+                            className="w-full accent-amber-500 bg-desk-surface"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="lg:col-span-2 flex items-center justify-end gap-2">
+                        {isCustom && (
+                          <button
+                            type="button"
+                            onClick={() => handleResetRule(activeProduct, agent, m.value)}
+                            disabled={isSaving}
+                            className="flex items-center justify-center p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors border border-red-500/20"
+                            title="Réinitialiser"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleSaveRule(activeProduct, agent, m.value)}
+                          disabled={isSaving}
+                          className={cn(
+                            'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg transition-colors border',
+                            isCustom
+                              ? 'bg-amber-500 hover:bg-amber-600 text-black border-amber-500'
+                              : 'bg-desk-surface hover:bg-desk-hover text-desk-text border-desk-border',
+                          )}
+                        >
+                          {isSaving ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Save className="w-3.5 h-3.5" />
+                          )}
+                          Enregistrer
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </GlassCard>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // MAIN PAGE
 // =============================================================================
 
@@ -1253,6 +1640,12 @@ export default function SettingsPage() {
           icon={<Sliders className="w-4 h-4" />}
           label="Modèles"
         />
+        <TabButton
+          active={activeTab === 'routing'}
+          onClick={() => setActiveTab('routing')}
+          icon={<Sliders className="w-4 h-4" />}
+          label="Matrice IA"
+        />
       </div>
 
       {/* Tab Content */}
@@ -1286,6 +1679,7 @@ export default function SettingsPage() {
           {activeTab === 'models' && (
             <ModelsTab config={modelConfig} onSave={handleSaveModelConfig} saving={saving} />
           )}
+          {activeTab === 'routing' && <RoutingTab />}
         </motion.div>
       </AnimatePresence>
     </div>

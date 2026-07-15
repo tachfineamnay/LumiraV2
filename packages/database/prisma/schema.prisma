@@ -442,6 +442,8 @@ model PromptVersion {
   isActive  Boolean  @default(false) // Only one active per key
   createdAt DateTime @default(now())
 
+  routingRules AiRoutingRule[] // Rules that pin a specific prompt version
+
   @@unique([key, version])
   @@index([key, isActive])
   @@index([key, createdAt])
@@ -533,4 +535,40 @@ model SequenceCounter {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+}
+
+// =============================================================================
+// AI ROUTING MATRIX - [ProductLevel] x [Agent] x [Mission] -> Provider + Model
+// =============================================================================
+
+enum AiMission {
+  DEFAULT // Fallback universel (s’applique si aucune règle plus spécifique)
+  READING_GENERATION // SCRIBE → génération lecture PDF
+  TIMELINE_BATCH // GUIDE → batch 30 jours
+  DREAM_INTERPRETATION // ONIRIQUE → interprétation rêve
+  CHAT_SESSION // CONFIDANT → session chat
+  CONTENT_REFINEMENT // EDITOR → affinage expert
+  AUDIO_NARRATION // NARRATOR → script TTS
+}
+
+model AiRoutingRule {
+  id              String       @id @default(cuid())
+  productLevel    ProductLevel // INITIE | MYSTIQUE | PROFOND | INTEGRALE
+  agent           String // SCRIBE | GUIDE | EDITOR | CONFIDANT | ONIRIQUE | NARRATOR
+  mission         AiMission    @default(DEFAULT)
+  provider        String       @default("gemini") // "gemini" | "openai"
+  model           String // ex: "gemini-2.5-flash", "gpt-4o"
+  temperature     Float        @default(0.8)
+  maxTokens       Int          @default(16384)
+  promptVersionId String? // FK optionnel vers PromptVersion (prompt spécifique)
+  promptVersion   PromptVersion? @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+  isActive        Boolean      @default(true)
+  note            String?      @db.Text // Note admin
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([productLevel, agent, mission])
+  @@index([productLevel])
+  @@index([agent])
+  @@index([isActive])
 }

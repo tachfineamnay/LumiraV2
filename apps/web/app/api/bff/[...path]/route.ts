@@ -104,7 +104,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
 
   // Clear stale cookie on unauthorized — but never for probes that can 401
   // before the client is fully hydrated (avoids wiping a fresh post-checkout cookie)
-  const pathKey = path.join('/');
+  const pathKey = path;
   const skipCookieClear =
     pathKey === 'subscriptions/status' || pathKey.startsWith('subscriptions/');
 
