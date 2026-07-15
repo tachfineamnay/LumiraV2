@@ -30,6 +30,7 @@ function AutoLoginHandler() {
   const router = useRouter();
   const {
     authenticateWithEmail,
+    retrySessionProbe,
     isAuthenticated,
     isLoading: authLoading,
     refetchData,
@@ -86,7 +87,7 @@ function AutoLoginHandler() {
     router,
   ]);
 
-  // Handle auto-login from URL params (no session yet — e.g. soft fallback)
+  // Handle auto-login from URL params (no session yet — cookie may not be read yet after checkout)
   useEffect(() => {
     if (!email || authLoading || isAuthenticated) return;
     if (autoLoginState !== 'idle') return;
@@ -98,6 +99,40 @@ function AutoLoginHandler() {
         setFirstVisitFlag(true);
       }
 
+      // --- POST-CHECKOUT PATH ---
+      // If this is a first-visit after payment (fv_ token or onboarding=1),
+      // the httpOnly cookie was ALREADY set by payment-success via persistSanctuaireSession.
+      // We must re-probe the cookie instead of calling authenticateWithEmail
+      // (which would trigger an email OTP / contact request to the client).
+      if (isFirstVisit || onboardingParam) {
+        const MAX_PROBE_RETRIES = 6;
+        for (let attempt = 0; attempt < MAX_PROBE_RETRIES; attempt++) {
+          if (attempt > 0) {
+            // Wait before retrying: 500ms, 1s, 1.5s, 2s, 2.5s
+            await new Promise((res) => setTimeout(res, 500 * attempt));
+          }
+          const ok = await retrySessionProbe();
+          if (ok) {
+            // Cookie is now recognized — isAuthenticated will flip via context update;
+            // the first useEffect above will open onboarding once it sees isAuthenticated=true.
+            setAutoLoginState('success');
+            setShowOnboarding(true);
+            return;
+          }
+        }
+        // Cookie still not found after retries — redirect to login page (no email sent)
+        setAutoLoginState('error');
+        setAutoLoginError(
+          'Votre session a expiré. Veuillez vous reconnecter avec votre email de commande.',
+        );
+        setTimeout(() => {
+          router.push(`/sanctuaire/login?email=${encodeURIComponent(email)}`);
+        }, 3000);
+        return;
+      }
+
+      // --- RETURNING USER PATH ---
+      // Not a first-visit checkout: use email-based auth for returning users
       const result = await authenticateWithEmail(email);
 
       if (result.success) {
@@ -134,9 +169,12 @@ function AutoLoginHandler() {
     isAuthenticated,
     autoLoginState,
     authenticateWithEmail,
+    retrySessionProbe,
     retryCount,
     router,
     shouldOpenOnboarding,
+    isFirstVisit,
+    onboardingParam,
   ]);
 
   // Show loading during auto-login
