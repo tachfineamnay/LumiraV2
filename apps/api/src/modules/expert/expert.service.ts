@@ -16,7 +16,13 @@ import { DigitalSoulService } from '../../services/factory/DigitalSoulService';
 import { VertexOracle } from '../../services/factory/VertexOracle';
 import { ExpertGateway } from './expert.gateway';
 import * as bcrypt from 'bcryptjs';
-import { Expert, Order, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
+import { Expert, Order, Prisma, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
+import {
+  buildGeneratedReadingVersion,
+  buildStudioReadingVersion,
+  CanonicalReadingContent,
+  hashReadingContent,
+} from './reading-version';
 
 type ExpertWithoutPassword = Omit<Expert, 'password'>;
 
@@ -803,6 +809,13 @@ export class ExpertService {
 
       // Generate PDF and finalize order using DigitalSoulService
       try {
+        await this.sealReadingVersion(
+          order,
+          buildGeneratedReadingVersion(order.generatedContent),
+          expert,
+          'EXPERT_APPROVAL',
+        );
+
         // Generate PDF and finalize
         const result = await this.digitalSoulService.finalizeWithPdf(dto.orderId);
 
@@ -1184,20 +1197,13 @@ MESSAGE DE L'EXPERT:`;
 
     this.logger.log(`📋 Validating order ${order.orderNumber} from Studio`);
 
-    // Save the final content
     const currentGenerated = (order.generatedContent as Record<string, unknown>) || {};
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        generatedContent: {
-          ...currentGenerated,
-          lecture: finalContent,
-          sealedAt: new Date().toISOString(),
-          sealedBy: expert.id,
-        },
-        status: 'AWAITING_VALIDATION',
-      },
-    });
+    await this.sealReadingVersion(
+      order,
+      buildStudioReadingVersion(currentGenerated, finalContent),
+      expert,
+      'STUDIO_VALIDATE',
+    );
 
     // Generate PDF and finalize
     try {
@@ -1266,68 +1272,12 @@ MESSAGE DE L'EXPERT:`;
 
     try {
       const currentGenerated = (order.generatedContent as Record<string, unknown>) || {};
-      const hasPdfContent =
-        currentGenerated.pdf_content && typeof currentGenerated.pdf_content === 'object';
-
-      // Build pdf_content structure if missing (manual content scenario)
-      let pdfContentData = currentGenerated.pdf_content as Record<string, unknown> | undefined;
-      let synthesisData = currentGenerated.synthesis as Record<string, unknown> | undefined;
-
-      if (!hasPdfContent) {
-        this.logger.log(`📝 No AI content found, building pdf_content from manual text...`);
-
-        // Parse sections from the final content (split by headers or double newlines)
-        const contentSections = this.parseManualContentToSections(finalContent);
-
-        // Build minimal pdf_content structure
-        pdfContentData = {
-          introduction:
-            contentSections.introduction ||
-            'Bienvenue dans votre lecture spirituelle personnalisée.',
-          archetype_reveal: 'Votre guidance spirituelle unique',
-          sections:
-            contentSections.sections.length > 0
-              ? contentSections.sections
-              : [
-                  {
-                    domain: 'Guidance Spirituelle',
-                    title: 'Votre Lecture Personnalisée',
-                    content: finalContent,
-                  },
-                ],
-          conclusion:
-            contentSections.conclusion || 'Que cette lecture vous accompagne sur votre chemin.',
-          karmic_insights: [],
-          life_mission: '',
-          rituals: [],
-        };
-
-        synthesisData = {
-          archetype: 'Guidance Personnalisée',
-          keywords: [],
-          emotional_state: 'En chemin',
-          key_blockage: '',
-        };
-      }
-
-      // 1. Save the final content with pdf_content structure
-      const updatedContent = {
-        ...currentGenerated,
-        pdf_content: pdfContentData,
-        synthesis: synthesisData || currentGenerated.synthesis,
-        lecture: finalContent,
-        sealedAt: new Date().toISOString(),
-        sealedBy: expert.id,
-        source: 'studio',
-      };
-
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: {
-          generatedContent: updatedContent as object,
-          status: 'AWAITING_VALIDATION',
-        },
-      });
+      await this.sealReadingVersion(
+        order,
+        buildStudioReadingVersion(currentGenerated, finalContent),
+        expert,
+        'STUDIO_FINALIZE',
+      );
 
       // 2. Generate PDF and finalize (sets status=COMPLETED + deliveredAt)
       const result = await this.digitalSoulService.finalizeWithPdf(orderId);
@@ -1390,83 +1340,55 @@ MESSAGE DE L'EXPERT:`;
   }
 
   /**
-   * Parse manual text content into sections for PDF generation.
-   * Attempts to extract introduction, body sections, and conclusion.
+   * Persists an immutable, auditable content version before the PDF is made.
+   * The order JSON is kept as a denormalized display cache only; delivery reads
+   * the ReadingVersion row, never this cache.
    */
-  private parseManualContentToSections(content: string): {
-    introduction: string;
-    sections: { domain: string; title: string; content: string }[];
-    conclusion: string;
-  } {
-    // Split content by common section markers
-    const lines = content.split('\n').filter((line) => line.trim());
+  private async sealReadingVersion(
+    order: Order,
+    content: CanonicalReadingContent,
+    expert: ExpertEntity,
+    source: string,
+  ) {
+    const sealedAt = new Date();
+    const currentGenerated = (order.generatedContent as Record<string, unknown>) || {};
 
-    // Try to detect headers (lines starting with # or all caps or short lines followed by content)
-    const sections: { domain: string; title: string; content: string }[] = [];
-    let currentSection: { title: string; content: string[] } | null = null;
-    let introduction = '';
-    let conclusion = '';
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      const isHeader =
-        line.startsWith('#') ||
-        (line.length < 60 && line === line.toUpperCase() && line.length > 3) ||
-        line.match(/^[A-ZÀ-Ü][^.!?]*:?\s*$/);
-
-      if (isHeader) {
-        // Save previous section
-        if (currentSection && currentSection.content.length > 0) {
-          sections.push({
-            domain: 'Guidance',
-            title: currentSection.title.replace(/^#+\s*/, ''),
-            content: currentSection.content.join('\n\n'),
-          });
-        }
-        currentSection = { title: line, content: [] };
-      } else if (currentSection) {
-        currentSection.content.push(line);
-      } else {
-        // Before first header = introduction
-        introduction += (introduction ? '\n\n' : '') + line;
-      }
-    }
-
-    // Save last section
-    if (currentSection && currentSection.content.length > 0) {
-      sections.push({
-        domain: 'Guidance',
-        title: currentSection.title.replace(/^#+\s*/, ''),
-        content: currentSection.content.join('\n\n'),
+    return this.prisma.$transaction(async (tx) => {
+      const latest = await tx.readingVersion.findFirst({
+        where: { orderId: order.id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
       });
-    }
+      const version = await tx.readingVersion.create({
+        data: {
+          orderId: order.id,
+          version: (latest?.version || 0) + 1,
+          status: 'SEALED',
+          content: content as unknown as Prisma.InputJsonValue,
+          contentHash: hashReadingContent(content),
+          source,
+          sealedByExpertId: expert.id,
+          sealedAt,
+        },
+      });
 
-    // If we have sections, use last one as conclusion candidate
-    if (sections.length > 1) {
-      const lastSection = sections[sections.length - 1];
-      if (
-        lastSection.title.toLowerCase().includes('conclusion') ||
-        lastSection.title.toLowerCase().includes('fin') ||
-        lastSection.content.length < 200
-      ) {
-        conclusion = lastSection.content;
-        sections.pop();
-      }
-    }
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          generatedContent: {
+            ...currentGenerated,
+            ...content,
+            canonicalReadingVersionId: version.id,
+            sealedAt: sealedAt.toISOString(),
+            sealedBy: expert.id,
+            source,
+          } as unknown as Prisma.InputJsonValue,
+          status: 'AWAITING_VALIDATION',
+        },
+      });
 
-    // If no sections found, treat whole content as one section
-    if (sections.length === 0 && !introduction) {
-      introduction = content.substring(0, Math.min(500, content.length));
-      if (content.length > 500) {
-        sections.push({
-          domain: 'Guidance Spirituelle',
-          title: 'Votre Message',
-          content: content.substring(500),
-        });
-      }
-    }
-
-    return { introduction, sections, conclusion };
+      return version;
+    });
   }
 
   async getClients(dto: ClientsQueryDto) {

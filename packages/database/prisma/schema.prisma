@@ -70,6 +70,14 @@ enum FileType {
   AUDIO_READING
 }
 
+/// Lifecycle of a versioned reading. A sealed version is immutable and is the
+/// only content allowed to reach the PDF renderer or delivery channel.
+enum ReadingVersionStatus {
+  DRAFT
+  SEALED
+  REOPENED
+}
+
 enum ProductLevel {
   INITIE
   MYSTIQUE
@@ -230,6 +238,7 @@ model Order {
 
   // Relations for interconnected ecosystem
   files          OrderFile[]
+  readingVersions ReadingVersion[]
   generatedSteps PathStep[] // Steps generated from this reading
   chatContexts   ChatSession[] // Chat sessions related to this order
 
@@ -243,6 +252,27 @@ model Order {
   @@index([status, createdAt(sort: Desc)])
   @@index([status, updatedAt(sort: Desc)])
   @@index([userEmail, status, paidAt(sort: Desc)])
+}
+
+model ReadingVersion {
+  id              String               @id @default(cuid())
+  orderId         String
+  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  version         Int
+  status          ReadingVersionStatus @default(DRAFT)
+  /// Immutable canonical payload rendered to PDF after an expert seal.
+  content         Json
+  contentHash     String
+  source          String
+  sealedByExpertId String?
+  sealedAt        DateTime?
+  reopenedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([orderId, version])
+  @@index([orderId, status, version(sort: Desc)])
+  @@index([contentHash])
 }
 
 model OrderFile {

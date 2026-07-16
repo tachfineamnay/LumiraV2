@@ -25,6 +25,7 @@ import { VertexOracle, OracleResponse, UserProfile, OrderContext } from './Verte
 import { PdfFactory, ReadingPdfData } from './PdfFactory';
 import { AudioGenerationService } from './AudioGenerationService';
 import { PathActionType, InsightCategory } from '@prisma/client';
+import { isCanonicalReadingContent } from '../../modules/expert/reading-version';
 
 // S3 upload dependencies
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -316,10 +317,16 @@ export class DigitalSoulService {
       throw new BadRequestException(`Order must be AWAITING_VALIDATION, got: ${order.status}`);
     }
 
-    const aiResponse = order.generatedContent as unknown as OracleResponse;
-    if (!aiResponse || !aiResponse.pdf_content) {
-      throw new BadRequestException('No generated content found for this order');
+    const sealedReading = await this.prisma.readingVersion.findFirst({
+      where: { orderId, status: 'SEALED' },
+      orderBy: { version: 'desc' },
+    });
+    if (!sealedReading || !isCanonicalReadingContent(sealedReading.content)) {
+      throw new BadRequestException(
+        'Aucune version scellée et valide de la lecture n’est disponible pour la génération PDF',
+      );
     }
+    const aiResponse = sealedReading.content as unknown as OracleResponse;
 
     const user = order.user;
     const profile = user.profile;
@@ -374,6 +381,8 @@ export class DigitalSoulService {
             orderId: order.id,
             orderNumber: order.orderNumber,
             userId: user.id,
+            readingVersionId: sealedReading.id,
+            contentHash: sealedReading.contentHash,
           },
         }),
       );
@@ -407,6 +416,8 @@ export class DigitalSoulService {
           ...aiResponse,
           pdfUrl,
           pdfKey,
+          canonicalReadingVersionId: sealedReading.id,
+          canonicalContentHash: sealedReading.contentHash,
         } as object,
       },
     });
