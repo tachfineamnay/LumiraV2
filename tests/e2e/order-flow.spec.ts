@@ -1,45 +1,49 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USER } from '../fixtures/test-user';
 
-test.describe('Order Flow V2', () => {
-    test('landing → commande → Stripe redirect (Happy Path)', async ({ page }) => {
-        // 1. Landing page loads
-        await page.goto('/');
-        await expect(page.locator('h1')).toContainText('LUMIRA');
+test.describe('Order Flow — lifetime access', () => {
+  test.describe.configure({ mode: 'serial' });
 
-        // 2. Navigate directly to /commande (single subscription offer, no tier selection)
-        await page.goto('/commande');
+  test('landing → checkout form → payment intent', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Lumira', exact: true })).toBeVisible();
 
-        // 3. Fill onboarding form — no tier/depth selection in V2
-        await page.fill('[name="firstName"]', TEST_USER.firstName);
-        await page.fill('[name="lastName"]', TEST_USER.lastName);
-        await page.fill('[name="email"]', TEST_USER.email);
-        await page.click('[data-testid="next-step"]');
+    // Checkout checks for a prior Sanctuaire session. This scenario covers a new buyer.
+    await page.route('**/api/bff/users/profile', async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Unauthenticated' }),
+      });
+    });
+    await page.goto('/commande');
+    await expect(page.getByText('paiement unique', { exact: true })).toBeVisible();
+    await expect(page.getByText(/accès à vie/i)).toBeVisible();
+    await expect(page.getByTestId('level-p-init')).not.toBeVisible();
+    await expect(page.getByTestId('level-p-itgr')).not.toBeVisible();
+    await page.locator('[name="firstName"]').fill(TEST_USER.firstName);
+    await page.locator('[name="lastName"]').fill(TEST_USER.lastName);
+    await page.locator('[name="email"]').fill(TEST_USER.email);
+    await page.locator('[name="phone"]').fill('06 12 34 56 78');
 
-        // 4. Mock the Stripe checkout API call
-        await page.route('**/subscriptions/checkout', async (route) => {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({ url: 'https://checkout.stripe.com/pay/test_mock_session' }),
-            });
-        });
-
-        // 5. Submit to trigger checkout redirect
-        await page.click('[data-testid="submit-checkout"]');
-
-        // 6. Assert the page navigated toward Stripe checkout
-        await page.waitForURL(/checkout\.stripe\.com|payment-success/, { timeout: 10000 });
+    let checkoutPayload: unknown;
+    await page.route('**/api/bff/payments/checkout-intent', async (route) => {
+      checkoutPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ clientSecret: 'pi_test_secret_for_e2e' }),
+      });
     });
 
-    test('commande page shows single 29€ offer — no tier cards', async ({ page }) => {
-        await page.goto('/commande');
+    await page.getByRole('button', { name: /payer 29€/i }).click();
 
-        // V2: no tier selection UI
-        await expect(page.getByTestId('level-p-init')).not.toBeVisible();
-        await expect(page.getByTestId('level-p-itgr')).not.toBeVisible();
-
-        // V2: single subscription offer visible
-        await expect(page.getByText('29')).toBeVisible();
+    await expect(page.getByText('Paiement sécurisé', { exact: true })).toBeVisible();
+    expect(checkoutPayload).toMatchObject({
+      email: TEST_USER.email,
+      firstName: TEST_USER.firstName,
+      lastName: TEST_USER.lastName,
+      productLevel: '4',
     });
+  });
 });

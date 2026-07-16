@@ -73,6 +73,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
+      - name: Build web application for browser smoke tests
+        run: pnpm --filter web... build
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
