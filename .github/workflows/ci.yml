@@ -14,16 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
       - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Activate pnpm 8.15.4
-        run: |
-          corepack enable
-          corepack prepare pnpm@8.15.4 --activate
-          pnpm --version
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -31,11 +31,11 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
-      # Keep the security report visible, but do not prevent typecheck, build,
-      # tests and launch validation from running while advisories are triaged.
+      # pnpm 8 still targets npm's retired audit endpoint. Run the audit with
+      # pnpm 11, which uses npm's bulk advisory endpoint, without migrating
+      # the workspace lockfile used for installation.
       - name: Audit dependencies (high severity)
         run: corepack pnpm@11.0.0 audit --audit-level=high
-        continue-on-error: true
 
       - name: Type Check
         run: pnpm typecheck
@@ -56,16 +56,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
       - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Activate pnpm 8.15.4
-        run: |
-          corepack enable
-          corepack prepare pnpm@8.15.4 --activate
-          pnpm --version
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
