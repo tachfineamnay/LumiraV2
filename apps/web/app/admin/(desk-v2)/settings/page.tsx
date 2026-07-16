@@ -1201,7 +1201,6 @@ function RoutingTab() {
     agent: string,
     mission: string,
     field: keyof RoutingRule,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
   ) => {
     const key = `${product}_${agent}_${mission}`;
