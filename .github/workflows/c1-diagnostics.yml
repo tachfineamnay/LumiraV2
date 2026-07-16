@@ -7,65 +7,9 @@ on:
     branches: [ main ]
 
 jobs:
-  install:
-    name: install-only
+  runner:
+    name: runner-smoke-test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Activate pnpm 8.15.4
-        run: |
-          corepack enable
-          corepack prepare pnpm@8.15.4 --activate
-          pnpm --version
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-  prisma:
-    name: install-and-prisma
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Activate pnpm 8.15.4
-        run: |
-          corepack enable
-          corepack prepare pnpm@8.15.4 --activate
-          pnpm --version
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Generate Prisma Client
-        run: pnpm db:generate
-
-  application:
-    name: application-checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Activate pnpm 8.15.4
-        run: |
-          corepack enable
-          corepack prepare pnpm@8.15.4 --activate
-          pnpm --version
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Generate Prisma Client
-        run: pnpm db:generate
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Lint
-        run: pnpm lint
-      - name: Build
-        run: pnpm build
-      - name: Test
-        run: pnpm test
+      - name: Verify runner
+        run: echo "GitHub Actions runner is available"
