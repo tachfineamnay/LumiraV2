@@ -10,10 +10,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Expert } from '@prisma/client';
-import { CurrentExpert } from './decorators';
+import { CurrentExpert, Roles } from './decorators';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { ProductionControlService } from './production-control.service';
-import { ProductionJobStatus } from './production-control.types';
+import { PRODUCTION_JOB_STATUSES, ProductionJobStatus } from './production-control.types';
 
 @Controller('expert')
 @UseGuards(ExpertAuthGuard, RolesGuard)
@@ -26,13 +26,13 @@ export class ProductionControlController {
   }
 
   @Get('production/jobs')
-  async getJobs(
-    @Query('status') status?: ProductionJobStatus,
-    @Query('limit') limit?: string,
-  ) {
+  async getJobs(@Query('status') status?: string, @Query('limit') limit?: string) {
+    const normalizedStatus = PRODUCTION_JOB_STATUSES.includes(status as ProductionJobStatus)
+      ? (status as ProductionJobStatus)
+      : undefined;
     return {
       data: await this.production.listJobs({
-        status,
+        status: normalizedStatus,
         limit: limit ? Number.parseInt(limit, 10) : undefined,
       }),
     };
@@ -71,6 +71,7 @@ export class ProductionControlController {
   }
 
   @Post('production/recover-stale')
+  @Roles('ADMIN')
   async recoverStaleJobs() {
     const recovered = await this.production.recoverStaleJobs(true);
     return { recovered };
