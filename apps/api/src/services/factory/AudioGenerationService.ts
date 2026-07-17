@@ -88,7 +88,7 @@ export class AudioGenerationService {
     this.maxChunkCharacters = this.readPositiveInt('AUDIO_TTS_CHUNK_CHARACTERS', 3500);
   }
 
-  async generateAllAudio(orderId: string): Promise<AudioGenerationResult> {
+  async generateAllAudio(orderId: string): Promise<AudioGenerationResult | null> {
     const startTime = Date.now();
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -108,10 +108,10 @@ export class AudioGenerationService {
     const isManagedAudioJob =
       production?.type === 'AUDIO_GENERATION' && production.status === 'RUNNING';
     if (!isManagedAudioJob && !this.allowLegacyFireAndForget) {
-      this.logger.warn(
-        `Audio generation ignored for ${order.orderNumber}: no managed RUNNING audio job`,
+      this.logger.log(
+        `Audio generation skipped for ${order.orderNumber}: no managed RUNNING audio job`,
       );
-      throw new Error('Aucun job audio géré par le Desk n’est actif');
+      return null;
     }
 
     const sealedVersion = order.readingVersions[0];
