@@ -18,10 +18,15 @@ log "Run focused API tests"
 pnpm --filter @lumira/api test -- \
   production-control.types.spec.ts \
   production-control.service.spec.ts \
+  production-cancel.interceptor.spec.ts \
+  production-paid-recovery.service.spec.ts \
   client-control.service.spec.ts \
+  client-sanctuaire.interceptor.spec.ts \
   AudioGenerationService.spec.ts \
   guidance-request.types.spec.ts \
   guidance-requests.service.spec.ts \
+  guidance-response.interceptor.spec.ts \
+  guidance-reply-recovery.interceptor.spec.ts \
   --runInBand
 
 log "Typecheck"
@@ -43,4 +48,4 @@ else
   printf '\nPlaywright skipped. Re-run with RUN_PLAYWRIGHT=true after services and test data are available.\n'
 fi
 
-printf '\n\033[1;32mDesk control center validation completed.\033[0m\n'
+printf '\n\033[1;32mLumira main integration validation completed.\033[0m\n'
