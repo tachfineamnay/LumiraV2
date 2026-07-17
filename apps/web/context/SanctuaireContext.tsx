@@ -8,24 +8,21 @@ import { useSanctuaireAuth } from './SanctuaireAuthContext';
 // TYPES
 // =============================================================================
 
-interface SubscriptionData {
-  /** Whether the user has an active lifetime access entitlement */
-  isSubscribed: boolean;
-  /** Subscription status from backend: ACTIVE | PAST_DUE | CANCELED | EXPIRED | null */
-  subscriptionStatus: string | null;
-  /** Number of completed orders (legacy reads) */
+interface LifetimeAccessData {
+  /** Whether the buyer has the permanent paid-order entitlement. */
+  hasLifetimeAccess: boolean;
+  /** Number of paid-order entitlements. */
   orderCount: number;
-  // Legacy fields kept for backward compat — always populated for subscribers
   capabilities: string[];
   highestLevel: number;
 }
 
 interface SanctuaireContextType {
-  /** V2 primary check: does user have an active subscription? */
+  /** Primary client authorization: a paid order grants permanent access. */
+  hasLifetimeAccess: boolean;
+  /** @deprecated Alias for dormant legacy components; not a subscription check. */
   isSubscribed: boolean;
-  subscriptionStatus: string | null;
   orderCount: number;
-  // Legacy compat — hasCapability returns true for everything if subscribed
   capabilities: string[];
   highestLevel: number;
   hasCapability: (capability: string) => boolean;
@@ -41,8 +38,8 @@ interface SanctuaireContextType {
 // =============================================================================
 
 const defaultContext: SanctuaireContextType = {
+  hasLifetimeAccess: false,
   isSubscribed: false,
-  subscriptionStatus: null,
   orderCount: 0,
   capabilities: [],
   highestLevel: 0,
@@ -66,7 +63,7 @@ const SanctuaireContext = createContext<SanctuaireContextType>(defaultContext);
 
 export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useSanctuaireAuth();
-  const [data, setData] = useState<SubscriptionData | null>(null);
+  const [data, setData] = useState<LifetimeAccessData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,33 +78,21 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoading(true);
       setError(null);
 
-      // Subscription data is display-only legacy metadata. Authorization comes
-      // from /users/entitlements, which is backed by paid Orders.
-      let subscriptionStatus: string | null = null;
-      try {
-        const subResponse = await sanctuaireApi.get('/subscriptions/status');
-        subscriptionStatus = subResponse.data?.subscription?.status ?? null;
-      } catch {
-        // A lifetime buyer need not have a Subscription row.
-      }
-
       const response = await sanctuaireApi.get('/users/entitlements');
 
-      const legacy = response.data;
-      const hasLifetimeAccess = (legacy.highestLevel ?? 0) >= 1;
+      const entitlement = response.data;
+      const hasLifetimeAccess = (entitlement.orderCount ?? 0) > 0;
       setData({
-        isSubscribed: hasLifetimeAccess,
-        subscriptionStatus,
-        orderCount: legacy.orderCount ?? 0,
-        capabilities: legacy.capabilities ?? [],
-        highestLevel: legacy.highestLevel ?? 0,
+        hasLifetimeAccess,
+        orderCount: entitlement.orderCount ?? 0,
+        capabilities: entitlement.capabilities ?? [],
+        highestLevel: entitlement.highestLevel ?? 0,
       });
     } catch (err) {
       console.error('Failed to fetch entitlements:', err);
       setError("Erreur lors du chargement des droits d'accès");
       setData({
-        isSubscribed: false,
-        subscriptionStatus: null,
+        hasLifetimeAccess: false,
         orderCount: 0,
         capabilities: [],
         highestLevel: 0,
@@ -122,11 +107,12 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     fetchEntitlements();
   }, [fetchEntitlements]);
 
-  // V2: if subscribed, all capabilities are granted
+  // A paid permanent entitlement unlocks the client surface. Legacy
+  // capability checks are retained only for dormant V1 consumers.
   const hasCapability = useCallback(
     (capability: string): boolean => {
       if (!data) return false;
-      if (data.isSubscribed) return true;
+      if (data.hasLifetimeAccess) return true;
       return data.capabilities.includes(capability);
     },
     [data],
@@ -135,7 +121,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const hasAnyCapability = useCallback(
     (capabilities: string[]): boolean => {
       if (!data) return false;
-      if (data.isSubscribed) return true;
+      if (data.hasLifetimeAccess) return true;
       return capabilities.some((cap) => data.capabilities.includes(cap));
     },
     [data],
@@ -144,7 +130,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const hasAllCapabilities = useCallback(
     (capabilities: string[]): boolean => {
       if (!data) return false;
-      if (data.isSubscribed) return true;
+      if (data.hasLifetimeAccess) return true;
       return capabilities.every((cap) => data.capabilities.includes(cap));
     },
     [data],
@@ -152,8 +138,10 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const value = useMemo<SanctuaireContextType>(
     () => ({
-      isSubscribed: data?.isSubscribed ?? false,
-      subscriptionStatus: data?.subscriptionStatus ?? null,
+      hasLifetimeAccess: data?.hasLifetimeAccess ?? false,
+      // Deprecated compatibility alias, deliberately derived from a paid
+      // order rather than the legacy Subscription model.
+      isSubscribed: data?.hasLifetimeAccess ?? false,
       orderCount: data?.orderCount ?? 0,
       capabilities: data?.capabilities ?? [],
       highestLevel: data?.highestLevel ?? 0,
@@ -194,11 +182,17 @@ export const useSanctuaire = (): SanctuaireContextType => {
 };
 
 /**
- * V2: Quick check if user has an active subscription
+ * Quick check for the permanent paid-order entitlement.
  */
+export const useLifetimeAccess = (): { hasLifetimeAccess: boolean; isLoading: boolean } => {
+  const { hasLifetimeAccess, isLoading } = useSanctuaire();
+  return { hasLifetimeAccess, isLoading };
+};
+
+/** @deprecated Legacy alias; use useLifetimeAccess. */
 export const useIsSubscribed = (): { isSubscribed: boolean; isLoading: boolean } => {
-  const { isSubscribed, isLoading } = useSanctuaire();
-  return { isSubscribed, isLoading };
+  const { hasLifetimeAccess, isLoading } = useSanctuaire();
+  return { isSubscribed: hasLifetimeAccess, isLoading };
 };
 
 /**

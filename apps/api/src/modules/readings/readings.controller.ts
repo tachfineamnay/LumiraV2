@@ -4,6 +4,7 @@ import {
   Param,
   Res,
   Logger,
+  Headers,
   NotFoundException,
   UseGuards,
   Request,
@@ -23,6 +24,30 @@ export class ReadingsController {
 
   constructor(private readonly readingsService: ReadingsService) {}
 
+  /** Authenticated private audio stream with range support for seek controls. */
+  @Get(':orderNumber/audio')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async streamAudio(
+    @Param('orderNumber') orderNumber: string,
+    @Request() req: { user: { userId: string } },
+    @Headers('range') range: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { stream, contentType, contentLength, contentRange } =
+      await this.readingsService.getAudioStream(orderNumber, req.user.userId, range);
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    if (contentLength != null) res.setHeader('Content-Length', String(contentLength));
+    if (contentRange) {
+      res.status(206);
+      res.setHeader('Content-Range', contentRange);
+    }
+    return new StreamableFile(stream);
+  }
+
   /**
    * GET /api/readings/:orderNumber/file
    * Authenticated binary stream — preferred for in-app viewer (no S3 CORS / redirect issues).
@@ -35,7 +60,7 @@ export class ReadingsController {
     @Request() req: { user: { userId: string } },
     @Res({ passthrough: true }) res: Response,
   ) {
-    this.logger.log(`📥 Stream request for: ${orderNumber} by user ${req.user.userId}`);
+    this.logger.log('PDF stream requested');
 
     try {
       const { stream, contentType, contentLength, filename } =
@@ -62,17 +87,23 @@ export class ReadingsController {
 
   /**
    * GET /api/readings/:orderNumber/download
-   * Redirects to a signed S3 URL for PDF download / open-in-new-tab.
-   * Prefer /file for in-app viewing. Ownership is NOT checked here (legacy);
-   * order numbers are unguessable but /file is the secure path.
+   * Authenticated redirect to a short-lived signed S3 URL for PDF download.
    */
   @Get(':orderNumber/download')
+  @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  async downloadPdf(@Param('orderNumber') orderNumber: string, @Res() res: Response) {
-    this.logger.log(`📥 Download request for: ${orderNumber}`);
+  async downloadPdf(
+    @Param('orderNumber') orderNumber: string,
+    @Request() req: { user: { userId: string } },
+    @Res() res: Response,
+  ) {
+    this.logger.log('PDF download requested');
 
     try {
-      const { url, filename } = await this.readingsService.getPdfSignedUrl(orderNumber);
+      const { url, filename } = await this.readingsService.getPdfSignedUrl(
+        orderNumber,
+        req.user.userId,
+      );
 
       res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
       res.setHeader('Cache-Control', 'private, max-age=3600');
@@ -102,7 +133,7 @@ export class ReadingsController {
     @Request() req: { user: { userId: string } },
     @Res() res: Response,
   ) {
-    this.logger.log(`📥 Secure download request for: ${orderNumber} by user ${req.user.userId}`);
+    this.logger.log('Secure PDF download requested');
 
     try {
       const { url, filename } = await this.readingsService.getPdfSignedUrl(

@@ -2,11 +2,8 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Sparkles, User, Bot, Loader2, MessageCircle, Crown } from 'lucide-react';
-import { GlassCard } from '../../../components/ui/GlassCard';
-import { SubscriptionLock } from '../../../components/sanctuary/SubscriptionLock';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, Loader2, MessageCircle, Send } from 'lucide-react';
 import sanctuaireApi from '../../../lib/sanctuaireApi';
 
 interface Message {
@@ -16,309 +13,199 @@ interface Message {
   timestamp: Date;
 }
 
-interface QuotaStatus {
-  isSubscribed: boolean;
-  messagesRemaining: number;
-  messagesUsed: number;
-  total: number;
+function normalizeHistory(messages: unknown): Message[] {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .filter(
+      (message): message is { role: 'user' | 'assistant'; content: string; timestamp?: string } =>
+        Boolean(message) &&
+        typeof message === 'object' &&
+        ((message as { role?: string }).role === 'user' ||
+          (message as { role?: string }).role === 'assistant') &&
+        typeof (message as { content?: unknown }).content === 'string',
+    )
+    .map((message, index) => ({
+      id: `${message.timestamp || 'history'}-${index}`,
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp ? new Date(message.timestamp) : new Date(),
+    }));
 }
 
-export default function OracleChatPage() {
+export default function GuidancePage() {
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
-  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content:
-        "Salutations, âme voyageuse. Je suis l'Oracle de Lumira. Quelle question brûle en vous aujourd'hui ?",
-      timestamp: new Date(),
-    },
-  ]);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Fetch initial quota status
   useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const { data } = await sanctuaireApi.get('/client/chat/quota');
-        setQuotaStatus({
-          isSubscribed: data.isSubscribed,
-          messagesRemaining: data.messagesRemaining,
-          messagesUsed: data.messagesUsed,
-          total: data.quota,
-        });
-        // Check if already exceeded
-        if (!data.isSubscribed && data.messagesRemaining <= 0 && data.messagesUsed > 0) {
-          setIsQuotaExceeded(true);
-        }
-      } catch (err) {
-        console.error('Failed to fetch quota:', err);
-      }
+    let active = true;
+    sanctuaireApi
+      .get('/client/chat/history')
+      .then(({ data }) => {
+        if (!active) return;
+        setSessionId(data.sessionId || null);
+        setMessages(normalizeHistory(data.messages));
+      })
+      .catch(() => {
+        if (active)
+          setError(
+            'Votre historique n’est pas disponible pour le moment. Vous pouvez tout de même envoyer un nouvel éclairage.',
+          );
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
     };
-    fetchQuota();
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, isSending]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isQuotaExceeded) return;
-
-    const userMsg: Message = {
-      id: Date.now().toString(),
+  const send = async () => {
+    const content = input.trim();
+    if (!content || isSending) return;
+    const optimistic: Message = {
+      id: `local-${Date.now()}`,
       role: 'user',
-      content: input,
+      content,
       timestamp: new Date(),
     };
-
-    setMessages((prev) => [...prev, userMsg]);
-    const userMessage = input;
+    setMessages((current) => [...current, optimistic]);
     setInput('');
-    setIsLoading(true);
-
+    setError(null);
+    setIsSending(true);
     try {
-      // Call the real API endpoint
-      const { data } = await sanctuaireApi.post('/client/chat', {
-        message: userMessage,
-        sessionId: sessionId,
-      });
-
-      // Update session ID for conversation continuity
-      if (data.sessionId) {
-        setSessionId(data.sessionId);
-      }
-
-      // Update quota status from response
-      if (data.quota) {
-        setQuotaStatus({
-          isSubscribed: data.quota.isSubscribed,
-          messagesRemaining: data.quota.messagesRemaining,
-          messagesUsed: data.quota.messagesUsed,
-          total: data.quota.total,
-        });
-      }
-
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-    } catch (error: unknown) {
-      console.error('Chat error:', error);
-
-      // Check if quota exceeded (403 with QUOTA_EXCEEDED code)
-      const axiosError = error as {
-        response?: {
-          status?: number;
-          data?: { code?: string; quotaStatus?: { messagesUsed: number; quota: number } };
-        };
-      };
-      if (
-        axiosError.response?.status === 403 &&
-        axiosError.response?.data?.code === 'QUOTA_EXCEEDED'
-      ) {
-        setIsQuotaExceeded(true);
-        if (axiosError.response.data.quotaStatus) {
-          setQuotaStatus({
-            isSubscribed: false,
-            messagesRemaining: 0,
-            messagesUsed: axiosError.response.data.quotaStatus.messagesUsed,
-            total: axiosError.response.data.quotaStatus.quota,
-          });
-        }
-        return; // Don't show error message, show lock instead
-      }
-
-      const errorMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content:
-          'Les astres sont momentanément voilés... Veuillez réessayer dans quelques instants.',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
+      const { data } = await sanctuaireApi.post('/client/chat', { message: content, sessionId });
+      if (data.sessionId) setSessionId(data.sessionId);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: data.response,
+          timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+        },
+      ]);
+    } catch {
+      setMessages((current) => current.filter((message) => message.id !== optimistic.id));
+      setInput(content);
+      setError('Votre demande n’a pas pu être envoyée. Vérifiez votre connexion puis réessayez.');
     } finally {
-      setIsLoading(false);
+      setIsSending(false);
     }
-  };
-
-  // Quota indicator component
-  const QuotaIndicator = () => {
-    if (!quotaStatus || quotaStatus.isSubscribed) return null;
-
-    const remaining = quotaStatus.messagesRemaining;
-    const isLow = remaining <= 1 && remaining > 0;
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-          remaining === 0
-            ? 'bg-red-500/20 border border-red-500/30 text-red-300'
-            : isLow
-              ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
-              : 'bg-white/10 border border-white/10 text-white/60'
-        }`}
-      >
-        <MessageCircle className="w-3.5 h-3.5" />
-        <span>
-          {remaining === 0 ? (
-            'Quota épuisé'
-          ) : (
-            <>
-              Messages restants : <span className="font-bold">{remaining}</span>
-            </>
-          )}
-        </span>
-        {!quotaStatus.isSubscribed && (
-          <span title="Passez premium pour des messages illimités">
-            <Crown className="w-3.5 h-3.5 text-amber-400 ml-1" />
-          </span>
-        )}
-      </motion.div>
-    );
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col items-center justify-start p-2 sm:p-4 md:p-8 relative min-h-0">
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
-        <div className="absolute top-20 right-20 w-96 h-96 bg-purple-900/20 rounded-full blur-[100px]" />
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-amber-900/10 rounded-full blur-[100px]" />
-      </div>
-
-      <GlassCard
-        className="w-full max-w-4xl flex flex-col relative z-10 border-white/10 !p-0 overflow-hidden min-h-0"
-        style={{
-          height:
-            'calc(100dvh - var(--sanctuaire-header-h) - var(--sanctuaire-main-pb) - 1rem)',
-          maxHeight:
-            'calc(100dvh - var(--sanctuaire-header-h) - var(--sanctuaire-main-pb) - 1rem)',
-        }}
-      >
-        {/* Header */}
-        <div className="p-3 sm:p-6 border-b border-white/5 bg-white/5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-900/20 flex items-center justify-center border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)] flex-shrink-0">
-              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-300 animate-pulse-slow" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-playfair italic text-white truncate">
-                L&apos;Oracle de Lumira
-              </h1>
-              <p className="text-[10px] sm:text-xs text-indigo-200/50 uppercase tracking-widest flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                Connecté au Flux
-              </p>
-            </div>
-          </div>
-
-          <QuotaIndicator />
-        </div>
-
-        {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar min-h-0">
-          <AnimatePresence>
-            {messages.map((msg) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.3 }}
-                className={`flex items-start gap-2 sm:gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-              >
-                <div
-                  className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 flex items-center justify-center border ${
-                    msg.role === 'assistant'
-                      ? 'bg-indigo-900/20 border-indigo-500/30'
-                      : 'bg-amber-900/20 border-amber-500/30'
-                  }`}
-                >
-                  {msg.role === 'assistant' ? (
-                    <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-300" />
-                  ) : (
-                    <User className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
-                  )}
-                </div>
-
-                <div
-                  className={`max-w-[85%] sm:max-w-[80%] p-3 sm:p-4 rounded-2xl text-sm leading-relaxed shadow-lg backdrop-blur-sm ${
-                    msg.role === 'assistant'
-                      ? 'bg-white/5 border border-indigo-500/20 text-indigo-100 rounded-tl-none'
-                      : 'bg-gradient-to-br from-amber-900/40 to-amber-950/40 border border-amber-500/20 text-amber-100 rounded-tr-none'
-                  }`}
-                >
-                  {msg.content}
-                  <div className="text-[10px] mt-2 opacity-40 uppercase tracking-wider font-bold text-right">
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center gap-3 text-indigo-300/50 text-xs uppercase tracking-widest pl-10 sm:pl-14"
-            >
-              <Loader2 className="w-4 h-4 animate-spin" />
-              L&apos;Oracle consulte les astres...
-            </motion.div>
-          )}
-          <div ref={scrollRef} />
-        </div>
-
-        {isQuotaExceeded ? (
-          <div className="p-3 sm:p-6 border-t border-white/5">
-            <SubscriptionLock
-              messagesUsed={quotaStatus?.messagesUsed || 3}
-              quota={quotaStatus?.total || 3}
-              variant="chat"
-            />
-          </div>
-        ) : (
-          <div className="p-3 sm:p-6 pt-3 border-t border-white/5 bg-white/5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-6">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="relative flex items-center gap-2 bg-cosmic-void/80 border border-white/10 rounded-xl p-1.5 sm:p-2 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/30 transition-all">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Posez votre question à l'univers..."
-                  className="flex-1 bg-transparent border-none text-white placeholder-white/30 text-sm px-3 sm:px-4 py-3 min-h-[44px] focus:ring-0 focus:outline-none font-medium"
-                  disabled={isLoading}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || isLoading}
-                  className="p-3 min-w-[44px] min-h-[44px] rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 text-white hover:shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                  title="Envoyer le message"
-                  aria-label="Envoyer le message"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <p className="text-center text-[10px] text-white/20 mt-2 sm:mt-3 hidden sm:block">
-              L&apos;Oracle offre des guidances spirituelles. Interprétez ses messages avec votre
-              propre intuition.
+    <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+      <header className="shrink-0 rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-horizon-400/15 text-horizon-300">
+            <MessageCircle className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+              Sanctuaire Lumira
             </p>
+            <h1 className="mt-1 font-playfair text-2xl italic text-stellar-100">
+              Demander un éclairage
+            </h1>
           </div>
-        )}
-      </GlassCard>
+        </div>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-stellar-400">
+          Une question sur votre lecture ou une situation particulière ? Décrivez-la simplement ici.
+        </p>
+      </header>
+
+      <section className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          {isLoading ? (
+            <div className="grid min-h-[240px] place-items-center">
+              <Loader2 className="h-7 w-7 animate-spin text-horizon-300" />
+            </div>
+          ) : messages.length === 0 ? (
+            <p className="mx-auto mt-12 max-w-md text-center text-sm leading-6 text-stellar-500">
+              Vos échanges seront conservés ici pour vous permettre de reprendre une réflexion quand
+              vous le souhaitez.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <article
+                  key={message.id}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[75%] ${message.role === 'user' ? 'rounded-br-sm bg-horizon-400/15 text-stellar-100' : 'rounded-bl-sm bg-white/[0.05] text-stellar-300'}`}
+                  >
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <time className="mt-2 block text-right text-[10px] text-stellar-600">
+                      {message.timestamp.toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </time>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+          {isSending && (
+            <div className="mt-4 flex items-center gap-2 text-xs text-stellar-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Votre éclairage est en cours de
+              préparation…
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="border-t border-white/[0.06] p-3 sm:p-4">
+          {error && (
+            <p
+              role="alert"
+              className="mb-3 flex items-start gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-xs text-rose-200"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+            </p>
+          )}
+          <div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-abyss-700 p-2 focus-within:border-horizon-400/50">
+            <label className="sr-only" htmlFor="guidance-message">
+              Votre question
+            </label>
+            <textarea
+              id="guidance-message"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  send();
+                }
+              }}
+              placeholder="Décrivez votre question ou votre situation…"
+              rows={2}
+              disabled={isSending}
+              className="min-h-[48px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-stellar-100 placeholder:text-stellar-600 outline-none disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={send}
+              disabled={!input.trim() || isSending}
+              aria-label="Envoyer ma demande d’éclairage"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-horizon-400 text-abyss-900 hover:bg-horizon-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

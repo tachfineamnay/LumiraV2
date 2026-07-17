@@ -49,6 +49,13 @@ interface CompletedOrder {
   createdAt: string;
 }
 
+export interface OnboardingProgress {
+  currentStep: number;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+  data: Record<string, unknown>;
+  completedAt: string | null;
+}
+
 interface LevelMetadata {
   level: 1 | 2 | 3 | 4;
   name: 'Initié' | 'Mystique' | 'Profond' | 'Intégral';
@@ -97,6 +104,7 @@ interface SanctuaireAuthContextType {
   // User Data
   profile: UserProfile | null;
   orders: CompletedOrder[];
+  onboardingProgress: OnboardingProgress | null;
   stats: { totalOrders: number; completedOrders: number } | null;
 
   // Rate Limiting
@@ -155,6 +163,7 @@ const defaultContext: SanctuaireAuthContextType = {
   hasProduct: () => false,
   profile: null,
   orders: [],
+  onboardingProgress: null,
   stats: null,
   cooldownRemaining: 0,
   isCoolingDown: false,
@@ -188,6 +197,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
   // User data state
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [orders, setOrders] = useState<CompletedOrder[]>([]);
+  const [onboardingProgress, setOnboardingProgress] = useState<OnboardingProgress | null>(null);
   const [stats, setStats] = useState<{ totalOrders: number; completedOrders: number } | null>(null);
 
   // Rate limiting state
@@ -214,6 +224,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
     setLevelMetadata(null);
     setProfile(null);
     setOrders([]);
+    setOnboardingProgress(null);
     setStats(null);
     setError(null);
   }, []);
@@ -221,9 +232,12 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
   // Initialize from existing token
   const initializeFromToken = useCallback(async () => {
     try {
-      const [profileRes, entitlementsRes] = await Promise.all([
+      const [profileRes, entitlementsRes, onboardingRes] = await Promise.all([
         sanctuaireApi.get('/users/profile'),
         sanctuaireApi.get('/users/entitlements'),
+        // A missing draft is normal for a first visit. Profile and entitlement
+        // requests remain authoritative for session validity.
+        sanctuaireApi.get('/users/onboarding').catch(() => null),
       ]);
 
       let ordersData: CompletedOrder[] = [];
@@ -250,6 +264,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       });
       setProfile(profileData.profile);
       setStats(profileData.stats);
+      setOnboardingProgress((onboardingRes?.data as OnboardingProgress | null | undefined) ?? null);
 
       // Set entitlements
       const entData = entitlementsRes.data as EntitlementsData;
@@ -285,6 +300,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
     setHighestLevel,
     setLevelMetadata,
     setOrders,
+    setOnboardingProgress,
     setIsAuthenticated,
     setError,
     setIsLoading,
@@ -493,6 +509,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       hasProduct,
       profile,
       orders,
+      onboardingProgress,
       stats,
       cooldownRemaining,
       isCoolingDown: cooldownRemaining > 0,
@@ -515,6 +532,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       hasProduct,
       profile,
       orders,
+      onboardingProgress,
       stats,
       cooldownRemaining,
       refetchData,

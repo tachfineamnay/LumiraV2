@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, CreditCard, Shield, ArrowLeft, SlidersHorizontal, BookOpen } from 'lucide-react';
+import { Settings, Shield, ArrowLeft, SlidersHorizontal, BookOpen } from 'lucide-react';
 
 const tabs = [
   {
@@ -17,12 +17,6 @@ const tabs = [
     icon: Shield,
     href: '/sanctuaire/settings/security',
     color: 'text-rose-400',
-  },
-  {
-    label: 'Abonnement',
-    icon: CreditCard,
-    href: '/sanctuaire/abonnement',
-    color: 'text-amber-400',
   },
   {
     label: 'Lectures',

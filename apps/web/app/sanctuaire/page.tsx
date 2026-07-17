@@ -2,281 +2,298 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { toast } from 'sonner';
-import { motion } from 'framer-motion';
-import { Loader2, Sparkles } from 'lucide-react';
-import { MandalaNav } from '../../components/sanctuary/MandalaNav';
-import { CosmicNotification } from '../../components/sanctuary/CosmicNotification';
-import { ExpertValidationBanner } from '../../components/sanctuary/ExpertValidationBanner';
-import {
-  CoreOnboardingWizard,
-  type CoreOnboardingData,
-} from '../../components/onboarding/CoreOnboardingWizard';
-import sanctuaireApi from '../../lib/sanctuaireApi';
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
+import dynamicImport from 'next/dynamic';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { BookOpen, Download, FileText, Headphones, Loader2, Sparkles } from 'lucide-react';
+import { ReadingPreparation } from '../../components/onboarding/ReadingPreparation';
+import { MysticAudioPlayer } from '../../components/ui/MysticAudioPlayer';
 import { useSanctuaire } from '../../context/SanctuaireContext';
-import {
-  clearFirstVisitFlag,
-  setFirstVisitFlag,
-  useSanctuaireAuth,
-} from '../../context/SanctuaireAuthContext';
+import { useSanctuaireAuth } from '../../context/SanctuaireAuthContext';
+import sanctuaireApi from '../../lib/sanctuaireApi';
+import { resolveSanctuaireHomeState } from '../../lib/sanctuaireHomeState';
 
-async function saveCoreOnboarding(data: CoreOnboardingData) {
-  await sanctuaireApi.patch('/users/profile', {
-    birthDate: data.birthDate,
-    birthTime: data.birthTime || null,
-    birthPlace: data.birthPlace,
-    facePhotoUrl: data.facePhoto,
-    palmPhotoUrl: data.palmPhoto,
-    profileCompleted: true,
-    consent: { accepted: data.gdprConsent, version: '2026-07-16' },
-  });
+const ReadingViewerModal = dynamicImport(
+  () =>
+    import('../../components/sanctuary/ReadingViewerModal').then(
+      (module) => module.ReadingViewerModal,
+    ),
+  { ssr: false },
+);
+
+type Reading = {
+  id: string;
+  orderNumber: string;
+  title: string;
+  status: string;
+  deliveredAt: string | null;
+  assets: { pdf?: string | null; audio?: string | null };
+};
+
+function toBffAssetUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith('/api/') ? url.replace('/api/', '/api/bff/') : url;
 }
 
-function AutoLoginHandler() {
+function SanctuaireHome() {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const { isLoading: entitlementsLoading } = useSanctuaire();
   const {
-    isAuthenticated,
     isLoading: authLoading,
-    refetchData,
+    onboardingProgress,
+    orders,
     profile,
+    refetchData,
     user,
   } = useSanctuaireAuth();
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const onboardingRequested = searchParams.get('onboarding') === '1';
+  const [showPreparation, setShowPreparation] = useState(false);
+  const [readings, setReadings] = useState<Reading[]>([]);
+  const [readingsError, setReadingsError] = useState(false);
+  const [selectedPdf, setSelectedPdf] = useState<{
+    url: string;
+    title: string;
+    orderNumber: string;
+  } | null>(null);
+
+  const homeState = resolveSanctuaireHomeState({
+    profile,
+    draft: onboardingProgress,
+    orders,
+  });
 
   useEffect(() => {
-    if (authLoading || !onboardingRequested) return;
-    if (!isAuthenticated) {
-      router.replace('/sanctuaire/login');
-      return;
+    if (searchParams.get('onboarding') === '1' && !profile?.profileCompleted) {
+      setShowPreparation(true);
     }
+  }, [profile?.profileCompleted, searchParams]);
+
+  const refreshReadings = useCallback(async () => {
     if (!profile?.profileCompleted) {
-      setFirstVisitFlag(true);
-      setShowOnboarding(true);
+      setReadings([]);
       return;
     }
-    router.replace('/sanctuaire');
-  }, [authLoading, onboardingRequested, isAuthenticated, profile?.profileCompleted, router]);
-
-  if (showOnboarding && !profile?.profileCompleted) {
-    return (
-      <CoreOnboardingWizard
-        userEmail={user?.email}
-        onClose={() => {
-          setShowOnboarding(false);
-          clearFirstVisitFlag();
-          toast.info('Votre progression est sauvegardée ✨', {
-            description: 'Vous pouvez reprendre le recueil essentiel depuis le Sanctuaire.',
-            duration: 5000,
-          });
-          router.replace('/sanctuaire');
-        }}
-        onComplete={async (data) => {
-          await saveCoreOnboarding(data);
-          setShowOnboarding(false);
-          clearFirstVisitFlag();
-          await refetchData();
-          toast.success('Éléments essentiels enregistrés', {
-            description: 'La préparation de votre expérience peut commencer.',
-          });
-          router.replace('/sanctuaire');
-        }}
-      />
-    );
-  }
-
-  return null;
-}
-
-function DashboardContent() {
-  const { isLoading, orderCount } = useSanctuaire();
-  const { profile, refetchData, user } = useSanctuaireAuth();
-  const [showWizard, setShowWizard] = useState(false);
-  const [hasDraft, setHasDraft] = useState(false);
-
-  const isOnboardingComplete = profile?.profileCompleted === true;
+    try {
+      setReadingsError(false);
+      const { data } = await sanctuaireApi.get('/client/readings');
+      setReadings(data.readings || []);
+    } catch {
+      setReadingsError(true);
+    }
+  }, [profile?.profileCompleted]);
 
   useEffect(() => {
-    if (isOnboardingComplete) {
-      setHasDraft(false);
-      return;
-    }
+    refreshReadings();
+  }, [refreshReadings]);
 
-    let active = true;
-    sanctuaireApi
-      .get('/users/onboarding')
-      .then((response) => {
-        if (!active) return;
-        const progress = response.data;
-        const hasData = progress?.data && Object.values(progress.data).some(Boolean);
-        setHasDraft(Boolean(progress && (progress.currentStep > 0 || hasData)));
-      })
-      .catch(() => {
-        if (active) setHasDraft(false);
+  const latestReading = readings[0];
+  const openReading = () => {
+    const pdfUrl = toBffAssetUrl(latestReading?.assets.pdf);
+    if (pdfUrl && latestReading) {
+      setSelectedPdf({
+        url: pdfUrl,
+        title: latestReading.title,
+        orderNumber: latestReading.orderNumber,
       });
-
-    return () => {
-      active = false;
-    };
-  }, [isOnboardingComplete, showWizard, user?.email]);
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[60vh] flex-1 items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-12 w-12 animate-spin text-horizon-400" />
-          <p className="text-sm uppercase tracking-widest text-stellar-500">
-            Chargement de votre sanctuaire...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const hasOrders = orderCount > 0;
-
-  const handleWizardComplete = async (data: CoreOnboardingData) => {
-    try {
-      await saveCoreOnboarding(data);
-      await refetchData();
-      toast.success('Éléments essentiels enregistrés', {
-        description: 'Votre Sanctuaire est maintenant ouvert.',
-      });
-      setShowWizard(false);
-    } catch (error) {
-      console.error('Failed to save core onboarding:', error);
-      toast.error('Erreur lors de la sauvegarde', {
-        description: 'Votre progression est conservée. Réessayez dans un instant.',
-      });
-      throw error;
     }
   };
 
+  const downloadPdf = async () => {
+    if (!latestReading?.assets.pdf) return;
+    try {
+      const { data } = await sanctuaireApi.get(`/readings/${latestReading.orderNumber}/file`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([data], { type: 'application/pdf' });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `${latestReading.title.replace(/[^\w-]+/gi, '_')}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setReadingsError(true);
+    }
+  };
+
+  if (authLoading || entitlementsLoading) {
+    return (
+      <div className="grid min-h-[60vh] place-items-center" role="status">
+        <Loader2 className="h-9 w-9 animate-spin text-horizon-300" />
+      </div>
+    );
+  }
+
+  const isPreparation = homeState.kind === 'PREPARE' || homeState.kind === 'RESUME';
+  const isReady = homeState.kind === 'READY';
+  const hasPdf = Boolean(latestReading?.assets.pdf);
+  const audioUrl = toBffAssetUrl(latestReading?.assets.audio);
+
   return (
     <>
-      {showWizard && (
-        <CoreOnboardingWizard
-          userEmail={user?.email}
-          onComplete={handleWizardComplete}
-          onClose={() => {
-            setShowWizard(false);
-            toast.info('Progression sauvegardée ✨', {
-              description: 'Reprenez quand vous êtes prêt.',
-            });
+      {showPreparation && (
+        <ReadingPreparation
+          onCompleted={async () => {
+            await refetchData();
+            await refreshReadings();
           }}
+          onClose={() => setShowPreparation(false)}
+        />
+      )}
+      {selectedPdf && (
+        <ReadingViewerModal
+          isOpen
+          onClose={() => setSelectedPdf(null)}
+          pdfUrl={selectedPdf.url}
+          title={selectedPdf.title}
+          orderNumber={selectedPdf.orderNumber}
         />
       )}
 
-      <div className="mx-auto flex max-w-5xl flex-col items-center px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
-        <div className="relative z-10 mb-8 text-center">
-          <motion.h1
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-4 font-playfair text-3xl italic text-gradient-gold md:text-5xl"
-          >
-            Votre Sanctuaire Personnel
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-xs font-medium uppercase tracking-[0.15em] text-stellar-500"
-          >
-            Explorez votre univers intérieur à travers le mandala sacré
-          </motion.p>
-        </div>
+      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+        <header className="max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+            Sanctuaire Lumira
+          </p>
+          <h1 className="mt-3 font-playfair text-3xl italic text-stellar-100 sm:text-4xl">
+            Bonjour {user?.firstName || ''}
+          </h1>
+          <p className="mt-3 text-base leading-7 text-stellar-400">
+            Votre espace Lumira rassemble vos lectures, votre synthèse personnelle et vos échanges.
+          </p>
+        </header>
 
-        {!isOnboardingComplete && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="relative z-40 mx-auto mb-6 w-full max-w-2xl"
-          >
-            <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-900/40 to-emerald-950/40 shadow-[0_0_40px_rgba(16,185,129,0.15)] backdrop-blur-xl">
-              <div className="relative flex flex-col items-start gap-4 p-4 sm:flex-row sm:items-center sm:p-6">
-                <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-500/20">
-                  <Sparkles className="h-7 w-7 text-emerald-400" />
-                </div>
-                <div className="flex-grow">
-                  <h3 className="flex items-center gap-2 font-playfair text-lg italic text-emerald-300">
-                    {hasDraft ? 'Reprenez votre préparation' : 'Trois étapes essentielles'}
-                  </h3>
-                  <p className="mt-1 text-sm text-emerald-100/80">
-                    {hasDraft
-                      ? 'Votre progression serveur est sauvegardée. Continuez exactement où vous vous êtes arrêté.'
-                      : 'Naissance, visage, paume et consentement. Le diagnostic complet pourra être enrichi plus tard.'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowWizard(true)}
-                  className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-5 py-2.5 text-sm font-bold uppercase tracking-widest text-emerald-300 transition-all hover:bg-emerald-500/30 sm:w-auto sm:flex-shrink-0"
-                >
-                  {hasDraft ? 'Continuer →' : 'Commencer →'}
-                </button>
+        <section className="mt-8 overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 shadow-abyss sm:p-7">
+          <div className="flex items-start gap-4">
+            <span
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${isReady ? 'bg-emerald-400/15 text-emerald-300' : 'bg-horizon-400/15 text-horizon-300'}`}
+            >
+              {isReady ? <Checkmark /> : <Sparkles className="h-5 w-5" />}
+            </span>
+            <div className="min-w-0">
+              <h2 className="font-playfair text-2xl italic text-stellar-100">{homeState.title}</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-stellar-400">
+                {homeState.description}
+              </p>
+            </div>
+          </div>
+
+          {isPreparation && (
+            <button
+              type="button"
+              onClick={() => setShowPreparation(true)}
+              className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+            >
+              <Sparkles className="h-4 w-4" /> {homeState.actionLabel}
+            </button>
+          )}
+
+          {homeState.kind === 'EXPERT_REVIEW' && (
+            <Link
+              href="/sanctuaire/draws"
+              className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+            >
+              <BookOpen className="h-4 w-4" /> Voir mes lectures
+            </Link>
+          )}
+
+          {homeState.kind === 'PREPARING' && (
+            <Link
+              href="/sanctuaire/draws"
+              className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+            >
+              <BookOpen className="h-4 w-4" /> Voir mes lectures
+            </Link>
+          )}
+
+          {isReady && (
+            <div className="mt-6 space-y-4">
+              {audioUrl && (
+                <MysticAudioPlayer
+                  audioUrl={audioUrl}
+                  loadingText="Audio indisponible pour le moment."
+                />
+              )}
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {hasPdf ? (
+                  <button
+                    type="button"
+                    onClick={openReading}
+                    className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+                  >
+                    <FileText className="h-4 w-4" /> Lire
+                  </button>
+                ) : (
+                  <Link
+                    href="/sanctuaire/draws"
+                    className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+                  >
+                    <BookOpen className="h-4 w-4" /> Voir mes lectures
+                  </Link>
+                )}
+                {audioUrl && (
+                  <a
+                    href="#audio"
+                    className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+                  >
+                    <Headphones className="h-4 w-4" /> Écouter
+                  </a>
+                )}
+                {hasPdf && (
+                  <button
+                    type="button"
+                    onClick={downloadPdf}
+                    className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+                  >
+                    <Download className="h-4 w-4" /> Télécharger le PDF
+                  </button>
+                )}
               </div>
             </div>
-          </motion.div>
-        )}
-
-        {isOnboardingComplete && (
-          <div className="relative z-40 mx-auto mb-6 w-full max-w-2xl">
-            <ExpertValidationBanner />
-          </div>
-        )}
-
-        <section className="relative z-30 mb-6 flex w-full items-start justify-center py-4 md:mb-8 md:py-8">
-          {isOnboardingComplete ? (
-            <MandalaNav />
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full max-w-lg text-center"
-            >
-              <div className="glass-card rounded-2xl border border-horizon-400/20 p-8">
-                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-horizon-400/30 bg-gradient-to-br from-horizon-400/20 to-serenity-400/20">
-                  <Sparkles className="h-8 w-8 text-horizon-400" />
-                </div>
-                <h3 className="mb-3 font-playfair text-xl italic text-stellar-100">
-                  Préparez votre première lecture
-                </h3>
-                <p className="mb-6 text-sm text-stellar-500">
-                  Commencez par le minimum essentiel. Vous gardez la liberté de compléter le reste ensuite.
-                </p>
-                <button
-                  onClick={() => setShowWizard(true)}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 px-6 py-3 font-semibold text-abyss-900 transition-all hover:shadow-lg hover:shadow-horizon-400/25"
-                >
-                  <Sparkles className="h-5 w-5" />
-                  Ouvrir les 3 étapes
-                </button>
-              </div>
-            </motion.div>
           )}
         </section>
 
-        {hasOrders && isOnboardingComplete && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="relative z-20 mx-auto mb-12 w-full max-w-3xl"
+        <section className="mt-6 grid gap-4 sm:grid-cols-2">
+          <Link
+            href="/sanctuaire/draws"
+            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 transition-colors hover:bg-white/[0.06]"
           >
-            <CosmicNotification
-              title="Votre demande a été transmise avec succès"
-              message="L'Oracle travaille sur votre révélation personnalisée. Vous serez notifié par email et via l'application dès qu'elle sera prête."
-              delay="24–48h"
-              status="En cours de préparation"
-              actionLabel="Voir ma lecture"
-              actionHref="/sanctuaire/draws"
-            />
-          </motion.div>
+            <BookOpen className="h-5 w-5 text-horizon-300" />
+            <h2 className="mt-4 text-base font-medium text-stellar-100">Mes lectures</h2>
+            <p className="mt-1 text-sm text-stellar-500">
+              Lire, écouter ou télécharger les éléments déjà disponibles.
+            </p>
+          </Link>
+          <Link
+            href="/sanctuaire/synthesis"
+            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 transition-colors hover:bg-white/[0.06]"
+          >
+            <Sparkles className="h-5 w-5 text-horizon-300" />
+            <h2 className="mt-4 text-base font-medium text-stellar-100">Ma synthèse</h2>
+            <p className="mt-1 text-sm text-stellar-500">
+              Retrouvez les enseignements validés par vos lectures.
+            </p>
+          </Link>
+        </section>
+
+        {readingsError && (
+          <p role="alert" className="mt-5 text-sm text-rose-300">
+            Vos fichiers ne sont pas accessibles pour le moment. Vous pouvez réessayer depuis Mes
+            lectures.
+          </p>
         )}
       </div>
     </>
+  );
+}
+
+function Checkmark() {
+  return (
+    <span aria-hidden className="text-xl">
+      ✓
+    </span>
   );
 }
 
@@ -284,16 +301,12 @@ export default function SanctuaireDashboard() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[60vh] flex-1 items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-12 w-12 animate-spin text-horizon-400" />
-            <p className="text-sm uppercase tracking-widest text-stellar-500">Chargement...</p>
-          </div>
+        <div className="grid min-h-[60vh] place-items-center">
+          <Loader2 className="h-9 w-9 animate-spin text-horizon-300" />
         </div>
       }
     >
-      <AutoLoginHandler />
-      <DashboardContent />
+      <SanctuaireHome />
     </Suspense>
   );
 }

@@ -122,6 +122,12 @@ export class ClientController {
     return this.clientService.getChatQuota(req.user.userId);
   }
 
+  @Get('chat/history')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async getChatHistory(@Request() req: { user: { userId: string } }) {
+    return this.clientService.getLatestChatHistory(req.user.userId);
+  }
+
   /**
    * POST /api/client/chat
    * Chat with Oracle Lumira (CONFIDANT agent)

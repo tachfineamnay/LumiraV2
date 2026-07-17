@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Star, ChevronRight, Sparkles } from 'lucide-react';
+import { Star, ChevronRight } from 'lucide-react';
 import { SIDEBAR_NAV, PROFILE_NAV_ITEM, isNavActive } from '@/lib/sanctuaireNav';
 
 export function SanctuaireSidebar() {
@@ -22,7 +22,7 @@ export function SanctuaireSidebar() {
               Sanctuaire
             </span>
             <span className="block text-[10px] text-stellar-500 uppercase tracking-wider">
-              Oracle Lumira
+              Espace personnel
             </span>
           </div>
         </Link>
@@ -66,7 +66,7 @@ export function SanctuaireSidebar() {
         </ul>
       </nav>
 
-      <div className="p-4 border-t border-white/5 space-y-3">
+      <div className="p-4 border-t border-white/5">
         {(() => {
           const Icon = PROFILE_NAV_ITEM.icon;
           const active = isNavActive(pathname, PROFILE_NAV_ITEM.route);
@@ -84,24 +84,6 @@ export function SanctuaireSidebar() {
             </Link>
           );
         })()}
-
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-serenity-600/20 to-serenity-700/10 border border-serenity-500/20">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-serenity-300" />
-            <span className="text-sm font-bold text-serenity-200">Évoluer</span>
-          </div>
-          <p className="text-xs text-stellar-500 mb-3 leading-relaxed">
-            Découvrez les niveaux supérieurs de votre parcours spirituel
-          </p>
-          <Link href="/commande">
-            <button
-              type="button"
-              className="w-full py-2.5 min-h-[44px] rounded-xl bg-gradient-to-r from-horizon-400 to-horizon-500 text-abyss-800 text-sm font-semibold hover:shadow-gold-glow transition-all"
-            >
-              Voir les offres
-            </button>
-          </Link>
-        </div>
       </div>
     </aside>
   );

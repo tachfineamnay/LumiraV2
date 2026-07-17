@@ -145,7 +145,7 @@ function LoginContent() {
             </motion.div>
 
             <h1 className="text-3xl font-playfair italic text-gradient-gold mb-3">
-              Sanctuaire Oracle
+              Sanctuaire Lumira
             </h1>
             <p className="text-stellar-400 text-sm">Accédez à vos lectures personnalisées</p>
           </div>

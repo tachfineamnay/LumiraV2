@@ -29,16 +29,15 @@ import {
 import Link from 'next/link';
 import { GlassCard } from '../../../components/ui/GlassCard';
 import { SmartPhotoUploader } from '../../../components/onboarding/SmartPhotoUploader';
-import { useSanctuaire } from '../../../context/SanctuaireContext';
 import { useSanctuaireAuth } from '../../../context/SanctuaireAuthContext';
 import { DELIVERY_STYLES } from '../../../lib/holisticSchema';
+import { uploadOnboardingPhoto } from '../../../lib/onboarding-upload';
 
 // =============================================================================
 // COMPONENT
 // =============================================================================
 
 export default function ProfilePage() {
-  const { isSubscribed } = useSanctuaire();
   const { user, profile, refetchData } = useSanctuaireAuth();
 
   const [isEditingPhotos, setIsEditingPhotos] = useState(false);
@@ -62,10 +61,14 @@ export default function ProfilePage() {
   const handleSavePhotos = async () => {
     setIsSaving(true);
     try {
-      await sanctuaireApi.patch('/users/profile', {
-        facePhotoUrl: facePhoto,
-        palmPhotoUrl: palmPhoto,
-      });
+      const changes: { facePhotoUrl?: string | null; palmPhotoUrl?: string | null } = {};
+      if (facePhoto !== profile?.facePhotoUrl) {
+        changes.facePhotoUrl = await uploadOnboardingPhoto(facePhoto, 'FACE');
+      }
+      if (palmPhoto !== profile?.palmPhotoUrl) {
+        changes.palmPhotoUrl = await uploadOnboardingPhoto(palmPhoto, 'PALM');
+      }
+      await sanctuaireApi.patch('/users/profile', changes);
       await refetchData();
       setIsEditingPhotos(false);
       setPhotosChanged(false);
@@ -129,6 +132,7 @@ export default function ProfilePage() {
 
   const profileComplete = profile?.profileCompleted ?? false;
   const deliveryStyle = getDeliveryStyleInfo(profile?.deliveryStyle);
+  const isPrivatePhoto = (url: string | null) => Boolean(url?.startsWith('s3://onboarding/'));
 
   // Get user initials for avatar
   const getInitials = () => {
@@ -169,20 +173,12 @@ export default function ProfilePage() {
               </h1>
               <p className="text-stellar-400 text-sm mb-3">{user?.email}</p>
               <div className="flex flex-wrap items-center gap-3">
-                {isSubscribed ? (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md">
-                    <span className="text-sm">👑</span>
-                    <span className="text-xs font-bold uppercase tracking-widest text-amber-400">
-                      Cercle des Initiés
-                    </span>
-                  </div>
-                ) : (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10">
-                    <span className="text-xs font-bold uppercase tracking-widest text-stellar-500">
-                      Compte gratuit
-                    </span>
-                  </div>
-                )}
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md">
+                  <span className="text-sm">👑</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-amber-400">
+                    Accès à vie
+                  </span>
+                </div>
                 <span
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${profileComplete ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}
                 >
@@ -500,6 +496,13 @@ export default function ProfilePage() {
                     value={facePhoto || undefined}
                     onChange={handleFacePhotoChange}
                   />
+                ) : isPrivatePhoto(facePhoto) ? (
+                  <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-emerald-400/20 flex flex-col items-center justify-center px-4 text-center">
+                    <Shield className="w-10 h-10 text-emerald-400/60 mb-3" />
+                    <span className="text-sm text-stellar-300">
+                      Photo enregistrée de façon privée
+                    </span>
+                  </div>
                 ) : facePhoto ? (
                   <div
                     className="aspect-[4/3] rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity relative group"
@@ -535,6 +538,13 @@ export default function ProfilePage() {
                     value={palmPhoto || undefined}
                     onChange={handlePalmPhotoChange}
                   />
+                ) : isPrivatePhoto(palmPhoto) ? (
+                  <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-emerald-400/20 flex flex-col items-center justify-center px-4 text-center">
+                    <Shield className="w-10 h-10 text-emerald-400/60 mb-3" />
+                    <span className="text-sm text-stellar-300">
+                      Photo enregistrée de façon privée
+                    </span>
+                  </div>
                 ) : palmPhoto ? (
                   <div
                     className="aspect-[4/3] rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity relative group"

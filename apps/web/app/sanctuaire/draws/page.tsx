@@ -2,544 +2,242 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import Link from 'next/link';
+import React, { useCallback, useEffect, useState } from 'react';
 import dynamicImport from 'next/dynamic';
-import {
-  FileText,
-  Calendar,
-  Clock,
-  Sparkles,
-  Lock,
-  Loader2,
-  ChevronRight,
-  Eye,
-  Plus,
-  Hash,
-  Download,
-  Headphones,
-} from 'lucide-react';
-import { useSanctuaire } from '../../../context/SanctuaireContext';
+import { AlertCircle, Download, FileText, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { MysticAudioPlayer } from '../../../components/ui/MysticAudioPlayer';
 import sanctuaireApi from '../../../lib/sanctuaireApi';
 
-// react-pdf requires browser globals such as DOMMatrix. Keeping the viewer out
-// of the server bundle prevents runtime 500s on the standalone Next.js server.
 const ReadingViewerModal = dynamicImport(
-  () => import('../../../components/sanctuary/ReadingViewerModal')
-    .then((module) => module.ReadingViewerModal),
+  () =>
+    import('../../../components/sanctuary/ReadingViewerModal').then(
+      (module) => module.ReadingViewerModal,
+    ),
   { ssr: false },
 );
 
-// =============================================================================
-// TYPES
-// =============================================================================
+type ReadingStatus = 'PAID' | 'PROCESSING' | 'AWAITING_VALIDATION' | 'COMPLETED';
 
 interface Reading {
   id: string;
   orderNumber: string;
-  level: number;
-  status?: 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'AWAITING_VALIDATION' | 'PAID';
+  status: ReadingStatus;
   deliveredAt: string | null;
   createdAt: string;
-  archetype: string | null;
   title: string;
-  intention?: string;
-  keywords?: string[];
-  inProgress?: boolean;
-  assets: {
-    pdf?: string;
-    audio?: string;
+  archetype: string | null;
+  intention?: string | null;
+  assets: { pdf?: string | null; audio?: string | null };
+}
+
+function toBffAssetUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith('/api/') ? url.replace('/api/', '/api/bff/') : url;
+}
+
+function statusCopy(status: ReadingStatus): { label: string; description: string; tone: string } {
+  if (status === 'COMPLETED')
+    return {
+      label: 'Prête',
+      description: 'Disponible dans votre espace.',
+      tone: 'bg-emerald-400/15 text-emerald-200 border-emerald-400/25',
+    };
+  if (status === 'AWAITING_VALIDATION')
+    return {
+      label: 'En vérification',
+      description: 'Notre équipe vérifie votre lecture avant sa mise à disposition.',
+      tone: 'bg-horizon-400/15 text-horizon-200 border-horizon-400/25',
+    };
+  return {
+    label: 'En préparation',
+    description: 'Vous n’avez plus rien à faire. Nous vous écrirons dès qu’elle sera prête.',
+    tone: 'bg-horizon-400/15 text-horizon-200 border-horizon-400/25',
   };
 }
 
-interface DrawType {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  available: boolean;
-  comingSoon?: boolean;
-}
-
-// =============================================================================
-// DRAW TYPES
-// =============================================================================
-
-const DRAW_TYPES: DrawType[] = [
-  {
-    id: 'soul-reading',
-    name: "Lecture d'Âme",
-    description: 'Votre guidance spirituelle complète',
-    icon: <Sparkles className="w-5 h-5" />,
-    available: true,
-  },
-  {
-    id: 'energy-reading',
-    name: 'Tirage Énergétique',
-    description: 'État de vos énergies actuelles',
-    icon: <Eye className="w-5 h-5" />,
-    available: false,
-    comingSoon: true,
-  },
-  {
-    id: 'karmic-reading',
-    name: 'Analyse Karmique',
-    description: 'Exploration de vos vies passées',
-    icon: <Clock className="w-5 h-5" />,
-    available: false,
-    comingSoon: true,
-  },
-  {
-    id: 'mission-reading',
-    name: 'Mission de Vie',
-    description: 'Découvrez votre purpose',
-    icon: <Hash className="w-5 h-5" />,
-    available: false,
-    comingSoon: true,
-  },
-];
-
-// =============================================================================
-// DRAW CARD COMPONENT
-// =============================================================================
-
-function DrawCard({ draw }: { draw: DrawType }) {
-  return (
-    <motion.div
-      whileHover={draw.available ? { scale: 1.02 } : undefined}
-      className={`relative p-5 rounded-2xl border transition-all ${
-        draw.available
-          ? 'bg-abyss-700/50 border-white/10 hover:border-horizon-400/30 cursor-pointer'
-          : 'bg-abyss-800/30 border-white/5'
-      }`}
-    >
-      {/* Coming Soon Badge */}
-      {draw.comingSoon && (
-        <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-serenity-500/20 text-serenity-300 text-[10px] font-medium uppercase tracking-wider">
-          Bientôt
-        </span>
-      )}
-
-      <div className="flex items-start gap-4">
-        {/* Icon */}
-        <div
-          className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${
-            draw.available ? 'bg-horizon-400/20 text-horizon-400' : 'bg-white/5 text-stellar-500'
-          }`}
-        >
-          {draw.available ? draw.icon : <Lock className="w-5 h-5" />}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <h3
-            className={`font-semibold mb-1 ${draw.available ? 'text-white' : 'text-stellar-500'}`}
-          >
-            {draw.name}
-          </h3>
-          <p className="text-xs text-stellar-500 line-clamp-2">{draw.description}</p>
-        </div>
-      </div>
-
-      {/* Action */}
-      {draw.available && (
-        <Link href="/commande">
-          <button className="mt-4 w-full py-2.5 rounded-xl bg-horizon-400/10 hover:bg-horizon-400/20 text-horizon-400 text-sm font-medium transition-colors flex items-center justify-center gap-2">
-            Lancer
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </Link>
-      )}
-    </motion.div>
-  );
-}
-
-// =============================================================================
-// MAIN COMPONENT
-// =============================================================================
-
 export default function DrawsPage() {
-  const { highestLevel, isLoading: contextLoading } = useSanctuaire();
   const [readings, setReadings] = useState<Reading[]>([]);
-  const [pendingReadings, setPendingReadings] = useState<Reading[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [viewerOpen, setViewerOpen] = useState(false);
+  const [pending, setPending] = useState<Reading[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPdf, setSelectedPdf] = useState<{
     url: string;
     title: string;
-    orderNumber?: string;
+    orderNumber: string;
   } | null>(null);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-  // Helper to resolve PDF URLs (convert relative API URLs to absolute)
-  const resolvePdfUrl = useCallback(
-    (url: string | null | undefined): string | null => {
-      if (!url) return null;
-      if (url.startsWith('/api/')) {
-        return `${apiUrl}${url}`;
-      }
-      return url;
-    },
-    [apiUrl],
-  );
-
-  // Fetch user's readings
-  const fetchReadings = useCallback(async () => {
+  const loadReadings = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      setLoading(true);
       const { data } = await sanctuaireApi.get('/client/readings');
       setReadings(data.readings || []);
-      setPendingReadings(data.pending || []);
-    } catch (error) {
-      console.error('Failed to fetch readings:', error);
+      setPending(data.pending || []);
+    } catch {
+      setError('Vos lectures ne sont pas accessibles pour le moment. Réessayez dans un instant.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchReadings();
-  }, [fetchReadings]);
-
-  const openPdfViewer = (pdfUrl: string, title: string, orderNumber?: string) => {
-    setSelectedPdf({ url: pdfUrl, title, orderNumber });
-    setViewerOpen(true);
-  };
-
-  const closePdfViewer = () => {
-    setViewerOpen(false);
-    setSelectedPdf(null);
-  };
+    loadReadings();
+  }, [loadReadings]);
 
   const downloadPdf = async (reading: Reading) => {
-    if (!reading.assets.pdf) return;
     try {
       const { data } = await sanctuaireApi.get(`/readings/${reading.orderNumber}/file`, {
         responseType: 'blob',
       });
-      const blob =
-        data instanceof Blob
-          ? data.type === 'application/pdf' || !data.type
-            ? data
-            : new Blob([data], { type: 'application/pdf' })
-          : new Blob([data], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${reading.title.replace(/[^\w-]+/gi, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download failed:', err);
-      // Fallback: open download redirect
-      const fallback = resolvePdfUrl(reading.assets.pdf);
-      if (fallback) window.open(fallback, '_blank', 'noopener,noreferrer');
+      const objectUrl = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `${reading.title.replace(/[^\w-]+/gi, '_')}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setError('Le PDF ne peut pas être téléchargé pour le moment.');
     }
   };
 
-  // Get the latest reading (completed or pending)
-  const latestReading = readings[0];
-  const latestPending = pendingReadings[0];
-  const currentMonth = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-
-  if (contextLoading || loading) {
+  if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 text-horizon-400 animate-spin mx-auto mb-3" />
-          <p className="text-stellar-400 text-sm">Chargement de vos révélations...</p>
-        </div>
+      <div className="grid min-h-[60vh] place-items-center">
+        <Loader2 className="h-9 w-9 animate-spin text-horizon-300" />
       </div>
     );
   }
 
+  const allReadings = [...pending, ...readings];
+
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
-      {/* PDF Viewer Modal */}
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
       {selectedPdf && (
         <ReadingViewerModal
-          isOpen={viewerOpen}
-          onClose={closePdfViewer}
+          isOpen
+          onClose={() => setSelectedPdf(null)}
           pdfUrl={selectedPdf.url}
           title={selectedPdf.title}
           orderNumber={selectedPdf.orderNumber}
         />
       )}
-
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-serif italic text-white mb-1">Mes Révélations</h1>
-            <p className="text-stellar-400 text-sm">
-              Accédez à vos lectures et tirages personnalisés
-            </p>
-          </div>
-          {!latestPending && (
-            <Link href="/commande">
-              <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-horizon-400 text-abyss-900 font-semibold text-sm hover:bg-horizon-300 transition-colors">
-                <Plus className="w-4 h-4" />
-                Nouvelle Lecture
-              </button>
-            </Link>
-          )}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+            Sanctuaire Lumira
+          </p>
+          <h1 className="mt-2 font-playfair text-3xl italic text-stellar-100">Mes lectures</h1>
+          <p className="mt-2 text-sm text-stellar-400">
+            Vos lectures sont disponibles ici dès leur validation.
+          </p>
         </div>
-      </motion.div>
-
-      {/* BANNIÈRE INFORMATIVE - Lecture en cours ou disponible */}
-      {latestPending && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3"
+        <button
+          type="button"
+          onClick={loadReadings}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-stellar-300 hover:bg-white/[0.05]"
         >
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
-            <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-white font-medium">Lecture en cours de préparation</p>
-            <p className="text-xs text-stellar-400">
-              Disponible sous 24-48h •{' '}
-              <span className="font-mono text-amber-400/80">#{latestPending.orderNumber}</span>
-            </p>
-          </div>
-        </motion.div>
+          <RefreshCw className="h-4 w-4" /> Actualiser
+        </button>
+      </header>
+
+      {error && (
+        <div
+          role="alert"
+          className="mt-6 flex items-start gap-3 rounded-2xl border border-rose-400/25 bg-rose-400/10 p-4 text-sm text-rose-200"
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <span>{error}</span>
+        </div>
       )}
 
-      {/* BANNIÈRE - Lecture disponible */}
-      {latestReading && latestReading.assets.pdf && !latestPending && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3"
-        >
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-white font-medium">Votre lecture est disponible</p>
-            <p className="text-xs text-stellar-400">
-              Consultez votre PDF, chemin de vie et synthèses ci-dessous
-            </p>
-          </div>
-          <button
-            onClick={() =>
-              openPdfViewer(
-                latestReading.assets.pdf!,
-                latestReading.title,
-                latestReading.orderNumber,
-              )
-            }
-            className="flex-shrink-0 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm font-medium hover:bg-emerald-500/30 transition-colors"
-          >
-            Consulter
-          </button>
-        </motion.div>
-      )}
-
-      {/* MA LECTURE - Main Reading Section */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mb-10"
-      >
-        <h2 className="text-xs font-bold text-stellar-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <FileText className="w-4 h-4" />
-          Ma Lecture
-        </h2>
-
-        {latestReading ? (
-          <div className="p-6 rounded-2xl bg-abyss-700/30 border border-white/10 backdrop-blur-sm">
-            {/* Top: Title & Date */}
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-              <div>
-                <h3 className="text-xl font-semibold text-white mb-1">
-                  Guidance de {currentMonth}
-                </h3>
-                <div className="flex items-center gap-3 text-xs text-stellar-400">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    {latestReading.deliveredAt
-                      ? new Date(latestReading.deliveredAt).toLocaleDateString('fr-FR', {
+      {allReadings.length === 0 ? (
+        <section className="mt-8 rounded-3xl border border-white/[0.08] bg-white/[0.03] p-8 text-center sm:p-12">
+          <Sparkles className="mx-auto h-8 w-8 text-horizon-300" />
+          <h2 className="mt-4 font-playfair text-2xl italic text-stellar-100">
+            Vos lectures apparaîtront ici
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-stellar-400">
+            Votre lecture sera ajoutée à cet espace dès que votre préparation aura été validée et
+            que les éléments seront prêts.
+          </p>
+        </section>
+      ) : (
+        <div className="mt-8 space-y-4">
+          {allReadings.map((reading) => {
+            const status = statusCopy(reading.status);
+            const pdfUrl = toBffAssetUrl(reading.assets.pdf);
+            const audioUrl = toBffAssetUrl(reading.assets.audio);
+            return (
+              <article
+                key={reading.id}
+                className="rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 shrink-0 text-horizon-300" />
+                      <h2 className="truncate text-lg font-medium text-stellar-100">
+                        {reading.title}
+                      </h2>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-stellar-400">
+                      {reading.intention || status.description}
+                    </p>
+                    {reading.deliveredAt && (
+                      <p className="mt-3 text-xs text-stellar-500">
+                        Disponible depuis le{' '}
+                        {new Date(reading.deliveredAt).toLocaleDateString('fr-FR', {
                           day: 'numeric',
                           month: 'long',
                           year: 'numeric',
-                        })
-                      : 'En cours de préparation'}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-horizon-400/20 text-horizon-400 font-medium">
-                    #{latestReading.orderNumber}
-                  </span>
-                </div>
-              </div>
-              {latestReading.archetype && (
-                <span className="px-3 py-1.5 rounded-full bg-serenity-500/20 text-serenity-300 text-xs font-medium">
-                  {latestReading.archetype}
-                </span>
-              )}
-            </div>
-
-            {/* Middle: Intention & Keywords */}
-            <div className="mb-6 p-4 rounded-xl bg-abyss-800/50 border border-white/5">
-              <p className="text-stellar-300 text-sm leading-relaxed line-clamp-3">
-                {latestReading.intention ||
-                  "Votre lecture spirituelle personnalisée est prête. Découvrez les messages de l'Oracle concernant votre chemin de vie et votre évolution spirituelle."}
-              </p>
-              {latestReading.keywords && latestReading.keywords.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {latestReading.keywords.map((keyword, i) => (
-                    <span
-                      key={i}
-                      className="px-2 py-0.5 rounded-full bg-white/5 text-stellar-400 text-xs"
-                    >
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Bottom: Audio Player & Action */}
-            <div className="space-y-4">
-              {/* Audio Player */}
-              {highestLevel >= 2 && <MysticAudioPlayer audioUrl={latestReading.assets.audio} />}
-
-              {/* Action Button */}
-              <div className="flex flex-col sm:flex-row gap-3">
-                {latestReading.assets.pdf ? (
-                  <button
-                    onClick={() =>
-                      openPdfViewer(
-                        latestReading.assets.pdf!,
-                        latestReading.title,
-                        latestReading.orderNumber,
-                      )
-                    }
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 min-h-[48px] rounded-xl bg-horizon-400 text-abyss-900 font-semibold hover:bg-horizon-300 transition-all hover:shadow-lg hover:shadow-horizon-400/20"
+                        })}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${status.tone}`}
                   >
-                    <Eye className="w-5 h-5" />
-                    Ouvrir le Dossier
-                  </button>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white/5 text-stellar-500">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Préparation en cours...
+                    {status.label}
+                  </span>
+                </div>
+
+                {reading.status === 'COMPLETED' && (
+                  <div className="mt-5 space-y-4">
+                    {audioUrl && <MysticAudioPlayer audioUrl={audioUrl} />}
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      {pdfUrl && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedPdf({
+                              url: pdfUrl,
+                              title: reading.title,
+                              orderNumber: reading.orderNumber,
+                            })
+                          }
+                          className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+                        >
+                          <FileText className="h-4 w-4" /> Lire
+                        </button>
+                      )}
+                      {pdfUrl && (
+                        <button
+                          type="button"
+                          onClick={() => downloadPdf(reading)}
+                          className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+                        >
+                          <Download className="h-4 w-4" /> Télécharger le PDF
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
-
-                {latestReading.assets.pdf && (
-                  <button
-                    type="button"
-                    onClick={() => downloadPdf(latestReading)}
-                    className="flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-xl bg-white/5 hover:bg-white/10 text-stellar-300 transition-colors"
-                    aria-label="Télécharger le PDF"
-                  >
-                    <Download className="w-5 h-5" />
-                    <span className="sm:inline">Télécharger</span>
-                  </button>
-                )}
-
-                {highestLevel >= 2 && latestReading.assets.audio && (
-                  <a
-                    href={latestReading.assets.audio}
-                    download
-                    title="Télécharger l'audio"
-                    className="flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-xl bg-white/5 hover:bg-white/10 text-stellar-300 transition-colors"
-                  >
-                    <Headphones className="w-5 h-5" />
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="p-8 rounded-2xl bg-abyss-700/30 border border-white/10 text-center">
-            <div className="w-16 h-16 rounded-full bg-horizon-400/10 flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-horizon-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Aucune lecture disponible</h3>
-            <p className="text-stellar-400 text-sm mb-4">
-              Commencez votre voyage spirituel avec votre première lecture
-            </p>
-            <Link href="/commande">
-              <button className="px-6 py-2.5 rounded-xl bg-horizon-400 text-abyss-900 font-semibold text-sm hover:bg-horizon-300 transition-colors">
-                Commander ma première lecture
-              </button>
-            </Link>
-          </div>
-        )}
-      </motion.section>
-
-      {/* MES TIRAGES - Draw Types Section */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <h2 className="text-xs font-bold text-stellar-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Sparkles className="w-4 h-4" />
-          Mes Tirages
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {DRAW_TYPES.map((draw) => (
-            <DrawCard key={draw.id} draw={draw} />
-          ))}
+              </article>
+            );
+          })}
         </div>
-      </motion.section>
-
-      {/* Previous Readings History */}
-      {readings.length > 1 && (
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mt-10"
-        >
-          <h2 className="text-xs font-bold text-stellar-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            Historique
-          </h2>
-
-          <div className="space-y-3">
-            {readings.slice(1).map((reading) => (
-              <div
-                key={reading.id}
-                className="flex items-center justify-between p-4 rounded-xl bg-abyss-800/30 border border-white/5 hover:border-white/10 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-stellar-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-white">{reading.title}</p>
-                    <p className="text-xs text-stellar-500">
-                      {reading.deliveredAt
-                        ? new Date(reading.deliveredAt).toLocaleDateString('fr-FR')
-                        : 'En cours'}
-                    </p>
-                  </div>
-                </div>
-                {reading.assets.pdf && (
-                  <button
-                    onClick={() =>
-                      openPdfViewer(reading.assets.pdf!, reading.title, reading.orderNumber)
-                    }
-                    className="px-4 py-2 min-h-[40px] rounded-lg bg-white/5 hover:bg-white/10 text-stellar-300 text-sm transition-colors"
-                  >
-                    Lire
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </motion.section>
       )}
     </div>
   );

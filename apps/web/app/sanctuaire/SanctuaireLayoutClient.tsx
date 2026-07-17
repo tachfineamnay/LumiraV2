@@ -3,197 +3,132 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { SanctuaireAuthProvider, useSanctuaireAuth } from '../../context/SanctuaireAuthContext';
-import { SanctuaireProvider, useSanctuaire } from '../../context/SanctuaireContext';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronDown, Home, LogOut, ShieldCheck } from 'lucide-react';
 import { SanctuaireGuard } from '../../components/guards/SanctuaireGuard';
-import { SanctuaireSidebar } from '../../components/sanctuary/SanctuaireSidebar';
 import { MobileBottomNav } from '../../components/sanctuary/MobileBottomNav';
+import { SanctuaireSidebar } from '../../components/sanctuary/SanctuaireSidebar';
+import { SanctuaireAuthProvider, useSanctuaireAuth } from '../../context/SanctuaireAuthContext';
+import { SanctuaireProvider } from '../../context/SanctuaireContext';
 import { PROFILE_MENU_NAV } from '@/lib/sanctuaireNav';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Home, LogOut, ChevronDown, Crown } from 'lucide-react';
 
 function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
-  const { user, logout, isAuthenticated } = useSanctuaireAuth();
-  const { isSubscribed, isLoading: entitlementsLoading } = useSanctuaire();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const { isAuthenticated, logout, user } = useSanctuaireAuth();
   const pathname = usePathname();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const isLoginPage = pathname === '/sanctuaire/login';
-  const userName = user ? `${user.firstName} ${user.lastName}` : 'Explorateur';
+  if (pathname === '/sanctuaire/login') return <>{children}</>;
+
+  const userName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Votre profil';
   const userInitial = user?.firstName?.[0]?.toUpperCase() || 'U';
-
-  if (isLoginPage) {
-    return <>{children}</>;
-  }
 
   return (
     <SanctuaireGuard>
       <div className="min-h-dvh bg-abyss-700 text-stellar-100 selection:bg-horizon-400/20 starfield">
         <SanctuaireSidebar />
-
-        <div className="lg:ml-64 min-h-dvh flex flex-col">
-          <header className="sticky top-0 z-40 p-3 sm:p-4 flex justify-between items-center backdrop-blur-xl bg-abyss-700/80 border-b border-white/[0.04]">
-            <div className="flex items-center gap-3 lg:hidden">
+        <div className="min-h-dvh lg:ml-64">
+          <header className="sticky top-0 z-40 flex min-h-[64px] items-center justify-between border-b border-white/[0.05] bg-abyss-700/85 px-3 py-3 backdrop-blur-xl sm:px-5">
+            <div className="flex items-center gap-2 lg:hidden">
               <Link
                 href="/sanctuaire"
-                aria-label="Accueil Sanctuaire"
-                className="w-10 h-10 rounded-xl bg-abyss-500/50 border border-white/[0.06] flex items-center justify-center hover:bg-abyss-400/50 transition-all duration-300 flex-shrink-0"
+                aria-label="Accueil Lumira"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-abyss-500/50 text-stellar-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
               >
-                <Home className="w-4 h-4 text-stellar-400" />
+                <Home className="h-4 w-4" />
               </Link>
-              <Link href="/sanctuaire" className="flex items-center gap-2">
-                <span className="text-sm font-playfair italic text-stellar-300">Sanctuaire</span>
-              </Link>
+              <span className="font-playfair text-sm italic text-stellar-200">Lumira</span>
             </div>
 
-            <div className="flex-1" />
-
-            <div className="flex items-center gap-2 sm:gap-3">
-              {entitlementsLoading ? (
-                <div
-                  className="w-10 h-10 sm:w-auto sm:px-4 sm:py-2 rounded-full bg-abyss-500/50 animate-pulse"
-                  aria-hidden
-                >
-                  <span className="hidden sm:inline text-xs text-stellar-500">Chargement...</span>
-                </div>
-              ) : isSubscribed ? (
-                <Link
-                  href="/sanctuaire/abonnement"
-                  aria-label="Cercle des Initiés"
-                  className="inline-flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md hover:border-amber-400/50 transition-colors"
-                >
-                  <Crown className="w-4 h-4 text-amber-400" />
-                  <span className="hidden sm:inline text-xs font-bold uppercase tracking-widest text-amber-400">
-                    Initié
-                  </span>
-                </Link>
-              ) : (
-                <Link
-                  href="/commande"
-                  aria-label="Découvrir les offres"
-                  className="inline-flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-full bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 hover:border-amber-500/40 transition-colors"
-                >
-                  <Crown className="w-4 h-4 text-amber-400/70 sm:hidden" />
-                  <span className="hidden sm:inline text-xs font-bold uppercase tracking-widest text-amber-400/70">
-                    S&apos;abonner
-                  </span>
-                </Link>
-              )}
-
-              {isAuthenticated && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    aria-expanded={isProfileOpen}
-                    aria-haspopup="menu"
-                    className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 min-h-[44px] rounded-xl bg-abyss-500/50 border border-white/[0.06] hover:bg-abyss-400/50 transition-all duration-300"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-horizon-300 to-horizon-500 flex items-center justify-center text-abyss-800 font-bold text-sm">
-                      {userInitial}
-                    </div>
-                    <span className="text-sm font-medium hidden md:block text-stellar-300 max-w-[120px] truncate">
-                      {userName}
-                    </span>
-                    <ChevronDown
-                      className={`w-4 h-4 text-stellar-500 transition-transform duration-300 ${
-                        isProfileOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-
-                  <AnimatePresence>
-                    {isProfileOpen && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-40"
-                          onClick={() => setIsProfileOpen(false)}
-                          aria-hidden
-                        />
-
-                        <motion.div
-                          role="menu"
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-72 z-50 bg-abyss-600/95 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-abyss overflow-hidden"
-                        >
-                          <div className="p-4 border-b border-white/[0.04] bg-gradient-to-br from-horizon-400/5 to-transparent">
-                            <div className="flex items-center gap-3 mb-3">
-                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-horizon-300 to-horizon-500 flex items-center justify-center text-abyss-800 font-bold text-lg flex-shrink-0">
-                                {userInitial}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-medium text-stellar-100 truncate">{userName}</p>
-                                <p className="text-xs text-stellar-500 truncate">{user?.email}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {!entitlementsLoading && isSubscribed ? (
-                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-400/30">
-                                  <Crown className="w-3 h-3 text-amber-400" />
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                                    Cercle des Initiés
-                                  </span>
-                                </div>
-                              ) : !entitlementsLoading ? (
-                                <span className="text-[10px] text-stellar-500 uppercase tracking-wider">
-                                  Compte gratuit
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <nav className="p-2">
-                            {PROFILE_MENU_NAV.map((item) => {
-                              const Icon = item.icon;
-                              return (
-                                <Link
-                                  key={item.key}
-                                  href={item.route}
-                                  role="menuitem"
-                                  onClick={() => setIsProfileOpen(false)}
-                                  className="flex items-center gap-3 w-full px-4 py-3 min-h-[48px] rounded-xl hover:bg-white/5 transition-colors"
-                                >
-                                  <Icon className="w-5 h-5 text-horizon-400 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <span className="text-sm text-stellar-100">{item.label}</span>
-                                    {item.sublabel && (
-                                      <span className="block text-[10px] text-stellar-500">
-                                        {item.sublabel}
-                                      </span>
-                                    )}
-                                  </div>
-                                </Link>
-                              );
-                            })}
-                          </nav>
-
-                          <div className="p-2 border-t border-white/[0.04]">
-                            <button
-                              type="button"
-                              className="flex items-center gap-3 w-full px-4 py-3 min-h-[48px] rounded-xl transition-colors text-rose-400 hover:bg-rose-400/10"
-                              onClick={() => {
-                                logout();
-                                setIsProfileOpen(false);
-                              }}
-                            >
-                              <LogOut className="w-5 h-5" />
-                              <span className="text-sm">Déconnexion</span>
-                            </button>
-                          </div>
-                        </motion.div>
-                      </>
-                    )}
-                  </AnimatePresence>
-                </div>
-              )}
+            <div className="hidden items-center gap-2 lg:flex" aria-label="Statut d'accès">
+              <ShieldCheck className="h-4 w-4 text-horizon-300" />
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-200">
+                Accès à vie
+              </span>
             </div>
+
+            {isAuthenticated && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen((open) => !open)}
+                  aria-expanded={isProfileOpen}
+                  aria-haspopup="menu"
+                  className="flex min-h-[44px] items-center gap-2 rounded-xl border border-white/[0.08] bg-abyss-500/50 px-2 py-2 text-left transition-colors hover:bg-abyss-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 sm:px-3"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-horizon-300 to-horizon-500 text-sm font-bold text-abyss-800">
+                    {userInitial}
+                  </span>
+                  <span className="hidden max-w-[150px] truncate text-sm text-stellar-200 sm:block">
+                    {userName}
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 text-stellar-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {isProfileOpen && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Fermer le menu profil"
+                        className="fixed inset-0 z-40 cursor-default"
+                        onClick={() => setIsProfileOpen(false)}
+                      />
+                      <motion.div
+                        role="menu"
+                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                        className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-600/95 shadow-abyss backdrop-blur-xl"
+                      >
+                        <div className="border-b border-white/[0.05] p-4">
+                          <p className="truncate text-sm font-medium text-stellar-100">
+                            {userName}
+                          </p>
+                          <p className="truncate text-xs text-stellar-500">{user?.email}</p>
+                          <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-horizon-400/25 bg-horizon-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-horizon-200">
+                            <ShieldCheck className="h-3 w-3" /> Accès à vie
+                          </p>
+                        </div>
+                        <nav className="p-2">
+                          {PROFILE_MENU_NAV.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                              <Link
+                                key={item.key}
+                                href={item.route}
+                                role="menuitem"
+                                onClick={() => setIsProfileOpen(false)}
+                                className="flex min-h-[48px] items-center gap-3 rounded-xl px-3 py-2 text-sm text-stellar-200 hover:bg-white/[0.05]"
+                              >
+                                <Icon className="h-5 w-5 text-horizon-300" />
+                                <span>{item.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </nav>
+                        <div className="border-t border-white/[0.05] p-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              logout();
+                              setIsProfileOpen(false);
+                            }}
+                            className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-rose-300 hover:bg-rose-400/10"
+                          >
+                            <LogOut className="h-5 w-5" /> Déconnexion
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </header>
-
-          <main className="sanctuaire-main flex-1 flex flex-col min-h-0 min-w-0">{children}</main>
+          <main className="sanctuaire-main flex min-h-0 min-w-0 flex-1 flex-col">{children}</main>
         </div>
-
         <MobileBottomNav />
       </div>
     </SanctuaireGuard>

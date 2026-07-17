@@ -13,6 +13,7 @@ import {
   createTestEntitlements,
   createTestDream,
   type TestUser,
+  type TestOrder,
 } from './fixtures-factory';
 
 const BFF = '**/api/bff';
@@ -34,6 +35,12 @@ export interface MockAuthOptions {
   subscribed?: boolean;
   hasOrders?: boolean;
   profileCompleted?: boolean;
+  orderStatus?: TestOrder['status'];
+  onboardingProgress?: {
+    currentStep: number;
+    status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+    data?: Record<string, unknown>;
+  } | null;
 }
 
 /**
@@ -41,11 +48,19 @@ export interface MockAuthOptions {
  * Call BEFORE navigating to /sanctuaire pages.
  */
 export async function mockSanctuaireAuth(page: Page, options: MockAuthOptions = {}) {
-  const { subscribed = true, hasOrders = true, profileCompleted = true } = options;
+  const {
+    subscribed = true,
+    hasOrders = true,
+    profileCompleted = true,
+    orderStatus,
+    onboardingProgress = null,
+  } = options;
 
   const user = createTestUser(options.user);
   const profile = createTestProfile(user.id, { profileCompleted });
-  const order = hasOrders ? createTestOrder({ userId: user.id, email: user.email }) : null;
+  const order = hasOrders
+    ? createTestOrder({ userId: user.id, email: user.email, status: orderStatus })
+    : null;
   const entitlements = createTestEntitlements(subscribed);
 
   // httpOnly session cookie (Playwright can set httpOnly cookies).
@@ -109,6 +124,14 @@ export async function mockSanctuaireAuth(page: Page, options: MockAuthOptions = 
 
   await page.route(`${BFF}/users/orders/completed`, async (route: Route) => {
     await fulfillJson(route, order ? [order] : []);
+  });
+
+  await page.route(`${BFF}/users/onboarding`, async (route: Route) => {
+    if (route.request().method() === 'GET') {
+      await fulfillJson(route, onboardingProgress);
+      return;
+    }
+    await fulfillJson(route, { currentStep: 1, status: 'IN_PROGRESS', data: {} });
   });
 
   const sub = subscribed ? createTestSubscription(user.id, 'ACTIVE') : null;
@@ -273,6 +296,10 @@ export async function mockChatApi(page: Page, options: MockChatOptions = {}) {
     });
   });
 
+  await page.route(`${BFF}/client/chat/history`, async (route: Route) => {
+    await fulfillJson(route, { sessionId: null, messages: [] });
+  });
+
   await page.route(`${BFF}/client/chat`, async (route: Route) => {
     if (route.request().method() === 'POST') {
       if (!subscribed && messagesUsed >= 3) {
@@ -283,9 +310,9 @@ export async function mockChatApi(page: Page, options: MockChatOptions = {}) {
         );
       } else {
         await fulfillJson(route, {
-          message: "Chère âme, votre question touche à l'essence même de votre chemin spirituel.",
-          role: 'assistant',
+          response: "Votre question touche à l'essence même de votre lecture.",
           sessionId: 'session-mock-1',
+          timestamp: new Date().toISOString(),
         });
       }
     } else {
@@ -339,7 +366,25 @@ export async function mockDrawsApi(page: Page, userId: string = 'user-1') {
   const order2 = createTestOrder({ userId, status: 'PROCESSING' });
 
   await page.route(`${BFF}/client/readings`, async (route: Route) => {
-    await fulfillJson(route, [order1, order2]);
+    await fulfillJson(route, {
+      readings: [
+        {
+          ...order1,
+          title: "Lecture d'Âme",
+          archetype: 'Le Sage',
+          intention: 'Une lecture validée pour accompagner votre réflexion.',
+          assets: { pdf: `/api/readings/${order1.orderNumber}/file`, audio: null },
+        },
+      ],
+      pending: [
+        {
+          ...order2,
+          title: "Lecture d'Âme",
+          archetype: null,
+          assets: { pdf: null, audio: null },
+        },
+      ],
+    });
   });
 
   await page.route(/\/api\/bff\/readings\/[\w-]+\/download/, async (route: Route) => {

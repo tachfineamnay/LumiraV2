@@ -79,7 +79,7 @@ describe('ClientService', () => {
         ],
       };
       prisma.spiritualPath.findUnique.mockResolvedValue(mockPath);
-      prisma.orderFile.findFirst.mockResolvedValue({ url: 'https://s3.example.com/audio.mp3' });
+      prisma.orderFile.findFirst.mockResolvedValue({ order: { orderNumber: 'LUM-001' } });
 
       const result = await service.getSpiritualPath('user-1');
 
@@ -89,7 +89,7 @@ describe('ClientService', () => {
       expect(result!.steps[0].dayNumber).toBe(1);
       expect(result!.steps[0].isCompleted).toBe(true);
       expect(result!.steps[1].isCompleted).toBe(false);
-      expect(result!.synthesisAudioUrl).toBe('https://s3.example.com/audio.mp3');
+      expect(result!.synthesisAudioUrl).toBe('/api/readings/LUM-001/audio');
     });
 
     it('should return null when no path exists', async () => {

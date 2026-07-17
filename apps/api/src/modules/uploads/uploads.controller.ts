@@ -48,7 +48,10 @@ export class UploadsController {
     return { url, key };
   }
 
-  @Roles('CLIENT', 'EXPERT', 'ADMIN')
+  // Client media has dedicated ownership-checked routes. This legacy generic
+  // signer remains available to the Desk only; a client must never turn an
+  // arbitrary object key into a private download URL.
+  @Roles('EXPERT', 'ADMIN')
   @Get('signed-url')
   async getSignedUrl(
     @Query('key') key: string,

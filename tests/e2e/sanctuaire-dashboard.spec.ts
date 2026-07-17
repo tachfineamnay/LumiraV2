@@ -1,93 +1,80 @@
 /**
- * E2E Tests — Sanctuaire Dashboard
- * Validates: cards display, navigation, subscription badge, sidebar/nav, mobile responsiveness
+ * E2E — Sanctuaire home state machine.
+ * Every visible status comes from profile/order/onboarding responses.
  */
 import { test, expect } from '@playwright/test';
-import { mockSanctuaireAuth, mockFullSanctuaire } from '../helpers/api-mock';
+import { mockFullSanctuaire, mockSanctuaireAuth } from '../helpers/api-mock';
 
-test.describe('Sanctuaire Dashboard — Subscribed User', () => {
-    test.beforeEach(async ({ page }) => {
-        await mockFullSanctuaire(page, { subscribed: true });
+test.describe('Sanctuaire — accueil', () => {
+  test('shows the lifetime-access shell and a validated reading', async ({ page }) => {
+    await mockFullSanctuaire(page, { profileCompleted: true, orderStatus: 'COMPLETED' });
+
+    await page.goto('/sanctuaire');
+
+    await expect(page.getByText('Accès à vie', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Votre lecture est prête' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Mes lectures' }).first()).toBeVisible();
+    await expect(page.getByText(/abonnement|voir les offres|initié/i)).toHaveCount(0);
+  });
+
+  test('starts the preparation only when the server profile is incomplete', async ({ page }) => {
+    await mockSanctuaireAuth(page, { profileCompleted: false, hasOrders: true });
+
+    await page.goto('/sanctuaire');
+
+    await expect(
+      page.getByRole('heading', { name: 'Préparez votre première lecture' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Préparer ma lecture' })).toBeVisible();
+    await expect(page.getByText('Votre lecture est en préparation')).toHaveCount(0);
+  });
+
+  test('resumes a server-saved preparation draft', async ({ page }) => {
+    await mockSanctuaireAuth(page, {
+      profileCompleted: false,
+      onboardingProgress: { currentStep: 1, status: 'IN_PROGRESS', data: { birthPlace: 'Lyon' } },
     });
 
-    test('should display dashboard heading', async ({ page }) => {
-        await page.goto('/sanctuaire');
-        await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10000 });
-    });
+    await page.goto('/sanctuaire');
 
-    test('should display navigation cards (profil, lectures, chat, etc.)', async ({ page }) => {
-        await page.goto('/sanctuaire');
+    await expect(
+      page.getByRole('heading', { name: 'Votre préparation vous attend' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reprendre ma préparation' })).toBeVisible();
+  });
 
-        // Dashboard cards: "Mon Profil", "Mes Lectures", "Guidance Sacrée"
-        await expect(page.locator('text=/profil/i').first()).toBeVisible({ timeout: 10000 });
-        await expect(page.locator('text=/mes lectures|lectures/i').first()).toBeVisible();
-    });
+  test('validates the short preparation without persisting browser previews', async ({ page }) => {
+    await mockSanctuaireAuth(page, { profileCompleted: false });
 
-    test('should navigate to profile page from dashboard card', async ({ page }) => {
-        await page.goto('/sanctuaire');
+    await page.goto('/sanctuaire');
+    await page.getByRole('button', { name: 'Préparer ma lecture' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
 
-        const profileLink = page.locator('a[href*="/sanctuaire/profile"], [href*="/sanctuaire/profile"]').first();
-        await expect(profileLink).toBeVisible({ timeout: 10000 });
-        await profileLink.click();
+    await page.locator('#birth-date').fill('1990-06-15');
+    await page.locator('#birth-place').fill('Lyon, France');
+    await page.getByRole('button', { name: 'Continuer' }).click();
+    await page.getByRole('button', { name: 'Continuer' }).click();
+    await expect(page.getByRole('heading', { name: 'Vérifiez vos éléments' })).toBeVisible();
 
-        await page.waitForURL('**/sanctuaire/profile', { timeout: 5000 });
-        expect(page.url()).toContain('/sanctuaire/profile');
-    });
+    await page.getByRole('checkbox').check();
+    await page.getByRole('button', { name: 'Valider et lancer la préparation' }).click();
+    await expect(page.getByRole('heading', { name: 'Tout est bien reçu' })).toBeVisible();
+  });
 
-    test('should navigate to draws page from dashboard card', async ({ page }) => {
-        await page.goto('/sanctuaire');
+  test('uses the server order status for preparation and review states', async ({ page }) => {
+    await mockSanctuaireAuth(page, { profileCompleted: true, orderStatus: 'PAID' });
+    await page.goto('/sanctuaire');
+    await expect(
+      page.getByRole('heading', { name: 'Votre lecture est en préparation' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Vous n’avez plus rien à faire. Nous vous écrirons dès qu’elle sera prête.'),
+    ).toBeVisible();
 
-        const drawsLink = page.locator('a[href*="/sanctuaire/draws"]').first();
-        await expect(drawsLink).toBeVisible({ timeout: 10000 });
-        await drawsLink.click();
-
-        await page.waitForURL('**/sanctuaire/draws', { timeout: 5000 });
-    });
-
-    test('should show subscription active indicator', async ({ page }) => {
-        await page.goto('/sanctuaire');
-
-        // Look for subscription/level badge or active indicator
-        const hasBadge = await page.locator('text=/actif|abonné|intégral|premium/i').first().isVisible({ timeout: 5000 }).catch(() => false);
-        // Or green/active dot/badge
-        const hasIndicator = await page.locator('[class*="emerald"], [class*="green"]').first().isVisible().catch(() => false);
-        expect(hasBadge || hasIndicator || true).toBeTruthy(); // Relaxed — UI may vary
-    });
-});
-
-test.describe('Sanctuaire Dashboard — Unsubscribed User', () => {
-    test('should show locked cards or upgrade prompts for unsubscribed user', async ({ page }) => {
-        await mockSanctuaireAuth(page, { subscribed: false });
-        await page.goto('/sanctuaire');
-
-        // Should see the dashboard but with locked elements
-        await page.waitForTimeout(3000);
-
-        // Lock icon or "upgrade" text should appear for premium features
-        const hasLock = await page.locator('text=/verrouillé|upgrade|abonne/i, svg.lucide-lock').first().isVisible().catch(() => false);
-        // At minimum, dashboard should still load
-        const loaded = await page.locator('h1, h2').first().isVisible().catch(() => false);
-        expect(hasLock || loaded).toBeTruthy();
-    });
-});
-
-test.describe('Sanctuaire Dashboard — MandalaNav', () => {
-    test('should display navigation sidebar or mandala nav', async ({ page }) => {
-        await mockFullSanctuaire(page);
-        await page.goto('/sanctuaire');
-
-        // MandalaNav or sidebar navigation should be visible
-        const hasNav = await page.locator('nav, [role="navigation"]').first().isVisible({ timeout: 10000 });
-        expect(hasNav).toBeTruthy();
-    });
-
-    test('should render navigation links in nav', async ({ page }) => {
-        await mockFullSanctuaire(page);
-        await page.goto('/sanctuaire');
-
-        // Navigation should contain links to Sanctuaire sub-pages
-        const navLinks = page.locator('nav a, [role="navigation"] a');
-        const count = await navLinks.count();
-        expect(count).toBeGreaterThan(0);
-    });
+    await mockSanctuaireAuth(page, { profileCompleted: true, orderStatus: 'AWAITING_VALIDATION' });
+    await page.goto('/sanctuaire');
+    await expect(
+      page.getByRole('heading', { name: 'Votre lecture est en vérification' }),
+    ).toBeVisible();
+  });
 });

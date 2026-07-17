@@ -199,4 +199,60 @@ export class ReadingsService {
       throw new NotFoundException('PDF non disponible');
     }
   }
+
+  /** Stream the latest reading audio after verifying order ownership. */
+  async getAudioStream(
+    orderNumber: string,
+    userId: string,
+    range?: string,
+  ): Promise<{
+    stream: Readable;
+    contentType: string;
+    contentLength?: number;
+    contentRange?: string;
+  }> {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      select: {
+        id: true,
+        userId: true,
+        files: {
+          where: { type: 'AUDIO_READING' },
+          orderBy: { uploadedAt: 'desc' },
+          take: 1,
+          select: { key: true, contentType: true },
+        },
+      },
+    });
+
+    if (!order || order.userId !== userId) {
+      throw new NotFoundException('Audio non disponible');
+    }
+
+    const audio = order.files[0];
+    if (!audio?.key) {
+      throw new NotFoundException('Audio non disponible');
+    }
+
+    try {
+      const response = await this.s3Client.send(
+        new GetObjectCommand({
+          Bucket: this.s3Bucket,
+          Key: audio.key,
+          ...(range ? { Range: range } : {}),
+        }),
+      );
+      if (!response.Body) throw new NotFoundException('Audio non disponible');
+      return {
+        stream: response.Body as Readable,
+        contentType: response.ContentType || audio.contentType || 'audio/mpeg',
+        contentLength: response.ContentLength,
+        contentRange: response.ContentRange,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(`Error streaming private audio for ${orderNumber}: ${String(error)}`);
+      throw new NotFoundException('Audio non disponible');
+    }
+  }
 }

@@ -68,6 +68,10 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   if (contentType) {
     headers.set('content-type', contentType);
   }
+  const range = request.headers.get('range');
+  if (range) {
+    headers.set('range', range);
+  }
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
@@ -98,6 +102,14 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const cacheControl = upstream.headers.get('cache-control');
   if (cacheControl) {
     responseHeaders.set('cache-control', cacheControl);
+  }
+  const contentRange = upstream.headers.get('content-range');
+  if (contentRange) {
+    responseHeaders.set('content-range', contentRange);
+  }
+  const acceptRanges = upstream.headers.get('accept-ranges');
+  if (acceptRanges) {
+    responseHeaders.set('accept-ranges', acceptRanges);
   }
 
   const response = new NextResponse(responseBody, {

@@ -18,7 +18,7 @@ export const CHAT_ERROR_CODES = {
   NO_ACCESS: 'NO_ACCESS',
 } as const;
 
-interface ChatMessage {
+export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
@@ -70,7 +70,7 @@ export class ClientService {
         key: { contains: 'audio/synthesis/' },
       },
       orderBy: { uploadedAt: 'desc' },
-      select: { url: true },
+      select: { order: { select: { orderNumber: true } } },
     });
 
     return {
@@ -78,7 +78,9 @@ export class ClientService {
       archetype: spiritualPath.archetype,
       synthesis: spiritualPath.synthesis,
       keyBlockage: spiritualPath.keyBlockage,
-      synthesisAudioUrl: synthesisAudioFile?.url || null,
+      synthesisAudioUrl: synthesisAudioFile
+        ? `/api/readings/${synthesisAudioFile.order.orderNumber}/audio`
+        : null,
       startedAt: spiritualPath.startedAt,
       completedAt: spiritualPath.completedAt,
       steps: spiritualPath.steps.map((step) => ({
@@ -218,6 +220,12 @@ export class ClientService {
         generatedContent: true,
         deliveredAt: true,
         createdAt: true,
+        files: {
+          where: { type: 'AUDIO_READING' },
+          orderBy: { uploadedAt: 'desc' },
+          take: 1,
+          select: { id: true },
+        },
       },
     });
 
@@ -257,8 +265,11 @@ export class ClientService {
         intention: (content?.specificQuestion as string) || null,
         keywords: (content?.keywords as string[]) || (synthesis?.keywords as string[]) || [],
         assets: {
-          pdf: (content?.pdfUrl as string) || null,
-          audio: (content?.audioUrl as string) || null,
+          // Media remains private: the client receives only authenticated API
+          // routes, never a durable S3 object URL.
+          pdf:
+            content?.pdfUrl || content?.pdfKey ? `/api/readings/${order.orderNumber}/file` : null,
+          audio: order.files[0] ? `/api/readings/${order.orderNumber}/audio` : null,
         },
       };
     });
@@ -396,6 +407,22 @@ export class ClientService {
     };
   }
 
+  /** Latest client-owned conversation, used to restore the Sanctuaire history. */
+  async getLatestChatHistory(
+    userId: string,
+  ): Promise<{ sessionId: string | null; messages: ChatMessage[] }> {
+    const session = await this.prisma.chatSession.findFirst({
+      where: { userId },
+      orderBy: { lastMessageAt: 'desc' },
+      select: { id: true, messages: true },
+    });
+
+    const messages = Array.isArray(session?.messages)
+      ? (session.messages as unknown as ChatMessage[])
+      : [];
+    return { sessionId: session?.id ?? null, messages };
+  }
+
   /**
    * Chat with Oracle Lumira using the CONFIDANT agent
    * Verifies a paid order before allowing a lifetime chat entitlement.
@@ -433,9 +460,9 @@ export class ClientService {
       throw error;
     }
 
-    this.logger.log(
-      `💬 Chat request from user ${userId}: "${message.substring(0, 50)}..." (${quotaStatus.messagesUsed + 1}/${quotaStatus.isSubscribed ? '∞' : FREE_CHAT_QUOTA})`,
-    );
+    // Do not log client content: a follow-up can contain sensitive personal
+    // context. The dispatcher retains its own audited operational metadata.
+    this.logger.log('Chat request received');
 
     try {
       // Use ContextDispatcher to route to CONFIDANT agent

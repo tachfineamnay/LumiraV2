@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function BillingSettingsPage() {
-  redirect('/sanctuaire/abonnement');
+  redirect('/sanctuaire/settings/preferences');
 }
