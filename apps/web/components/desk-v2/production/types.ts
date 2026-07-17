@@ -1,7 +1,7 @@
 export type ProductionJobType = 'READING_GENERATION' | 'AUDIO_GENERATION';
 export type ProductionJobStatus = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
 
-export interface ProductionJob {
+export interface ProductionJobCore {
   id: string;
   orderId: string;
   orderNumber: string;
@@ -18,6 +18,9 @@ export interface ProductionJob {
   completedAt?: string;
   failedAt?: string;
   error?: { code?: string; message: string } | null;
+}
+
+export interface ProductionJob extends ProductionJobCore {
   orderStatus: string;
   user: {
     id: string;
@@ -53,7 +56,7 @@ export interface OrderControlCenter {
     palmPhoto: boolean;
     consent: boolean;
   };
-  production: ProductionJob | null;
+  production: ProductionJobCore | null;
   assets: {
     pdf: Record<string, unknown>;
     audio: Record<string, unknown>;
