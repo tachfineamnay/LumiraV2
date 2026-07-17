@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { parseGuidanceRequest } from '../guidance-requests/guidance-request.types';
 import { readCurrentProduction, readExpertReview } from './production-control.types';
 
 type ClientReadingState =
@@ -17,6 +18,22 @@ type LegacyChatMessage = {
   role?: string;
   content?: string;
   timestamp?: string;
+};
+
+type ClientConversationProjection = {
+  id: string;
+  type: 'AI_ASSISTANT' | 'EXPERT_REQUEST';
+  relatedOrderId: string | null;
+  title: string;
+  status: string;
+  category?: string;
+  assignedExpert?: { id: string; name: string } | null;
+  messageCount: number;
+  unreadByExpert: number;
+  unreadByClient: number;
+  lastSender: string | null;
+  lastMessageAt: Date;
+  createdAt: Date;
 };
 
 @Injectable()
@@ -115,16 +132,48 @@ export class ClientControlService {
       };
     });
 
-    const conversations = client.chatSessions.map((session) => {
-      const messages = this.readMessages(session.messages);
+    const conversations: ClientConversationProjection[] = client.chatSessions.map((session) => {
+      const guidance = parseGuidanceRequest(session.messages);
+      if (guidance) {
+        const lastMessage = guidance.messages[guidance.messages.length - 1] || null;
+        return {
+          id: session.id,
+          type: 'EXPERT_REQUEST',
+          relatedOrderId: session.relatedOrderId,
+          title: session.title || 'Demande d’éclairage',
+          status: guidance.meta.status,
+          category: guidance.meta.category,
+          assignedExpert: guidance.meta.assignedExpertId
+            ? {
+                id: guidance.meta.assignedExpertId,
+                name: guidance.meta.assignedExpertName || 'Expert',
+              }
+            : null,
+          messageCount: guidance.messages.length,
+          unreadByExpert: guidance.messages.filter(
+            (message) => message.senderType === 'CLIENT' && !message.readByExpertAt,
+          ).length,
+          unreadByClient: guidance.messages.filter(
+            (message) => message.senderType === 'EXPERT' && !message.readByClientAt,
+          ).length,
+          lastSender: lastMessage?.senderType || null,
+          lastMessageAt: session.lastMessageAt || session.updatedAt,
+          createdAt: session.createdAt,
+        };
+      }
+
+      const messages = this.readLegacyMessages(session.messages);
       const lastMessage = messages[messages.length - 1] || null;
       return {
         id: session.id,
-        type: 'AI_ASSISTANT' as const,
+        type: 'AI_ASSISTANT',
         relatedOrderId: session.relatedOrderId,
         title: session.title || 'Échange Lumira',
         status: session.isActive ? 'OPEN' : 'ARCHIVED',
+        assignedExpert: null,
         messageCount: messages.length,
+        unreadByExpert: 0,
+        unreadByClient: 0,
         lastSender: lastMessage?.role || null,
         lastMessageAt: session.lastMessageAt || session.updatedAt,
         createdAt: session.createdAt,
@@ -136,6 +185,9 @@ export class ClientControlService {
     const lifetimeAccess = client.orders.some((order) => paidStatuses.includes(order.status));
     const openReadings = readings.filter(
       (reading) => !['DELIVERED', 'REFUNDED'].includes(reading.state),
+    );
+    const guidanceRequests = conversations.filter(
+      (conversation) => conversation.type === 'EXPERT_REQUEST',
     );
 
     return {
@@ -164,6 +216,14 @@ export class ClientControlService {
         openReadings: openReadings.length,
         incidents: readings.filter((reading) => reading.state === 'INCIDENT').length,
         conversations: conversations.length,
+        guidanceRequests: guidanceRequests.length,
+        openGuidanceRequests: guidanceRequests.filter(
+          (request) => !['RESOLVED', 'ARCHIVED'].includes(request.status),
+        ).length,
+        unreadGuidanceForExpert: guidanceRequests.reduce(
+          (total, request) => total + request.unreadByExpert,
+          0,
+        ),
         unreadNotifications: client.notifications.filter((notification) => !notification.read).length,
       },
       readings,
@@ -219,7 +279,7 @@ export class ClientControlService {
 
   private buildTimeline(
     client: Awaited<ReturnType<typeof this.loadClientShape>>,
-    conversations: Array<Record<string, unknown>>,
+    conversations: ClientConversationProjection[],
   ) {
     const events: Array<{
       id: string;
@@ -307,18 +367,23 @@ export class ClientControlService {
 
     for (const conversation of conversations) {
       events.push({
-        id: `conversation-${String(conversation.id)}`,
-        type: 'CONVERSATION_ACTIVITY',
-        title: `Échange client — ${String(conversation.title)}`,
-        occurredAt: new Date(String(conversation.lastMessageAt)),
-        conversationId: String(conversation.id),
+        id: `conversation-${conversation.id}`,
+        type:
+          conversation.type === 'EXPERT_REQUEST'
+            ? 'GUIDANCE_REQUEST_ACTIVITY'
+            : 'AI_CONVERSATION_ACTIVITY',
+        title:
+          conversation.type === 'EXPERT_REQUEST'
+            ? `Demande d’éclairage — ${conversation.title}`
+            : `Échange IA — ${conversation.title}`,
+        occurredAt: conversation.lastMessageAt,
+        conversationId: conversation.id,
       });
     }
 
     return events.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
   }
 
-  /** Type anchor used only by buildTimeline to preserve the Prisma query shape. */
   private async loadClientShape(clientId: string) {
     return this.prisma.user.findUniqueOrThrow({
       where: { id: clientId },
@@ -340,12 +405,19 @@ export class ClientControlService {
     });
   }
 
-  private readMessages(value: Prisma.JsonValue): LegacyChatMessage[] {
+  private readLegacyMessages(value: Prisma.JsonValue): LegacyChatMessage[] {
     if (!Array.isArray(value)) return [];
-    return value.filter(
-      (item): item is LegacyChatMessage =>
-        Boolean(item && typeof item === 'object' && !Array.isArray(item)),
-    );
+    const messages: LegacyChatMessage[] = [];
+    for (const item of value) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const record = item as Record<string, unknown>;
+      messages.push({
+        role: typeof record.role === 'string' ? record.role : undefined,
+        content: typeof record.content === 'string' ? record.content : undefined,
+        timestamp: typeof record.timestamp === 'string' ? record.timestamp : undefined,
+      });
+    }
+    return messages;
   }
 
   private asRecord(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
