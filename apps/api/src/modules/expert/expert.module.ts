@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ExpertController } from './expert.controller';
+import { ProductionControlController } from './production-control.controller';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
@@ -9,32 +11,46 @@ import { RolesGuard } from './guards/roles.guard';
 import { ExpertGateway } from './expert.gateway';
 import { IdGenerator } from '../../utils/IdGenerator';
 import { ServicesModule } from '../../services/services.module';
+import { ProductionControlService } from './production-control.service';
+import { ProductionQueueInterceptor } from './production-queue.interceptor';
 
 @Module({
-    imports: [
-        ConfigModule,
-        ServicesModule,
-        JwtModule.registerAsync({
-            imports: [ConfigModule],
-            inject: [ConfigService],
-            useFactory: (configService: ConfigService) => ({
-                secret: configService.get<string>('JWT_SECRET'),
-                signOptions: {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    expiresIn: configService.get<string>('JWT_EXPIRES_IN', '8h') as any,
-                },
-            }),
-        }),
-    ],
-    controllers: [ExpertController],
-    providers: [
-        ExpertService,
-        AdminSettingsService,
-        ExpertAuthGuard,
-        RolesGuard,
-        ExpertGateway,
-        IdGenerator,
-    ],
-    exports: [ExpertService, ExpertGateway, IdGenerator],
+  imports: [
+    ConfigModule,
+    ServicesModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '8h') as any,
+        },
+      }),
+    }),
+  ],
+  controllers: [ExpertController, ProductionControlController],
+  providers: [
+    ExpertService,
+    AdminSettingsService,
+    ExpertAuthGuard,
+    RolesGuard,
+    ExpertGateway,
+    IdGenerator,
+    ProductionControlService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ProductionQueueInterceptor,
+    },
+  ],
+  exports: [
+    ExpertService,
+    ExpertGateway,
+    IdGenerator,
+    ExpertAuthGuard,
+    RolesGuard,
+    ProductionControlService,
+  ],
 })
-export class ExpertModule { }
+export class ExpertModule {}
