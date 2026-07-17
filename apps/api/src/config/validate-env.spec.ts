@@ -9,6 +9,9 @@ const validProductionConfig = {
   STRIPE_SECRET_KEY: 'sk_live_validvalue',
   STRIPE_WEBHOOK_SECRET: 'whsec_validvalue',
   SMTP_HOST: 'smtp.provider.net',
+  SMTP_PORT: '587',
+  SMTP_SECURE: 'false',
+  SMTP_REQUIRE_TLS: 'true',
   SMTP_USER: 'lumira',
   SMTP_PASS: 'secure-password',
   MAIL_FROM: 'noreply@oraclelumira.com',
@@ -34,6 +37,44 @@ describe('validateEnvironment', () => {
   it('rejects localhost service URLs in production', () => {
     const config = { ...validProductionConfig, GOTENBERG_URL: 'http://localhost:3002' };
     expect(() => validateEnvironment(config)).toThrow('GOTENBERG_URL');
+  });
+
+  it.each([
+    'localhost',
+    '127.0.0.1',
+    '127.0.0.42',
+    '::1',
+    '[::1]',
+    '0.0.0.0',
+    'host.docker.internal',
+  ])('rejects loopback SMTP host %s in production', (smtpHost) => {
+    const config = { ...validProductionConfig, SMTP_HOST: smtpHost };
+    expect(() => validateEnvironment(config)).toThrow('SMTP_HOST');
+  });
+
+  it('rejects a protocol in SMTP_HOST', () => {
+    const config = { ...validProductionConfig, SMTP_HOST: 'smtp://smtp.provider.net' };
+    expect(() => validateEnvironment(config)).toThrow('sans protocole');
+  });
+
+  it('rejects an invalid SMTP port', () => {
+    const config = { ...validProductionConfig, SMTP_PORT: 'not-a-port' };
+    expect(() => validateEnvironment(config)).toThrow('SMTP_PORT');
+  });
+
+  it('requires implicit TLS on SMTP port 465', () => {
+    const config = { ...validProductionConfig, SMTP_PORT: '465', SMTP_SECURE: 'false' };
+    expect(() => validateEnvironment(config)).toThrow('SMTP_SECURE');
+  });
+
+  it('accepts implicit TLS on SMTP port 465', () => {
+    const config = { ...validProductionConfig, SMTP_PORT: '465', SMTP_SECURE: 'true' };
+    expect(validateEnvironment(config)).toEqual(config);
+  });
+
+  it('rejects an invalid sender address', () => {
+    const config = { ...validProductionConfig, MAIL_FROM: 'Oracle Lumira' };
+    expect(() => validateEnvironment(config)).toThrow('MAIL_FROM');
   });
 
   it('does not require production secrets during tests', () => {
