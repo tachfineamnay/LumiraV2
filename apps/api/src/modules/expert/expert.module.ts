@@ -62,6 +62,7 @@ import { ClientControlService } from './client-control.service';
     RolesGuard,
     ProductionControlService,
     ClientControlService,
+    JwtModule,
   ],
 })
 export class ExpertModule {}

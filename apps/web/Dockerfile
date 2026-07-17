@@ -31,7 +31,22 @@ COPY --from=pruner /app/out/full/ .
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG API_INTERNAL_URL=http://api:3001
-RUN test -n "$NEXT_PUBLIC_API_URL" && test -n "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+
+RUN if [ -z "$NEXT_PUBLIC_API_URL" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" ]; then \
+      echo "========================================================================="; \
+      echo "ERROR: NEXT_PUBLIC_API_URL or NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is empty!"; \
+      echo "Because Next.js compiles NEXT_PUBLIC_* environment variables into the client-side"; \
+      echo "bundle, these variables must be provided at BUILD TIME."; \
+      echo ""; \
+      echo "To fix this in Coolify:"; \
+      echo "1. Go to the 'Environment Variables' tab of your Web service."; \
+      echo "2. Find NEXT_PUBLIC_API_URL and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY."; \
+      echo "3. Ensure their values are set, and check the 'Build Variable' (or 'Available at build time') toggle."; \
+      echo "4. Save and redeploy."; \
+      echo "========================================================================="; \
+      exit 1; \
+    fi
+
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
