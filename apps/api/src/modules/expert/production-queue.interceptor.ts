@@ -1,4 +1,10 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import {
+  BadRequestException,
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
 import { Expert } from '@prisma/client';
 import { from, Observable } from 'rxjs';
 import { ProductionControlService } from './production-control.service';
@@ -47,12 +53,13 @@ export class ProductionQueueInterceptor implements NestInterceptor {
 
   private async enqueueAndWaitForLegacyProcess(request: ExpertRequest) {
     const orderId = this.stringValue(request.body?.orderId);
-    if (!orderId) throw new Error('orderId is required');
+    if (!orderId) throw new BadRequestException('orderId est requis');
     return this.enqueueAndWait(orderId, request);
   }
 
   private async enqueueAndWait(orderId: string, request: ExpertRequest) {
-    const queued = await this.production.enqueueReading(orderId, request.expert!, {
+    if (!request.expert) throw new BadRequestException('Expert non résolu');
+    const queued = await this.production.enqueueReading(orderId, request.expert, {
       expertPrompt: this.stringValue(request.body?.expertPrompt),
       expertInstructions: this.stringValue(request.body?.expertInstructions),
     });
