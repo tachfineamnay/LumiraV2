@@ -13,11 +13,11 @@ type ClientReadingState =
   | 'INCIDENT'
   | 'REFUNDED';
 
-interface LegacyChatMessage {
+type LegacyChatMessage = {
   role?: string;
   content?: string;
   timestamp?: string;
-}
+};
 
 @Injectable()
 export class ClientControlService {
@@ -131,7 +131,7 @@ export class ClientControlService {
       };
     });
 
-    const timeline = this.buildTimeline(client, readings, conversations);
+    const timeline = this.buildTimeline(client, conversations);
     const paidStatuses = ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'];
     const lifetimeAccess = client.orders.some((order) => paidStatuses.includes(order.status));
     const openReadings = readings.filter(
@@ -219,7 +219,6 @@ export class ClientControlService {
 
   private buildTimeline(
     client: Awaited<ReturnType<typeof this.loadClientShape>>,
-    readings: Array<Record<string, unknown>>,
     conversations: Array<Record<string, unknown>>,
   ) {
     const events: Array<{
@@ -252,7 +251,9 @@ export class ClientControlService {
       events.push({
         id: `order-${order.id}`,
         type: order.paidAt ? 'ORDER_PAID' : 'ORDER_CREATED',
-        title: order.paidAt ? `Paiement confirmé — ${order.orderNumber}` : `Commande créée — ${order.orderNumber}`,
+        title: order.paidAt
+          ? `Paiement confirmé — ${order.orderNumber}`
+          : `Commande créée — ${order.orderNumber}`,
         occurredAt: order.paidAt || order.createdAt,
         orderId: order.id,
       });
@@ -319,7 +320,7 @@ export class ClientControlService {
 
   /** Type anchor used only by buildTimeline to preserve the Prisma query shape. */
   private async loadClientShape(clientId: string) {
-    const client = await this.prisma.user.findUniqueOrThrow({
+    return this.prisma.user.findUniqueOrThrow({
       where: { id: clientId },
       include: {
         profile: true,
@@ -337,13 +338,13 @@ export class ClientControlService {
         notifications: true,
       },
     });
-    return client;
   }
 
   private readMessages(value: Prisma.JsonValue): LegacyChatMessage[] {
     if (!Array.isArray(value)) return [];
     return value.filter(
-      (item): item is LegacyChatMessage => Boolean(item && typeof item === 'object' && !Array.isArray(item)),
+      (item): item is LegacyChatMessage =>
+        Boolean(item && typeof item === 'object' && !Array.isArray(item)),
     );
   }
 
