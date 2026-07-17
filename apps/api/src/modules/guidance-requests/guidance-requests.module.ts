@@ -8,6 +8,7 @@ import {
 } from './guidance-requests.controller';
 import { GuidanceRequestsService } from './guidance-requests.service';
 import { GuidanceResponseInterceptor } from './guidance-response.interceptor';
+import { GuidanceReplyRecoveryInterceptor } from './guidance-reply-recovery.interceptor';
 
 @Module({
   imports: [ExpertModule, NotificationsModule],
@@ -17,6 +18,10 @@ import { GuidanceResponseInterceptor } from './guidance-response.interceptor';
     {
       provide: APP_INTERCEPTOR,
       useClass: GuidanceResponseInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: GuidanceReplyRecoveryInterceptor,
     },
   ],
   exports: [GuidanceRequestsService],
