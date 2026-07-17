@@ -4,7 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    # Pause automated version-update PRs during launch stabilization.
+    # Dependabot security updates remain managed separately by GitHub.
+    open-pull-requests-limit: 0
     groups:
       nestjs:
         patterns:
@@ -18,3 +20,4 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
