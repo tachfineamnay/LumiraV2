@@ -81,28 +81,26 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoading(true);
       setError(null);
 
-      // Try V2 subscription status first
-      let isSubscribed = false;
+      // Subscription data is display-only legacy metadata. Authorization comes
+      // from /users/entitlements, which is backed by paid Orders.
       let subscriptionStatus: string | null = null;
       try {
         const subResponse = await sanctuaireApi.get('/subscriptions/status');
         subscriptionStatus = subResponse.data?.subscription?.status ?? null;
-        isSubscribed = subscriptionStatus === 'ACTIVE';
       } catch {
-        // Endpoint may not exist yet — fall back to legacy
+        // A lifetime buyer need not have a Subscription row.
       }
 
-      // Also fetch legacy entitlements for backward compat
       const response = await sanctuaireApi.get('/users/entitlements');
 
       const legacy = response.data;
-      // If subscribed, treat as full access (highestLevel = 4, all capabilities)
+      const hasLifetimeAccess = (legacy.highestLevel ?? 0) >= 1;
       setData({
-        isSubscribed,
+        isSubscribed: hasLifetimeAccess,
         subscriptionStatus,
         orderCount: legacy.orderCount ?? 0,
         capabilities: legacy.capabilities ?? [],
-        highestLevel: isSubscribed ? 4 : (legacy.highestLevel ?? 0),
+        highestLevel: legacy.highestLevel ?? 0,
       });
     } catch (err) {
       console.error('Failed to fetch entitlements:', err);

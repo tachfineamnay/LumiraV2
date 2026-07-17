@@ -1,15 +1,15 @@
 import {
-    Controller,
-    Get,
-    Post,
-    Patch,
-    Body,
-    Param,
-    Request,
-    UseGuards,
-    HttpCode,
-    HttpStatus,
-    Query,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Request,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { ClientService } from './client.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,7 +18,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * ClientController - Sanctuaire API endpoints
- * 
+ *
  * Provides endpoints for the user's sanctuary (sanctuaire) including:
  * - Spiritual path journey data
  * - User profile with reading data
@@ -28,181 +28,176 @@ import { NotificationsService } from '../notifications/notifications.service';
 @Controller('client')
 @UseGuards(JwtAuthGuard)
 export class ClientController {
-    constructor(
-        private readonly clientService: ClientService,
-        private readonly notificationsService: NotificationsService,
-    ) { }
+  constructor(
+    private readonly clientService: ClientService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
-    /**
-     * GET /api/client/spiritual-path
-     * Returns the user's spiritual path journey with all steps
-     */
-    @Get('spiritual-path')
-    @Throttle({ default: { limit: 30, ttl: 60000 } })
-    async getSpiritualPath(@Request() req: { user: { userId: string } }) {
-        const path = await this.clientService.getSpiritualPath(req.user.userId);
-        
-        // Return empty structure if no path exists yet
-        if (!path) {
-            return {
-                exists: false,
-                message: 'Votre parcours spirituel sera créé après votre première lecture.',
-            };
-        }
+  /**
+   * GET /api/client/spiritual-path
+   * Returns the user's spiritual path journey with all steps
+   */
+  @Get('spiritual-path')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getSpiritualPath(@Request() req: { user: { userId: string } }) {
+    const path = await this.clientService.getSpiritualPath(req.user.userId);
 
-        return {
-            exists: true,
-            ...path,
-        };
+    // Return empty structure if no path exists yet
+    if (!path) {
+      return {
+        exists: false,
+        message: 'Votre parcours spirituel sera créé après votre première lecture.',
+      };
     }
 
-    /**
-     * POST /api/client/spiritual-path/steps/:stepId/complete
-     * Mark a step as completed
-     */
-    @Post('spiritual-path/steps/:stepId/complete')
-    @HttpCode(HttpStatus.OK)
-    async completeStep(
-        @Request() req: { user: { userId: string } },
-        @Param('stepId') stepId: string,
-    ) {
-        const step = await this.clientService.completeStep(req.user.userId, stepId);
-        return {
-            success: true,
-            step,
-        };
-    }
+    return {
+      exists: true,
+      ...path,
+    };
+  }
 
-    /**
-     * GET /api/client/profile
-     * Returns the user's profile with their latest reading summary
-     */
-    @Get('profile')
-    @Throttle({ default: { limit: 30, ttl: 60000 } })
-    async getProfile(@Request() req: { user: { userId: string } }) {
-        return this.clientService.getClientProfile(req.user.userId);
-    }
+  /**
+   * POST /api/client/spiritual-path/steps/:stepId/complete
+   * Mark a step as completed
+   */
+  @Post('spiritual-path/steps/:stepId/complete')
+  @HttpCode(HttpStatus.OK)
+  async completeStep(
+    @Request() req: { user: { userId: string } },
+    @Param('stepId') stepId: string,
+  ) {
+    const step = await this.clientService.completeStep(req.user.userId, stepId);
+    return {
+      success: true,
+      step,
+    };
+  }
 
-    /**
-     * GET /api/client/readings
-     * Returns all readings for the user (completed + in progress)
-     */
-    @Get('readings')
-    @Throttle({ default: { limit: 30, ttl: 60000 } })
-    async getReadings(@Request() req: { user: { userId: string } }) {
-        const result = await this.clientService.getCompletedReadings(req.user.userId);
-        return {
-            readings: result.readings,
-            pending: result.pending,
-            totalCompleted: result.readings.length,
-            totalPending: result.pending.length,
-        };
-    }
+  /**
+   * GET /api/client/profile
+   * Returns the user's profile with their latest reading summary
+   */
+  @Get('profile')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getProfile(@Request() req: { user: { userId: string } }) {
+    return this.clientService.getClientProfile(req.user.userId);
+  }
 
-    /**
-     * GET /api/client/readings/:orderId
-     * Returns the full content of a specific reading
-     */
-    @Get('readings/:orderId')
-    @Throttle({ default: { limit: 30, ttl: 60000 } })
-    async getReadingContent(
-        @Request() req: { user: { userId: string } },
-        @Param('orderId') orderId: string,
-    ) {
-        return this.clientService.getReadingContent(req.user.userId, orderId);
-    }
+  /**
+   * GET /api/client/readings
+   * Returns all readings for the user (completed + in progress)
+   */
+  @Get('readings')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getReadings(@Request() req: { user: { userId: string } }) {
+    const result = await this.clientService.getCompletedReadings(req.user.userId);
+    return {
+      readings: result.readings,
+      pending: result.pending,
+      totalCompleted: result.readings.length,
+      totalPending: result.pending.length,
+    };
+  }
 
-    /**
-     * GET /api/client/chat/quota
-     * Returns the user's chat quota status
-     */
-    @Get('chat/quota')
-    @Throttle({ default: { limit: 60, ttl: 60000 } })
-    async getChatQuota(@Request() req: { user: { userId: string } }) {
-        return this.clientService.getChatQuota(req.user.userId);
-    }
+  /**
+   * GET /api/client/readings/:orderId
+   * Returns the full content of a specific reading
+   */
+  @Get('readings/:orderId')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getReadingContent(
+    @Request() req: { user: { userId: string } },
+    @Param('orderId') orderId: string,
+  ) {
+    return this.clientService.getReadingContent(req.user.userId, orderId);
+  }
 
-    /**
-     * POST /api/client/chat
-     * Chat with Oracle Lumira (CONFIDANT agent)
-     * Requires active subscription or completed reading
-     * Free users limited to 3 messages
-     */
-    @Post('chat')
-    @HttpCode(HttpStatus.OK)
-    @Throttle({ default: { limit: 20, ttl: 60000 } })
-    async chatWithOracle(
-        @Request() req: { user: { userId: string } },
-        @Body() body: { message: string; sessionId?: string },
-    ) {
-        return this.clientService.chatWithOracle(
-            req.user.userId,
-            body.message,
-            body.sessionId,
-        );
-    }
+  /**
+   * GET /api/client/chat/quota
+   * Returns the user's chat quota status
+   */
+  @Get('chat/quota')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async getChatQuota(@Request() req: { user: { userId: string } }) {
+    return this.clientService.getChatQuota(req.user.userId);
+  }
 
-    // ========================================
-    // Notifications endpoints
-    // ========================================
+  /**
+   * POST /api/client/chat
+   * Chat with Oracle Lumira (CONFIDANT agent)
+   * Requires a paid order (lifetime access)
+   */
+  @Post('chat')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  async chatWithOracle(
+    @Request() req: { user: { userId: string } },
+    @Body() body: { message: string; sessionId?: string },
+  ) {
+    return this.clientService.chatWithOracle(req.user.userId, body.message, body.sessionId);
+  }
 
-    /**
-     * GET /api/client/notifications
-     * Returns user notifications (most recent first)
-     */
-    @Get('notifications')
-    @Throttle({ default: { limit: 30, ttl: 60000 } })
-    async getNotifications(
-        @Request() req: { user: { userId: string } },
-        @Query('limit') limit?: string,
-    ) {
-        const notifications = await this.notificationsService.getUserNotifications(
-            req.user.userId,
-            limit ? parseInt(limit, 10) : 10,
-        );
-        const unreadCount = await this.notificationsService.getUnreadCount(req.user.userId);
-        
-        return {
-            notifications,
-            unreadCount,
-        };
-    }
+  // ========================================
+  // Notifications endpoints
+  // ========================================
 
-    /**
-     * PATCH /api/client/notifications/:id/read
-     * Mark a notification as read
-     */
-    @Patch('notifications/:id/read')
-    @HttpCode(HttpStatus.OK)
-    async markNotificationRead(
-        @Request() req: { user: { userId: string } },
-        @Param('id') notificationId: string,
-    ) {
-        await this.notificationsService.markAsRead(notificationId, req.user.userId);
-        return { success: true };
-    }
+  /**
+   * GET /api/client/notifications
+   * Returns user notifications (most recent first)
+   */
+  @Get('notifications')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getNotifications(
+    @Request() req: { user: { userId: string } },
+    @Query('limit') limit?: string,
+  ) {
+    const notifications = await this.notificationsService.getUserNotifications(
+      req.user.userId,
+      limit ? parseInt(limit, 10) : 10,
+    );
+    const unreadCount = await this.notificationsService.getUnreadCount(req.user.userId);
 
-    /**
-     * POST /api/client/notifications/read-all
-     * Mark all notifications as read
-     */
-    @Post('notifications/read-all')
-    @HttpCode(HttpStatus.OK)
-    async markAllNotificationsRead(@Request() req: { user: { userId: string } }) {
-        await this.notificationsService.markAllAsRead(req.user.userId);
-        return { success: true };
-    }
+    return {
+      notifications,
+      unreadCount,
+    };
+  }
 
-    /**
-     * PATCH /api/client/voice-preference
-     * Update the user's preferred TTS voice (MASCULINE or FEMININE)
-     */
-    @Patch('voice-preference')
-    @HttpCode(HttpStatus.OK)
-    async updateVoicePreference(
-        @Request() req: { user: { userId: string } },
-        @Body() body: { voice: 'MASCULINE' | 'FEMININE' },
-    ) {
-        return this.clientService.updateVoicePreference(req.user.userId, body.voice);
-    }
+  /**
+   * PATCH /api/client/notifications/:id/read
+   * Mark a notification as read
+   */
+  @Patch('notifications/:id/read')
+  @HttpCode(HttpStatus.OK)
+  async markNotificationRead(
+    @Request() req: { user: { userId: string } },
+    @Param('id') notificationId: string,
+  ) {
+    await this.notificationsService.markAsRead(notificationId, req.user.userId);
+    return { success: true };
+  }
+
+  /**
+   * POST /api/client/notifications/read-all
+   * Mark all notifications as read
+   */
+  @Post('notifications/read-all')
+  @HttpCode(HttpStatus.OK)
+  async markAllNotificationsRead(@Request() req: { user: { userId: string } }) {
+    await this.notificationsService.markAllAsRead(req.user.userId);
+    return { success: true };
+  }
+
+  /**
+   * PATCH /api/client/voice-preference
+   * Update the user's preferred TTS voice (MASCULINE or FEMININE)
+   */
+  @Patch('voice-preference')
+  @HttpCode(HttpStatus.OK)
+  async updateVoicePreference(
+    @Request() req: { user: { userId: string } },
+    @Body() body: { voice: 'MASCULINE' | 'FEMININE' },
+  ) {
+    return this.clientService.updateVoicePreference(req.user.userId, body.voice);
+  }
 }

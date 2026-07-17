@@ -10,6 +10,7 @@ const ALLOWED_PREFIXES = [
   'auth/sanctuaire-v2',
   'auth/sanctuaire/consume-link',
   'users/',
+  'uploads/',
   'client/',
   'dreams',
   'subscriptions/',

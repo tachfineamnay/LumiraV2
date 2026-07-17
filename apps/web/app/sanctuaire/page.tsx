@@ -12,6 +12,7 @@ import { ExpertValidationBanner } from '../../components/sanctuary/ExpertValidat
 import { HolisticWizard } from '../../components/onboarding/HolisticWizard';
 import { HolisticDiagnosticData } from '../../lib/holisticSchema';
 import sanctuaireApi from '../../lib/sanctuaireApi';
+import { uploadOnboardingPhoto } from '../../lib/onboarding-upload';
 import { useSanctuaire } from '../../context/SanctuaireContext';
 import {
   useSanctuaireAuth,
@@ -70,13 +71,17 @@ function AutoLoginHandler() {
         }}
         onComplete={async (data) => {
           try {
+            const [facePhotoUrl, palmPhotoUrl] = await Promise.all([
+              uploadOnboardingPhoto(data.facePhoto, 'FACE'),
+              uploadOnboardingPhoto(data.palmPhoto, 'PALM'),
+            ]);
             // Map wizard fields to API expected fields
             const profileData = {
               birthDate: data.birthDate,
               birthTime: data.birthTime || null,
               birthPlace: data.birthPlace,
-              facePhotoUrl: data.facePhoto || null,
-              palmPhotoUrl: data.palmPhoto || null,
+              facePhotoUrl,
+              palmPhotoUrl,
               highs: data.highs,
               lows: data.lows,
               strongSide: data.strongSide,
@@ -91,6 +96,7 @@ function AutoLoginHandler() {
               fears: data.fears || null,
               rituals: data.rituals || null,
               profileCompleted: true,
+              consent: { accepted: data.gdprConsent, version: '2026-07-16' },
             };
 
             await sanctuaireApi.patch('/users/profile', profileData);
@@ -155,12 +161,16 @@ function DashboardContent() {
   // Handle wizard completion
   const handleWizardComplete = async (data: HolisticDiagnosticData) => {
     try {
+      const [facePhotoUrl, palmPhotoUrl] = await Promise.all([
+        uploadOnboardingPhoto(data.facePhoto, 'FACE'),
+        uploadOnboardingPhoto(data.palmPhoto, 'PALM'),
+      ]);
       const profileData = {
         birthDate: data.birthDate,
         birthTime: data.birthTime || null,
         birthPlace: data.birthPlace,
-        facePhotoUrl: data.facePhoto || null,
-        palmPhotoUrl: data.palmPhoto || null,
+        facePhotoUrl,
+        palmPhotoUrl,
         highs: data.highs,
         lows: data.lows,
         strongSide: data.strongSide,
@@ -175,6 +185,7 @@ function DashboardContent() {
         fears: data.fears || null,
         rituals: data.rituals || null,
         profileCompleted: true,
+        consent: { accepted: data.gdprConsent, version: '2026-07-16' },
       };
 
       await sanctuaireApi.patch('/users/profile', profileData);

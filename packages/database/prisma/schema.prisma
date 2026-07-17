@@ -78,6 +78,11 @@ enum ReadingVersionStatus {
   REOPENED
 }
 
+enum OnboardingStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
 enum ProductLevel {
   INITIE
   MYSTIQUE
@@ -127,6 +132,8 @@ model User {
   subscription  Subscription? // V2: Single-offer subscription
   dreams        Dream[] // V2: Dream journal entries
   sanctuaireLoginTokens SanctuaireLoginToken[]
+  consents      ConsentRecord[]
+  onboardingProgress OnboardingProgress?
 
   @@index([email])
   @@index([refId])
@@ -252,6 +259,38 @@ model Order {
   @@index([status, createdAt(sort: Desc)])
   @@index([status, updatedAt(sort: Desc)])
   @@index([userEmail, status, paidAt(sort: Desc)])
+}
+
+/// Legal, versioned acceptance records. They are append-only so a later policy
+/// revision never erases the evidence of the prior acceptance.
+model ConsentRecord {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose    String
+  version    String
+  acceptedAt DateTime @default(now())
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, purpose, version])
+  @@index([userId, acceptedAt(sort: Desc)])
+}
+
+/// Server-side resume point for the Sanctuaire diagnostic. Browser storage is
+/// only a best-effort offline cache and never the authoritative draft.
+model OnboardingProgress {
+  id          String           @id @default(cuid())
+  userId      String           @unique
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStep Int              @default(0)
+  status      OnboardingStatus @default(IN_PROGRESS)
+  data        Json
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([status, updatedAt(sort: Desc)])
 }
 
 model ReadingVersion {

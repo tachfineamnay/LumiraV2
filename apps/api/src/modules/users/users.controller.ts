@@ -1,10 +1,23 @@
-import { Controller, Get, Patch, Body, Request, UseGuards, NotFoundException, ForbiddenException, Query, ParseIntPipe, DefaultValuePipe } from "@nestjs/common";
-import { UsersService } from "./users.service";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  Request,
+  UseGuards,
+  NotFoundException,
+  ForbiddenException,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+} from '@nestjs/common';
+import { UsersService } from './users.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UpdateOnboardingProgressDto, UpdateProfileDto } from './dto/update-profile.dto';
 
-@Controller("users")
+@Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -16,7 +29,7 @@ export class UsersController {
     if (req.user.role !== 'ADMIN' && req.user.role !== 'EXPERT') {
       throw new ForbiddenException('Admin or Expert access required');
     }
-    
+
     const skip = (page - 1) * limit;
     return this.usersService.findAll(skip, limit);
   }
@@ -24,7 +37,7 @@ export class UsersController {
   /**
    * GET /api/users/entitlements
    * Returns the authenticated user's capabilities based on their purchased products.
-   * 
+   *
    * Response:
    * {
    *   "capabilities": ["content.basic", "readings.pdf", ...],
@@ -34,7 +47,7 @@ export class UsersController {
    *   "orderCount": 2
    * }
    */
-  @Get("entitlements")
+  @Get('entitlements')
   @UseGuards(JwtAuthGuard)
   async getEntitlements(@Request() req: { user: { userId: string } }) {
     return this.usersService.getEntitlements(req.user.userId);
@@ -44,7 +57,7 @@ export class UsersController {
    * GET /api/users/profile
    * Returns the authenticated user's complete profile data.
    */
-  @Get("profile")
+  @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req: { user: { userId: string } }) {
     const data = await this.usersService.getUserProfile(req.user.userId);
@@ -57,28 +70,30 @@ export class UsersController {
       firstName: data.user.firstName,
       lastName: data.user.lastName,
       phone: data.user.phone,
-      profile: data.profile ? {
-        birthDate: data.profile.birthDate,
-        birthTime: data.profile.birthTime,
-        birthPlace: data.profile.birthPlace,
-        specificQuestion: data.profile.specificQuestion,
-        objective: data.profile.objective,
-        facePhotoUrl: data.profile.facePhotoUrl,
-        palmPhotoUrl: data.profile.palmPhotoUrl,
-        highs: data.profile.highs,
-        lows: data.profile.lows,
-        strongSide: data.profile.strongSide,
-        weakSide: data.profile.weakSide,
-        strongZone: data.profile.strongZone,
-        weakZone: data.profile.weakZone,
-        deliveryStyle: data.profile.deliveryStyle,
-        pace: data.profile.pace,
-        ailments: data.profile.ailments,
-        fears: data.profile.fears,
-        rituals: data.profile.rituals,
-        profileCompleted: data.profile.profileCompleted,
-        submittedAt: data.profile.submittedAt,
-      } : null,
+      profile: data.profile
+        ? {
+            birthDate: data.profile.birthDate,
+            birthTime: data.profile.birthTime,
+            birthPlace: data.profile.birthPlace,
+            specificQuestion: data.profile.specificQuestion,
+            objective: data.profile.objective,
+            facePhotoUrl: data.profile.facePhotoUrl,
+            palmPhotoUrl: data.profile.palmPhotoUrl,
+            highs: data.profile.highs,
+            lows: data.profile.lows,
+            strongSide: data.profile.strongSide,
+            weakSide: data.profile.weakSide,
+            strongZone: data.profile.strongZone,
+            weakZone: data.profile.weakZone,
+            deliveryStyle: data.profile.deliveryStyle,
+            pace: data.profile.pace,
+            ailments: data.profile.ailments,
+            fears: data.profile.fears,
+            rituals: data.profile.rituals,
+            profileCompleted: data.profile.profileCompleted,
+            submittedAt: data.profile.submittedAt,
+          }
+        : null,
       stats: data.stats,
     };
   }
@@ -87,7 +102,7 @@ export class UsersController {
    * GET /api/users/orders/completed
    * Returns the authenticated user's completed/delivered orders.
    */
-  @Get("orders/completed")
+  @Get('orders/completed')
   @UseGuards(JwtAuthGuard)
   async getCompletedOrders(@Request() req: { user: { userId: string } }) {
     return this.usersService.getCompletedOrders(req.user.userId);
@@ -97,32 +112,27 @@ export class UsersController {
    * PATCH /api/users/profile
    * Updates the authenticated user's profile data.
    */
-  @Patch("profile")
+  @Patch('profile')
   @UseGuards(JwtAuthGuard)
   async updateProfile(
     @Request() req: { user: { userId: string } },
-    @Body() updateData: {
-      birthDate?: string;
-      birthTime?: string;
-      birthPlace?: string;
-      specificQuestion?: string;
-      objective?: string;
-      facePhotoUrl?: string;
-      palmPhotoUrl?: string;
-      highs?: string;
-      lows?: string;
-      strongSide?: string;
-      weakSide?: string;
-      strongZone?: string;
-      weakZone?: string;
-      deliveryStyle?: string;
-      pace?: number;
-      ailments?: string;
-      fears?: string;
-      rituals?: string;
-      profileCompleted?: boolean;
-    }
+    @Body() updateData: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(req.user.userId, updateData);
+  }
+
+  @Get('onboarding')
+  @UseGuards(JwtAuthGuard)
+  async getOnboardingProgress(@Request() req: { user: { userId: string } }) {
+    return this.usersService.getOnboardingProgress(req.user.userId);
+  }
+
+  @Patch('onboarding')
+  @UseGuards(JwtAuthGuard)
+  async saveOnboardingProgress(
+    @Request() req: { user: { userId: string } },
+    @Body() dto: UpdateOnboardingProgressDto,
+  ) {
+    return this.usersService.saveOnboardingProgress(req.user.userId, dto);
   }
 }

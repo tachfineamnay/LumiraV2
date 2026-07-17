@@ -17,6 +17,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, GenerativeModel, Content, Part } from '@google/generative-ai';
 import OpenAI from 'openai';
 import axios from 'axios';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiRoutingService } from '../../modules/settings/ai-routing.service';
 import { ProductLevel, AiMission } from '@prisma/client';
@@ -425,13 +426,24 @@ export class VertexOracle {
   private promptsLoaded = false;
   // Dedicated JSON model for ONIRIQUE to guarantee structured output
   private oniricModel: GenerativeModel | null = null;
+  private readonly onboardingS3Client: S3Client;
+  private readonly onboardingBucket: string;
 
   constructor(
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => PrismaService))
     private readonly prisma: PrismaService,
     private readonly aiRouting: AiRoutingService,
-  ) {}
+  ) {
+    this.onboardingBucket = this.configService.get<string>('S3_UPLOAD_BUCKET', '');
+    this.onboardingS3Client = new S3Client({
+      region: this.configService.get<string>('AWS_REGION', 'eu-west-3'),
+      credentials: {
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID', ''),
+        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY', ''),
+      },
+    });
+  }
 
   // =========================================================================
   // INITIALIZATION
@@ -1561,6 +1573,21 @@ Génère le timeline au format JSON spécifié (tableau de 10 objets).
    */
   private async fetchImageAsBase64(url: string): Promise<string> {
     this.logger.log(`📷 Fetching image: ${url.substring(0, 50)}...`);
+    if (url.startsWith('s3://onboarding/')) {
+      if (!this.onboardingBucket) {
+        throw new Error('S3_UPLOAD_BUCKET is required to load a private onboarding photo');
+      }
+      const key = url.slice('s3://'.length);
+      const response = await this.onboardingS3Client.send(
+        new GetObjectCommand({ Bucket: this.onboardingBucket, Key: key }),
+      );
+      if (!response.Body) {
+        throw new Error('Private onboarding photo has no body');
+      }
+      const bytes = await response.Body.transformToByteArray();
+      return Buffer.from(bytes).toString('base64');
+    }
+
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 30000,

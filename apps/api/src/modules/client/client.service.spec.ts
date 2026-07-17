@@ -169,10 +169,10 @@ describe('ClientService', () => {
   // =========================================================================
 
   describe('getChatQuota', () => {
-    it('should return unlimited for subscribed users', async () => {
+    it('should return unlimited for a paid lifetime buyer without a subscription', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-1',
-        subscriptionStatus: 'ACTIVE',
+        subscriptionStatus: null,
         orders: [{ id: 'order-1' }],
       });
 
@@ -183,23 +183,7 @@ describe('ClientService', () => {
       expect(result.hasAccess).toBe(true);
     });
 
-    it('should return 3 free messages for unsubscribed users with completed reading', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-1',
-        subscriptionStatus: null,
-        orders: [{ id: 'order-1' }],
-      });
-      prisma.chatSession.findMany.mockResolvedValue([]);
-
-      const result = await service.getChatQuota('user-1');
-
-      expect(result.isSubscribed).toBe(false);
-      expect(result.hasAccess).toBe(true);
-      expect(result.messagesRemaining).toBe(3);
-      expect(result.quota).toBe(3);
-    });
-
-    it('should return no access for users without completed reading', async () => {
+    it('should return no access for users without a paid order', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-1',
         subscriptionStatus: null,
@@ -212,7 +196,7 @@ describe('ClientService', () => {
       expect(result.messagesRemaining).toBe(0);
     });
 
-    it('should count user messages from chat sessions', async () => {
+    it('does not impose a quota on a paid buyer with existing chat history', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-1',
         subscriptionStatus: null,
@@ -231,33 +215,9 @@ describe('ClientService', () => {
 
       const result = await service.getChatQuota('user-1');
 
-      expect(result.messagesUsed).toBe(2);
-      expect(result.messagesRemaining).toBe(1); // 3 - 2 = 1
-    });
-
-    it('should return 0 remaining when quota exhausted', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-1',
-        subscriptionStatus: null,
-        orders: [{ id: 'order-1' }],
-      });
-      prisma.chatSession.findMany.mockResolvedValue([
-        {
-          messages: [
-            { role: 'user', content: 'Q1', timestamp: '' },
-            { role: 'assistant', content: 'A1', timestamp: '' },
-            { role: 'user', content: 'Q2', timestamp: '' },
-            { role: 'assistant', content: 'A2', timestamp: '' },
-            { role: 'user', content: 'Q3', timestamp: '' },
-            { role: 'assistant', content: 'A3', timestamp: '' },
-          ],
-        },
-      ]);
-
-      const result = await service.getChatQuota('user-1');
-
-      expect(result.messagesRemaining).toBe(0);
-      expect(result.hasAccess).toBe(false);
+      expect(result.messagesUsed).toBe(0);
+      expect(result.messagesRemaining).toBe(-1);
+      expect(prisma.chatSession.findMany).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException for unknown user', async () => {
@@ -280,10 +240,10 @@ describe('ClientService', () => {
       } as any);
     });
 
-    it('should dispatch chat request for subscribed user', async () => {
+    it('should dispatch chat request for a paid user without a subscription', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-1',
-        subscriptionStatus: 'ACTIVE',
+        subscriptionStatus: null,
         orders: [{ id: 'order-1' }],
       });
 
@@ -294,7 +254,7 @@ describe('ClientService', () => {
       expect(result.quota.isSubscribed).toBe(true);
     });
 
-    it('should throw ForbiddenException when no completed reading (NO_ACCESS)', async () => {
+    it('should throw ForbiddenException when no paid order exists (NO_ACCESS)', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-1',
         subscriptionStatus: null,
@@ -306,7 +266,7 @@ describe('ClientService', () => {
       );
     });
 
-    it('should throw ForbiddenException when quota exceeded', async () => {
+    it('does not reject a paid lifetime buyer because of historic message count', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-1',
         subscriptionStatus: null,
@@ -325,30 +285,10 @@ describe('ClientService', () => {
         },
       ]);
 
-      await expect(service.chatWithOracle('user-1', 'Question 4')).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
-    it('should decrement remaining messages in response for free users', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-1',
-        subscriptionStatus: null,
-        orders: [{ id: 'order-1' }],
-      });
-      prisma.chatSession.findMany.mockResolvedValue([
-        {
-          messages: [
-            { role: 'user', content: 'Q1', timestamp: '' },
-            { role: 'assistant', content: 'A1', timestamp: '' },
-          ],
-        },
-      ]);
-
       const result = await service.chatWithOracle('user-1', 'Question 2');
 
-      expect(result.quota.messagesUsed).toBe(2); // 1 existing + 1 new
-      expect(result.quota.messagesRemaining).toBe(1); // 3 - 1 existing - 1 new
+      expect(result.success).toBe(true);
+      expect(result.quota.messagesRemaining).toBe(-1);
     });
   });
 

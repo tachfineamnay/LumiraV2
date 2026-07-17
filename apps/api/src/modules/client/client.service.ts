@@ -325,16 +325,17 @@ export class ClientService {
 
   /**
    * Get the user's chat quota status
-   * Returns remaining messages and subscription status
+   * Returns remaining messages and permanent-access status.
    */
   async getChatQuota(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
-        subscriptionStatus: true,
         orders: {
-          where: { status: 'COMPLETED' },
+          where: {
+            status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] },
+          },
           take: 1,
           select: { id: true },
         },
@@ -345,11 +346,11 @@ export class ClientService {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    const hasCompletedReading = user.orders.length > 0;
-    const isSubscribed = user.subscriptionStatus === 'ACTIVE';
+    const hasLifetimeAccess = user.orders.length > 0;
 
-    // If subscribed, unlimited messages
-    if (isSubscribed) {
+    // A paid order grants lifetime access; legacy subscription fields never
+    // participate in this authorization decision.
+    if (hasLifetimeAccess) {
       return {
         isSubscribed: true,
         hasAccess: true,
@@ -359,8 +360,8 @@ export class ClientService {
       };
     }
 
-    // If no completed reading, no access at all
-    if (!hasCompletedReading) {
+    // If no paid order, no access at all
+    if (!hasLifetimeAccess) {
       return {
         isSubscribed: false,
         hasAccess: false,
@@ -397,8 +398,7 @@ export class ClientService {
 
   /**
    * Chat with Oracle Lumira using the CONFIDANT agent
-   * Verifies user has access (completed reading or active subscription)
-   * Enforces quota for free users (3 messages max)
+   * Verifies a paid order before allowing a lifetime chat entitlement.
    */
   async chatWithOracle(userId: string, message: string, sessionId?: string) {
     // Get quota status
@@ -411,8 +411,7 @@ export class ClientService {
       quotaStatus.messagesUsed === 0
     ) {
       const error = new ForbiddenException({
-        message:
-          "Vous devez avoir complété au moins une lecture pour accéder au chat avec l'Oracle.",
+        message: 'Vous devez disposer d’une commande payée pour accéder au chat avec l’Oracle.',
         code: CHAT_ERROR_CODES.NO_ACCESS,
       });
       throw error;
@@ -424,7 +423,7 @@ export class ClientService {
         `⚠️ User ${userId} exceeded chat quota (${quotaStatus.messagesUsed}/${FREE_CHAT_QUOTA})`,
       );
       const error = new ForbiddenException({
-        message: "L'Oracle doit se reposer... Rejoignez le Cercle pour continuer vos échanges.",
+        message: "L'Oracle doit se reposer... Votre accès n'est pas encore activé.",
         code: CHAT_ERROR_CODES.QUOTA_EXCEEDED,
         quotaStatus: {
           messagesUsed: quotaStatus.messagesUsed,

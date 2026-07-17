@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { User, Expert, UserProfile } from '@prisma/client';
+import { Prisma, User, Expert, UserProfile } from '@prisma/client';
 import { aggregateCapabilities, getHighestLevel, EntitlementsResponse } from '@packages/shared';
+import { UpdateOnboardingProgressDto, UpdateProfileDto } from './dto/update-profile.dto';
+
+const ONBOARDING_CONSENT_PURPOSE = 'PERSONALIZED_SPIRITUAL_EXPERIENCE';
 
 @Injectable()
 export class UsersService {
@@ -23,25 +26,27 @@ export class UsersService {
   }
 
   /**
-   * V2: Get entitlements based on active subscription.
-   * Returns level 4 (full access) when subscribed, 0 when not.
+   * Sanctuaire access is permanent after a paid order. Subscription records are
+   * retained only as legacy billing metadata and must never authorize access.
    */
   async getEntitlements(userId: string): Promise<EntitlementsResponse> {
-    const subscription = await this.prisma.subscription.findUnique({
-      where: { userId },
-      select: { status: true },
+    const orderCount = await this.prisma.order.count({
+      where: {
+        userId,
+        status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] },
+      },
     });
 
-    const isActive = subscription?.status === 'ACTIVE';
-    const levels = isActive ? [4] : [];
+    const hasPaidOrder = orderCount > 0;
+    const levels = hasPaidOrder ? [4] : [];
     const capabilities = aggregateCapabilities(levels);
     const highestLevel = getHighestLevel(levels);
 
     return {
       capabilities,
-      products: isActive ? ['subscription'] : [],
+      products: hasPaidOrder ? ['lifetime-access'] : [],
       highestLevel,
-      orderCount: isActive ? 1 : 0,
+      orderCount,
     };
   }
 
@@ -257,28 +262,18 @@ export class UsersService {
    */
   async updateProfile(
     userId: string,
-    data: {
-      birthDate?: string;
-      birthTime?: string;
-      birthPlace?: string;
-      specificQuestion?: string;
-      objective?: string;
-      facePhotoUrl?: string;
-      palmPhotoUrl?: string;
-      highs?: string;
-      lows?: string;
-      strongSide?: string;
-      weakSide?: string;
-      strongZone?: string;
-      weakZone?: string;
-      deliveryStyle?: string;
-      pace?: number;
-      ailments?: string;
-      fears?: string;
-      rituals?: string;
-      profileCompleted?: boolean;
-    },
+    data: UpdateProfileDto,
   ): Promise<{ success: boolean; profile: UserProfile }> {
+    if (data.facePhotoUrl !== undefined)
+      this.assertPrivateOnboardingPhoto(data.facePhotoUrl, userId);
+    if (data.palmPhotoUrl !== undefined)
+      this.assertPrivateOnboardingPhoto(data.palmPhotoUrl, userId);
+    if (data.profileCompleted && !data.consent?.accepted) {
+      throw new BadRequestException(
+        'Le consentement explicite est requis pour finaliser le diagnostic',
+      );
+    }
+
     // Upsert the profile (create if not exists, update if exists)
     const profile = await this.prisma.userProfile.upsert({
       where: { userId },
@@ -331,6 +326,72 @@ export class UsersService {
       },
     });
 
+    if (data.profileCompleted && data.consent) {
+      await this.prisma.$transaction([
+        this.prisma.consentRecord.upsert({
+          where: {
+            userId_purpose_version: {
+              userId,
+              purpose: ONBOARDING_CONSENT_PURPOSE,
+              version: data.consent.version,
+            },
+          },
+          create: {
+            userId,
+            purpose: ONBOARDING_CONSENT_PURPOSE,
+            version: data.consent.version,
+          },
+          update: { revokedAt: null },
+        }),
+        this.prisma.onboardingProgress.upsert({
+          where: { userId },
+          create: {
+            userId,
+            currentStep: 5,
+            status: 'COMPLETED',
+            data: {} as Prisma.InputJsonValue,
+            completedAt: new Date(),
+          },
+          update: { currentStep: 5, status: 'COMPLETED', completedAt: new Date() },
+        }),
+      ]);
+    }
+
     return { success: true, profile };
+  }
+
+  async getOnboardingProgress(userId: string) {
+    return this.prisma.onboardingProgress.findUnique({ where: { userId } });
+  }
+
+  async saveOnboardingProgress(userId: string, dto: UpdateOnboardingProgressDto) {
+    if (JSON.stringify(dto.data).includes('data:image/')) {
+      throw new BadRequestException(
+        'Les aperçus Base64 ne peuvent pas être persistés dans un brouillon',
+      );
+    }
+    return this.prisma.onboardingProgress.upsert({
+      where: { userId },
+      create: {
+        userId,
+        currentStep: dto.currentStep,
+        data: dto.data as Prisma.InputJsonValue,
+      },
+      update: {
+        currentStep: dto.currentStep,
+        data: dto.data as Prisma.InputJsonValue,
+        status: 'IN_PROGRESS',
+        completedAt: null,
+      },
+    });
+  }
+
+  private assertPrivateOnboardingPhoto(value: string | null, userId: string) {
+    if (value === null || value === '') return;
+    if (!value.startsWith(`s3://onboarding/${userId}/`)) {
+      throw new BadRequestException(
+        'Les photos doivent être envoyées dans le stockage privé Lumira',
+      );
+    }
   }
 }
