@@ -100,6 +100,11 @@ export function isActiveProductionJob(job?: ProductionJobState): boolean {
   return job?.status === 'QUEUED' || job?.status === 'RUNNING';
 }
 
+/**
+ * Prisma JSON fields reject `undefined` values nested in objects. Production
+ * state is assembled from optional fields, so normalize it through JSON before
+ * persistence. Dates are stored as ISO strings by design.
+ */
 export function toJson(value: unknown): Prisma.InputJsonValue {
-  return value as Prisma.InputJsonValue;
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
