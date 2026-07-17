@@ -90,19 +90,17 @@ describe('AudioGenerationService managed sealed narration', () => {
     mockS3Send.mockResolvedValue({});
   });
 
-  it('refuses the historical fire-and-forget call without a managed audio job', async () => {
+  it('silently skips the historical fire-and-forget call without a managed audio job', async () => {
     const prisma = createPrisma(null);
     const service = new AudioGenerationService(config, prisma as never);
 
-    await expect(service.generateAllAudio('order-1')).rejects.toThrow(
-      'Aucun job audio géré par le Desk',
-    );
+    await expect(service.generateAllAudio('order-1')).resolves.toBeNull();
 
     expect(mockSynthesizeSpeech).not.toHaveBeenCalled();
     expect(mockS3Send).not.toHaveBeenCalled();
   });
 
-  it('requires an immutable sealed reading version', async () => {
+  it('requires an immutable sealed reading version for a managed job', async () => {
     const prisma = createPrisma({
       production: { type: 'AUDIO_GENERATION', status: 'RUNNING', stage: 'GENERATING_AUDIO' },
     });
@@ -143,7 +141,7 @@ describe('AudioGenerationService managed sealed narration', () => {
     expect(mockSynthesizeSpeech).toHaveBeenCalledTimes(1);
     expect(PutObjectCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        Key: result.storageKey,
+        Key: result?.storageKey,
         ContentType: 'audio/mpeg',
         Metadata: expect.objectContaining({
           readingVersionId: 'version-2',
@@ -157,7 +155,7 @@ describe('AudioGenerationService managed sealed narration', () => {
     expect(prisma.tx.orderFile.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         orderId: 'order-1',
-        key: result.storageKey,
+        key: result?.storageKey,
         type: 'AUDIO_READING',
         size: 4,
       }),
