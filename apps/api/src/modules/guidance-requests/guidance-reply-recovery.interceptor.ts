@@ -50,7 +50,8 @@ export class GuidanceReplyRecoveryInterceptor implements NestInterceptor {
     originalError: unknown,
   ) {
     const detail = await this.requests.getExpertRequest(requestId).catch(() => null);
-    const lastMessage = detail?.messages?.[detail.messages.length - 1];
+    const messages = detail?.messages || [];
+    const lastMessage = messages[messages.length - 1];
 
     if (
       !detail ||
