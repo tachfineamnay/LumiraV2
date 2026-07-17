@@ -11,7 +11,6 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
-
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ExpertModule } from './modules/expert/expert.module';
 import { ProductsModule } from './modules/products/products.module';
@@ -22,6 +21,7 @@ import { ServicesModule } from './services/services.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { DreamsModule } from './modules/dreams/dreams.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { GuidanceRequestsModule } from './modules/guidance-requests/guidance-requests.module';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 import { validateEnvironment } from './config/validate-env';
 
@@ -32,7 +32,6 @@ import { validateEnvironment } from './config/validate-env';
       envFilePath: ['../../.env', '.env'],
       validate: validateEnvironment,
     }),
-    // Rate limiting - 100 requests per 60 seconds (more permissive for polling)
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
@@ -49,6 +48,7 @@ import { validateEnvironment } from './config/validate-env';
     WebhooksModule,
     NotificationsModule,
     ExpertModule,
+    GuidanceRequestsModule,
     ProductsModule,
     InsightsModule,
     ClientModule,
@@ -60,7 +60,6 @@ import { validateEnvironment } from './config/validate-env';
   controllers: [AppController],
   providers: [
     AppService,
-    // Global rate limiting guard
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,

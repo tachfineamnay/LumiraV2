@@ -3,11 +3,29 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
-import { Clock, Sparkles, GripVertical, ExternalLink, Eye, UserCheck, Hand } from 'lucide-react';
+import {
+  AlertTriangle,
+  Clock,
+  ExternalLink,
+  Eye,
+  GripVertical,
+  Hand,
+  Loader2,
+  Play,
+  Sparkles,
+  UserCheck,
+} from 'lucide-react';
 import { Order, LEVEL_CONFIG, KanbanColumnId } from '../types';
 import type { OrderViewer } from '../hooks/useSocket';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+
+interface ProductionState {
+  id?: string;
+  status?: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+  stage?: string;
+  type?: 'READING_GENERATION' | 'AUDIO_GENERATION';
+}
 
 interface OrderCardProps {
   order: Order;
@@ -16,6 +34,8 @@ interface OrderCardProps {
   columnId?: KanbanColumnId;
   viewers?: OrderViewer[];
   onClaim?: (orderId: string) => void;
+  onGenerate?: (orderId: string) => void;
+  generatingOrderId?: string | null;
 }
 
 export function OrderCard({
@@ -25,6 +45,8 @@ export function OrderCard({
   columnId,
   viewers = [],
   onClaim,
+  onGenerate,
+  generatingOrderId,
 }: OrderCardProps) {
   const router = useRouter();
 
@@ -48,19 +70,32 @@ export function OrderCard({
     locale: fr,
   });
 
-  // Assignment info
-  const assignedBy = (order.expertReview as { assignedBy?: string })?.assignedBy;
-  const assignedName = (order.expertReview as { assignedName?: string })?.assignedName;
+  const review = (order.expertReview || {}) as {
+    assignedBy?: string;
+    assignedName?: string;
+    production?: ProductionState;
+  };
+  const assignedBy = review.assignedBy;
+  const assignedName = review.assignedName;
+  const production = review.production;
   const isAssignedToMe = assignedBy === currentExpertId;
   const isAssignedToOther = !!assignedBy && !isAssignedToMe;
+  const isStarting = generatingOrderId === order.id;
+  const hasActiveProduction = production?.status === 'QUEUED' || production?.status === 'RUNNING';
+  const hasProductionIncident = production?.status === 'FAILED';
 
   const handleClick = () => {
     router.push(`/admin/studio/${order.id}`);
   };
 
-  const handleClaim = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleClaim = (event: React.MouseEvent) => {
+    event.stopPropagation();
     onClaim?.(order.id);
+  };
+
+  const handleGenerate = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    onGenerate?.(order.id);
   };
 
   const isBeingDragged = isDragging || isSortableDragging;
@@ -83,20 +118,17 @@ export function OrderCard({
       `}
       onClick={!isBeingDragged ? handleClick : undefined}
     >
-      {/* Drag handle — always visible on touch, hover-reveal on md+ */}
       <div
         {...attributes}
         {...listeners}
         className="absolute top-2 right-2 p-2 min-w-[36px] min-h-[36px] rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100
                    hover:bg-desk-hover cursor-grab active:cursor-grabbing transition-opacity flex items-center justify-center"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <GripVertical className="w-4 h-4 text-desk-subtle" />
       </div>
 
-      {/* Content */}
       <div className="p-4">
-        {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -105,39 +137,31 @@ export function OrderCard({
                 {order.orderNumber}
               </span>
             </div>
-            <span
-              className={`
-              inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
-              ${getLevelBadgeColor(order.level)}
-            `}
-            >
-              {levelConfig.name}
-            </span>
-            {/* Assignment badge */}
-            {isAssignedToMe && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-600">
-                <UserCheck className="w-3 h-3" />
-                Ma commande
+            <div className="flex flex-wrap gap-1.5">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getLevelBadgeColor(order.level)}`}
+              >
+                {levelConfig.name}
               </span>
-            )}
-            {isAssignedToOther && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-600">
-                <UserCheck className="w-3 h-3" />
-                {assignedName || 'Prise'}
-              </span>
-            )}
+              {isAssignedToMe && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-600">
+                  <UserCheck className="w-3 h-3" /> À moi
+                </span>
+              )}
+              {isAssignedToOther && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/15 text-orange-600">
+                  <UserCheck className="w-3 h-3" /> {assignedName || 'Prise'}
+                </span>
+              )}
+            </div>
           </div>
           <span className="text-lg font-semibold text-amber-600">
             {(order.amount / 100).toFixed(0)}€
           </span>
         </div>
 
-        {/* Client info */}
         <div className="flex items-center gap-2 mb-3">
-          <div
-            className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 
-                          flex items-center justify-center text-xs font-medium text-white"
-          >
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center text-xs font-medium text-white">
             {order.user.firstName?.[0]}
             {order.user.lastName?.[0]}
           </div>
@@ -149,13 +173,22 @@ export function OrderCard({
           </div>
         </div>
 
-        {/* Meta */}
         <div className="flex items-center gap-4 text-xs text-desk-subtle">
           <div className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" />
             <span>{timeAgo}</span>
           </div>
-          {order.status === 'AWAITING_VALIDATION' ? (
+          {hasActiveProduction ? (
+            <div className="flex items-center gap-1 text-blue-600">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>{production?.status === 'QUEUED' ? 'En file' : 'Production'}</span>
+            </div>
+          ) : hasProductionIncident ? (
+            <div className="flex items-center gap-1 text-red-600">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Incident</span>
+            </div>
+          ) : order.status === 'AWAITING_VALIDATION' ? (
             <div className="flex items-center gap-1 text-purple-600 animate-pulse">
               <Eye className="w-3.5 h-3.5" />
               <span>À valider</span>
@@ -168,7 +201,14 @@ export function OrderCard({
           ) : null}
         </div>
 
-        {/* Question preview */}
+        {production?.stage && hasActiveProduction && (
+          <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-2 text-xs text-blue-700">
+            {production.stage === 'GENERATING_READING'
+              ? 'La lecture se génère côté serveur. Vous pouvez quitter cette page.'
+              : production.stage.replaceAll('_', ' ').toLowerCase()}
+          </div>
+        )}
+
         {order.user.profile?.specificQuestion && (
           <div className="mt-3 p-2 rounded-lg bg-desk-card border border-desk-border">
             <p className="text-xs text-desk-muted line-clamp-2">
@@ -177,31 +217,37 @@ export function OrderCard({
           </div>
         )}
 
-        {/* Claim button — shown on unassigned orders in paid column */}
         {columnId === 'paid' && !assignedBy && onClaim && (
           <button
             onClick={handleClaim}
-            className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-lg
-                       bg-amber-500/10 text-amber-600 text-sm font-medium
-                       hover:bg-amber-500/20 transition-colors"
+            className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-lg bg-amber-500/10 text-amber-600 text-sm font-medium hover:bg-amber-500/20 transition-colors"
           >
             <Hand className="w-4 h-4" />
-            Prendre cette commande
+            Prendre en charge
           </button>
         )}
 
-        {/* Presence viewers */}
+        {columnId === 'paid' && isAssignedToMe && onGenerate && !hasActiveProduction && (
+          <button
+            onClick={handleGenerate}
+            disabled={isStarting}
+            className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-lg bg-amber-500 text-slate-950 text-sm font-semibold hover:bg-amber-400 transition-colors disabled:opacity-60"
+          >
+            {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Lancer la production
+          </button>
+        )}
+
         {viewers.length > 0 && (
           <div className="mt-2 flex items-center gap-1.5">
             <div className="flex -space-x-1.5">
-              {viewers.slice(0, 3).map((v) => (
+              {viewers.slice(0, 3).map((viewer) => (
                 <div
-                  key={v.expertId}
-                  title={v.expertEmail}
-                  className="w-5 h-5 rounded-full bg-blue-500 border-2 border-desk-surface
-                             flex items-center justify-center text-[9px] font-bold text-white"
+                  key={viewer.expertId}
+                  title={viewer.expertEmail}
+                  className="w-5 h-5 rounded-full bg-blue-500 border-2 border-desk-surface flex items-center justify-center text-[9px] font-bold text-white"
                 >
-                  {v.expertEmail[0]?.toUpperCase()}
+                  {viewer.expertEmail[0]?.toUpperCase()}
                 </div>
               ))}
             </div>
@@ -212,7 +258,6 @@ export function OrderCard({
         )}
       </div>
 
-      {/* Hover action */}
       <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
         <div className="flex items-center gap-1 text-xs text-amber-600">
           <span>Ouvrir</span>

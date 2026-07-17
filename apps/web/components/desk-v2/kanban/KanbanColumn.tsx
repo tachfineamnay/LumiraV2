@@ -14,6 +14,8 @@ interface KanbanColumnProps {
   currentExpertId?: string;
   orderViewers?: Record<string, OrderViewer[]>;
   onClaim?: (orderId: string) => void;
+  onGenerate?: (orderId: string) => void;
+  generatingOrderId?: string | null;
 }
 
 const COLUMN_COLORS = {
@@ -50,6 +52,8 @@ export function KanbanColumn({
   currentExpertId,
   orderViewers = {},
   onClaim,
+  onGenerate,
+  generatingOrderId,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
@@ -59,10 +63,10 @@ export function KanbanColumn({
   const isValidationColumn = column.id === 'validation';
   const hasUrgentOrders = isValidationColumn && orders.length > 0;
 
-  // Count orders assigned to current expert
   const myOrdersCount = currentExpertId
     ? orders.filter(
-        (o) => (o.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId,
+        (order) =>
+          (order.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId,
       ).length
     : 0;
 
@@ -75,7 +79,6 @@ export function KanbanColumn({
         ${hasUrgentOrders ? 'border-amber-500/60 shadow-lg shadow-amber-500/10' : isOver ? `${colors.border} bg-desk-card` : 'border-desk-border'}
       `}
     >
-      {/* Header */}
       <div className={`p-4 rounded-t-xl bg-gradient-to-b ${colors.header}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -100,24 +103,20 @@ export function KanbanColumn({
         )}
       </div>
 
-      {/* Cards */}
-      <SortableContext items={orders.map((o) => o.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={orders.map((order) => order.id)} strategy={verticalListSortingStrategy}>
         <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px]">
           {isLoading ? (
-            // Loading skeletons
             <>
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-32 rounded-lg bg-desk-card animate-pulse" />
+              {[1, 2, 3].map((index) => (
+                <div key={index} className="h-32 rounded-lg bg-desk-card animate-pulse" />
               ))}
             </>
           ) : orders.length === 0 ? (
-            // Empty state
             <div className="flex flex-col items-center justify-center h-32 text-desk-muted">
               <span className="text-2xl mb-2">📭</span>
               <span className="text-sm">Aucune commande</span>
             </div>
           ) : (
-            // Order cards
             orders.map((order, index) => (
               <motion.div
                 key={order.id}
@@ -131,6 +130,8 @@ export function KanbanColumn({
                   currentExpertId={currentExpertId}
                   viewers={orderViewers[order.id]}
                   onClaim={onClaim}
+                  onGenerate={onGenerate}
+                  generatingOrderId={generatingOrderId}
                 />
               </motion.div>
             ))

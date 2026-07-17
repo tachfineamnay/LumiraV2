@@ -8,6 +8,7 @@ import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
 import { ClientIdentityHeader } from '@/components/desk-v2/clients/ClientIdentityHeader';
 import { ClientTabs } from '@/components/desk-v2/clients/ClientTabs';
+import { ClientControlOverview } from '@/components/desk-v2/clients/ClientControlOverview';
 import { ConfirmModal } from '@/components/desk-v2/shared/ConfirmModal';
 import { ClientFullData } from '@/components/desk-v2/clients/types';
 
@@ -76,7 +77,6 @@ export default function ClientDetailPage() {
       animate={{ opacity: 1 }}
       className="p-3 sm:p-6 space-y-4 sm:space-y-6"
     >
-      {/* Back navigation */}
       <div className="flex items-center gap-4">
         <button
           onClick={() => router.push('/admin/clients')}
@@ -86,7 +86,12 @@ export default function ClientDetailPage() {
         >
           <ArrowLeft className="w-5 h-5 text-desk-muted" />
         </button>
-        <h1 className="text-xl font-semibold text-desk-text">Dossier d&apos;Âme</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-desk-text">Dossier client</h1>
+          <p className="hidden text-xs text-desk-muted sm:block">
+            Lectures, production, assets, échanges et historique
+          </p>
+        </div>
         <button
           onClick={fetchClient}
           className="ml-auto p-2 hover:bg-desk-hover rounded-lg transition-colors"
@@ -97,7 +102,6 @@ export default function ClientDetailPage() {
         </button>
       </div>
 
-      {/* Identity Header with KPIs */}
       <ClientIdentityHeader
         client={client}
         onStatusChange={(status) => setStatusAction(status)}
@@ -105,10 +109,10 @@ export default function ClientDetailPage() {
         onRefresh={fetchClient}
       />
 
-      {/* Tabbed Content */}
+      <ClientControlOverview clientId={clientId} />
+
       <ClientTabs client={client} onRefresh={fetchClient} />
 
-      {/* Delete client confirm */}
       <ConfirmModal
         isOpen={showDeleteClient}
         onClose={() => !isDeletingClient && setShowDeleteClient(false)}
@@ -131,7 +135,6 @@ export default function ClientDetailPage() {
         isLoading={isDeletingClient}
       />
 
-      {/* Status change confirm */}
       <ConfirmModal
         isOpen={!!statusAction}
         onClose={() => !isChangingStatus && setStatusAction(null)}
