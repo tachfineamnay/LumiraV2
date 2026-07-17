@@ -426,7 +426,7 @@ export function ReadingViewerModal({
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <span className="hidden sm:inline px-2 text-xs font-mono text-stellar-400 min-w-[4.5rem] text-center">
+                  <span className="inline px-1.5 sm:px-2 text-[11px] sm:text-xs font-mono text-stellar-400 min-w-[3rem] sm:min-w-[4.5rem] text-center tabular-nums">
                     {numPages ? `${pageNumber}/${numPages}` : '—'}
                   </span>
                   <button

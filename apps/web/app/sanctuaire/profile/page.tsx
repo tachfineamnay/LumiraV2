@@ -200,7 +200,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Action Button */}
-            <Link href="/sanctuaire/settings/history">
+            <Link href="/sanctuaire/settings/preferences">
               <button className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/5 text-stellar-300 border border-white/10 hover:bg-white/10 hover:border-horizon-400/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
                 <Target className="w-4 h-4" />
                 Réglages
@@ -510,8 +510,8 @@ export default function ProfilePage() {
                       alt="Photo de visage"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
-                      <span className="text-xs text-stellar-200">Cliquez pour agrandir</span>
+                    <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/70 to-transparent opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
+                      <span className="text-xs text-stellar-200">Appuyez pour agrandir</span>
                     </div>
                   </div>
                 ) : (
@@ -545,8 +545,8 @@ export default function ProfilePage() {
                       alt="Photo de paume"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
-                      <span className="text-xs text-stellar-200">Cliquez pour agrandir</span>
+                    <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/70 to-transparent opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
+                      <span className="text-xs text-stellar-200">Appuyez pour agrandir</span>
                     </div>
                   </div>
                 ) : (

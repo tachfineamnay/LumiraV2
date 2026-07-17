@@ -44,7 +44,7 @@ test.describe('Sanctuaire Profile — Display', () => {
         await page.waitForTimeout(3000);
 
         // Delivery style should be visible
-        const hasStyle = await page.locator('text=/poétique|analytique|style/i').first().isVisible({ timeout: 5000 }).catch(() => false);
+        const hasStyle = await page.locator("text=/L'Épée|Vérité crue/i").first().isVisible({ timeout: 5000 }).catch(() => false);
         expect(hasStyle).toBeTruthy();
     });
 });

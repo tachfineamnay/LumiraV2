@@ -190,15 +190,20 @@ export default function OracleChatPage() {
   };
 
   return (
-    <div className="w-full flex flex-col items-center justify-start p-2 sm:p-4 md:p-8 relative min-h-0">
+    <div className="w-full flex-1 flex flex-col items-center justify-start p-2 sm:p-4 md:p-8 relative min-h-0">
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 bg-purple-900/20 rounded-full blur-[100px]" />
         <div className="absolute bottom-20 left-20 w-96 h-96 bg-amber-900/10 rounded-full blur-[100px]" />
       </div>
 
       <GlassCard
-        className="w-full max-w-4xl flex flex-col relative z-10 border-white/10 !p-0 overflow-hidden"
-        style={{ height: 'calc(100svh - 11rem)' }}
+        className="w-full max-w-4xl flex flex-col relative z-10 border-white/10 !p-0 overflow-hidden min-h-0"
+        style={{
+          height:
+            'calc(100dvh - var(--sanctuaire-header-h) - var(--sanctuaire-main-pb) - 1rem)',
+          maxHeight:
+            'calc(100dvh - var(--sanctuaire-header-h) - var(--sanctuaire-main-pb) - 1rem)',
+        }}
       >
         {/* Header */}
         <div className="p-3 sm:p-6 border-b border-white/5 bg-white/5 flex items-center justify-between gap-2">

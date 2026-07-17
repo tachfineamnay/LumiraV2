@@ -58,7 +58,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
       {/* Horizontal tabs — no competing fixed sidebar */}
       <nav
-        className="flex gap-2 overflow-x-auto pb-2 mb-6 -mx-1 px-1 scrollbar-thin"
+        className="flex gap-2 overflow-x-auto pb-2 mb-6 -mx-1 px-1 custom-scrollbar"
         aria-label="Sections réglages"
       >
         {tabs.map((tab) => {

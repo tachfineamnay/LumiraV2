@@ -96,9 +96,9 @@ export function InsightModal({ data, isOpen, onClose, onCreateRitual }: InsightM
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 
-                       z-50 w-auto md:w-[600px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] 
-                       overflow-hidden rounded-2xl bg-abyss-600/95 backdrop-blur-xl 
+                        className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2
+                       z-50 w-auto md:w-[600px] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]
+                       overflow-hidden rounded-2xl bg-abyss-600/95 backdrop-blur-xl
                        border border-white/[0.08] shadow-abyss flex flex-col"
                     >
                         {/* Header */}

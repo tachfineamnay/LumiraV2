@@ -19,6 +19,13 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /sanctuaire-mobile\.spec\.ts/,
+    },
+    {
+      // Chromium + mobile viewport (WebKit not required on Windows CI/dev)
+      name: 'Mobile Chrome',
+      use: { ...devices['Pixel 5'] },
+      testMatch: /sanctuaire-mobile\.spec\.ts/,
     },
   ],
 

@@ -28,10 +28,10 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <SanctuaireGuard>
-      <div className="min-h-screen bg-abyss-700 text-stellar-100 selection:bg-horizon-400/20 starfield">
+      <div className="min-h-dvh bg-abyss-700 text-stellar-100 selection:bg-horizon-400/20 starfield">
         <SanctuaireSidebar />
 
-        <div className="lg:ml-64 min-h-screen flex flex-col">
+        <div className="lg:ml-64 min-h-dvh flex flex-col">
           <header className="sticky top-0 z-40 p-3 sm:p-4 flex justify-between items-center backdrop-blur-xl bg-abyss-700/80 border-b border-white/[0.04]">
             <div className="flex items-center gap-3 lg:hidden">
               <Link
@@ -49,32 +49,36 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
             <div className="flex-1" />
 
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="hidden sm:block">
-                {entitlementsLoading ? (
-                  <div className="px-4 py-2 rounded-full bg-abyss-500/50 animate-pulse">
-                    <span className="text-xs text-stellar-500">Chargement...</span>
-                  </div>
-                ) : isSubscribed ? (
-                  <Link
-                    href="/sanctuaire/abonnement"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md hover:border-amber-400/50 transition-colors"
-                  >
-                    <Crown className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-bold uppercase tracking-widest text-amber-400">
-                      Initié
-                    </span>
-                  </Link>
-                ) : (
-                  <Link
-                    href="/commande"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 hover:border-amber-500/40 transition-colors"
-                  >
-                    <span className="text-xs font-bold uppercase tracking-widest text-amber-400/70">
-                      S&apos;abonner
-                    </span>
-                  </Link>
-                )}
-              </div>
+              {entitlementsLoading ? (
+                <div
+                  className="w-10 h-10 sm:w-auto sm:px-4 sm:py-2 rounded-full bg-abyss-500/50 animate-pulse"
+                  aria-hidden
+                >
+                  <span className="hidden sm:inline text-xs text-stellar-500">Chargement...</span>
+                </div>
+              ) : isSubscribed ? (
+                <Link
+                  href="/sanctuaire/abonnement"
+                  aria-label="Cercle des Initiés"
+                  className="inline-flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md hover:border-amber-400/50 transition-colors"
+                >
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  <span className="hidden sm:inline text-xs font-bold uppercase tracking-widest text-amber-400">
+                    Initié
+                  </span>
+                </Link>
+              ) : (
+                <Link
+                  href="/commande"
+                  aria-label="Découvrir les offres"
+                  className="inline-flex items-center justify-center gap-2 w-10 h-10 sm:w-auto sm:h-auto sm:px-4 sm:py-2 rounded-full bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20 hover:border-amber-500/40 transition-colors"
+                >
+                  <Crown className="w-4 h-4 text-amber-400/70 sm:hidden" />
+                  <span className="hidden sm:inline text-xs font-bold uppercase tracking-widest text-amber-400/70">
+                    S&apos;abonner
+                  </span>
+                </Link>
+              )}
 
               {isAuthenticated && (
                 <div className="relative">
@@ -187,7 +191,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <main className="flex-1 pb-28 lg:pb-8 min-w-0">{children}</main>
+          <main className="sanctuaire-main flex-1 flex flex-col min-h-0 min-w-0">{children}</main>
         </div>
 
         <MobileBottomNav />

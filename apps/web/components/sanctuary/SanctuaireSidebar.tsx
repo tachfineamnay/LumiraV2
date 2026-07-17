@@ -11,7 +11,7 @@ export function SanctuaireSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 glass-sidebar z-40">
+    <aside className="hidden lg:flex flex-col w-64 h-dvh fixed left-0 top-0 glass-sidebar z-40">
       <div className="p-6 border-b border-white/5">
         <Link href="/sanctuaire" className="flex items-center gap-3 group">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-horizon-400 to-horizon-500 flex items-center justify-center shadow-gold-soft">

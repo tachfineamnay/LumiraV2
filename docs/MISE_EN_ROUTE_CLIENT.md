@@ -148,8 +148,8 @@ Le code est déclarable **GO sous conditions d’infrastructure** lorsque : buil
 | Audit dépendances niveau high | OK — aucune vulnérabilité connue |
 | Build API isolé | OK |
 | Build Web standalone isolé | OK |
-| E2E Chromium | 63/75 validés dans l’état de travail complet |
+| E2E Playwright desktop + mobile | OK — 75/75 scénarios validés |
 
-Les 12 E2E non verts appartiennent à la refonte UI Insights→Synthèse et au nouveau shell mobile encore non commités dans le workspace, plus une attente de libellé profil. Ils ne concernent pas le durcissement de démarrage livré ici, mais empêchent de qualifier la branche complète de CI verte tant que ce chantier n’est pas terminé. Les 37 scénarios Auth, Chat, Dashboard, Lectures et Rêves sont verts après correction du contrat BFF et du crash serveur `react-pdf`.
+La suite Playwright complète est verte sur Chromium desktop et Pixel 5. Elle couvre notamment l’achat, l’authentification, le Sanctuaire, le chat, les lectures, les rêves, la synthèse/Insights, le profil et le shell mobile.
 
 Limites du poste de recette : Docker n’est pas installé et PostgreSQL local n’est pas démarré. Les images Docker ont donc été inspectées statiquement mais doivent être construites par la CI/Coolify ; `prisma migrate status` et les smoke tests fournisseurs doivent être exécutés dans l’infrastructure client selon les sections précédentes.

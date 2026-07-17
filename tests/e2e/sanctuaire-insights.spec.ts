@@ -1,26 +1,41 @@
 /**
- * E2E Tests — Sanctuaire Insights Page
- * Validates: 8 insight cards, modal open, "New" badge, audio player, auto-polling
+ * E2E Tests — Sanctuaire Insights (canonical: /sanctuaire/synthesis)
+ * Validates: redirect from legacy URL, 8 insight cards, modal, "New" badge, audio
  */
 import { test, expect } from '@playwright/test';
-import { mockSanctuaireAuth, mockInsightsApi } from '../helpers/api-mock';
+import { mockInsightsApi, mockFullSanctuaire } from '../helpers/api-mock';
 
-const API_BASE = 'http://localhost:3001/api';
+const BFF = '**/api/bff';
+const INSIGHTS_URL = '/sanctuaire/synthesis';
+
+test.describe('Sanctuaire Insights — Legacy redirect', () => {
+    test('should redirect /sanctuaire/insights to synthesis', async ({ page }) => {
+        await mockFullSanctuaire(page, { subscribed: true });
+        await page.goto('/sanctuaire/insights');
+        await page.waitForURL('**/sanctuaire/synthesis', { timeout: 10000 });
+        expect(page.url()).toContain('/sanctuaire/synthesis');
+    });
+});
 
 test.describe('Sanctuaire Insights — Display', () => {
     test.beforeEach(async ({ page }) => {
-        await mockSanctuaireAuth(page, { subscribed: true });
-        await mockInsightsApi(page, { withAudio: true });
+        await mockFullSanctuaire(page, { subscribed: true });
     });
 
     test('should display 8 insight category cards', async ({ page }) => {
-        await page.goto('/sanctuaire/insights');
-
-        // Wait for insights to load
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(3000);
 
-        // Should display all 8 categories
-        const categories = ['Spirituel', 'Relations', 'Mission', 'Créativité', 'Émotions', 'Travail', 'Santé', 'Finance'];
+        const categories = [
+            'Spirituel',
+            'Relations',
+            'Mission',
+            'Créativité',
+            'Émotions',
+            'Travail',
+            'Santé',
+            'Finance',
+        ];
         for (const cat of categories) {
             await expect(page.locator(`text=${cat}`).first()).toBeVisible({ timeout: 5000 });
         }
@@ -28,11 +43,9 @@ test.describe('Sanctuaire Insights — Display', () => {
 
     test('should display "New" badge on unviewed insights', async ({ page }) => {
         await mockInsightsApi(page, { allViewed: false });
-        await page.goto('/sanctuaire/insights');
-
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(3000);
 
-        // "New" or "Nouveau" badge should be visible on unviewed insights
         const newBadges = page.locator('text=/new|nouveau/i');
         const count = await newBadges.count();
         expect(count).toBeGreaterThan(0);
@@ -40,8 +53,7 @@ test.describe('Sanctuaire Insights — Display', () => {
 
     test('should NOT display "New" badge when all insights are viewed', async ({ page }) => {
         await mockInsightsApi(page, { allViewed: true });
-        await page.goto('/sanctuaire/insights');
-
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(3000);
 
         const newBadges = page.locator('text=/^new$|^nouveau$/i');
@@ -50,8 +62,7 @@ test.describe('Sanctuaire Insights — Display', () => {
     });
 
     test('should display empty state when no insights exist', async ({ page }) => {
-        // Override insights mock to return empty
-        await page.route(`${API_BASE}/insights`, async (route) => {
+        await page.route(`${BFF}/insights`, async (route) => {
             if (route.request().method() === 'GET') {
                 await route.fulfill({
                     status: 200,
@@ -66,85 +77,70 @@ test.describe('Sanctuaire Insights — Display', () => {
             }
         });
 
-        await page.goto('/sanctuaire/insights');
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(3000);
 
-        // Should show empty state message
         await expect(
-            page.locator('text=/insights|générés|première lecture/i').first(),
+            page.locator('text=/insights|génération|première lecture|essence/i').first(),
         ).toBeVisible({ timeout: 5000 });
     });
 });
 
 test.describe('Sanctuaire Insights — Modal Interaction', () => {
     test('should open insight modal on card click', async ({ page }) => {
-        await mockSanctuaireAuth(page, { subscribed: true });
-        await mockInsightsApi(page, { withAudio: true });
+        await mockFullSanctuaire(page, { subscribed: true });
 
-        await page.goto('/sanctuaire/insights');
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(3000);
 
-        // Click on first insight card
-        const firstCard = page.locator('text=/spirituel/i').first();
-        await firstCard.click();
+        await page.getByRole('button', { name: 'Explorer' }).first().click();
 
-        // Modal should open with full content
         await expect(
             page.locator('text=/analyse complète|résumé|guidance/i').first(),
         ).toBeVisible({ timeout: 5000 });
     });
 
     test('should mark insight as viewed when modal opens (PATCH call)', async ({ page }) => {
-        await mockSanctuaireAuth(page, { subscribed: true });
+        await mockFullSanctuaire(page, { subscribed: true });
         await mockInsightsApi(page, { allViewed: false });
 
-        let viewPatchCalled = false;
-        await page.route(/\/api\/insights\/\w+\/view/, async (route) => {
-            if (route.request().method() === 'PATCH') {
-                viewPatchCalled = true;
-                await route.fulfill({
-                    status: 200,
-                    contentType: 'application/json',
-                    body: JSON.stringify({ success: true, viewedAt: new Date().toISOString() }),
-                });
-            } else {
-                await route.continue();
-            }
-        });
-
-        await page.goto('/sanctuaire/insights');
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(3000);
 
-        const firstCard = page.locator('text=/spirituel/i').first();
-        await firstCard.click();
-        await page.waitForTimeout(1000);
-
-        expect(viewPatchCalled).toBe(true);
+        const viewRequest = page.waitForRequest(
+            (request) =>
+                request.method() === 'PATCH' &&
+                /\/api\/bff\/insights\/\w+\/view/.test(request.url()),
+        );
+        await page.getByRole('button', { name: 'Explorer' }).first().click();
+        await expect(viewRequest).resolves.toBeTruthy();
     });
 });
 
 test.describe('Sanctuaire Insights — Audio', () => {
     test('should show audio player when audioUrl is available', async ({ page }) => {
-        await mockSanctuaireAuth(page, { subscribed: true });
-        await mockInsightsApi(page, { withAudio: true });
+        await mockFullSanctuaire(page, { subscribed: true });
 
-        await page.goto('/sanctuaire/insights');
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(3000);
 
-        // Click an insight to open modal
-        const firstCard = page.locator('text=/spirituel/i').first();
-        await firstCard.click();
+        await page.getByRole('button', { name: 'Explorer' }).first().click();
 
-        // Audio player or play button should be visible
-        const hasAudio = await page.locator('audio, button:has-text("Écouter"), [aria-label*="audio" i], [class*="audio" i]').first().isVisible({ timeout: 5000 }).catch(() => false);
+        const hasAudio = await page
+            .locator(
+                'audio, button:has-text("Écouter"), [aria-label*="audio" i], [class*="audio" i]',
+            )
+            .first()
+            .isVisible({ timeout: 5000 })
+            .catch(() => false);
         expect(hasAudio).toBeTruthy();
     });
 
     test('should poll for audio when audioUrl is null', async ({ page }) => {
-        await mockSanctuaireAuth(page, { subscribed: true });
+        await mockFullSanctuaire(page, { subscribed: true });
 
         let pollCount = 0;
-        await page.route(`${API_BASE}/insights`, async (route) => {
+        await page.route(`${BFF}/insights`, async (route) => {
             if (route.request().method() === 'GET') {
                 pollCount++;
                 await route.fulfill({
@@ -154,7 +150,12 @@ test.describe('Sanctuaire Insights — Audio', () => {
                         categories: [
                             {
                                 category: 'SPIRITUEL',
-                                metadata: { label: 'Spirituel', description: 'Éveil', icon: 'Sparkles', color: 'horizon' },
+                                metadata: {
+                                    label: 'Spirituel',
+                                    description: 'Éveil',
+                                    icon: 'Sparkles',
+                                    color: 'horizon',
+                                },
                                 insight: {
                                     id: 'ins-1',
                                     category: 'SPIRITUEL',
@@ -174,12 +175,9 @@ test.describe('Sanctuaire Insights — Audio', () => {
             }
         });
 
-        await page.goto('/sanctuaire/insights');
-
-        // Wait for at least 2 polling cycles (useInsights polls every 10s)
+        await page.goto(INSIGHTS_URL);
         await page.waitForTimeout(25000);
 
-        // Should have polled multiple times
         expect(pollCount).toBeGreaterThan(1);
     });
 });

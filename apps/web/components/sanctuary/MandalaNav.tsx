@@ -56,7 +56,7 @@ export function MandalaNav() {
   const navItems = MANDALA_NAV;
 
   return (
-    <div className="w-full flex items-center justify-center overflow-hidden px-2">
+    <div className="w-full flex items-center justify-center overflow-x-clip overflow-y-visible px-2 py-10 sm:py-8">
       <div
         className="relative mx-auto flex-shrink-0 scale-[0.72] sm:scale-90 md:scale-100 origin-center"
         style={{ width: containerSize, height: containerSize, maxWidth: '100%' }}

@@ -82,7 +82,7 @@ export function createTestProfile(
     weakSide: 'gauche',
     strongZone: 'cœur',
     weakZone: 'gorge',
-    deliveryStyle: 'poétique',
+    deliveryStyle: 'Direct',
     pace: 3,
     ailments: 'Migraines occasionnelles',
     fears: 'Abandon, solitude',
