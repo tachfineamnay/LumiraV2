@@ -7,6 +7,7 @@ type AuthenticatedRequest = {
   originalUrl?: string;
   url?: string;
   user?: { id?: string; userId?: string };
+  body?: { category?: unknown };
 };
 
 @Injectable()
@@ -22,6 +23,12 @@ export class GuidanceResponseInterceptor implements NestInterceptor {
 
     if (request.method !== 'POST' || !path.endsWith('/client/requests') || !userId) {
       return next.handle();
+    }
+
+    if (request.body?.category === 'PERSONAL_SITUATION') {
+      request.body.category = 'SPECIFIC_SITUATION';
+    } else if (request.body?.category === 'TECHNICAL_HELP') {
+      request.body.category = 'OTHER';
     }
 
     return next.handle().pipe(
