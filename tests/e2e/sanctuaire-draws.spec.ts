@@ -5,7 +5,7 @@
 import { test, expect } from '@playwright/test';
 import { mockSanctuaireAuth, mockDrawsApi } from '../helpers/api-mock';
 
-const API_BASE = 'http://localhost:3001/api';
+const BFF = '**/api/bff';
 
 test.describe('Sanctuaire Draws — Display', () => {
     test.beforeEach(async ({ page }) => {
@@ -14,12 +14,12 @@ test.describe('Sanctuaire Draws — Display', () => {
 
     test('should display draws/readings page with completed orders', async ({ page }) => {
         // Mock completed orders
-        await page.route(`${API_BASE}/users/orders/completed`, async (route) => {
+        await page.route(`${BFF}/client/readings`, async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify([
-                    {
+                body: JSON.stringify({
+                    readings: [{
                         id: 'order-1',
                         orderNumber: 'LU240115001',
                         level: 1,
@@ -29,8 +29,9 @@ test.describe('Sanctuaire Draws — Display', () => {
                         archetype: 'Le Sage',
                         title: 'Lecture d\'Âme',
                         assets: { pdf: 'https://s3.example.com/reading.pdf' },
-                    },
-                ]),
+                    }],
+                    pending: [],
+                }),
             });
         });
 
@@ -80,12 +81,12 @@ test.describe('Sanctuaire Draws — Reading Actions', () => {
         await mockSanctuaireAuth(page, { subscribed: true, hasOrders: true });
         await mockDrawsApi(page);
 
-        await page.route(`${API_BASE}/users/orders/completed`, async (route) => {
+        await page.route(`${BFF}/client/readings`, async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify([
-                    {
+                body: JSON.stringify({
+                    readings: [{
                         id: 'order-1',
                         orderNumber: 'LU240115001',
                         level: 1,
@@ -95,8 +96,9 @@ test.describe('Sanctuaire Draws — Reading Actions', () => {
                         archetype: 'Le Sage',
                         title: 'Lecture d\'Âme',
                         assets: { pdf: 'https://s3.example.com/reading.pdf' },
-                    },
-                ]),
+                    }],
+                    pending: [],
+                }),
             });
         });
 
@@ -114,12 +116,13 @@ test.describe('Sanctuaire Draws — Reading Actions', () => {
     test('should show processing status for pending orders', async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: true, hasOrders: true });
 
-        await page.route(`${API_BASE}/users/orders/completed`, async (route) => {
+        await page.route(`${BFF}/client/readings`, async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify([
-                    {
+                body: JSON.stringify({
+                    readings: [],
+                    pending: [{
                         id: 'order-2',
                         orderNumber: 'LU240115002',
                         level: 1,
@@ -130,8 +133,8 @@ test.describe('Sanctuaire Draws — Reading Actions', () => {
                         title: 'Lecture d\'Âme',
                         inProgress: true,
                         assets: {},
-                    },
-                ]),
+                    }],
+                }),
             });
         });
 

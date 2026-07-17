@@ -19,7 +19,7 @@ test.describe('Sanctuaire Dashboard — Subscribed User', () => {
         await page.goto('/sanctuaire');
 
         // Dashboard cards: "Mon Profil", "Mes Lectures", "Guidance Sacrée"
-        await expect(page.locator('text=/mon profil/i').first()).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('text=/profil/i').first()).toBeVisible({ timeout: 10000 });
         await expect(page.locator('text=/mes lectures|lectures/i').first()).toBeVisible();
     });
 

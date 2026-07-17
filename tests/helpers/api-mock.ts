@@ -48,15 +48,16 @@ export async function mockSanctuaireAuth(page: Page, options: MockAuthOptions = 
   const order = hasOrders ? createTestOrder({ userId: user.id, email: user.email }) : null;
   const entitlements = createTestEntitlements(subscribed);
 
-  // httpOnly session cookie (Playwright can set httpOnly cookies)
+  // httpOnly session cookie (Playwright can set httpOnly cookies).
+  // Use url only (not path/domain) so it matches Playwright baseURL (127.0.0.1:3100).
+  const cookieUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3100';
   await page.context().addCookies([
     {
       name: 'sanctuaire_token',
       value: 'mock-jwt-token-valid',
-      url: 'http://localhost:3000',
+      url: cookieUrl,
       httpOnly: true,
       sameSite: 'Lax',
-      path: '/',
     },
   ]);
 

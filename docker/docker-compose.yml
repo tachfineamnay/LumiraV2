@@ -29,11 +29,13 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-pk_test_replace_me}
         API_INTERNAL_URL: http://api:3001
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-pk_test_replace_me}
       - API_INTERNAL_URL=http://api:3001
       - JWT_SECRET=${JWT_SECRET:-dev-only-change-me-in-production-64chars-minimum!!}
     depends_on:
@@ -59,6 +61,14 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - MAIL_FROM=${MAIL_FROM:-noreply@oraclelumira.local}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_replace_me}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_replace_me}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-replace_me}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-replace_me}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-replace_me}
+      - AWS_REGION=${AWS_REGION:-eu-west-3}
+      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-lumira-readings-dev}
+      - AWS_UPLOADS_BUCKET_NAME=${AWS_UPLOADS_BUCKET_NAME:-lumira-uploads-dev}
       - NODE_ENV=development
     depends_on:
       - postgres

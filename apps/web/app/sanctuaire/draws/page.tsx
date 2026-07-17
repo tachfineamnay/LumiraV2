@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import dynamicImport from 'next/dynamic';
 import {
   FileText,
   Calendar,
@@ -20,9 +21,16 @@ import {
   Headphones,
 } from 'lucide-react';
 import { useSanctuaire } from '../../../context/SanctuaireContext';
-import { ReadingViewerModal } from '../../../components/sanctuary/ReadingViewerModal';
 import { MysticAudioPlayer } from '../../../components/ui/MysticAudioPlayer';
 import sanctuaireApi from '../../../lib/sanctuaireApi';
+
+// react-pdf requires browser globals such as DOMMatrix. Keeping the viewer out
+// of the server bundle prevents runtime 500s on the standalone Next.js server.
+const ReadingViewerModal = dynamicImport(
+  () => import('../../../components/sanctuary/ReadingViewerModal')
+    .then((module) => module.ReadingViewerModal),
+  { ssr: false },
+);
 
 // =============================================================================
 // TYPES

@@ -3,6 +3,7 @@ export class SendEmailDto {
     subject: string;
     template: string;
     context: Record<string, unknown>;
+    messageId?: string;
 }
 
 export interface OrderConfirmationContext {

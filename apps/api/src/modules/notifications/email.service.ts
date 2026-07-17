@@ -37,6 +37,7 @@ export class EmailService {
       subject: sendEmailDto.subject,
       template: sendEmailDto.template,
       context: sendEmailDto.context,
+      ...(sendEmailDto.messageId && { messageId: sendEmailDto.messageId }),
     });
     this.logger.log(`Email sent to ${sendEmailDto.to} with template ${sendEmailDto.template}`);
   }

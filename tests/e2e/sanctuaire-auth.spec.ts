@@ -28,11 +28,9 @@ test.describe('Sanctuaire Auth — Login Page', () => {
     const submitBtn = page.locator(
       'button[type="submit"], button:has-text("Accéder"), button:has-text("Connexion")',
     );
-    await submitBtn.click();
-
-    // Should show validation error
-    const errorText = page.locator('text=/email/i');
-    await expect(errorText.first()).toBeVisible({ timeout: 3000 });
+    // Empty submissions are prevented before any network request.
+    await expect(submitBtn).toBeDisabled();
+    await expect(page.locator('input[type="email"]')).toHaveValue('');
   });
 
   test('should request a magic link without authenticating the browser', async ({ page }) => {

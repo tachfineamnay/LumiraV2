@@ -23,12 +23,14 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { DreamsModule } from './modules/dreams/dreams.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
+import { validateEnvironment } from './config/validate-env';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['../../.env', '.env'],
+      validate: validateEnvironment,
     }),
     // Rate limiting - 100 requests per 60 seconds (more permissive for polling)
     ThrottlerModule.forRoot([

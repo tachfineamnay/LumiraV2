@@ -18,8 +18,14 @@ export class S3Service {
                 secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
             },
         });
-        this.uploadBucket = this.configService.get<string>('S3_UPLOAD_BUCKET');
-        this.readingBucket = this.configService.get<string>('S3_READING_BUCKET');
+        this.uploadBucket = this.configService.get<string>(
+            'AWS_UPLOADS_BUCKET_NAME',
+            this.configService.get<string>('S3_UPLOAD_BUCKET'),
+        );
+        this.readingBucket = this.configService.get<string>(
+            'AWS_S3_BUCKET_NAME',
+            this.configService.get<string>('S3_READING_BUCKET'),
+        );
     }
 
     async getUploadPresignedUrl(key: string, contentType: string) {

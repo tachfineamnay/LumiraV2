@@ -2,7 +2,7 @@
 FROM node:20-alpine AS pruner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
-RUN npm install -g turbo
+RUN npm install -g turbo@2.7.1
 COPY . .
 RUN turbo prune --scope=api --docker
 
@@ -12,7 +12,7 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 # Installation de pnpm et des dépendances
-RUN npm install -g pnpm
+RUN npm install -g pnpm@8.15.4
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 # Désactiver Husky pour le build
@@ -36,7 +36,7 @@ ENV PORT=3001
 ENV HUSKY=0
 
 # Installation des dépendances de prod uniquement
-RUN npm install -g pnpm
+RUN npm install -g pnpm@8.15.4
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
@@ -65,5 +65,9 @@ RUN npm install -g prisma@5.22.0
 
 EXPOSE 3001
 
-# Apply pending migrations before starting the API (Resolve init migration to baseline existing DB)
-CMD ["/bin/sh", "-c", "prisma migrate resolve --applied 20250617000000_init --schema=packages/database/prisma/schema.prisma || true; prisma migrate deploy --schema=packages/database/prisma/schema.prisma && node apps/api/dist/main.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3001/api/health || exit 1
+
+# Baselines are an explicit one-time operation for legacy databases. Automatically
+# resolving the init migration here would corrupt a brand-new installation.
+CMD ["/bin/sh", "-c", "prisma migrate deploy --schema=packages/database/prisma/schema.prisma && exec node apps/api/dist/main.js"]

@@ -18,8 +18,8 @@ export class ReadingsService {
   ) {
     this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
     this.s3Bucket = this.configService.get<string>(
-      'AWS_LECTURES_BUCKET_NAME',
-      this.configService.get<string>('AWS_S3_BUCKET_NAME', 'oracle-lumira-lectures'),
+      'AWS_S3_BUCKET_NAME',
+      this.configService.get<string>('AWS_LECTURES_BUCKET_NAME', 'oracle-lumira-lectures'),
     );
 
     this.s3Client = new S3Client({

@@ -1,11 +1,11 @@
 /**
  * @fileoverview AudioGenerationService — Google Cloud TTS integration for Lumira.
- * 
+ *
  * Converts insight texts and spiritual path synthesis into meditative audio
  * using Google Cloud Text-to-Speech (Neural2/Journey voices) with SSML formatting.
- * 
+ *
  * Audio files are uploaded to S3 and URLs stored in the database.
- * 
+ *
  * @module services/factory/AudioGenerationService
  */
 
@@ -55,8 +55,8 @@ export class AudioGenerationService {
         // Reuse existing S3 config pattern from DigitalSoulService
         const s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
         this.s3Bucket = this.configService.get<string>(
-            'AWS_LECTURES_BUCKET_NAME',
-            this.configService.get<string>('AWS_S3_BUCKET_NAME', 'oracle-lumira-lectures'),
+            'AWS_S3_BUCKET_NAME',
+            this.configService.get<string>('AWS_LECTURES_BUCKET_NAME', 'oracle-lumira-lectures'),
         );
         this.s3Client = new S3Client({
             region: s3Region,

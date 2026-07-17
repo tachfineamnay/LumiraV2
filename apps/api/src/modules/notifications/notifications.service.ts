@@ -19,6 +19,12 @@ export class NotificationsService {
         private readonly configService: ConfigService,
     ) { }
 
+    private getWebUrl(): string {
+        return this.configService.get<string>('WEB_URL')
+            || this.configService.get<string>('FRONTEND_URL')
+            || 'http://localhost:3000';
+    }
+
     async sendOrderConfirmation(order: Order, user: User) {
         const context: OrderConfirmationContext = {
             firstName: user.firstName,
@@ -41,8 +47,7 @@ export class NotificationsService {
             where: { isActive: true },
         });
 
-        const frontendUrl = this.configService.get('FRONTEND_URL') || process.env.FRONTEND_URL || 'http://localhost:3000';
-        const adminUrl = `${frontendUrl}/expert`;
+        const adminUrl = `${this.getWebUrl()}/admin`;
 
         for (const expert of experts) {
             const context: ExpertAlertContext = {
@@ -66,7 +71,7 @@ export class NotificationsService {
         const context: ContentReadyContext = {
             firstName: user.firstName,
             orderNumber: order.orderNumber,
-            sanctuaireLink: `${process.env.FRONTEND_URL}/sanctuaire`,
+            sanctuaireLink: `${this.getWebUrl()}/sanctuaire`,
         };
 
         await this.emailService.send({
@@ -81,7 +86,7 @@ export class NotificationsService {
         const context: ReminderContext = {
             firstName: user.firstName,
             orderNumber: order.orderNumber,
-            sanctuaireLink: `${process.env.FRONTEND_URL}/sanctuaire`,
+            sanctuaireLink: `${this.getWebUrl()}/sanctuaire`,
         };
 
         await this.emailService.send({
@@ -105,15 +110,16 @@ export class NotificationsService {
                 hour: '2-digit',
                 minute: '2-digit'
             }),
-            sanctuaireLink: `${process.env.FRONTEND_URL}/sanctuaire`,
+            sanctuaireLink: `${this.getWebUrl()}/sanctuaire`,
         };
 
         // Send email
-        await this.emailService.send({
+        await this.emailService.sendOrThrow({
             to: user.email,
             subject: `👁️ ${expertName} a validé votre lecture`,
             template: 'expert-validation',
             context,
+            messageId: `<lumira-delivery-${order.id}@oraclelumira.com>`,
         });
 
         // Create in-app notification

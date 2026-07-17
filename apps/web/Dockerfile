@@ -6,7 +6,7 @@ WORKDIR /app
 # 1. Prune
 FROM base AS pruner
 # Install turbo globally for the pruning step
-RUN npm install -g turbo
+RUN npm install -g turbo@2.7.1
 COPY . .
 RUN turbo prune --scope=web --docker
 
@@ -28,9 +28,12 @@ COPY --from=pruner /app/out/full/ .
 
 # NEXT_PUBLIC_* values are compiled into browser bundles; API_INTERNAL_URL is
 # used by server-side routes and rewrites inside the Docker network.
-ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG API_INTERNAL_URL=http://api:3001
+RUN test -n "$NEXT_PUBLIC_API_URL" && test -n "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
 
 # Generate Prisma Client (Explicitly)
@@ -68,4 +71,6 @@ COPY --from=builder /app/apps/web/public/ ./apps/web/public/
 
 
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
 CMD ["node", "apps/web/server.js"]

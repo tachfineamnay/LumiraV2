@@ -3,14 +3,34 @@
  * Validates: dream list, create dream, emotion selection, daily limit, interpretation display
  */
 import { test, expect } from '@playwright/test';
-import { mockSanctuaireAuth, mockDreamsApi } from '../helpers/api-mock';
+import { mockSanctuaireAuth } from '../helpers/api-mock';
+import { createTestDream } from '../helpers/fixtures-factory';
 
-const API_BASE = 'http://localhost:3001/api';
+const BFF = '**/api/bff';
+
+async function mockDreamsContract(page: import('@playwright/test').Page) {
+    const dreams = [
+        createTestDream('user-1'),
+        createTestDream('user-1', {
+            id: 'dream-2',
+            content: "J'étais sur un bateau naviguant vers une île mystérieuse.",
+            emotion: 'joie',
+            symbols: ['eau', 'île', 'voyage'],
+        }),
+    ];
+    await page.route(`${BFF}/dreams`, async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ dreams, total: dreams.length }),
+        });
+    });
+}
 
 test.describe('Sanctuaire Dreams — Display', () => {
     test.beforeEach(async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: true });
-        await mockDreamsApi(page);
+        await mockDreamsContract(page);
     });
 
     test('should display dream journal page with existing dreams', async ({ page }) => {
@@ -41,7 +61,7 @@ test.describe('Sanctuaire Dreams — Display', () => {
     });
 
     test('should display empty state when no dreams exist', async ({ page }) => {
-        await page.route(`${API_BASE}/dreams`, async (route) => {
+        await page.route(`${BFF}/dreams`, async (route) => {
             if (route.request().method() === 'GET') {
                 await route.fulfill({
                     status: 200,
@@ -66,7 +86,7 @@ test.describe('Sanctuaire Dreams — Display', () => {
 test.describe('Sanctuaire Dreams — Create Dream', () => {
     test('should show "add dream" button', async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: true });
-        await mockDreamsApi(page);
+        await mockDreamsContract(page);
 
         await page.goto('/sanctuaire/reves');
         await page.waitForTimeout(3000);
@@ -77,7 +97,7 @@ test.describe('Sanctuaire Dreams — Create Dream', () => {
 
     test('should open dream creation form', async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: true });
-        await mockDreamsApi(page);
+        await mockDreamsContract(page);
 
         await page.goto('/sanctuaire/reves');
         await page.waitForTimeout(3000);
@@ -95,7 +115,7 @@ test.describe('Sanctuaire Dreams — Create Dream', () => {
         await mockSanctuaireAuth(page, { subscribed: true });
 
         let dreamCreated = false;
-        await page.route(`${API_BASE}/dreams`, async (route) => {
+        await page.route(`${BFF}/dreams`, async (route) => {
             if (route.request().method() === 'POST') {
                 dreamCreated = true;
                 await route.fulfill({
@@ -157,7 +177,7 @@ test.describe('Sanctuaire Dreams — Daily Limit', () => {
     test('should show rate limit error when 2 dreams already submitted', async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: true });
 
-        await page.route(`${API_BASE}/dreams`, async (route) => {
+        await page.route(`${BFF}/dreams`, async (route) => {
             if (route.request().method() === 'POST') {
                 await route.fulfill({
                     status: 429,

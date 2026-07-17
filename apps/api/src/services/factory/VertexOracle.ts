@@ -435,7 +435,10 @@ export class VertexOracle {
     private readonly prisma: PrismaService,
     private readonly aiRouting: AiRoutingService,
   ) {
-    this.onboardingBucket = this.configService.get<string>('S3_UPLOAD_BUCKET', '');
+    this.onboardingBucket = this.configService.get<string>(
+      'AWS_UPLOADS_BUCKET_NAME',
+      this.configService.get<string>('S3_UPLOAD_BUCKET', ''),
+    );
     this.onboardingS3Client = new S3Client({
       region: this.configService.get<string>('AWS_REGION', 'eu-west-3'),
       credentials: {
@@ -1575,7 +1578,7 @@ Génère le timeline au format JSON spécifié (tableau de 10 objets).
     this.logger.log(`📷 Fetching image: ${url.substring(0, 50)}...`);
     if (url.startsWith('s3://onboarding/')) {
       if (!this.onboardingBucket) {
-        throw new Error('S3_UPLOAD_BUCKET is required to load a private onboarding photo');
+        throw new Error('AWS_UPLOADS_BUCKET_NAME is required to load a private onboarding photo');
       }
       const key = url.slice('s3://'.length);
       const response = await this.onboardingS3Client.send(

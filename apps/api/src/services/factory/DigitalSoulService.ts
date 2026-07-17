@@ -70,10 +70,10 @@ export class DigitalSoulService {
     @Optional() private readonly audioGenerationService?: AudioGenerationService,
   ) {
     this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
-    // Use AWS_LECTURES_BUCKET_NAME for PDF storage (fallback to AWS_S3_BUCKET_NAME)
+    // Canonical production bucket with compatibility for older deployments.
     this.s3Bucket = this.configService.get<string>(
-      'AWS_LECTURES_BUCKET_NAME',
-      this.configService.get<string>('AWS_S3_BUCKET_NAME', 'oracle-lumira-lectures'),
+      'AWS_S3_BUCKET_NAME',
+      this.configService.get<string>('AWS_LECTURES_BUCKET_NAME', 'oracle-lumira-lectures'),
     );
 
     this.s3Client = new S3Client({

@@ -1,25 +1,25 @@
 /**
  * @fileoverview ContextDispatcher - The Logic Glue for Oracle Lumira.
- * 
+ *
  * This service orchestrates context-aware interactions by:
  * - Fetching user profile, Akashic Records, and order history
  * - Building rich context prompts for AI agents
  * - Dispatching requests to the appropriate VertexOracle agent
  * - Updating Akashic Records after significant interactions
- * 
+ *
  * @module services/factory/ContextDispatcher
  */
 
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { 
-    VertexOracle, 
-    ChatContext, 
-    ChatMessage, 
+import {
+    VertexOracle,
+    ChatContext,
+    ChatMessage,
     AkashicDomains,
     ReadingSynthesis,
-    OracleResponse 
+    OracleResponse
 } from './VertexOracle';
 import { PdfFactory, ReadingPdfData } from './PdfFactory';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -96,7 +96,10 @@ export class ContextDispatcher {
         private readonly pdfFactory: PdfFactory,
     ) {
         this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
-        this.s3Bucket = this.configService.get<string>('AWS_S3_BUCKET_READINGS', 'lumira-readings');
+        this.s3Bucket = this.configService.get<string>(
+            'AWS_S3_BUCKET_NAME',
+            this.configService.get<string>('AWS_S3_BUCKET_READINGS', 'lumira-readings'),
+        );
 
         this.s3Client = new S3Client({
             region: this.s3Region,
@@ -116,7 +119,7 @@ export class ContextDispatcher {
      * - User Profile
      * - Akashic Record (archetype, domains, history)
      * - Last completed order content
-     * 
+     *
      * Constructs a rich context prompt and calls VertexOracle.chatWithUser()
      */
     async dispatchChatRequest(
@@ -489,7 +492,7 @@ export class ContextDispatcher {
         // Add Akashic context
         if (archetype || domains) {
             parts.push(`Voici ce que tu sais du client ${firstName}:`);
-            
+
             if (archetype) {
                 parts.push(`- Archétype: ${archetype}`);
             }
@@ -579,7 +582,7 @@ export class ContextDispatcher {
             // Append to existing messages
             const currentMessages = existingSession.messages as unknown as ChatMessage[] || [];
             const updatedMessages = [...currentMessages, userMsg, assistantMsg];
-            
+
             await this.prisma.chatSession.update({
                 where: { id: sessionId },
                 data: {
@@ -667,7 +670,7 @@ export class ContextDispatcher {
 
         // Split content into sections and analyze
         const sections = content.split(/#{2,3}\s+/);
-        
+
         for (const section of sections) {
             if (section.length < 50) continue;
 
@@ -709,7 +712,7 @@ export class ContextDispatcher {
             .replace(/[^\w\sàâäéèêëïîôùûüÿç]/g, '')
             .split(/\s+/)
             .filter(w => w.length > 5);
-        
+
         const wordFreq = new Map<string, number>();
         for (const word of words) {
             wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
@@ -774,7 +777,7 @@ export class ContextDispatcher {
      */
     private detectDomainFromTitle(title: string): string {
         const titleLower = title.toLowerCase();
-        
+
         if (titleLower.includes('spirit') || titleLower.includes('âme')) return 'spirituel';
         if (titleLower.includes('relation') || titleLower.includes('amour')) return 'relations';
         if (titleLower.includes('mission') || titleLower.includes('vocation')) return 'mission';
@@ -839,7 +842,7 @@ export class ContextDispatcher {
     private generateSessionTitle(message: string): string {
         const maxLength = 50;
         const cleaned = message.replace(/\n/g, ' ').trim();
-        
+
         if (cleaned.length <= maxLength) {
             return cleaned;
         }

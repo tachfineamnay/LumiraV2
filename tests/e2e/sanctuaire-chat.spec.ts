@@ -3,14 +3,66 @@
  * Validates: send message, receive response, quota display, quota exceeded, SubscriptionLock
  */
 import { test, expect } from '@playwright/test';
-import { mockSanctuaireAuth, mockChatApi } from '../helpers/api-mock';
+import { mockSanctuaireAuth } from '../helpers/api-mock';
 
-const API_BASE = 'http://localhost:3001/api';
+const BFF = '**/api/bff';
+
+async function mockChatContract(
+    page: import('@playwright/test').Page,
+    options: { subscribed?: boolean; messagesUsed?: number } = {},
+) {
+    const { subscribed = true, messagesUsed = 0 } = options;
+    const remaining = subscribed ? -1 : Math.max(0, 3 - messagesUsed);
+
+    await page.route(`${BFF}/client/chat/quota`, async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                isSubscribed: subscribed,
+                hasAccess: subscribed || remaining > 0,
+                messagesRemaining: remaining,
+                messagesUsed,
+                quota: subscribed ? -1 : 3,
+            }),
+        });
+    });
+
+    await page.route(`${BFF}/client/chat`, async (route) => {
+        if (!subscribed && messagesUsed >= 3) {
+            await route.fulfill({
+                status: 403,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    code: 'QUOTA_EXCEEDED',
+                    message: 'Quota de messages dépassé.',
+                    quotaStatus: { messagesUsed, quota: 3 },
+                }),
+            });
+            return;
+        }
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                response: "Chère âme, votre question éclaire votre chemin spirituel.",
+                sessionId: 'session-mock-1',
+                quota: {
+                    isSubscribed: subscribed,
+                    messagesRemaining: subscribed ? -1 : Math.max(0, remaining - 1),
+                    messagesUsed: messagesUsed + 1,
+                    total: 3,
+                },
+            }),
+        });
+    });
+}
 
 test.describe('Sanctuaire Chat — Subscribed User', () => {
     test.beforeEach(async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: true });
-        await mockChatApi(page, { subscribed: true });
+        await mockChatContract(page, { subscribed: true });
     });
 
     test('should display initial Oracle greeting', async ({ page }) => {
@@ -59,7 +111,7 @@ test.describe('Sanctuaire Chat — Free User Quota', () => {
         await mockSanctuaireAuth(page, { subscribed: false });
 
         // Mock quota: 1 message used, 2 remaining
-        await page.route(`${API_BASE}/client/chat/quota`, async (route) => {
+        await page.route(`${BFF}/client/chat/quota`, async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
@@ -72,7 +124,7 @@ test.describe('Sanctuaire Chat — Free User Quota', () => {
             });
         });
 
-        await page.route(`${API_BASE}/client/chat`, async (route) => {
+        await page.route(`${BFF}/client/chat`, async (route) => {
             if (route.request().method() === 'POST') {
                 await route.fulfill({
                     status: 200,
@@ -101,19 +153,7 @@ test.describe('Sanctuaire Chat — Free User Quota', () => {
 
     test('should show SubscriptionLock when quota exceeded', async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: false });
-
-        await page.route(`${API_BASE}/client/chat/quota`, async (route) => {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({
-                    isSubscribed: false,
-                    messagesRemaining: 0,
-                    messagesUsed: 3,
-                    quota: 3,
-                }),
-            });
-        });
+        await mockChatContract(page, { subscribed: false, messagesUsed: 3 });
 
         await page.goto('/sanctuaire/chat');
         await page.waitForTimeout(3000);
@@ -125,15 +165,15 @@ test.describe('Sanctuaire Chat — Free User Quota', () => {
 
     test('should block sending when quota exceeded (403 response)', async ({ page }) => {
         await mockSanctuaireAuth(page, { subscribed: false });
-        await mockChatApi(page, { subscribed: false, messagesUsed: 3 });
+        await mockChatContract(page, { subscribed: false, messagesUsed: 3 });
 
         await page.goto('/sanctuaire/chat');
         await page.waitForTimeout(3000);
 
-        // Input should be disabled or message should be blocked
+        // The composer is removed and replaced by the subscription lock.
         const input = page.locator('input[type="text"], textarea').first();
-        const isDisabled = await input.isDisabled().catch(() => false);
-        const hasBlockMsg = await page.locator('text=/dépassé|épuisé|limite/i').first().isVisible().catch(() => false);
-        expect(isDisabled || hasBlockMsg).toBeTruthy();
+        await expect(page.locator('text=/quota|dépassé|épuisé|limite|reposer/i').first())
+            .toBeVisible({ timeout: 5000 });
+        await expect(input).toHaveCount(0);
     });
 });
