@@ -15,7 +15,7 @@ log "Generate Prisma client"
 pnpm db:generate
 
 log "Run focused API tests"
-pnpm --filter @lumira/api test -- \
+pnpm --filter api test -- \
   production-control.types.spec.ts \
   production-control.service.spec.ts \
   production-cancel.interceptor.spec.ts \
