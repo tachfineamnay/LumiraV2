@@ -2,7 +2,7 @@
 
 > Branche : `finalisation/lumira-v2-launch-ready`  
 > Référence analysée : `b3fb7ec` (`origin/main` au 16 juillet 2026)  
-> Statut : audit initial terminé, aucune modification du code métier dans ce lot.
+> Statut : audit initial et lots P0 prioritaires exécutés.
 
 ## Sources lues
 
@@ -62,3 +62,40 @@
 - Valider la stratégie de version canonique de lecture : nouvelle table `ReadingVersion` plutôt que surcharge de `Order.generatedContent`.
 - Arbitrer le niveau de preuve légal attendu pour le consentement photo (version de texte, finalité, rétention, IP tronquée/hashée).
 - Confirmer la politique produit à appliquer à un remboursement : maintien ou révocation de l’accès lifetime.
+
+## Exécution P0 — 17 juillet 2026
+
+### Livré
+
+| Lot                 | Livraison                                                                                                                                      | Preuve code |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| CI et E2E           | Typecheck UI fiabilisé, lint corrigé, tests découplés du build et Playwright lancé contre le standalone isolé.                                 | `b0276ed`   |
+| Studio → PDF        | `ReadingVersion` scellée, hashée et relue exclusivement lors du rendu PDF ; le brouillon AI ne peut plus écraser une correction du Studio.     | `8dc05a2`   |
+| Onboarding et accès | Brouillon serveur, consentement versionné, photos privées S3 sans Base64 persistant, et accès lifetime fondé seulement sur une commande payée. | `bd76a7a`   |
+| Livraison           | Registre persistant liant PDF privé, version scellée, hash et état/tentatives d’e-mail.                                                        | `0dee7da`   |
+
+### Migrations à déployer
+
+1. `20260716000000_add_reading_versions`
+2. `20260716000100_add_onboarding_progress_and_consents`
+3. `20260716000200_add_delivery_records`
+
+Exécuter `pnpm --filter @packages/database db:migrate:deploy` dans l’environnement cible avant le déploiement applicatif.
+
+### Recette finale effectuée
+
+| Commande                                                                                              | Résultat                                                                     |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `pnpm db:generate`                                                                                    | OK                                                                           |
+| `pnpm typecheck`                                                                                      | OK                                                                           |
+| `pnpm lint`                                                                                           | OK, avertissements Next préexistants sur des balises `<img>` et un hook Desk |
+| `pnpm test`                                                                                           | OK — 109 tests API                                                           |
+| `pnpm exec playwright test tests/e2e/landing.spec.ts tests/e2e/order-flow.spec.ts --project=chromium` | OK — 4/4                                                                     |
+| `pnpm --filter api run build`                                                                         | OK                                                                           |
+| `pnpm --filter web run build`                                                                         | OK                                                                           |
+
+### Écarts ouverts conservés explicitement
+
+- P0 restant : la table historique des transitions d’état et les transitions atomiques centralisées restent à livrer ; la nouvelle traçabilité de livraison ne remplace pas cette machine d’état.
+- La politique de remboursement/révocation lifetime, les relances planifiées d’e-mail et la purge/export RGPD nécessitent une décision produit et un lot dédié.
+- Les observables IA complets (`AiRun`, coûts, snapshots, comparaison) et les lots RAG/podcast/Mandala restent hors du P0 livré.
