@@ -41,13 +41,17 @@ Configurer `/api/health` comme healthcheck HTTP pour l’API et le Web. Le healt
 | `WEB_URL` | URL publique du Web, sans slash final |
 | `STRIPE_SECRET_KEY` | clé Stripe live |
 | `STRIPE_WEBHOOK_SECRET` | secret du webhook Stripe live |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | accès SMTP transactionnel |
-| `MAIL_FROM` | expéditeur validé par le fournisseur SMTP |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | accès SMTP transactionnel réel ; `SMTP_HOST` est un nom d’hôte sans protocole |
+| `SMTP_SECURE` | `false` pour STARTTLS sur 587 ; `true` pour TLS implicite sur 465 |
+| `SMTP_REQUIRE_TLS` | `true` recommandé sur 587 lorsque le fournisseur exige STARTTLS |
+| `MAIL_FROM` | adresse expéditeur validée, sans nom d’affichage |
 | `GEMINI_API_KEY` | clé Gemini production |
 | `GOTENBERG_URL` | URL privée du service, par ex. `http://gotenberg:3000` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | accès S3 limité aux deux buckets |
 | `AWS_S3_BUCKET_NAME` | bucket privé PDFs, audio et lectures |
 | `AWS_UPLOADS_BUCKET_NAME` | bucket privé photos et uploads clients |
+
+`SMTP_HOST` ne doit jamais être `localhost`, `127.0.0.1`, `0.0.0.0`, `::1` ou `host.docker.internal` en production. Ces valeurs désignent le conteneur API lui-même ; sans serveur SMTP embarqué, Nodemailer échoue avec `ECONNREFUSED`. Utiliser le nom d’hôte exact du fournisseur transactionnel, par exemple celui communiqué par Brevo, Mailgun, Postmark, Resend ou Amazon SES.
 
 Génération locale des secrets :
 
@@ -94,7 +98,7 @@ Reporter son secret `whsec_…` dans `STRIPE_WEBHOOK_SECRET`. Vérifier qu’un 
 
 1. Restaurer ou créer la base PostgreSQL, puis prendre un snapshot si elle contient déjà des données.
 2. Démarrer PostgreSQL et Gotenberg.
-3. Déployer l’API. Son démarrage applique uniquement les migrations en attente.
+3. Renseigner le SMTP transactionnel réel dans Coolify, puis déployer l’API. Son démarrage applique uniquement les migrations en attente et refuse désormais une configuration SMTP locale ou incohérente.
 4. Vérifier `GET https://api.oraclelumira.com/api/health` : réponse HTTP 200 avec `database: "ok"`.
 5. Déployer le Web avec les arguments de build de production.
 6. Vérifier `GET https://oraclelumira.com/api/health` : réponse HTTP 200 avec `api: "ok"`.
