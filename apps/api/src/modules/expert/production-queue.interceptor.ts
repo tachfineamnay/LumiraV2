@@ -33,6 +33,11 @@ export class ProductionQueueInterceptor implements NestInterceptor {
       return from(this.enqueueAndWaitForLegacyProcess(request));
     }
 
+    const audioTestMatch = path.match(/\/expert\/test-audio\/([^/]+)$/);
+    if (audioTestMatch) {
+      return from(this.production.enqueueAudio(audioTestMatch[1], request.expert));
+    }
+
     const generateMatch = path.match(/\/expert\/orders\/([^/]+)\/generate$/);
     if (generateMatch) {
       return from(
@@ -64,9 +69,6 @@ export class ProductionQueueInterceptor implements NestInterceptor {
       expertInstructions: this.stringValue(request.body?.expertInstructions),
     });
 
-    // Legacy Studio calls expect the request to resolve after generation. The
-    // durable worker owns the task, so navigation or a disconnected browser no
-    // longer stops it; this wait only preserves the old response contract.
     return this.production.waitForJob(queued.jobId);
   }
 
