@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -24,10 +24,7 @@ interface ControlCenterResponse extends OrderControlCenter {
     id: string;
     orderNumber: string;
     status: string;
-    user: {
-      firstName: string;
-      lastName: string;
-    };
+    user: { firstName: string; lastName: string };
   };
 }
 
@@ -56,50 +53,18 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  const launchReading = async () => {
+  const execute = async (action: () => Promise<unknown>, success: string, failure: string) => {
     setBusy(true);
     try {
-      await expertApi.post(`/expert/orders/${orderId}/jobs/reading`, {});
-      toast.success('Production lancée', {
-        description: 'Elle continue côté serveur, même si vous changez de page.',
+      await action();
+      toast.success(success, {
+        description: 'Le traitement continue côté serveur, indépendamment de cette page.',
       });
       await refresh();
     } catch (error: unknown) {
       const message = (error as { response?: { data?: { message?: string } } })?.response?.data
         ?.message;
-      toast.error('Lancement impossible', { description: message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const launchAudio = async () => {
-    setBusy(true);
-    try {
-      await expertApi.post(`/expert/orders/${orderId}/jobs/audio`);
-      toast.success('Audio ajouté à la file', {
-        description: 'Vous pouvez continuer à travailler sur une autre commande.',
-      });
-      await refresh();
-    } catch (error: unknown) {
-      const message = (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
-      toast.error('Génération audio impossible', { description: message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const retry = async (job: ProductionJob) => {
-    setBusy(true);
-    try {
-      await expertApi.post(`/expert/production/jobs/${job.id}/retry`);
-      toast.success('Traitement relancé');
-      await refresh();
-    } catch (error: unknown) {
-      const message = (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
-      toast.error('Relance impossible', { description: message });
+      toast.error(failure, { description: message });
     } finally {
       setBusy(false);
     }
@@ -124,9 +89,14 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
     );
   }
 
-  const audioStatus = String(data.assets.audio?.status || 'MISSING');
   const currentJob = data.production;
+  const activeJob =
+    currentJob?.status === 'QUEUED' || currentJob?.status === 'RUNNING' ? currentJob : null;
+  const failedJob = currentJob?.status === 'FAILED' ? currentJob : null;
+  const audioStatus = String(data.assets.audio?.status || 'MISSING');
   const presentation = workflowPresentation(data.workflowState);
+  const canLaunchAudio =
+    data.order.status === 'COMPLETED' && audioStatus !== 'READY' && activeJob === null;
 
   return (
     <section className={`flex-shrink-0 border-b ${presentation.border} ${presentation.background}`}>
@@ -134,12 +104,13 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
         <div className={`flex h-8 w-8 items-center justify-center rounded-full ${presentation.iconBg}`}>
           {presentation.icon}
         </div>
+
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-desk-text">{presentation.title}</p>
-            {currentJob?.status === 'RUNNING' && (
+            {activeJob && (
               <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-600">
-                {stageLabel(currentJob.stage)}
+                {stageLabel(activeJob.stage)}
               </span>
             )}
           </div>
@@ -147,48 +118,50 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {data.workflowState === 'READY_FOR_PRODUCTION' && (
-            <button
-              type="button"
-              onClick={() => void launchReading()}
-              disabled={busy}
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              Lancer la production
-            </button>
+          {data.workflowState === 'READY_FOR_PRODUCTION' && !activeJob && (
+            <ActionButton
+              busy={busy}
+              icon={<Play className="h-4 w-4" />}
+              label="Lancer la production"
+              onClick={() =>
+                void execute(
+                  () => expertApi.post(`/expert/orders/${orderId}/jobs/reading`, {}),
+                  'Production lancée',
+                  'Lancement impossible',
+                )
+              }
+            />
           )}
 
-          {data.workflowState === 'INCIDENT' && currentJob?.status === 'FAILED' && (
-            <button
-              type="button"
-              onClick={() => void retry(currentJob)}
-              disabled={busy}
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {busy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RotateCcw className="h-4 w-4" />
-              )}
-              Réessayer
-            </button>
+          {failedJob && (
+            <ActionButton
+              busy={busy}
+              danger
+              icon={<RotateCcw className="h-4 w-4" />}
+              label="Réessayer"
+              onClick={() =>
+                void execute(
+                  () => expertApi.post(`/expert/production/jobs/${failedJob.id}/retry`),
+                  'Traitement relancé',
+                  'Relance impossible',
+                )
+              }
+            />
           )}
 
-          {data.order.status === 'COMPLETED' && audioStatus !== 'READY' && !currentJob && (
-            <button
-              type="button"
-              onClick={() => void launchAudio()}
-              disabled={busy}
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
-            >
-              {busy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Headphones className="h-4 w-4" />
-              )}
-              Générer l’audio
-            </button>
+          {canLaunchAudio && (
+            <ActionButton
+              busy={busy}
+              icon={<Headphones className="h-4 w-4" />}
+              label="Générer l’audio"
+              onClick={() =>
+                void execute(
+                  () => expertApi.post(`/expert/orders/${orderId}/jobs/audio`),
+                  'Audio ajouté à la file',
+                  'Génération audio impossible',
+                )
+              }
+            />
           )}
 
           <Link
@@ -201,6 +174,7 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
             type="button"
             onClick={() => setExpanded((value) => !value)}
             aria-expanded={expanded}
+            aria-label={expanded ? 'Réduire le contrôle' : 'Afficher le contrôle détaillé'}
             className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg border border-desk-border text-desk-muted hover:bg-desk-hover"
           >
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -210,10 +184,7 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
 
       {expanded && (
         <div className="grid gap-4 border-t border-desk-border/70 px-4 py-3 lg:grid-cols-3">
-          <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-desk-subtle">
-              Dossier client
-            </p>
+          <DetailGroup title="Dossier client">
             <div className="grid grid-cols-2 gap-1.5 text-xs">
               <ChecklistItem label="Paiement" done={data.checklist.paymentConfirmed} />
               <ChecklistItem label="Profil validé" done={data.checklist.profileValidated} />
@@ -222,28 +193,22 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
               <ChecklistItem label="Paume" done={data.checklist.palmPhoto} />
               <ChecklistItem label="Consentement" done={data.checklist.consent} />
             </div>
-          </div>
+          </DetailGroup>
 
-          <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-desk-subtle">
-              Assets
-            </p>
+          <DetailGroup title="Assets">
             <div className="space-y-1.5 text-xs">
               <AssetRow label="PDF" status={String(data.assets.pdf?.status || 'MISSING')} />
               <AssetRow label="Audio" status={audioStatus} />
               <AssetRow label="E-mail" status={String(data.assets.email?.status || 'PENDING')} />
             </div>
-          </div>
+          </DetailGroup>
 
-          <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-desk-subtle">
-              Traitement courant
-            </p>
+          <DetailGroup title="Dernier traitement">
             {currentJob ? (
               <div className="rounded-lg border border-desk-border bg-desk-card p-2.5 text-xs">
                 <p className="font-semibold text-desk-text">
                   {currentJob.type === 'READING_GENERATION' ? 'Lecture' : 'Audio'} ·{' '}
-                  {currentJob.status}
+                  {statusLabel(currentJob.status)}
                 </p>
                 <p className="mt-1 text-desk-muted">{stageLabel(currentJob.stage)}</p>
                 <p className="mt-1 text-desk-subtle">
@@ -254,12 +219,49 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
                 )}
               </div>
             ) : (
-              <p className="text-xs text-desk-muted">Aucun traitement actif.</p>
+              <p className="text-xs text-desk-muted">Aucun traitement enregistré.</p>
             )}
-          </div>
+          </DetailGroup>
         </div>
       )}
     </section>
+  );
+}
+
+function ActionButton({
+  busy,
+  danger = false,
+  icon,
+  label,
+  onClick,
+}: {
+  busy: boolean;
+  danger?: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className={`inline-flex min-h-[40px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50 ${
+        danger ? 'bg-red-600 text-white' : 'bg-amber-500 text-slate-950'
+      }`}
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
+      {label}
+    </button>
+  );
+}
+
+function DetailGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-desk-subtle">{title}</p>
+      {children}
+    </div>
   );
 }
 
@@ -298,72 +300,32 @@ function AssetRow({ label, status }: { label: string; status: string }) {
 }
 
 function workflowPresentation(state: OrderControlCenter['workflowState']) {
-  switch (state) {
-    case 'WAITING_CLIENT':
-      return {
-        title: 'Éléments client incomplets',
-        description: 'La production ne doit pas commencer avant la validation des éléments essentiels.',
-        border: 'border-amber-500/30',
-        background: 'bg-amber-500/5',
-        iconBg: 'bg-amber-500/15 text-amber-600',
-        icon: <Circle className="h-4 w-4" />,
-      };
-    case 'READY_FOR_PRODUCTION':
-      return {
-        title: 'Dossier prêt à produire',
-        description: 'La prise en charge est distincte du lancement de la génération.',
-        border: 'border-emerald-500/30',
-        background: 'bg-emerald-500/5',
-        iconBg: 'bg-emerald-500/15 text-emerald-600',
-        icon: <Play className="h-4 w-4" />,
-      };
-    case 'IN_PRODUCTION':
-    case 'ASSETS_IN_PRODUCTION':
-      return {
-        title: 'Production serveur en cours',
-        description: 'Vous pouvez quitter cette commande : le traitement continue indépendamment.',
-        border: 'border-blue-500/30',
-        background: 'bg-blue-500/5',
-        iconBg: 'bg-blue-500/15 text-blue-600',
-        icon: <Loader2 className="h-4 w-4 animate-spin" />,
-      };
-    case 'AWAITING_REVIEW':
-      return {
-        title: 'Lecture prête à réviser',
-        description: 'Vérifiez le contenu dans le Studio avant de le sceller.',
-        border: 'border-purple-500/30',
-        background: 'bg-purple-500/5',
-        iconBg: 'bg-purple-500/15 text-purple-600',
-        icon: <CheckCircle2 className="h-4 w-4" />,
-      };
-    case 'READY_FOR_DELIVERY':
-      return {
-        title: 'PDF prêt · audio à produire',
-        description: 'Générez et contrôlez l’audio pour compléter la livraison.',
-        border: 'border-amber-500/30',
-        background: 'bg-amber-500/5',
-        iconBg: 'bg-amber-500/15 text-amber-600',
-        icon: <Headphones className="h-4 w-4" />,
-      };
-    case 'DELIVERED':
-      return {
-        title: 'Lecture et assets disponibles',
-        description: 'Le dossier livré reste accessible dans l’historique client.',
-        border: 'border-emerald-500/30',
-        background: 'bg-emerald-500/5',
-        iconBg: 'bg-emerald-500/15 text-emerald-600',
-        icon: <CheckCircle2 className="h-4 w-4" />,
-      };
-    default:
-      return {
-        title: 'Incident de production',
-        description: 'Consultez l’erreur puis relancez uniquement l’étape concernée.',
-        border: 'border-red-500/30',
-        background: 'bg-red-500/5',
-        iconBg: 'bg-red-500/15 text-red-600',
-        icon: <AlertTriangle className="h-4 w-4" />,
-      };
-  }
+  const states = {
+    WAITING_CLIENT: ['Éléments client incomplets', 'La production attend la validation des éléments essentiels.', 'amber'],
+    READY_FOR_PRODUCTION: ['Dossier prêt à produire', 'La prise en charge est distincte du lancement.', 'emerald'],
+    IN_PRODUCTION: ['Production serveur en cours', 'Vous pouvez quitter cette commande : le traitement continue.', 'blue'],
+    ASSETS_IN_PRODUCTION: ['Assets en production', 'Le PDF ou l’audio continue côté serveur.', 'blue'],
+    AWAITING_REVIEW: ['Lecture prête à réviser', 'Vérifiez le contenu avant de le sceller.', 'purple'],
+    READY_FOR_DELIVERY: ['PDF prêt · audio à produire', 'Complétez et contrôlez les assets promis.', 'amber'],
+    DELIVERED: ['Lecture et assets disponibles', 'Le dossier livré reste dans l’historique client.', 'emerald'],
+    INCIDENT: ['Incident de production', 'Consultez l’erreur puis relancez uniquement cette étape.', 'red'],
+  } as const;
+  const [title, description, color] = states[state];
+  const icons = {
+    amber: <Headphones className="h-4 w-4" />,
+    emerald: <CheckCircle2 className="h-4 w-4" />,
+    blue: <Loader2 className="h-4 w-4 animate-spin" />,
+    purple: <CheckCircle2 className="h-4 w-4" />,
+    red: <AlertTriangle className="h-4 w-4" />,
+  };
+  return {
+    title,
+    description,
+    border: `border-${color}-500/30`,
+    background: `bg-${color}-500/5`,
+    iconBg: `bg-${color}-500/15 text-${color}-600`,
+    icon: icons[color],
+  };
 }
 
 function stageLabel(stage: string) {
@@ -385,6 +347,9 @@ function statusLabel(status: string) {
     SENT: 'Envoyé',
     MISSING: 'Manquant',
     QUEUED: 'En file',
+    RUNNING: 'En cours',
+    SUCCEEDED: 'Terminé',
+    CANCELLED: 'Annulé',
     GENERATING: 'En cours',
     PENDING: 'En attente',
     SENDING: 'Envoi',
