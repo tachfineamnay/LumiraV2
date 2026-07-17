@@ -16,7 +16,6 @@ import {
   GUIDANCE_REQUEST_STATUSES,
   GuidanceMessage,
   GuidanceRequestCategory,
-  GuidanceRequestMeta,
   GuidanceRequestPriority,
   GuidanceRequestStatus,
   ParsedGuidanceRequest,

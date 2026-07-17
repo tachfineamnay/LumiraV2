@@ -56,7 +56,7 @@ export interface ParsedGuidanceRequest {
   messages: GuidanceMessage[];
 }
 
-export function parseGuidanceRequest(value: Prisma.JsonValue): ParsedGuidanceRequest | null {
+export function parseGuidanceRequest(value: unknown): ParsedGuidanceRequest | null {
   if (!Array.isArray(value) || value.length === 0) return null;
   const [rawMeta, ...rawMessages] = value;
   if (!rawMeta || typeof rawMeta !== 'object' || Array.isArray(rawMeta)) return null;

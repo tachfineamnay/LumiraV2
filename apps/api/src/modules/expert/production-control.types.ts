@@ -78,18 +78,16 @@ export interface ProductionSummary {
   audioMissing: number;
 }
 
-export function asRecord(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+export function asRecord(value: unknown): Record<string, unknown> {
   if (!value || Array.isArray(value) || typeof value !== 'object') return {};
   return value as Record<string, unknown>;
 }
 
-export function readExpertReview(value: Prisma.JsonValue | null | undefined): ExpertReviewState {
+export function readExpertReview(value: unknown): ExpertReviewState {
   return asRecord(value) as ExpertReviewState;
 }
 
-export function readCurrentProduction(
-  value: Prisma.JsonValue | null | undefined,
-): ProductionJobState | undefined {
+export function readCurrentProduction(value: unknown): ProductionJobState | undefined {
   const review = readExpertReview(value);
   const job = review.production;
   if (!job || typeof job !== 'object' || typeof job.id !== 'string') return undefined;

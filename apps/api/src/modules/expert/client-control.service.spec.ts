@@ -182,7 +182,7 @@ describe('ClientControlService', () => {
     const result = await service.getClientControlCenter('user-1');
     const serializedTimeline = JSON.stringify(result.timeline);
 
-    expect(serializedTimeline).toContain('Échange client — Question privée');
+    expect(serializedTimeline).toContain('Échange IA — Question privée');
     expect(serializedTimeline).not.toContain('CONTENU_PERSONNEL_NE_DOIT_PAS_ETRE_DANS_LA_TIMELINE');
     expect(serializedTimeline).not.toContain('Réponse confidentielle');
   });
