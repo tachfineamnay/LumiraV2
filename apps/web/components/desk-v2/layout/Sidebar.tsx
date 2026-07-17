@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   Kanban,
+  Activity,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -30,6 +31,11 @@ const NAV_ITEMS = [
     label: 'Board',
     icon: Kanban,
     badge: true,
+  },
+  {
+    href: '/admin/production',
+    label: 'Production',
+    icon: Activity,
   },
   {
     href: '/admin/clients',
@@ -140,7 +146,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
-  // Close mobile drawer on route change
   useEffect(() => {
     onMobileClose?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,7 +153,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop sidebar */}
       <motion.aside
         initial={false}
         animate={{ width: isCollapsed ? 64 : 220 }}
@@ -192,7 +196,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         </button>
       </motion.aside>
 
-      {/* Mobile drawer */}
       <AnimatePresence>
         {mobileOpen && (
           <>
