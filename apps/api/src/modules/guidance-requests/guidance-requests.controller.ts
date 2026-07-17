@@ -21,9 +21,7 @@ import {
   GuidanceRequestStatus,
 } from './guidance-request.types';
 
-interface ClientRequest extends Request {
-  user: { id: string };
-}
+type AuthenticatedClientRequest = { user: { id: string } };
 
 @Controller('client/requests')
 @UseGuards(JwtAuthGuard)
@@ -31,13 +29,13 @@ export class ClientGuidanceRequestsController {
   constructor(private readonly requests: GuidanceRequestsService) {}
 
   @Get()
-  async list(@Request() req: ClientRequest) {
+  async list(@Request() req: AuthenticatedClientRequest) {
     return { data: await this.requests.listClientRequests(req.user.id) };
   }
 
   @Post()
   async create(
-    @Request() req: ClientRequest,
+    @Request() req: AuthenticatedClientRequest,
     @Body()
     body: {
       subject: string;
@@ -51,13 +49,13 @@ export class ClientGuidanceRequestsController {
   }
 
   @Get(':id')
-  async get(@Request() req: ClientRequest, @Param('id') requestId: string) {
+  async get(@Request() req: AuthenticatedClientRequest, @Param('id') requestId: string) {
     return this.requests.getClientRequest(req.user.id, requestId);
   }
 
   @Post(':id/messages')
   async addMessage(
-    @Request() req: ClientRequest,
+    @Request() req: AuthenticatedClientRequest,
     @Param('id') requestId: string,
     @Body('content') content: string,
   ) {
@@ -65,7 +63,7 @@ export class ClientGuidanceRequestsController {
   }
 
   @Post(':id/read')
-  async markRead(@Request() req: ClientRequest, @Param('id') requestId: string) {
+  async markRead(@Request() req: AuthenticatedClientRequest, @Param('id') requestId: string) {
     return this.requests.markClientRead(req.user.id, requestId);
   }
 }
