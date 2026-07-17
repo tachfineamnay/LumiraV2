@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import expertApi from '@/lib/expertApi';
-import type { OrderControlCenter, ProductionJob } from '../production/types';
+import type { OrderControlCenter } from '../production/types';
 
 interface ControlCenterResponse extends OrderControlCenter {
   order: {
@@ -27,6 +27,85 @@ interface ControlCenterResponse extends OrderControlCenter {
     user: { firstName: string; lastName: string };
   };
 }
+
+type WorkflowPresentation = {
+  title: string;
+  description: string;
+  border: string;
+  background: string;
+  iconBg: string;
+  icon: ReactNode;
+};
+
+const WORKFLOW_PRESENTATIONS: Record<
+  OrderControlCenter['workflowState'],
+  WorkflowPresentation
+> = {
+  WAITING_CLIENT: {
+    title: 'Éléments client incomplets',
+    description: 'La production attend la validation des éléments essentiels.',
+    border: 'border-amber-500/30',
+    background: 'bg-amber-500/5',
+    iconBg: 'bg-amber-500/15 text-amber-600',
+    icon: <Circle className="h-4 w-4" />,
+  },
+  READY_FOR_PRODUCTION: {
+    title: 'Dossier prêt à produire',
+    description: 'La prise en charge est distincte du lancement.',
+    border: 'border-emerald-500/30',
+    background: 'bg-emerald-500/5',
+    iconBg: 'bg-emerald-500/15 text-emerald-600',
+    icon: <Play className="h-4 w-4" />,
+  },
+  IN_PRODUCTION: {
+    title: 'Production serveur en cours',
+    description: 'Vous pouvez quitter cette commande : le traitement continue.',
+    border: 'border-blue-500/30',
+    background: 'bg-blue-500/5',
+    iconBg: 'bg-blue-500/15 text-blue-600',
+    icon: <Loader2 className="h-4 w-4 animate-spin" />,
+  },
+  AWAITING_REVIEW: {
+    title: 'Lecture prête à réviser',
+    description: 'Vérifiez le contenu avant de le sceller.',
+    border: 'border-purple-500/30',
+    background: 'bg-purple-500/5',
+    iconBg: 'bg-purple-500/15 text-purple-600',
+    icon: <CheckCircle2 className="h-4 w-4" />,
+  },
+  ASSETS_IN_PRODUCTION: {
+    title: 'Assets en production',
+    description: 'Le PDF ou l’audio continue côté serveur.',
+    border: 'border-blue-500/30',
+    background: 'bg-blue-500/5',
+    iconBg: 'bg-blue-500/15 text-blue-600',
+    icon: <Loader2 className="h-4 w-4 animate-spin" />,
+  },
+  READY_FOR_DELIVERY: {
+    title: 'PDF prêt · audio à produire',
+    description: 'Complétez et contrôlez les assets promis.',
+    border: 'border-amber-500/30',
+    background: 'bg-amber-500/5',
+    iconBg: 'bg-amber-500/15 text-amber-600',
+    icon: <Headphones className="h-4 w-4" />,
+  },
+  DELIVERED: {
+    title: 'Lecture et assets disponibles',
+    description: 'Le dossier livré reste dans l’historique client.',
+    border: 'border-emerald-500/30',
+    background: 'bg-emerald-500/5',
+    iconBg: 'bg-emerald-500/15 text-emerald-600',
+    icon: <CheckCircle2 className="h-4 w-4" />,
+  },
+  INCIDENT: {
+    title: 'Incident de production',
+    description: 'Consultez l’erreur puis relancez uniquement cette étape.',
+    border: 'border-red-500/30',
+    background: 'bg-red-500/5',
+    iconBg: 'bg-red-500/15 text-red-600',
+    icon: <AlertTriangle className="h-4 w-4" />,
+  },
+};
 
 export function OrderControlStrip({ orderId }: { orderId: string }) {
   const [data, setData] = useState<ControlCenterResponse | null>(null);
@@ -94,7 +173,7 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
     currentJob?.status === 'QUEUED' || currentJob?.status === 'RUNNING' ? currentJob : null;
   const failedJob = currentJob?.status === 'FAILED' ? currentJob : null;
   const audioStatus = String(data.assets.audio?.status || 'MISSING');
-  const presentation = workflowPresentation(data.workflowState);
+  const presentation = WORKFLOW_PRESENTATIONS[data.workflowState];
   const canLaunchAudio =
     data.order.status === 'COMPLETED' && audioStatus !== 'READY' && activeJob === null;
 
@@ -237,7 +316,7 @@ function ActionButton({
 }: {
   busy: boolean;
   danger?: boolean;
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   onClick: () => void;
 }) {
@@ -256,7 +335,7 @@ function ActionButton({
   );
 }
 
-function DetailGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function DetailGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
       <p className="mb-2 text-xs font-bold uppercase tracking-wider text-desk-subtle">{title}</p>
@@ -297,35 +376,6 @@ function AssetRow({ label, status }: { label: string; status: string }) {
       </span>
     </div>
   );
-}
-
-function workflowPresentation(state: OrderControlCenter['workflowState']) {
-  const states = {
-    WAITING_CLIENT: ['Éléments client incomplets', 'La production attend la validation des éléments essentiels.', 'amber'],
-    READY_FOR_PRODUCTION: ['Dossier prêt à produire', 'La prise en charge est distincte du lancement.', 'emerald'],
-    IN_PRODUCTION: ['Production serveur en cours', 'Vous pouvez quitter cette commande : le traitement continue.', 'blue'],
-    ASSETS_IN_PRODUCTION: ['Assets en production', 'Le PDF ou l’audio continue côté serveur.', 'blue'],
-    AWAITING_REVIEW: ['Lecture prête à réviser', 'Vérifiez le contenu avant de le sceller.', 'purple'],
-    READY_FOR_DELIVERY: ['PDF prêt · audio à produire', 'Complétez et contrôlez les assets promis.', 'amber'],
-    DELIVERED: ['Lecture et assets disponibles', 'Le dossier livré reste dans l’historique client.', 'emerald'],
-    INCIDENT: ['Incident de production', 'Consultez l’erreur puis relancez uniquement cette étape.', 'red'],
-  } as const;
-  const [title, description, color] = states[state];
-  const icons = {
-    amber: <Headphones className="h-4 w-4" />,
-    emerald: <CheckCircle2 className="h-4 w-4" />,
-    blue: <Loader2 className="h-4 w-4 animate-spin" />,
-    purple: <CheckCircle2 className="h-4 w-4" />,
-    red: <AlertTriangle className="h-4 w-4" />,
-  };
-  return {
-    title,
-    description,
-    border: `border-${color}-500/30`,
-    background: `bg-${color}-500/5`,
-    iconBg: `bg-${color}-500/15 text-${color}-600`,
-    icon: icons[color],
-  };
 }
 
 function stageLabel(stage: string) {
