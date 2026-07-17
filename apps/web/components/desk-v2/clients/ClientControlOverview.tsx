@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  Bot,
   BookOpen,
   Check,
   CheckCircle2,
@@ -32,9 +34,7 @@ interface ClientReadingSummary {
     | 'INCIDENT'
     | 'REFUNDED';
   orderedAt: string;
-  deliveredAt?: string | null;
   assignedExpert?: { name: string } | null;
-  production?: { status: string; stage: string } | null;
   versions: { count: number; sealedVersionNumber?: number | null };
   assets: {
     pdf: { status?: string };
@@ -46,9 +46,13 @@ interface ClientReadingSummary {
 interface ClientConversationSummary {
   id: string;
   title: string;
-  type: 'AI_ASSISTANT';
+  type: 'AI_ASSISTANT' | 'EXPERT_REQUEST';
   status: string;
+  category?: string;
+  assignedExpert?: { id: string; name: string } | null;
   messageCount: number;
+  unreadByExpert: number;
+  unreadByClient: number;
   lastSender?: string | null;
   lastMessageAt: string;
   relatedOrderId?: string | null;
@@ -86,6 +90,9 @@ interface ClientControlData {
     openReadings: number;
     incidents: number;
     conversations: number;
+    guidanceRequests?: number;
+    openGuidanceRequests?: number;
+    unreadGuidanceForExpert?: number;
     unreadNotifications: number;
   };
   readings: ClientReadingSummary[];
@@ -122,6 +129,14 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
     () => data?.readings.filter((reading) => !['DELIVERED', 'REFUNDED'].includes(reading.state)) || [],
     [data],
   );
+  const guidanceRequests = useMemo(
+    () => data?.conversations.filter((conversation) => conversation.type === 'EXPERT_REQUEST') || [],
+    [data],
+  );
+  const aiConversations = useMemo(
+    () => data?.conversations.filter((conversation) => conversation.type === 'AI_ASSISTANT') || [],
+    [data],
+  );
 
   if (loading) {
     return (
@@ -143,6 +158,13 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
     );
   }
 
+  const openGuidance =
+    data.summary.openGuidanceRequests ??
+    guidanceRequests.filter((request) => !['RESOLVED', 'ARCHIVED'].includes(request.status)).length;
+  const unreadGuidance =
+    data.summary.unreadGuidanceForExpert ??
+    guidanceRequests.reduce((total, request) => total + request.unreadByExpert, 0);
+
   return (
     <section className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -152,26 +174,19 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
           icon={<InfinityIcon className="h-5 w-5" />}
           positive={data.client.access === 'LIFETIME'}
         />
-        <MetricCard
-          label="Lectures"
-          value={data.summary.totalReadings}
-          icon={<BookOpen className="h-5 w-5" />}
-        />
+        <MetricCard label="Lectures" value={data.summary.totalReadings} icon={<BookOpen className="h-5 w-5" />} />
         <MetricCard
           label="Livrées"
           value={data.summary.deliveredReadings}
           icon={<CheckCircle2 className="h-5 w-5" />}
           positive={data.summary.deliveredReadings > 0}
         />
+        <MetricCard label="À traiter" value={data.summary.openReadings} icon={<Clock3 className="h-5 w-5" />} />
         <MetricCard
-          label="À traiter"
-          value={data.summary.openReadings}
-          icon={<Clock3 className="h-5 w-5" />}
-        />
-        <MetricCard
-          label="Échanges"
-          value={data.summary.conversations}
+          label="Demandes Desk"
+          value={openGuidance}
           icon={<MessageCircle className="h-5 w-5" />}
+          danger={unreadGuidance > 0}
         />
         <MetricCard
           label="Incidents"
@@ -181,27 +196,19 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.8fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.85fr)]">
         <div className="space-y-4">
-          <div className="rounded-xl border border-desk-border bg-desk-surface">
-            <div className="flex items-center justify-between border-b border-desk-border px-4 py-3">
-              <div>
-                <h2 className="font-semibold text-desk-text">Ce qui demande une action</h2>
-                <p className="mt-0.5 text-xs text-desk-muted">
-                  Production, validation, assets ou précision client.
-                </p>
-              </div>
-              <span className="rounded-full bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-600">
-                {actionableReadings.length}
-              </span>
-            </div>
-
+          <Panel
+            title="Ce qui demande une action"
+            description="Production, validation, assets ou éléments client."
+            badge={actionableReadings.length}
+          >
             {actionableReadings.length === 0 ? (
-              <div className="flex min-h-32 flex-col items-center justify-center p-5 text-center">
-                <CheckCircle2 className="mb-2 h-8 w-8 text-emerald-600" />
-                <p className="font-medium text-desk-text">Aucune lecture en attente</p>
-                <p className="mt-1 text-xs text-desk-muted">Toutes les lectures sont livrées ou archivées.</p>
-              </div>
+              <EmptyState
+                icon={<CheckCircle2 className="h-8 w-8 text-emerald-600" />}
+                title="Aucune lecture en attente"
+                description="Toutes les lectures sont livrées ou archivées."
+              />
             ) : (
               <div className="divide-y divide-desk-border">
                 {actionableReadings.map((reading) => (
@@ -209,17 +216,12 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
                 ))}
               </div>
             )}
-          </div>
+          </Panel>
 
-          <div className="rounded-xl border border-desk-border bg-desk-surface">
-            <div className="flex items-center justify-between border-b border-desk-border px-4 py-3">
-              <div>
-                <h2 className="font-semibold text-desk-text">Historique des lectures</h2>
-                <p className="mt-0.5 text-xs text-desk-muted">
-                  Chaque dossier conserve ses versions, son PDF, son audio et sa livraison.
-                </p>
-              </div>
-            </div>
+          <Panel
+            title="Historique des lectures"
+            description="Versions, PDF, audio et livraison restent liés à chaque dossier."
+          >
             {data.readings.length === 0 ? (
               <p className="p-5 text-sm text-desk-muted">Aucune lecture enregistrée.</p>
             ) : (
@@ -229,15 +231,33 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
                 ))}
               </div>
             )}
-          </div>
+          </Panel>
+
+          <Panel
+            title="Demandes d’éclairage"
+            description="Conversations humaines adressées au Desk, séparées du chat IA."
+            action={
+              <Link href="/admin/messages" className="text-xs font-semibold text-amber-600 hover:underline">
+                Ouvrir l’inbox
+              </Link>
+            }
+          >
+            {guidanceRequests.length === 0 ? (
+              <p className="p-5 text-sm text-desk-muted">Aucune demande adressée au Desk.</p>
+            ) : (
+              <div className="divide-y divide-desk-border">
+                {guidanceRequests.slice(0, 8).map((conversation) => (
+                  <ConversationRow key={conversation.id} conversation={conversation} />
+                ))}
+              </div>
+            )}
+          </Panel>
         </div>
 
         <div className="space-y-4">
           <div className="rounded-xl border border-desk-border bg-desk-surface p-4">
             <h2 className="font-semibold text-desk-text">Dossier essentiel</h2>
-            <p className="mt-1 text-xs text-desk-muted">
-              Conditions nécessaires avant la première production.
-            </p>
+            <p className="mt-1 text-xs text-desk-muted">Conditions nécessaires avant la production.</p>
             <div className="mt-4 space-y-2">
               <ReadinessRow label="Profil validé" done={data.readiness.profileCompleted} />
               <ReadinessRow label="Date et lieu de naissance" done={data.readiness.birthData} />
@@ -247,14 +267,7 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
             </div>
           </div>
 
-          <div className="rounded-xl border border-desk-border bg-desk-surface">
-            <div className="flex items-center justify-between border-b border-desk-border px-4 py-3">
-              <div>
-                <h2 className="font-semibold text-desk-text">Activité récente</h2>
-                <p className="mt-0.5 text-xs text-desk-muted">Chronologie métier du client.</p>
-              </div>
-              <Activity className="h-4 w-4 text-desk-subtle" />
-            </div>
+          <Panel title="Activité récente" description="Chronologie métier, sans contenu privé.">
             <div className="divide-y divide-desk-border">
               {(showAllTimeline ? data.timeline : data.timeline.slice(0, 8)).map((event) => (
                 <TimelineRow key={event.id} event={event} />
@@ -272,40 +285,64 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
                 {showAllTimeline ? 'Réduire' : `Afficher les ${data.timeline.length} événements`}
               </button>
             )}
-          </div>
+          </Panel>
 
-          <div className="rounded-xl border border-desk-border bg-desk-surface">
-            <div className="border-b border-desk-border px-4 py-3">
-              <h2 className="font-semibold text-desk-text">Échanges existants</h2>
-              <p className="mt-0.5 text-xs text-desk-muted">
-                Adaptateur temporaire du chat IA avant la messagerie structurée.
-              </p>
-            </div>
-            {data.conversations.length === 0 ? (
-              <p className="p-4 text-sm text-desk-muted">Aucun échange enregistré.</p>
+          <Panel title="Conversations IA" description="Historique du confident IA, distinct des réponses humaines.">
+            {aiConversations.length === 0 ? (
+              <p className="p-4 text-sm text-desk-muted">Aucune conversation IA enregistrée.</p>
             ) : (
               <div className="divide-y divide-desk-border">
-                {data.conversations.slice(0, 5).map((conversation) => (
-                  <div key={conversation.id} className="px-4 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium text-desk-text">
-                        {conversation.title}
-                      </p>
-                      <span className="text-xs text-desk-subtle">
-                        {conversation.messageCount} msg
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-desk-muted">
-                      {formatDate(conversation.lastMessageAt)} · {conversation.status}
-                    </p>
-                  </div>
+                {aiConversations.slice(0, 5).map((conversation) => (
+                  <ConversationRow key={conversation.id} conversation={conversation} />
                 ))}
               </div>
             )}
-          </div>
+          </Panel>
         </div>
       </div>
     </section>
+  );
+}
+
+function Panel({
+  title,
+  description,
+  badge,
+  action,
+  children,
+}: {
+  title: string;
+  description: string;
+  badge?: number;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-desk-border bg-desk-surface">
+      <div className="flex items-center justify-between gap-3 border-b border-desk-border px-4 py-3">
+        <div>
+          <h2 className="font-semibold text-desk-text">{title}</h2>
+          <p className="mt-0.5 text-xs text-desk-muted">{description}</p>
+        </div>
+        {action}
+        {badge !== undefined && (
+          <span className="rounded-full bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-600">
+            {badge}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+  return (
+    <div className="flex min-h-32 flex-col items-center justify-center p-5 text-center">
+      {icon}
+      <p className="mt-2 font-medium text-desk-text">{title}</p>
+      <p className="mt-1 text-xs text-desk-muted">{description}</p>
+    </div>
   );
 }
 
@@ -318,7 +355,7 @@ function MetricCard({
 }: {
   label: string;
   value: string | number;
-  icon: React.ReactNode;
+  icon: ReactNode;
   positive?: boolean;
   danger?: boolean;
 }) {
@@ -379,15 +416,45 @@ function ReadingRow({ reading, compact = false }: { reading: ClientReadingSummar
   );
 }
 
+function ConversationRow({ conversation }: { conversation: ClientConversationSummary }) {
+  const isGuidance = conversation.type === 'EXPERT_REQUEST';
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+          isGuidance ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'
+        }`}
+      >
+        {isGuidance ? <MessageCircle className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium text-desk-text">{conversation.title}</p>
+          {conversation.unreadByExpert > 0 && (
+            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {conversation.unreadByExpert}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-desk-muted">
+          {formatDateTime(conversation.lastMessageAt)} · {conversation.messageCount} message
+          {conversation.messageCount > 1 ? 's' : ''} · {conversation.status}
+        </p>
+      </div>
+      {isGuidance && (
+        <Link href="/admin/messages" className="text-xs font-semibold text-amber-600 hover:underline">
+          Inbox
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function ReadinessRow({ label, done }: { label: string; done: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-desk-card px-3 py-2 text-sm">
       <span className="text-desk-muted">{label}</span>
-      {done ? (
-        <Check className="h-4 w-4 text-emerald-600" />
-      ) : (
-        <Circle className="h-4 w-4 text-amber-600" />
-      )}
+      {done ? <Check className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-amber-600" />}
     </div>
   );
 }
@@ -395,14 +462,13 @@ function ReadinessRow({ label, done }: { label: string; done: boolean }) {
 function TimelineRow({ event }: { event: ClientTimelineItem }) {
   const content = (
     <div className="flex gap-3 px-4 py-3">
-      <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-amber-500" />
+      <Activity className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
       <div className="min-w-0">
         <p className="text-sm text-desk-text">{event.title}</p>
         <p className="mt-1 text-xs text-desk-subtle">{formatDateTime(event.occurredAt)}</p>
       </div>
     </div>
   );
-
   return event.orderId ? <Link href={`/admin/studio/${event.orderId}`}>{content}</Link> : content;
 }
 
