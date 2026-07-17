@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Search, Bell, Wifi, WifiOff, Command, Menu, X } from 'lucide-react';
 import { useSocket } from '../hooks/useSocket';
 import { useExpertAuth } from '@/context/ExpertAuthContext';
+import { ProductionIndicator } from '../production/ProductionIndicator';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -22,7 +23,6 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
   return (
     <header className="h-12 flex-shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 border-b border-desk-border bg-desk-surface">
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        {/* Mobile menu toggle */}
         <button
           onClick={onMenuClick}
           aria-label={mobileNavOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
@@ -34,7 +34,6 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
           {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
 
-        {/* Search — icon on mobile, full pill on sm+ */}
         <button
           onClick={handleSearchClick}
           aria-label="Rechercher"
@@ -52,11 +51,11 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
         </button>
       </div>
 
-      {/* Right section */}
       <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-        {/* Connection status — icon only on mobile */}
+        <ProductionIndicator />
+
         <div
-          className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-desk-card border border-desk-border"
+          className="hidden sm:flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-desk-card border border-desk-border"
           title={isConnected ? `Live${latency ? ` ${latency}ms` : ''}` : 'Hors ligne'}
         >
           {isConnected ? (
@@ -75,9 +74,8 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
           )}
         </div>
 
-        {/* Online experts — md+ only */}
         {onlineCount > 0 && (
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-desk-card border border-desk-border">
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-desk-card border border-desk-border">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs text-desk-muted">
               {onlineCount} expert{onlineCount > 1 ? 's' : ''} en ligne
@@ -89,6 +87,7 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
           onClick={() => setShowNotifications(!showNotifications)}
           title="Notifications"
           aria-label="Notifications"
+          aria-pressed={showNotifications}
           className="relative p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover transition-colors
                      flex items-center justify-center"
         >
