@@ -9,6 +9,10 @@ interface UseProductionControlOptions {
   includeJobs?: boolean;
 }
 
+interface ProductionJobsResponse {
+  data: ProductionJob[];
+}
+
 const EMPTY_SUMMARY: ProductionSummary = {
   queued: 0,
   running: 0,
@@ -30,14 +34,14 @@ export function useProductionControl(options: UseProductionControlOptions = {}) 
     if (requestRunning.current) return;
     requestRunning.current = true;
     try {
-      const requests = [expertApi.get<ProductionSummary>('/expert/production/summary')];
-      if (includeJobs) requests.push(expertApi.get('/expert/production/jobs?limit=150'));
-      const [summaryResponse, jobsResponse] = await Promise.all(requests);
+      const summaryRequest = expertApi.get<ProductionSummary>('/expert/production/summary');
+      const jobsRequest = includeJobs
+        ? expertApi.get<ProductionJobsResponse>('/expert/production/jobs?limit=150')
+        : Promise.resolve(null);
+      const [summaryResponse, jobsResponse] = await Promise.all([summaryRequest, jobsRequest]);
       if (!mounted.current) return;
       setSummary(summaryResponse.data);
-      if (includeJobs && jobsResponse) {
-        setJobs((jobsResponse.data as { data?: ProductionJob[] }).data || []);
-      }
+      if (jobsResponse) setJobs(jobsResponse.data.data || []);
       setError(null);
     } catch (requestError) {
       if (!mounted.current) return;
