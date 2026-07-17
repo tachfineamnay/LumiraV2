@@ -35,7 +35,7 @@ interface ClaimedProductionJob {
   job: ProductionJobState;
 }
 
-interface EnqueueReadingInput {
+interface EnqueueReadingInput extends Record<string, unknown> {
   expertPrompt?: string;
   expertInstructions?: string;
 }
