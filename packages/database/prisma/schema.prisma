@@ -70,6 +70,13 @@ enum FileType {
   AUDIO_READING
 }
 
+enum DeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
 /// Lifecycle of a versioned reading. A sealed version is immutable and is the
 /// only content allowed to reach the PDF renderer or delivery channel.
 enum ReadingVersionStatus {
@@ -246,6 +253,7 @@ model Order {
   // Relations for interconnected ecosystem
   files          OrderFile[]
   readingVersions ReadingVersion[]
+  deliveries     DeliveryRecord[]
   generatedSteps PathStep[] // Steps generated from this reading
   chatContexts   ChatSession[] // Chat sessions related to this order
 
@@ -308,9 +316,32 @@ model ReadingVersion {
   reopenedAt      DateTime?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
+  deliveries      DeliveryRecord[]
 
   @@unique([orderId, version])
   @@index([orderId, status, version(sort: Desc)])
+  @@index([contentHash])
+}
+
+/// Persistent delivery ledger. It binds a private PDF object to the immutable
+/// content hash and makes notification retries observable and idempotent.
+model DeliveryRecord {
+  id               String         @id @default(cuid())
+  orderId          String
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  readingVersionId String
+  readingVersion   ReadingVersion @relation(fields: [readingVersionId], references: [id], onDelete: Cascade)
+  pdfKey           String
+  contentHash      String
+  emailStatus      DeliveryStatus @default(PENDING)
+  emailAttempts    Int            @default(0)
+  emailSentAt      DateTime?
+  lastEmailError   String?        @db.Text
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([orderId, readingVersionId])
+  @@index([emailStatus, updatedAt(sort: Desc)])
   @@index([contentHash])
 }
 

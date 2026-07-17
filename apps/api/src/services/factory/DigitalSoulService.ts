@@ -388,6 +388,24 @@ export class DigitalSoulService {
       );
       // Use API endpoint for signed URL access (S3 bucket is private)
       pdfUrl = `/api/readings/${order.orderNumber}/download`;
+      await this.prisma.deliveryRecord.upsert({
+        where: {
+          orderId_readingVersionId: {
+            orderId: order.id,
+            readingVersionId: sealedReading.id,
+          },
+        },
+        create: {
+          orderId: order.id,
+          readingVersionId: sealedReading.id,
+          pdfKey,
+          contentHash: sealedReading.contentHash,
+        },
+        update: {
+          pdfKey,
+          contentHash: sealedReading.contentHash,
+        },
+      });
       this.logger.log(`☁️ PDF uploaded to S3: ${pdfKey}`);
       this.logger.log(`🔗 Access URL: ${pdfUrl}`);
     } catch (error) {

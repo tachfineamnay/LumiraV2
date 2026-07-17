@@ -833,6 +833,8 @@ export class ExpertService {
           },
         });
 
+        await this.sendDeliveryEmail(dto.orderId, expert.name || 'Un expert Lumira');
+
         this.logger.log(`✅ Order ${order.orderNumber} approved and PDF delivered`);
         return updatedOrder;
       } catch (error) {
@@ -1222,6 +1224,8 @@ MESSAGE DE L'EXPERT:`;
         },
       });
 
+      await this.sendDeliveryEmail(orderId, expert.name || 'Un expert Lumira');
+
       this.logger.log(`✅ Order ${order.orderNumber} sealed and PDF delivered from Studio`);
       this.gateway.notifyOrderSealed({
         id: order.id,
@@ -1296,17 +1300,8 @@ MESSAGE DE L'EXPERT:`;
         },
       });
 
-      // 4. Send email notification to the client
-      try {
-        const expertName = expert.name || 'Un expert Lumira';
-        await this.notificationsService.sendExpertValidation(order, order.user, expertName);
-        this.logger.log(
-          `📧 Expert validation email sent to ${order.user.email} (validated by ${expertName})`,
-        );
-      } catch (emailError) {
-        // Log but don't fail the finalization if email fails
-        this.logger.warn(`⚠️ Failed to send email notification: ${emailError}`);
-      }
+      // 4. Send a tracked, retry-safe email notification to the client.
+      await this.sendDeliveryEmail(orderId, expert.name || 'Un expert Lumira');
 
       this.logger.log(`✅ Order ${order.orderNumber} finalized - PDF: ${result.pdfUrl}`);
       this.gateway.notifyOrderSealed({
@@ -1389,6 +1384,54 @@ MESSAGE DE L'EXPERT:`;
 
       return version;
     });
+  }
+
+  /**
+   * Sends at most one confirmation email per sealed PDF. The delivery record is
+   * retained on failures so a scheduled retry can safely resume it later.
+   */
+  private async sendDeliveryEmail(orderId: string, expertName: string): Promise<void> {
+    const [order, delivery] = await Promise.all([
+      this.prisma.order.findUnique({ where: { id: orderId }, include: { user: true } }),
+      this.prisma.deliveryRecord.findFirst({
+        where: { orderId },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    if (!order || !delivery) {
+      this.logger.warn(`No delivery record available for order ${orderId}; email not sent`);
+      return;
+    }
+    if (delivery.emailStatus === 'SENT') {
+      this.logger.log(`Delivery email already sent for ${order.orderNumber}`);
+      return;
+    }
+
+    await this.prisma.deliveryRecord.update({
+      where: { id: delivery.id },
+      data: {
+        emailStatus: 'SENDING',
+        emailAttempts: { increment: 1 },
+        lastEmailError: null,
+      },
+    });
+
+    try {
+      await this.notificationsService.sendExpertValidation(order, order.user, expertName);
+      await this.prisma.deliveryRecord.update({
+        where: { id: delivery.id },
+        data: { emailStatus: 'SENT', emailSentAt: new Date(), lastEmailError: null },
+      });
+      this.logger.log(`📧 Delivery email sent to ${order.user.email} for ${order.orderNumber}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.prisma.deliveryRecord.update({
+        where: { id: delivery.id },
+        data: { emailStatus: 'FAILED', lastEmailError: message },
+      });
+      this.logger.error(`Delivery email failed for ${order.orderNumber}: ${message}`);
+    }
   }
 
   async getClients(dto: ClientsQueryDto) {
