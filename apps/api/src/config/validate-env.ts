@@ -26,9 +26,28 @@ const PLACEHOLDER_MARKERS = [
   'xxxxxxxx',
 ];
 
+const BOOLEAN_VALUES = ['true', 'false', '1', '0'] as const;
+
 function read(config: Record<string, unknown>, key: string): string {
   const value = config[key];
-  return typeof value === 'string' ? value.trim() : '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function normalizeHost(host: string): string {
+  return host.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+}
+
+function isLoopbackSmtpHost(host: string): boolean {
+  const normalized = normalizeHost(host);
+  return (
+    normalized === 'localhost' ||
+    normalized === '::1' ||
+    normalized === '0.0.0.0' ||
+    normalized === 'host.docker.internal' ||
+    /^127(?:\.\d{1,3}){3}$/.test(normalized)
+  );
 }
 
 /**
@@ -71,6 +90,39 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
 
   if (!/^postgres(?:ql)?:\/\//i.test(read(config, 'DATABASE_URL'))) {
     throw new Error('DATABASE_URL doit être une URL PostgreSQL valide');
+  }
+
+  const smtpHost = read(config, 'SMTP_HOST');
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(smtpHost) || /[\s/]/.test(smtpHost)) {
+    throw new Error('SMTP_HOST doit contenir uniquement le nom d’hôte du fournisseur, sans protocole');
+  }
+  if (isLoopbackSmtpHost(smtpHost)) {
+    throw new Error(
+      'SMTP_HOST ne peut pas pointer vers localhost, une adresse loopback ou host.docker.internal en production',
+    );
+  }
+
+  const smtpPortRaw = read(config, 'SMTP_PORT') || '587';
+  const smtpPort = Number(smtpPortRaw);
+  if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+    throw new Error('SMTP_PORT doit être un port TCP valide');
+  }
+
+  for (const key of ['SMTP_SECURE', 'SMTP_REQUIRE_TLS'] as const) {
+    const value = read(config, key).toLowerCase();
+    if (value && !BOOLEAN_VALUES.includes(value as (typeof BOOLEAN_VALUES)[number])) {
+      throw new Error(`${key} doit valoir true, false, 1 ou 0`);
+    }
+  }
+
+  const smtpSecure = read(config, 'SMTP_SECURE').toLowerCase();
+  if (smtpPort === 465 && (smtpSecure === 'false' || smtpSecure === '0')) {
+    throw new Error('SMTP_SECURE doit être activé avec SMTP_PORT=465');
+  }
+
+  const mailFrom = read(config, 'MAIL_FROM');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailFrom)) {
+    throw new Error('MAIL_FROM doit être une adresse e-mail valide sans nom d’affichage');
   }
 
   return config;
