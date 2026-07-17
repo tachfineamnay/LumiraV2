@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ExpertController } from './expert.controller';
 import { ProductionControlController } from './production-control.controller';
+import { ClientControlController } from './client-control.controller';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
@@ -13,6 +14,7 @@ import { IdGenerator } from '../../utils/IdGenerator';
 import { ServicesModule } from '../../services/services.module';
 import { ProductionControlService } from './production-control.service';
 import { ProductionQueueInterceptor } from './production-queue.interceptor';
+import { ClientControlService } from './client-control.service';
 
 @Module({
   imports: [
@@ -30,7 +32,7 @@ import { ProductionQueueInterceptor } from './production-queue.interceptor';
       }),
     }),
   ],
-  controllers: [ExpertController, ProductionControlController],
+  controllers: [ExpertController, ProductionControlController, ClientControlController],
   providers: [
     ExpertService,
     AdminSettingsService,
@@ -39,6 +41,7 @@ import { ProductionQueueInterceptor } from './production-queue.interceptor';
     ExpertGateway,
     IdGenerator,
     ProductionControlService,
+    ClientControlService,
     {
       provide: APP_INTERCEPTOR,
       useClass: ProductionQueueInterceptor,
@@ -51,6 +54,7 @@ import { ProductionQueueInterceptor } from './production-queue.interceptor';
     ExpertAuthGuard,
     RolesGuard,
     ProductionControlService,
+    ClientControlService,
   ],
 })
 export class ExpertModule {}
