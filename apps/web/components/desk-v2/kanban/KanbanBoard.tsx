@@ -28,8 +28,8 @@ export function KanbanBoard() {
   const { expert } = useExpertAuth();
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
+  const [generatingOrderId, setGeneratingOrderId] = useState<string | null>(null);
 
-  // Notify on initial load if orders are waiting for validation
   useEffect(() => {
     if (!isLoading && orders.validation.length > 0) {
       toast.info(
@@ -42,7 +42,6 @@ export function KanbanBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
-  // Socket for real-time updates
   const { orderViewers } = useSocket({
     onNewOrder: (order) => {
       addOrder(order);
@@ -51,7 +50,6 @@ export function KanbanBoard() {
       });
     },
     onStatusChange: (data) => {
-      // Notify when an order enters validation
       if (data.newStatus === 'AWAITING_VALIDATION') {
         toast.info(`Lecture prête à valider: ${data.orderNumber}`, {
           description: 'Une lecture attend votre approbation dans la colonne Validation.',
@@ -70,7 +68,6 @@ export function KanbanBoard() {
       fetchOrders();
     },
     onOrderClaimed: (data) => {
-      // Update the order's expertReview optimistically
       updateOrder(data.orderId, {
         expertReview: {
           assignedBy: data.expertId,
@@ -84,7 +81,6 @@ export function KanbanBoard() {
     },
   });
 
-  // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -96,53 +92,76 @@ export function KanbanBoard() {
     }),
   );
 
-  // Filter orders by level
   const filteredOrders = useMemo(() => {
     if (!levelFilter) return orders;
     return {
-      paid: orders.paid.filter((o) => o.level === levelFilter),
-      processing: orders.processing.filter((o) => o.level === levelFilter),
-      validation: orders.validation.filter((o) => o.level === levelFilter),
-      completed: orders.completed.filter((o) => o.level === levelFilter),
+      paid: orders.paid.filter((order) => order.level === levelFilter),
+      processing: orders.processing.filter((order) => order.level === levelFilter),
+      validation: orders.validation.filter((order) => order.level === levelFilter),
+      completed: orders.completed.filter((order) => order.level === levelFilter),
     };
   }, [orders, levelFilter]);
 
-  // Find which column an order is in
   const findOrderColumn = (orderId: string): KanbanColumnId | null => {
     for (const [columnId, columnOrders] of Object.entries(filteredOrders)) {
-      if (columnOrders.find((o: Order) => o.id === orderId)) {
+      if (columnOrders.find((order: Order) => order.id === orderId)) {
         return columnId as KanbanColumnId;
       }
     }
     return null;
   };
 
-  // Claim an order
   const handleClaim = async (orderId: string) => {
     try {
       await expertApi.post(`/expert/orders/${orderId}/assign`);
-      // Optimistic update will come via socket order:claimed event
+      toast.success('Commande prise en charge', {
+        description: 'Vérifiez le dossier puis lancez la production lorsque vous êtes prêt.',
+      });
+      await fetchOrders();
     } catch (error: unknown) {
-      const msg = (error as { response?: { data?: { message?: string } } })?.response?.data
+      const message = (error as { response?: { data?: { message?: string } } })?.response?.data
         ?.message;
-      toast.error(msg || 'Impossible de prendre la commande');
+      toast.error(message || 'Impossible de prendre la commande');
       console.error(error);
     }
   };
 
-  // Drag handlers
+  const handleGenerate = async (orderId: string) => {
+    setGeneratingOrderId(orderId);
+    try {
+      const { data } = await expertApi.post(`/expert/orders/${orderId}/jobs/reading`, {});
+      const current = filteredOrders.paid.find((order) => order.id === orderId);
+      if (current) {
+        updateOrder(orderId, {
+          expertReview: {
+            ...((current.expertReview as Record<string, unknown>) || {}),
+            production: data.job,
+          },
+        });
+      }
+      toast.success('Production lancée', {
+        description: 'Le traitement continue côté serveur. Vous pouvez ouvrir une autre commande.',
+      });
+      window.setTimeout(() => void fetchOrders(), 800);
+    } catch (error: unknown) {
+      const message = (error as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
+      toast.error('Impossible de lancer la production', { description: message });
+    } finally {
+      setGeneratingOrderId(null);
+    }
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const column = findOrderColumn(active.id as string);
     if (column) {
-      const order = filteredOrders[column].find((o) => o.id === active.id);
+      const order = filteredOrders[column].find((candidate) => candidate.id === active.id);
       setActiveOrder(order || null);
     }
   };
 
-  const handleDragOver = () => {
-    // Optional: Add visual feedback during drag
-  };
+  const handleDragOver = () => undefined;
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -152,80 +171,72 @@ export function KanbanBoard() {
 
     const activeId = active.id as string;
     const overId = over.id as string;
-
-    // Get source and destination columns
     const sourceColumn = findOrderColumn(activeId);
-    let destColumn: KanbanColumnId | null = null;
+    let destinationColumn: KanbanColumnId | null = null;
 
-    // Check if dropped on a column
-    if (KANBAN_COLUMNS.find((c) => c.id === overId)) {
-      destColumn = overId as KanbanColumnId;
+    if (KANBAN_COLUMNS.find((column) => column.id === overId)) {
+      destinationColumn = overId as KanbanColumnId;
     } else {
-      // Dropped on another order - find its column
-      destColumn = findOrderColumn(overId);
+      destinationColumn = findOrderColumn(overId);
     }
 
-    if (!sourceColumn || !destColumn || sourceColumn === destColumn) return;
+    if (!sourceColumn || !destinationColumn || sourceColumn === destinationColumn) return;
 
-    // Block drag if assigned to another expert (unless admin)
-    const draggedOrder = filteredOrders[sourceColumn]?.find((o) => o.id === activeId);
+    const draggedOrder = filteredOrders[sourceColumn]?.find((order) => order.id === activeId);
     const assignedBy = (draggedOrder?.expertReview as { assignedBy?: string })?.assignedBy;
     if (assignedBy && assignedBy !== expert?.id && expert?.role !== 'ADMIN') {
       toast.error('Commande déjà prise par un autre expert');
       return;
     }
 
-    // PAID is webhook-only and validation/completion require Studio actions.
-    if (destColumn === 'paid') {
+    if (destinationColumn === 'paid') {
       toast.error('Impossible de revenir en « Nouvelles »', {
         description: 'Le statut PAID est géré uniquement après paiement.',
       });
       return;
     }
-    if (destColumn === 'validation') {
+    if (destinationColumn === 'validation') {
       toast.info('La validation est alimentée automatiquement', {
-        description: 'Lancez la génération : la lecture apparaîtra ici une fois prête.',
+        description: 'Lancez la production : la lecture apparaîtra ici une fois prête.',
       });
       return;
     }
-    if (destColumn === 'completed') {
+    if (destinationColumn === 'completed') {
       toast.info('Finalisation dans le Studio', {
         description: 'Ouvrez la lecture, vérifiez le contenu, puis scellez-la depuis le Studio.',
       });
       return;
     }
-    if (destColumn !== 'processing' || !['paid', 'validation'].includes(sourceColumn)) {
+    if (destinationColumn !== 'processing' || !['paid', 'validation'].includes(sourceColumn)) {
       toast.error('Transition non autorisée');
       return;
     }
 
-    // Optimistic rendering while the server holds the generation lease.
-    moveOrder(activeId, sourceColumn, destColumn);
+    moveOrder(activeId, sourceColumn, destinationColumn);
 
     try {
       await expertApi.post(`/expert/orders/${activeId}/generate`);
-      toast.success('Génération lancée');
+      toast.success('Production ajoutée à la file', {
+        description: 'Elle continue côté serveur indépendamment de cette page.',
+      });
     } catch (error) {
-      // Revert on error
-      moveOrder(activeId, destColumn, sourceColumn);
-      toast.error('Erreur lors du déplacement');
+      moveOrder(activeId, destinationColumn, sourceColumn);
+      toast.error('Erreur lors du lancement');
       console.error(error);
     }
   };
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
       <div className="px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-desk-border">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-semibold text-desk-text">Board</h1>
           <p className="text-sm text-desk-muted mt-0.5 hidden sm:block">
-            Gérez vos commandes par glisser-déposer
+            Assignez, lancez et suivez les dossiers sans bloquer votre navigation
           </p>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          {/* Level filter */}
           <div className="flex items-center gap-1 p-1 rounded-lg bg-desk-card border border-desk-border overflow-x-auto max-w-full">
             <button
               onClick={() => setLevelFilter(null)}
@@ -252,7 +263,6 @@ export function KanbanBoard() {
             ))}
           </div>
 
-          {/* Refresh */}
           <button
             onClick={() => fetchOrders()}
             disabled={isLoading}
@@ -265,7 +275,6 @@ export function KanbanBoard() {
         </div>
       </div>
 
-      {/* Board */}
       <div className="flex-1 overflow-x-auto p-3 sm:p-6 snap-x snap-mandatory sm:snap-none">
         <DndContext
           sensors={sensors}
@@ -284,11 +293,12 @@ export function KanbanBoard() {
                 currentExpertId={expert?.id}
                 orderViewers={orderViewers}
                 onClaim={handleClaim}
+                onGenerate={handleGenerate}
+                generatingOrderId={generatingOrderId}
               />
             ))}
           </div>
 
-          {/* Drag overlay */}
           <DragOverlay dropAnimation={null}>
             {activeOrder && <OrderCard order={activeOrder} isDragging />}
           </DragOverlay>
