@@ -14,6 +14,7 @@ Cette première tranche stabilise sans migration destructive :
 - heartbeat et reprise après redémarrage ;
 - centre de production global ;
 - état détaillé dans chaque Studio ;
+- vue client 360 fondée sur l’historique réel ;
 - compatibilité avec les anciennes routes de génération.
 
 Aucun fichier de l’expérience Sanctuaire en cours de refonte n’est modifié par cette branche.
@@ -51,6 +52,7 @@ Cette solution réutilise le schéma existant et évite un conflit de migration 
 - `GET /api/expert/production/jobs`
 - `GET /api/expert/production/summary`
 - `GET /api/expert/orders/:id/control-center`
+- `GET /api/expert/clients/:id/control-center`
 - `POST /api/expert/production/jobs/:jobId/retry`
 - `POST /api/expert/production/jobs/:jobId/cancel`
 - `POST /api/expert/production/recover-stale` — ADMIN uniquement
@@ -85,6 +87,18 @@ Le worker met à jour `heartbeatAt` toutes les dix secondes. Un job `RUNNING` sa
 
 Pour une lecture interrompue alors que `Order.status` est `PROCESSING`, l’ordre repasse temporairement en `FAILED`, statut accepté par le générateur pour une reprise contrôlée.
 
+## Contrôle audio
+
+Le service TTS refuse désormais par défaut tout appel qui ne correspond pas à un job `AUDIO_GENERATION` réellement `RUNNING`. L’ancien lancement « fire-and-forget » exécuté après la création du PDF est donc neutralisé : l’audio doit être lancé et suivi depuis le Desk.
+
+Le mode historique peut uniquement être réactivé pour un rollback temporaire :
+
+```env
+AUDIO_ALLOW_LEGACY_FIRE_AND_FORGET=false
+```
+
+Garder cette valeur à `false` en production normale.
+
 ## Variables Coolify
 
 ```env
@@ -93,6 +107,7 @@ PRODUCTION_WORKER_POLL_MS=2500
 PRODUCTION_WORKER_CONCURRENCY=2
 PRODUCTION_JOB_STALE_MS=900000
 PRODUCTION_JOB_MAX_ATTEMPTS=3
+AUDIO_ALLOW_LEGACY_FIRE_AND_FORGET=false
 ```
 
 ### Important en cas de plusieurs réplicas API
@@ -102,17 +117,19 @@ Tant que le moteur P0 utilise `Order.expertReview`, activer le worker sur une se
 ## Déploiement Coolify
 
 1. sauvegarder PostgreSQL ;
-2. déployer l’API ;
-3. vérifier `/api/health` ;
-4. vérifier dans les logs : `Production worker started` ;
-5. déployer le Web/Desk ;
-6. ouvrir `/admin/production` ;
-7. assigner une commande de test ;
-8. cliquer `Lancer la production` ;
-9. changer immédiatement de page ;
-10. vérifier que le job continue et rejoint `À valider` ;
-11. finaliser une lecture de test ;
-12. lancer ou vérifier l’audio depuis le Studio.
+2. ajouter les variables ci-dessus à l’API ;
+3. déployer l’API ;
+4. vérifier `/api/health` ;
+5. vérifier dans les logs : `Production worker started` ;
+6. déployer le Web/Desk ;
+7. ouvrir `/admin/production` ;
+8. assigner une commande de test ;
+9. cliquer `Lancer la production` ;
+10. changer immédiatement de page ;
+11. vérifier que le job continue et rejoint `À valider` ;
+12. finaliser une lecture de test ;
+13. lancer l’audio depuis le Studio ;
+14. vérifier que le PDF, l’audio et l’e-mail apparaissent séparément.
 
 ## Smoke tests obligatoires
 
@@ -123,12 +140,17 @@ Tant que le moteur P0 utilise `Order.expertReview`, activer le worker sur une se
 - un redémarrage API récupère un job abandonné ;
 - une erreur est visible dans `/admin/production` ;
 - `Réessayer` relance uniquement l’étape échouée ;
+- un appel audio historique sans job est ignoré ;
+- un job audio géré produit un `OrderFile` `AUDIO_READING` ;
 - un audio existant n’est pas recréé sans action explicite ;
+- la fiche client conserve l’historique des lectures, versions, assets et échanges ;
 - le client ne voit jamais les erreurs techniques du worker.
 
 ## Rollback
 
 Le rollback applicatif consiste à redéployer le commit précédent. Aucun schéma n’est ajouté dans cette tranche. Les nouvelles clés JSON présentes dans `Order.expertReview` sont ignorées par l’ancien code et peuvent rester en base.
+
+Pour rétablir temporairement l’ancien audio automatique, définir `AUDIO_ALLOW_LEGACY_FIRE_AND_FORGET=true` avant de redéployer l’API.
 
 Avant rollback, attendre la fin des jobs actifs ou les annuler depuis le Desk afin d’éviter qu’une ancienne image API ne reprenne une commande au statut intermédiaire.
 
@@ -138,5 +160,5 @@ Avant rollback, attendre la fin des jobs actifs ou les annuler depuis le Desk af
 - une seule tâche courante par commande ;
 - pas encore de table normalisée pour les jobs et les assets ;
 - la messagerie structurée Desk/Sanctuaire reste à ajouter ;
-- l’audio complet doit être harmonisé avec la version scellée et le DTO client canonique ;
-- le lancement audio automatique historique après PDF doit être supprimé ou redirigé vers le worker lors de la tranche suivante.
+- l’audio principal actuel narre la synthèse ; la narration complète par chapitres reste une évolution ;
+- les données du Sanctuaire devront consommer le DTO canonique après intégration du commit en cours.
