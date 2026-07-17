@@ -15,6 +15,7 @@ import { ServicesModule } from '../../services/services.module';
 import { ProductionControlService } from './production-control.service';
 import { ProductionQueueInterceptor } from './production-queue.interceptor';
 import { ProductionCancelInterceptor } from './production-cancel.interceptor';
+import { ProductionPaidRecoveryService } from './production-paid-recovery.service';
 import { ClientControlService } from './client-control.service';
 
 @Module({
@@ -42,6 +43,7 @@ import { ClientControlService } from './client-control.service';
     ExpertGateway,
     IdGenerator,
     ProductionControlService,
+    ProductionPaidRecoveryService,
     ClientControlService,
     {
       provide: APP_INTERCEPTOR,
