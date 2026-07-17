@@ -14,6 +14,7 @@ import { IdGenerator } from '../../utils/IdGenerator';
 import { ServicesModule } from '../../services/services.module';
 import { ProductionControlService } from './production-control.service';
 import { ProductionQueueInterceptor } from './production-queue.interceptor';
+import { ProductionCancelInterceptor } from './production-cancel.interceptor';
 import { ClientControlService } from './client-control.service';
 
 @Module({
@@ -45,6 +46,10 @@ import { ClientControlService } from './client-control.service';
     {
       provide: APP_INTERCEPTOR,
       useClass: ProductionQueueInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ProductionCancelInterceptor,
     },
   ],
   exports: [
