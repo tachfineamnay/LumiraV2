@@ -101,7 +101,7 @@ export function ReadingPreparation({
   const draft = useMemo(() => serializableDraft(data), [data]);
 
   useEffect(() => {
-    if (!loaded || isComplete) return;
+    if (!loaded || isComplete || isSubmitting) return;
     const timer = window.setTimeout(() => {
       sanctuaireApi.patch('/users/onboarding', { currentStep: step, data: draft }).catch(() => {
         setError(
@@ -110,7 +110,7 @@ export function ReadingPreparation({
       });
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [draft, isComplete, loaded, step]);
+  }, [draft, isComplete, isSubmitting, loaded, step]);
 
   const update = <Key extends keyof PreparationData>(key: Key, value: PreparationData[Key]) => {
     setError(null);
@@ -384,7 +384,7 @@ export function ReadingPreparation({
               ) : (
                 <button
                   type="button"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !data.consent}
                   onClick={submit}
                   className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >

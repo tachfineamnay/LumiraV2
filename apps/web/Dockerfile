@@ -28,28 +28,30 @@ COPY --from=pruner /app/out/full/ .
 
 # NEXT_PUBLIC_* values are compiled into browser bundles; API_INTERNAL_URL is
 # used by server-side routes and rewrites inside the Docker network.
-ARG NEXT_PUBLIC_API_URL
+# Default API URL unblocks Coolify when the var is missing or passed empty
+# as a build-arg (empty overrides a plain ARG default). Override via Coolify
+# "Build Variable" when targeting a non-production API.
+ARG NEXT_PUBLIC_API_URL=https://api.oraclelumira.com
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG API_INTERNAL_URL=http://api:3001
 
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.oraclelumira.com}
+ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+ENV API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:3001}
+
 RUN if [ -z "$NEXT_PUBLIC_API_URL" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" ]; then \
       echo "========================================================================="; \
-      echo "ERROR: NEXT_PUBLIC_API_URL or NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is empty!"; \
-      echo "Because Next.js compiles NEXT_PUBLIC_* environment variables into the client-side"; \
-      echo "bundle, these variables must be provided at BUILD TIME."; \
+      if [ -z "$NEXT_PUBLIC_API_URL" ]; then echo "ERROR: NEXT_PUBLIC_API_URL is empty"; fi; \
+      if [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" ]; then echo "ERROR: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is empty"; fi; \
+      echo "Next.js inlines NEXT_PUBLIC_* into the client bundle at BUILD TIME."; \
       echo ""; \
-      echo "To fix this in Coolify:"; \
-      echo "1. Go to the 'Environment Variables' tab of your Web service."; \
-      echo "2. Find NEXT_PUBLIC_API_URL and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY."; \
-      echo "3. Ensure their values are set, and check the 'Build Variable' (or 'Available at build time') toggle."; \
-      echo "4. Save and redeploy."; \
+      echo "In Coolify (Web / Desk services):"; \
+      echo "1. Environment Variables → set each missing variable."; \
+      echo "2. Enable 'Build Variable' / 'Available at build time'."; \
+      echo "3. Save and redeploy."; \
       echo "========================================================================="; \
       exit 1; \
     fi
-
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-ENV API_INTERNAL_URL=$API_INTERNAL_URL
 
 # Generate Prisma Client (Explicitly)
 RUN pnpm turbo run db:generate --filter=@packages/database

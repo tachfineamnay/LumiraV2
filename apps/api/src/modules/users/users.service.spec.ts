@@ -57,6 +57,7 @@ describe('UsersService', () => {
         count: jest.fn(),
       },
       userProfile: {
+        findUnique: jest.fn(),
         upsert: jest.fn(),
       },
       consentRecord: {
@@ -361,6 +362,46 @@ describe('UsersService', () => {
           data: { facePhoto: 'data:image/jpeg;base64,not-allowed' },
         }),
       ).rejects.toThrow('Base64');
+    });
+
+    it('does not downgrade a COMPLETED onboarding draft', async () => {
+      const completed = {
+        userId: 'user-1',
+        currentStep: 5,
+        status: 'COMPLETED',
+        data: {},
+        completedAt: new Date(),
+      };
+      prisma.onboardingProgress.findUnique.mockResolvedValue(completed);
+      prisma.userProfile.findUnique.mockResolvedValue({ profileCompleted: false });
+
+      const result = await service.saveOnboardingProgress('user-1', {
+        currentStep: 2,
+        data: { birthDate: '1990-01-01', consent: true },
+      });
+
+      expect(result).toEqual(completed);
+      expect(prisma.onboardingProgress.upsert).not.toHaveBeenCalled();
+    });
+
+    it('does not rewrite draft after profileCompleted', async () => {
+      const completed = {
+        userId: 'user-1',
+        currentStep: 5,
+        status: 'COMPLETED',
+        data: {},
+        completedAt: new Date(),
+      };
+      prisma.onboardingProgress.findUnique.mockResolvedValue(completed);
+      prisma.userProfile.findUnique.mockResolvedValue({ profileCompleted: true });
+
+      const result = await service.saveOnboardingProgress('user-1', {
+        currentStep: 2,
+        data: { birthPlace: 'Lyon' },
+      });
+
+      expect(result).toEqual(completed);
+      expect(prisma.onboardingProgress.upsert).not.toHaveBeenCalled();
     });
   });
 });

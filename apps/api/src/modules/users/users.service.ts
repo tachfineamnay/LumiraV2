@@ -370,6 +370,20 @@ export class UsersService {
         'Les aperçus Base64 ne peuvent pas être persistés dans un brouillon',
       );
     }
+
+    // A late autosave must never downgrade a finalized preparation. Profile
+    // completion (and OnboardingProgress.COMPLETED) are authoritative.
+    const [existingProgress, profile] = await Promise.all([
+      this.prisma.onboardingProgress.findUnique({ where: { userId } }),
+      this.prisma.userProfile.findUnique({
+        where: { userId },
+        select: { profileCompleted: true },
+      }),
+    ]);
+    if (existingProgress?.status === 'COMPLETED' || profile?.profileCompleted) {
+      return existingProgress;
+    }
+
     return this.prisma.onboardingProgress.upsert({
       where: { userId },
       create: {

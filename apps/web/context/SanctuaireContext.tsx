@@ -1,6 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import sanctuaireApi from '../lib/sanctuaireApi';
 import { useSanctuaireAuth } from './SanctuaireAuthContext';
 
@@ -63,25 +71,33 @@ const SanctuaireContext = createContext<SanctuaireContextType>(defaultContext);
 
 export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useSanctuaireAuth();
+  const userId = user?.id ?? null;
   const [data, setData] = useState<LifetimeAccessData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasCachedEntitlementsRef = useRef(false);
 
   const fetchEntitlements = useCallback(async () => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !userId) {
+      hasCachedEntitlementsRef.current = false;
       setData(null);
       setIsLoading(false);
       return;
     }
 
     try {
-      setIsLoading(true);
+      // Silent refresh when entitlements are already cached — avoids tearing
+      // down Sanctuaire pages (e.g. onboarding modal) during refetchData.
+      if (!hasCachedEntitlementsRef.current) {
+        setIsLoading(true);
+      }
       setError(null);
 
       const response = await sanctuaireApi.get('/users/entitlements');
 
       const entitlement = response.data;
       const hasLifetimeAccess = (entitlement.orderCount ?? 0) > 0;
+      hasCachedEntitlementsRef.current = true;
       setData({
         hasLifetimeAccess,
         orderCount: entitlement.orderCount ?? 0,
@@ -91,6 +107,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (err) {
       console.error('Failed to fetch entitlements:', err);
       setError("Erreur lors du chargement des droits d'accès");
+      hasCachedEntitlementsRef.current = true;
       setData({
         hasLifetimeAccess: false,
         orderCount: 0,
@@ -100,7 +117,7 @@ export const SanctuaireProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } finally {
       setIsLoading(false);
     }
-  }, [user, isAuthenticated]);
+  }, [userId, isAuthenticated]);
 
   // Fetch entitlements when auth state changes
   useEffect(() => {

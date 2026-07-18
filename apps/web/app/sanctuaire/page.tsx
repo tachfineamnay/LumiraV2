@@ -118,7 +118,11 @@ function SanctuaireHome() {
     }
   };
 
-  if (authLoading || entitlementsLoading) {
+  // Keep the preparation modal mounted during background refetch so the
+  // success screen is not torn down and remounted at step 3.
+  const blockForInitialLoad = (authLoading || entitlementsLoading) && !showPreparation;
+
+  if (blockForInitialLoad) {
     return (
       <div className="grid min-h-[60vh] place-items-center" role="status">
         <Loader2 className="h-9 w-9 animate-spin text-horizon-300" />
