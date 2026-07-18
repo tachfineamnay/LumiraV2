@@ -1,5 +1,5 @@
 /**
- * E2E — Sanctuaire home state machine.
+ * E2E — Sanctuaire home and client-controlled intake state machine.
  * Every visible status comes from profile/order/onboarding responses.
  */
 import { test, expect } from '@playwright/test';
@@ -17,58 +17,72 @@ test.describe('Sanctuaire — accueil', () => {
     await expect(page.getByText(/abonnement|voir les offres|initié/i)).toHaveCount(0);
   });
 
-  test('starts the preparation only when the server profile is incomplete', async ({ page }) => {
+  test('lets an incomplete client choose the base of their reading', async ({ page }) => {
     await mockSanctuaireAuth(page, { profileCompleted: false, hasOrders: true });
 
     await page.goto('/sanctuaire');
 
     await expect(
-      page.getByRole('heading', { name: 'Préparez votre première lecture' }),
+      page.getByRole('heading', { name: 'Choisissez la base de votre lecture' }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Préparer ma lecture' })).toBeVisible();
-    await expect(page.getByText('Votre lecture est en préparation')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Préparer mon dossier' })).toBeVisible();
+    await expect(page.getByText('Votre dossier a bien été transmis')).toHaveCount(0);
   });
 
-  test('resumes a server-saved preparation draft', async ({ page }) => {
+  test('resumes a server-saved client dossier', async ({ page }) => {
     await mockSanctuaireAuth(page, {
       profileCompleted: false,
-      onboardingProgress: { currentStep: 1, status: 'IN_PROGRESS', data: { birthPlace: 'Lyon' } },
+      onboardingProgress: { currentStep: 2, status: 'IN_PROGRESS', data: { birthPlace: 'Lyon' } },
     });
 
     await page.goto('/sanctuaire');
 
-    await expect(
-      page.getByRole('heading', { name: 'Votre préparation vous attend' }),
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Reprendre ma préparation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Votre dossier vous attend' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reprendre mon dossier' })).toBeVisible();
   });
 
-  test('validates the short preparation without persisting browser previews', async ({ page }) => {
+  test('supports review, change and explicit sealing before submission', async ({ page }) => {
     await mockSanctuaireAuth(page, { profileCompleted: false });
 
     await page.goto('/sanctuaire');
-    await page.getByRole('button', { name: 'Préparer ma lecture' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Préparer mon dossier' }).click();
 
-    await page.locator('#birth-date').fill('1990-06-15');
-    await page.locator('#birth-place').fill('Lyon, France');
+    await expect(page.getByRole('heading', { name: 'Vous gardez la main' })).toBeVisible();
+    await page.getByRole('button', { name: 'Commencer mon dossier' }).click();
+
+    await page.getByLabel('Date de naissance').fill('1990-06-15');
+    await page.getByLabel('Lieu de naissance').fill('Lyon, France');
     await page.getByRole('button', { name: 'Continuer' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Ce que vous souhaitez éclairer' })).toBeVisible();
+    await page.getByLabel(/Votre question/).fill('Que dois-je comprendre maintenant ?');
     await page.getByRole('button', { name: 'Continuer' }).click();
-    await expect(page.getByRole('heading', { name: 'Vérifiez vos éléments' })).toBeVisible();
+
+    await expect(page.getByRole('heading', { name: 'Visage et paume' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuer' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuer' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Relire et sceller' })).toBeVisible();
+    await expect(page.getByText('Que dois-je comprendre maintenant ?')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Modifier' }).first()).toBeVisible();
 
     await page.getByRole('checkbox').check();
-    await page.getByRole('button', { name: 'Valider et lancer la préparation' }).click();
-    await expect(page.getByRole('heading', { name: 'Tout est bien reçu' })).toBeVisible();
+    await page.getByRole('button', { name: 'Sceller et transmettre mon dossier' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Votre lecture de base peut commencer' }),
+    ).toBeVisible();
   });
 
-  test('uses the server order status for preparation and review states', async ({ page }) => {
+  test('uses the server order status after the dossier is sealed', async ({ page }) => {
     await mockSanctuaireAuth(page, { profileCompleted: true, orderStatus: 'PAID' });
     await page.goto('/sanctuaire');
     await expect(
-      page.getByRole('heading', { name: 'Votre lecture est en préparation' }),
+      page.getByRole('heading', { name: 'Votre dossier a bien été transmis' }),
     ).toBeVisible();
     await expect(
-      page.getByText('Vous n’avez plus rien à faire. Nous vous écrirons dès qu’elle sera prête.'),
+      page.getByText(/Les éléments que vous avez choisis sont maintenant utilisés/),
     ).toBeVisible();
 
     await mockSanctuaireAuth(page, { profileCompleted: true, orderStatus: 'AWAITING_VALIDATION' });
