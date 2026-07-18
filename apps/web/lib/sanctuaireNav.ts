@@ -1,8 +1,17 @@
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, Compass, Home, Layers, MessageCircle, Settings, User } from 'lucide-react';
+import {
+  BookOpen,
+  ClipboardCheck,
+  Compass,
+  Home,
+  Layers,
+  MessageCircle,
+  Settings,
+  User,
+} from 'lucide-react';
 
 export interface SanctuaireNavItem {
-  key: 'accueil' | 'lectures' | 'synthese' | 'eclairage' | 'profil' | 'reglages';
+  key: 'accueil' | 'dossier' | 'lectures' | 'synthese' | 'eclairage' | 'profil' | 'reglages';
   label: string;
   shortLabel?: string;
   sublabel?: string;
@@ -10,9 +19,16 @@ export interface SanctuaireNavItem {
   route: string;
 }
 
-/** The five permanent-access destinations exposed to paid clients. */
+/** Permanent-access destinations exposed to paid clients. */
 export const PRIMARY_NAV: SanctuaireNavItem[] = [
   { key: 'accueil', label: 'Accueil', icon: Home, route: '/sanctuaire' },
+  {
+    key: 'dossier',
+    label: 'Mon dossier',
+    shortLabel: 'Dossier',
+    icon: ClipboardCheck,
+    route: '/sanctuaire/dossier',
+  },
   {
     key: 'lectures',
     label: 'Mes lectures',
@@ -36,7 +52,6 @@ export const PRIMARY_NAV: SanctuaireNavItem[] = [
   },
 ];
 
-/** Desktop keeps the profile as a calm, separate footer destination. */
 export const SIDEBAR_NAV = PRIMARY_NAV;
 
 export const PROFILE_NAV_ITEM: SanctuaireNavItem = {
@@ -58,10 +73,7 @@ export const PROFILE_MENU_NAV: SanctuaireNavItem[] = [
   },
 ];
 
-/**
- * @deprecated Legacy-only data for the archived MandalaNav component. It is
- * intentionally absent from every active desktop and mobile navigation path.
- */
+/** @deprecated Legacy-only data for the archived MandalaNav component. */
 export const MANDALA_NAV = [
   {
     key: 'chemin',
