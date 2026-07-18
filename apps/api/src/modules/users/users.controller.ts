@@ -12,12 +12,16 @@ import {
   DefaultValuePipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { ReadingIntakeService } from './reading-intake.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateOnboardingProgressDto, UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly readingIntakeService: ReadingIntakeService,
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -37,15 +41,6 @@ export class UsersController {
   /**
    * GET /api/users/entitlements
    * Returns the authenticated user's capabilities based on their purchased products.
-   *
-   * Response:
-   * {
-   *   "capabilities": ["content.basic", "readings.pdf", ...],
-   *   "products": ["initie", "mystique"],
-   *   "highestLevel": 2,
-   *   "levelMetadata": { "name": "Mystique", "color": "#7C3AED", "icon": "🔮" },
-   *   "orderCount": 2
-   * }
    */
   @Get('entitlements')
   @UseGuards(JwtAuthGuard)
@@ -53,10 +48,7 @@ export class UsersController {
     return this.usersService.getEntitlements(req.user.userId);
   }
 
-  /**
-   * GET /api/users/profile
-   * Returns the authenticated user's complete profile data.
-   */
+  /** Returns the authenticated user's complete profile data. */
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req: { user: { userId: string } }) {
@@ -98,10 +90,7 @@ export class UsersController {
     };
   }
 
-  /**
-   * GET /api/users/orders/completed
-   * Returns the authenticated user's completed/delivered orders.
-   */
+  /** Returns the authenticated user's completed/delivered orders. */
   @Get('orders/completed')
   @UseGuards(JwtAuthGuard)
   async getCompletedOrders(@Request() req: { user: { userId: string } }) {
@@ -110,7 +99,8 @@ export class UsersController {
 
   /**
    * PATCH /api/users/profile
-   * Updates the authenticated user's profile data.
+   * Normal profile edits remain possible outside an active reading. A completion
+   * request is different: it atomically seals the client intake into the paid order.
    */
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
@@ -118,6 +108,10 @@ export class UsersController {
     @Request() req: { user: { userId: string } },
     @Body() updateData: UpdateProfileDto,
   ) {
+    if (updateData.profileCompleted === true) {
+      return this.readingIntakeService.seal(req.user.userId, updateData);
+    }
+    await this.readingIntakeService.assertProfileEditable(req.user.userId);
     return this.usersService.updateProfile(req.user.userId, updateData);
   }
 
