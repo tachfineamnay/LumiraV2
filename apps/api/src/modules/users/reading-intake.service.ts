@@ -206,7 +206,6 @@ export class ReadingIntakeService {
       where: {
         userId,
         status: { in: [...ACTIVE_READING_STATUSES] },
-        clientInputs: { not: Prisma.JsonNull },
       },
       orderBy: { createdAt: 'desc' },
       select: { clientInputs: true },
