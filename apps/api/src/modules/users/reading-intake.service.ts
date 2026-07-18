@@ -56,10 +56,14 @@ export class ReadingIntakeService {
     sealedAt: string;
     profile: UserProfile;
   }> {
+    const birthDate = dto.birthDate;
+    const birthPlace = dto.birthPlace?.trim();
+    const consentVersion = dto.consent?.version || INTAKE_VERSION;
+
     if (!dto.consent?.accepted) {
       throw new BadRequestException('La confirmation explicite est requise pour sceller le dossier');
     }
-    if (!dto.birthDate || !dto.birthPlace?.trim()) {
+    if (!birthDate || !birthPlace) {
       throw new BadRequestException('La date et le lieu de naissance sont requis');
     }
 
@@ -98,11 +102,10 @@ export class ReadingIntakeService {
       }
 
       const sealedAt = new Date().toISOString();
-      const consentVersion = dto.consent.version || INTAKE_VERSION;
-      const profilePayload = {
-        birthDate: dto.birthDate,
+      const profilePayload: ReadingIntakeSnapshot['profile'] = {
+        birthDate,
         birthTime: dto.birthTime || null,
-        birthPlace: dto.birthPlace.trim(),
+        birthPlace,
         specificQuestion: this.clean(dto.specificQuestion),
         objective: this.clean(dto.objective),
         facePhotoUrl: dto.facePhotoUrl || null,
