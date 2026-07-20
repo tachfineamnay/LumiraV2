@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Bot,
@@ -26,14 +26,10 @@ import { cn } from '@/lib/utils';
 type AgentKey = 'SCRIBE' | 'EDITOR' | 'GUIDE' | 'NARRATOR' | 'CONFIDANT' | 'ONIRIQUE';
 type TabId = 'readiness' | 'credentials' | 'personality' | 'agents' | 'models';
 type ProbeStatus = 'ok' | 'error' | 'not_tested';
-type CredentialState =
-  | 'not_configured'
-  | 'configured'
-  | 'not_tested'
-  | 'connection_ok'
-  | 'test_failed'
-  | 'quota_billing'
-  | 'model_inaccessible';
+type ModelId =
+  | 'gpt-5.5-2026-04-23'
+  | 'gpt-5.4-2026-03-05'
+  | 'gpt-4o-2024-11-20';
 
 interface PromptWithMeta {
   key: string;
@@ -57,7 +53,7 @@ interface PromptHistory {
 interface AgentModelConfig {
   enabled: boolean;
   provider: 'openai';
-  model: 'gpt-5.5' | 'gpt-5.4' | 'gpt-4o';
+  model: ModelId;
   reasoningEffort?: 'low' | 'medium' | 'high';
   verbosity?: 'low' | 'medium' | 'high';
   temperature?: number;
@@ -73,7 +69,7 @@ interface ModelConfig {
 interface ProviderStatus {
   envVar: string;
   configured: boolean;
-  state: CredentialState;
+  state: string;
   model: string;
   lastTestedAt?: string;
   lastError?: string;
@@ -95,10 +91,8 @@ interface ReadinessCheck {
 
 interface AiRunRow {
   id: string;
-  orderId?: string | null;
   agent: string;
   mission: string;
-  provider: string;
   model: string;
   routingSource?: string | null;
   status: 'SUCCESS' | 'ERROR';
@@ -152,42 +146,45 @@ interface ConnectionTestResult {
   error?: string;
 }
 
-const AGENTS: Array<{
-  key: AgentKey;
-  label: string;
-  description: string;
-}> = [
+const AGENTS: Array<{ key: AgentKey; label: string; description: string }> = [
   { key: 'SCRIBE', label: 'SCRIBE', description: 'Lecture principale multimodale et synthèse' },
   { key: 'EDITOR', label: 'EDITOR', description: 'Corrections guidées par l’expert' },
-  { key: 'GUIDE', label: 'GUIDE', description: 'Parcours de 30 jours en batches de 10 jours' },
+  { key: 'GUIDE', label: 'GUIDE', description: 'Parcours de 30 jours en lots de 10 jours' },
   { key: 'NARRATOR', label: 'NARRATOR', description: 'Adaptation de la lecture validée pour l’audio' },
-  { key: 'CONFIDANT', label: 'CONFIDANT', description: 'Compagnon conversationnel, hors lancement V1' },
-  { key: 'ONIRIQUE', label: 'ONIRIQUE', description: 'Lecture symbolique des rêves, hors lancement V1' },
+  { key: 'CONFIDANT', label: 'CONFIDANT', description: 'Compagnon optionnel, désactivé au lancement' },
+  { key: 'ONIRIQUE', label: 'ONIRIQUE', description: 'Interprétation des rêves, désactivée au lancement' },
 ];
 
-const MODEL_PRICES: Record<AgentModelConfig['model'], string> = {
-  'gpt-5.5': '5 $ entrée / 30 $ sortie par million',
-  'gpt-5.4': '2,50 $ entrée / 15 $ sortie par million',
-  'gpt-4o': '2,50 $ entrée / 10 $ sortie par million',
-};
+const MODEL_OPTIONS: Array<{ id: ModelId; label: string; price: string }> = [
+  {
+    id: 'gpt-5.5-2026-04-23',
+    label: 'GPT-5.5 · snapshot 23/04/2026',
+    price: '5 $ entrée / 30 $ sortie par million',
+  },
+  {
+    id: 'gpt-5.4-2026-03-05',
+    label: 'GPT-5.4 · snapshot 05/03/2026',
+    price: '2,50 $ entrée / 15 $ sortie par million',
+  },
+  {
+    id: 'gpt-4o-2024-11-20',
+    label: 'GPT-4o · snapshot 20/11/2024',
+    price: '2,50 $ entrée / 10 $ sortie par million',
+  },
+];
 
-function errorMessage(error: unknown): string {
+function messageFromError(error: unknown): string {
   const value = error as {
     response?: { status?: number; data?: { message?: string; error?: string } };
     message?: string;
   };
   if (value.response?.status === 403) {
-    return 'Accès refusé. Le compte connecté doit avoir le rôle ADMIN.';
+    return 'Accès refusé : le compte connecté doit être ADMIN.';
   }
-  return (
-    value.response?.data?.message ||
-    value.response?.data?.error ||
-    value.message ||
-    'Erreur inconnue'
-  );
+  return value.response?.data?.message || value.response?.data?.error || value.message || 'Erreur inconnue';
 }
 
-function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <section className={cn('rounded-2xl border border-desk-border bg-desk-surface shadow-sm', className)}>
       {children}
@@ -195,7 +192,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
   );
 }
 
-function StatusPill({ level, children }: { level: 'pass' | 'warning' | 'fail'; children: React.ReactNode }) {
+function Pill({ level, children }: { level: 'pass' | 'warning' | 'fail'; children: ReactNode }) {
   return (
     <span
       className={cn(
@@ -205,20 +202,26 @@ function StatusPill({ level, children }: { level: 'pass' | 'warning' | 'fail'; c
         level === 'fail' && 'border-red-500/30 bg-red-500/10 text-red-600',
       )}
     >
-      {level === 'pass' ? <Check className="h-3.5 w-3.5" /> : level === 'fail' ? <X className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+      {level === 'pass' ? (
+        <Check className="h-3.5 w-3.5" />
+      ) : level === 'fail' ? (
+        <X className="h-3.5 w-3.5" />
+      ) : (
+        <AlertCircle className="h-3.5 w-3.5" />
+      )}
       {children}
     </span>
   );
 }
 
-function PromptEditor({
+function PromptPanel({
   promptKey,
   prompt,
   defaultValue,
   saving,
   onSave,
   onReset,
-  onChanged,
+  onDirtyChange,
 }: {
   promptKey: string;
   prompt: PromptWithMeta;
@@ -226,12 +229,12 @@ function PromptEditor({
   saving: boolean;
   onSave: (key: string, value: string, comment?: string) => Promise<void>;
   onReset: (key: string) => Promise<void>;
-  onChanged: (dirty: boolean) => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [value, setValue] = useState(prompt.value);
   const [comment, setComment] = useState('');
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<PromptHistory[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
@@ -240,9 +243,9 @@ function PromptEditor({
   }, [prompt.value, prompt.version]);
 
   const dirty = value !== prompt.value;
-  useEffect(() => onChanged(dirty), [dirty, onChanged]);
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
-  const loadHistory = async () => {
+  const toggleHistory = async () => {
     if (historyOpen) {
       setHistoryOpen(false);
       return;
@@ -265,17 +268,15 @@ function PromptEditor({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <StatusPill level={prompt.isCustom ? 'warning' : 'pass'}>
-            {prompt.isCustom ? `Personnalisé v${prompt.version}` : 'Valeur contrôlée par défaut'}
-          </StatusPill>
-          {value !== defaultValue && (
-            <span className="text-xs text-desk-muted">Différent du défaut</span>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill level={prompt.isCustom ? 'warning' : 'pass'}>
+            {prompt.isCustom ? `Personnalisé v${prompt.version}` : 'Défaut contrôlé'}
+          </Pill>
+          {value !== defaultValue && <span className="text-xs text-desk-muted">Différent du défaut</span>}
         </div>
         <button
           type="button"
-          onClick={loadHistory}
+          onClick={toggleHistory}
           disabled={historyLoading}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"
         >
@@ -300,7 +301,7 @@ function PromptEditor({
         <input
           value={comment}
           onChange={(event) => setComment(event.target.value)}
-          placeholder="Note de version, recommandée avant production"
+          placeholder="Note de version recommandée"
           className="w-full rounded-xl border border-desk-border bg-desk-input px-3 py-2.5 text-sm text-desk-text outline-none focus:border-amber-500/60"
         />
       )}
@@ -338,7 +339,7 @@ function PromptEditor({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm text-desk-text">v{item.version}</span>
-                    {item.isActive && <StatusPill level="pass">Active</StatusPill>}
+                    {item.isActive && <Pill level="pass">Active</Pill>}
                   </div>
                   <p className="truncate text-xs text-desk-muted">
                     {item.comment || 'Sans note'} · {new Date(item.createdAt).toLocaleString('fr-FR')}
@@ -367,28 +368,24 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [dirtyPrompt, setDirtyPrompt] = useState(false);
+  const [expandedAgent, setExpandedAgent] = useState<AgentKey | null>('SCRIBE');
   const [prompts, setPrompts] = useState<Record<string, PromptWithMeta> | null>(null);
   const [defaults, setDefaults] = useState<Record<string, string> | null>(null);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
+  const [savedModelConfig, setSavedModelConfig] = useState<ModelConfig | null>(null);
   const [credentials, setCredentials] = useState<CredentialsStatus | null>(null);
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
-  const [expandedAgent, setExpandedAgent] = useState<AgentKey | null>('SCRIBE');
-
-  const clearFeedback = () => {
-    setActionError(null);
-    setSuccessMessage(null);
-  };
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [promptsResponse, defaultsResponse, configResponse, statusResponse, readinessResponse] =
+      const [promptResponse, defaultResponse, modelResponse, statusResponse, readinessResponse] =
         await Promise.all([
           expertApi.get('/expert/settings/prompts'),
           expertApi.get('/expert/settings/prompts/defaults'),
@@ -396,47 +393,59 @@ export default function SettingsPage() {
           expertApi.get('/expert/settings/status'),
           expertApi.get('/expert/settings/readiness'),
         ]);
-      setPrompts(promptsResponse.data);
-      setDefaults(defaultsResponse.data);
-      setModelConfig(configResponse.data);
+      setPrompts(promptResponse.data);
+      setDefaults(defaultResponse.data);
+      setModelConfig(modelResponse.data);
+      setSavedModelConfig(modelResponse.data);
       setCredentials(statusResponse.data);
       setReadiness(readinessResponse.data);
     } catch (error) {
       setPrompts(null);
       setDefaults(null);
       setModelConfig(null);
+      setSavedModelConfig(null);
       setCredentials(null);
       setReadiness(null);
-      setLoadError(errorMessage(error));
+      setLoadError(messageFromError(error));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadAll();
+    void loadAll();
   }, [loadAll]);
+
+  const modelDirty =
+    modelConfig && savedModelConfig
+      ? JSON.stringify(modelConfig) !== JSON.stringify(savedModelConfig)
+      : false;
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!dirtyPrompt) return;
+      if (!dirtyPrompt && !modelDirty) return;
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', beforeUnload);
     return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [dirtyPrompt]);
+  }, [dirtyPrompt, modelDirty]);
+
+  const clearFeedback = () => {
+    setActionError(null);
+    setSuccess(null);
+  };
 
   const savePrompt = async (key: string, value: string, comment?: string) => {
     clearFeedback();
     setSaving(true);
     try {
       await expertApi.put(`/expert/settings/prompts/${key}`, { value, comment });
-      setSuccessMessage(`${key} enregistré avec une nouvelle version active.`);
+      setSuccess(`${key} enregistré et appliqué au runtime.`);
       setDirtyPrompt(false);
       await loadAll();
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError(messageFromError(error));
     } finally {
       setSaving(false);
     }
@@ -447,10 +456,11 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await expertApi.post(`/expert/settings/prompts/${key}/reset`);
-      setSuccessMessage(`${key} restauré à sa valeur contrôlée par défaut.`);
+      setSuccess(`${key} restauré au défaut contrôlé.`);
+      setDirtyPrompt(false);
       await loadAll();
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError(messageFromError(error));
     } finally {
       setSaving(false);
     }
@@ -463,11 +473,11 @@ export default function SettingsPage() {
     try {
       const { data } = await expertApi.post('/expert/settings/openai-test');
       setTestResult(data);
-      if (data.success) setSuccessMessage('Responses API texte et vision validées.');
+      if (data.success) setSuccess('Responses API texte structuré et vision validées.');
       else setActionError(data.error || 'Le test OpenAI a échoué.');
       await loadAll();
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError(messageFromError(error));
     } finally {
       setTesting(false);
     }
@@ -479,10 +489,10 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await expertApi.put('/expert/settings/model-config', modelConfig);
-      setSuccessMessage('Configuration par agent enregistrée et cache runtime invalidé.');
+      setSuccess('Configuration des snapshots enregistrée et cache runtime invalidé.');
       await loadAll();
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError(messageFromError(error));
     } finally {
       setSaving(false);
     }
@@ -534,14 +544,14 @@ export default function SettingsPage() {
             <div>
               <h1 className="text-lg font-semibold text-desk-text">Configuration IA non vérifiée</h1>
               <p className="mt-2 text-sm leading-6 text-desk-muted">
-                Le Desk refuse d’afficher des valeurs locales de secours. La configuration réelle doit être lisible avant toute mise en production.
+                Le Desk n’affiche aucune valeur locale de secours. La configuration réelle doit être lisible avant la production.
               </p>
               <p className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
                 {loadError || 'Réponse de configuration incomplète.'}
               </p>
               <button
                 type="button"
-                onClick={loadAll}
+                onClick={() => void loadAll()}
                 className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -563,16 +573,16 @@ export default function SettingsPage() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-desk-text">Contrôle IA de production</h1>
-            <p className="text-xs text-desk-muted">Configuration réelle, agents, prompts, coûts et état OpenAI</p>
+            <p className="text-xs text-desk-muted">Configuration réelle, snapshots, prompts, vision et coûts</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusPill level={readiness.verdict === 'GO' ? 'pass' : readiness.verdict === 'NO_GO' ? 'fail' : 'warning'}>
+          <Pill level={readiness.verdict === 'GO' ? 'pass' : readiness.verdict === 'NO_GO' ? 'fail' : 'warning'}>
             {readiness.verdict}
-          </StatusPill>
+          </Pill>
           <button
             type="button"
-            onClick={loadAll}
+            onClick={() => void loadAll()}
             className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-desk-border px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"
           >
             <RefreshCw className="h-4 w-4" />
@@ -581,7 +591,7 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      {(actionError || successMessage) && (
+      {(actionError || success) && (
         <div
           role="status"
           className={cn(
@@ -592,7 +602,7 @@ export default function SettingsPage() {
           )}
         >
           {actionError ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <Check className="mt-0.5 h-4 w-4 shrink-0" />}
-          <span>{actionError || successMessage}</span>
+          <span>{actionError || success}</span>
         </div>
       )}
 
@@ -622,11 +632,11 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-desk-muted">Contrôles validés</p>
+              <p className="text-xs uppercase tracking-wide text-desk-muted">Validés</p>
               <p className="mt-1 text-2xl font-semibold text-emerald-600">{readiness.summary.passes}</p>
             </Card>
             <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-desk-muted">Avertissements</p>
+              <p className="text-xs uppercase tracking-wide text-desk-muted">À tester</p>
               <p className="mt-1 text-2xl font-semibold text-amber-600">{readiness.summary.warnings}</p>
             </Card>
             <Card className="p-4">
@@ -642,9 +652,9 @@ export default function SettingsPage() {
                   <h2 className="text-sm font-semibold text-desk-text">{check.label}</h2>
                   <p className="mt-1 text-sm text-desk-muted">{check.detail}</p>
                 </div>
-                <StatusPill level={check.level}>
+                <Pill level={check.level}>
                   {check.level === 'pass' ? 'Validé' : check.level === 'warning' ? 'À tester' : 'Bloquant'}
-                </StatusPill>
+                </Pill>
               </div>
             ))}
           </Card>
@@ -653,7 +663,7 @@ export default function SettingsPage() {
             <Card className="p-5">
               <div className="flex items-center gap-2">
                 <CircleDollarSign className="h-5 w-5 text-amber-600" />
-                <h2 className="font-semibold text-desk-text">Derniers appels IA</h2>
+                <h2 className="font-semibold text-desk-text">Télémétrie récente</h2>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl bg-desk-card p-3">
@@ -666,7 +676,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="rounded-xl bg-desk-card p-3">
                   <p className="text-xl font-semibold text-amber-600">${readiness.recentRunSummary.estimatedCost.toFixed(4)}</p>
-                  <p className="text-xs text-desk-muted">Coût estimé</p>
+                  <p className="text-xs text-desk-muted">Coût</p>
                 </div>
               </div>
             </Card>
@@ -683,7 +693,7 @@ export default function SettingsPage() {
                   <dd className="font-mono text-desk-text">{readiness.activeRoutingRules.length}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-desk-muted">Dernière vérification</dt>
+                  <dt className="text-desk-muted">Vérification</dt>
                   <dd className="text-right text-desk-text">{new Date(readiness.generatedAt).toLocaleString('fr-FR')}</dd>
                 </div>
               </dl>
@@ -692,8 +702,8 @@ export default function SettingsPage() {
 
           <Card className="overflow-hidden">
             <div className="border-b border-desk-border p-4">
-              <h2 className="font-semibold text-desk-text">Historique technique récent</h2>
-              <p className="mt-1 text-sm text-desk-muted">Modèle réellement exécuté, durée, tokens et coût.</p>
+              <h2 className="font-semibold text-desk-text">Appels réellement exécutés</h2>
+              <p className="mt-1 text-sm text-desk-muted">Snapshot, source, tokens, durée et coût.</p>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-xs">
@@ -701,9 +711,9 @@ export default function SettingsPage() {
                   <tr>
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Agent</th>
-                    <th className="px-4 py-3">Modèle réel</th>
+                    <th className="px-4 py-3">Snapshot</th>
                     <th className="px-4 py-3">Source</th>
-                    <th className="px-4 py-3">Tokens</th>
+                    <th className="px-4 py-3">Tokens entrée / sortie</th>
                     <th className="px-4 py-3">Durée</th>
                     <th className="px-4 py-3">Coût</th>
                     <th className="px-4 py-3">État</th>
@@ -727,7 +737,7 @@ export default function SettingsPage() {
                         <td className="whitespace-nowrap px-4 py-3">{run.durationMs ? `${(run.durationMs / 1000).toFixed(1)} s` : '—'}</td>
                         <td className="whitespace-nowrap px-4 py-3">{run.estimatedCost != null ? `$${run.estimatedCost.toFixed(4)}` : '—'}</td>
                         <td className="px-4 py-3">
-                          <StatusPill level={run.status === 'SUCCESS' ? 'pass' : 'fail'}>{run.status}</StatusPill>
+                          <Pill level={run.status === 'SUCCESS' ? 'pass' : 'fail'}>{run.status}</Pill>
                         </td>
                       </tr>
                     ))
@@ -749,23 +759,23 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="font-semibold text-desk-text">OpenAI — production active</h2>
-                  <p className="mt-1 text-sm text-desk-muted">Variable : OPENAI_API_KEY · modèle de test : {credentials.openai.model}</p>
+                  <p className="mt-1 text-sm text-desk-muted">Modèle testé : {credentials.openai.model}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <StatusPill level={credentials.openai.configured ? 'pass' : 'fail'}>
+                    <Pill level={credentials.openai.configured ? 'pass' : 'fail'}>
                       {credentials.openai.configured ? 'Clé configurée' : 'Clé absente'}
-                    </StatusPill>
-                    <StatusPill level={credentials.openai.text === 'ok' ? 'pass' : credentials.openai.text === 'error' ? 'fail' : 'warning'}>
+                    </Pill>
+                    <Pill level={credentials.openai.text === 'ok' ? 'pass' : credentials.openai.text === 'error' ? 'fail' : 'warning'}>
                       Texte {credentials.openai.text}
-                    </StatusPill>
-                    <StatusPill level={credentials.openai.multimodal === 'ok' ? 'pass' : credentials.openai.multimodal === 'error' ? 'fail' : 'warning'}>
+                    </Pill>
+                    <Pill level={credentials.openai.multimodal === 'ok' ? 'pass' : credentials.openai.multimodal === 'error' ? 'fail' : 'warning'}>
                       Vision {credentials.openai.multimodal || 'not_tested'}
-                    </StatusPill>
+                    </Pill>
                   </div>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={runOpenAiTest}
+                onClick={() => void runOpenAiTest()}
                 disabled={testing}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
@@ -788,7 +798,7 @@ export default function SettingsPage() {
           <Card className="p-5">
             <h2 className="font-semibold text-desk-text">Gemini / Vertex</h2>
             <p className="mt-2 text-sm leading-6 text-desk-muted">
-              Désactivé dans le runtime V1. Les identifiants peuvent rester stockés pour une comparaison future, mais aucune génération de production ne les utilise.
+              Désactivé dans le runtime V1. Aucun appel de production ne peut être routé vers Google.
             </p>
           </Card>
         </div>
@@ -798,16 +808,16 @@ export default function SettingsPage() {
         <Card className="p-5">
           <div className="mb-5">
             <h2 className="font-semibold text-desk-text">ADN commun de Lumira</h2>
-            <p className="mt-1 text-sm text-desk-muted">Cadre de ton, de prudence et d’interprétation partagé par les agents actifs.</p>
+            <p className="mt-1 text-sm text-desk-muted">Cadre partagé de ton, prudence et interprétation.</p>
           </div>
-          <PromptEditor
+          <PromptPanel
             promptKey="LUMIRA_DNA"
             prompt={prompts.LUMIRA_DNA}
             defaultValue={defaults.LUMIRA_DNA || ''}
             saving={saving}
             onSave={savePrompt}
             onReset={resetPrompt}
-            onChanged={setDirtyPrompt}
+            onDirtyChange={setDirtyPrompt}
           />
         </Card>
       )}
@@ -816,7 +826,7 @@ export default function SettingsPage() {
         <div className="space-y-3">
           {AGENTS.map((agent) => {
             const open = expandedAgent === agent.key;
-            const model = modelConfig.agents[agent.key];
+            const config = modelConfig.agents[agent.key];
             return (
               <Card key={agent.key}>
                 <button
@@ -831,10 +841,10 @@ export default function SettingsPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-desk-text">{agent.label}</span>
-                        <StatusPill level={model.enabled ? 'pass' : 'warning'}>
-                          {model.enabled ? 'Actif V1' : 'Désactivé V1'}
-                        </StatusPill>
-                        <span className="font-mono text-xs text-desk-muted">{model.model}</span>
+                        <Pill level={config.enabled ? 'pass' : 'warning'}>
+                          {config.enabled ? 'Actif V1' : 'Désactivé V1'}
+                        </Pill>
+                        <span className="font-mono text-xs text-desk-muted">{config.model}</span>
                       </div>
                       <p className="truncate text-sm text-desk-muted">{agent.description}</p>
                     </div>
@@ -843,14 +853,14 @@ export default function SettingsPage() {
                 </button>
                 {open && (
                   <div className="border-t border-desk-border p-4">
-                    <PromptEditor
+                    <PromptPanel
                       promptKey={agent.key}
                       prompt={prompts[agent.key]}
                       defaultValue={defaults[agent.key] || ''}
                       saving={saving}
                       onSave={savePrompt}
                       onReset={resetPrompt}
-                      onChanged={setDirtyPrompt}
+                      onDirtyChange={setDirtyPrompt}
                     />
                   </div>
                 )}
@@ -863,27 +873,26 @@ export default function SettingsPage() {
       {activeTab === 'models' && (
         <div className="space-y-4">
           <Card className="border-blue-500/30 p-5">
-            <h2 className="font-semibold text-desk-text">OpenAI-only · offre unique</h2>
+            <h2 className="font-semibold text-desk-text">OpenAI-only · snapshots verrouillés</h2>
             <p className="mt-1 text-sm text-desk-muted">
-              Ces valeurs sont la source de vérité. La matrice produit historique est neutralisée et n’est plus exposée.
+              Les alias mouvants ne sont pas acceptés. Le snapshot affiché est exactement celui envoyé à OpenAI.
             </p>
           </Card>
 
           {AGENTS.map((agent) => {
             const item = modelConfig.agents[agent.key];
             const isGpt5 = item.model.startsWith('gpt-5.');
+            const price = MODEL_OPTIONS.find((option) => option.id === item.model)?.price;
             return (
               <Card key={agent.key} className="p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-semibold text-desk-text">{agent.label}</h2>
-                      <StatusPill level={item.enabled ? 'pass' : 'warning'}>
-                        {item.enabled ? 'Actif' : 'Désactivé'}
-                      </StatusPill>
+                      <Pill level={item.enabled ? 'pass' : 'warning'}>{item.enabled ? 'Actif' : 'Désactivé'}</Pill>
                     </div>
                     <p className="mt-1 text-sm text-desk-muted">{agent.description}</p>
-                    <p className="mt-1 text-xs text-desk-muted">{MODEL_PRICES[item.model]}</p>
+                    <p className="mt-1 text-xs text-desk-muted">{price}</p>
                   </div>
                   <label className="inline-flex min-h-10 items-center gap-2 text-sm text-desk-muted">
                     <input
@@ -898,23 +907,29 @@ export default function SettingsPage() {
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="text-sm text-desk-muted">
-                    Modèle
+                    Snapshot
                     <select
                       value={item.model}
                       onChange={(event) => {
-                        const model = event.target.value as AgentModelConfig['model'];
+                        const model = event.target.value as ModelId;
                         updateAgent(agent.key, {
                           model,
                           ...(model.startsWith('gpt-5.')
-                            ? { reasoningEffort: item.reasoningEffort || 'medium', verbosity: item.verbosity || 'medium' }
-                            : { temperature: item.temperature ?? 0.3, topP: item.topP ?? 0.9 }),
+                            ? {
+                                reasoningEffort: item.reasoningEffort || 'medium',
+                                verbosity: item.verbosity || 'medium',
+                              }
+                            : {
+                                temperature: item.temperature ?? 0.3,
+                                topP: item.topP ?? 0.9,
+                              }),
                         });
                       }}
                       className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
                     >
-                      <option value="gpt-5.5">gpt-5.5</option>
-                      <option value="gpt-5.4">gpt-5.4</option>
-                      <option value="gpt-4o">gpt-4o</option>
+                      {MODEL_OPTIONS.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
                     </select>
                   </label>
 
@@ -993,12 +1008,12 @@ export default function SettingsPage() {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={saveModels}
-              disabled={saving}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-black disabled:opacity-50"
+              onClick={() => void saveModels()}
+              disabled={saving || !modelDirty}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Enregistrer la configuration effective
+              Enregistrer les snapshots
             </button>
           </div>
         </div>
