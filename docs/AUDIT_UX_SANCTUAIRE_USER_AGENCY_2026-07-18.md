@@ -7,94 +7,15 @@
 
 ## 1. Décision produit
 
-Le Sanctuaire ne doit pas être principalement une bibliothèque mystique ni un profil administratif.
-Sa mission première, avant la première lecture, est de permettre au client de :
-
-1. comprendre ce qui est demandé et pourquoi ;
-2. choisir ce qu'il souhaite transmettre ;
-3. conserver un brouillon ;
-4. revenir sur chaque section ;
-5. relire l'ensemble ;
-6. sceller explicitement la base de sa lecture ;
-7. savoir ensuite ce qui est verrouillé, en production ou livré.
+Le Sanctuaire ne doit pas être principalement une bibliothèque mystique ni un profil administratif. Sa mission première, avant la première lecture, est de permettre au client de comprendre ce qui est demandé, choisir ce qu'il souhaite transmettre, conserver un brouillon, relire l'ensemble et sceller explicitement la base de sa lecture.
 
 Le modèle mental retenu est :
 
 > **Je choisis → je relis → je scelle → Lumira prépare → je reçois.**
 
-## 2. Diagnostic de l'interface précédente
+## 2. Architecture livrée
 
-### 2.1 Préparation trop courte et trop implicite
-
-L'ancien parcours comportait trois étapes : naissance, photos, confirmation. Il ne donnait pas au client un espace clair pour sa question, son objectif, son contexte ou ses préférences, alors que ces champs existent dans `UserProfile` et sont exploités par l'IA.
-
-Conséquences :
-
-- perception d'un formulaire subi plutôt que d'une transmission choisie ;
-- faible compréhension de l'usage des données ;
-- absence de hiérarchie entre nécessaire et facultatif ;
-- aucune vue complète des éléments transmis ;
-- CTA final ambigu : « Valider et lancer la préparation » ;
-- confusion entre profil permanent, brouillon et matière de la lecture.
-
-### 2.2 Le profil mélangeait identité, diagnostic et matière transmise
-
-La page Profil exposait de nombreux champs sans distinguer :
-
-- les informations générales du compte ;
-- les préférences évolutives ;
-- les éléments choisis pour une lecture donnée ;
-- l'instantané déjà scellé.
-
-Cette confusion réduisait le sentiment de contrôle et créait un risque fonctionnel : une modification tardive pouvait être interprétée comme une modification de la lecture en cours.
-
-### 2.3 Navigation orientée contenus, pas tâche principale
-
-La navigation mettait en avant Accueil, Lectures, Synthèse et Éclairage. Le dossier envoyé à Lumira n'avait pas de destination dédiée, alors qu'il constitue le premier objet que le client doit comprendre et gérer.
-
-### 2.4 États corrects mais formulation passive
-
-Plusieurs formulations retiraient inutilement de l'agence au client :
-
-- « Vous n'avez plus rien à faire » ;
-- « Préparez votre première lecture » sans expliquer ce qui sera transmis ;
-- absence de distinction visible entre brouillon, scellement et production.
-
-## 3. Principes UX appliqués
-
-### Contrôle et consentement
-
-- ne demander que le nécessaire ;
-- marquer clairement chaque champ facultatif ;
-- expliquer l'effet de l'envoi avant l'action finale ;
-- ne pas confondre consentement légal et décision produit ;
-- conserver une action finale explicite et non automatique.
-
-### Divulgation progressive
-
-- une intention par étape ;
-- détails avancés regroupés dans le contexte facultatif ;
-- navigation latérale sur desktop et progression compacte sur mobile ;
-- récapitulatif avant soumission.
-
-### Prévention et récupération des erreurs
-
-- brouillon serveur ;
-- statut visible de sauvegarde ;
-- boutons Modifier dans le récapitulatif ;
-- données saisies conservées lors du retour ;
-- conflit serveur si la production a déjà commencé.
-
-### Confiance
-
-- aucune donnée annoncée comme transmise avant scellement ;
-- photos identifiées et servies comme ressources privées ;
-- instantané transmis séparé du profil évolutif ;
-- client informé de ce qui est renseigné, absent ou facultatif.
-
-## 4. Architecture livrée
-
-### 4.1 Parcours en six étapes
+### Parcours en six étapes
 
 1. **Votre choix** — explique le contrôle utilisateur ;
 2. **Repères** — date et lieu requis, heure facultative ;
@@ -107,7 +28,7 @@ Le CTA final est :
 
 > **Sceller et transmettre mon dossier**
 
-### 4.2 Modèle serveur de scellement
+### Modèle serveur de scellement
 
 Lors de la soumission finale :
 
@@ -120,7 +41,7 @@ Lors de la soumission finale :
 - seule une commande `PAID` peut recevoir un premier scellement ;
 - une seconde tentative ou un début de production provoque un conflit explicite.
 
-### 4.3 Source canonique de génération
+### Source canonique de génération
 
 Le pipeline IA utilise désormais en priorité :
 
@@ -130,7 +51,7 @@ Order.clientInputs.readingIntake.profile
 
 Lorsqu'un instantané scellé valide existe, le profil courant n'est pas fusionné avec lui. Les anciennes commandes restent compatibles grâce à un fallback explicite vers `UserProfile`, identifié comme `LEGACY_PROFILE` dans les métadonnées de génération.
 
-### 4.4 Photos privées
+### Photos privées
 
 Les photos restent stockées dans le bucket privé `uploads` avec des références :
 
@@ -147,7 +68,7 @@ Elles sont consultées par des routes serveur protégées :
 - aucune balise d'image alimentée par une référence `s3://` ;
 - aucune URL présignée persistée en base.
 
-### 4.5 Routage IA et diagnostics
+### Routage IA et diagnostics
 
 La matrice IA est raccordée aux appels texte, JSON, conversationnels et multimodaux. Le contexte d'exécution transmet l'agent, la mission, le niveau produit, le provider, le modèle et la version de prompt. Les changements de configuration invalident le cache d'exécution.
 
@@ -160,7 +81,7 @@ OPENAI_API_KEY
 
 Les exécutions sont enregistrées dans `AiRun` sans stocker les données intimes, les prompts complets ni les images.
 
-### 4.6 Destination « Mon dossier »
+### Destination « Mon dossier »
 
 La navigation principale inclut un espace permettant de voir :
 
@@ -172,7 +93,7 @@ La navigation principale inclut un espace permettant de voir :
 - état de production ;
 - action de reprise avant scellement.
 
-## 5. Critères d'acceptation atteints
+## 3. Critères d'acceptation atteints dans le code
 
 - [x] Le client comprend que rien n'est envoyé avant confirmation.
 - [x] Les champs facultatifs sont identifiés.
@@ -188,7 +109,7 @@ La navigation principale inclut un espace permettant de voir :
 - [x] La matrice IA est appliquée aux principaux agents et au multimodal.
 - [x] Les diagnostics Gemini/OpenAI reflètent les variables serveur réelles.
 
-## 6. Validation et limites de cette fusion
+## 4. Validation et limites de cette fusion
 
 Les runners GitHub hébergés ne sont pas disponibles au moment de la fusion en raison de l'état de facturation du compte. La décision de fusion repose donc sur :
 
@@ -198,9 +119,9 @@ Les runners GitHub hébergés ne sont pas disponibles au moment de la fusion en 
 - résolution des divergences avec `main` ;
 - conservation des workflows Coolify durcis présents sur `main`.
 
-Aucun résultat de runner GitHub n'est présenté comme réussi.
+Aucun résultat de runner GitHub n'est présenté comme réussi. L'exécution réelle de la recette, des tests navigateur et de la validation staging est volontairement reportée au prompt 7.
 
-## 7. Travaux différés
+## 5. Travaux différés
 
 ### Prompt 7 — Codex Terra High
 
@@ -214,7 +135,7 @@ Aucun résultat de runner GitHub n'est présenté comme réussi.
 - accessibilité et rédaction finale ;
 - préparation détaillée de release et de rollback.
 
-## 8. Point de vigilance au déploiement
+## 6. Point de vigilance au déploiement
 
 La migration suivante doit être appliquée avant ou au démarrage de l'API :
 
