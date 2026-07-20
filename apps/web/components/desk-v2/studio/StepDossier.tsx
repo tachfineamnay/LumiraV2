@@ -15,6 +15,7 @@ import {
   User,
 } from 'lucide-react';
 import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
+import { resolveDeskReadingSource } from '@/lib/desk-reading-source';
 
 interface StepDossierProps {
   order: Order;
@@ -27,7 +28,8 @@ function isHttpPhotoUrl(url: string | undefined | null): boolean {
 
 export function StepDossier({ order, onContinue }: StepDossierProps) {
   const { user } = order;
-  const profile = user.profile;
+  const readingSource = resolveDeskReadingSource(order);
+  const profile = readingSource.profile;
   const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
   const historicalFiles = order.files.filter((file) => {
     if (!isHttpPhotoUrl(file.url)) return false;
@@ -70,6 +72,20 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${
+              readingSource.source === 'SEALED_INTAKE'
+                ? 'bg-emerald-500/10 text-emerald-700'
+                : 'bg-amber-500/10 text-amber-700'
+            }`}
+          >
+            <span>Source de lecture :</span>
+            <code>{readingSource.source}</code>
+            {readingSource.source === 'SEALED_INTAKE' && (
+              <span>· dossier scellé, non modifiable pendant la production</span>
+            )}
           </div>
 
           {/* 2-column grid */}

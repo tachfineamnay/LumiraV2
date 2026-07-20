@@ -31,6 +31,9 @@ export interface UserProfile {
   lows?: string;
   fears?: string;
   rituals?: string;
+  ailments?: string;
+  deliveryStyle?: string;
+  pace?: number;
 }
 
 export interface User {
@@ -87,6 +90,11 @@ export interface Order {
   expertPrompt?: string;
   expertInstructions?: string;
   expertReview?: Record<string, unknown>;
+  /**
+   * Immutable client material sealed for this order.  The Desk must prefer it
+   * over the mutable profile when it is present.
+   */
+  clientInputs?: unknown;
   revisionCount: number;
   createdAt: string;
   updatedAt: string;

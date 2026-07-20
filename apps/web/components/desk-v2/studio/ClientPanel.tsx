@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 import { Order, LEVEL_CONFIG } from '../types';
+import { resolveDeskReadingSource } from '@/lib/desk-reading-source';
 
 interface ClientPanelProps {
   order: Order;
@@ -28,7 +29,8 @@ interface ClientPanelProps {
 export function ClientPanel({ order }: ClientPanelProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(['profile', 'question']);
   const { user } = order;
-  const profile = user.profile;
+  const readingSource = resolveDeskReadingSource(order);
+  const profile = readingSource.profile;
   const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
 
   const toggleSection = (section: string) => {
@@ -68,6 +70,9 @@ export function ClientPanel({ order }: ClientPanelProps) {
           <span className="text-sm text-desk-subtle">•</span>
           <span className="font-mono text-sm text-desk-muted">{order.orderNumber}</span>
         </div>
+        <p className="mt-2 text-[11px] font-medium text-emerald-700">
+          Source : {readingSource.source}
+        </p>
       </div>
 
       {/* Sections */}

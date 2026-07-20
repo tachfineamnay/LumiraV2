@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Order } from '../types';
+import { resolveDeskReadingSource } from '@/lib/desk-reading-source';
 import { ArrowLeft, Sparkles, Clock, User, Calendar, MessageSquare, Target } from 'lucide-react';
 
 interface StepBriefingProps {
@@ -52,7 +53,8 @@ export function StepBriefing({ order, isGenerating, onLaunch, onBack }: StepBrie
   const [expertPrompt, setExpertPrompt] = useState(order.expertPrompt || '');
   const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const { user } = order;
-  const profile = user.profile;
+  const readingSource = resolveDeskReadingSource(order);
+  const profile = readingSource.profile;
 
   const toggleDomain = (domain: string) => {
     setSelectedDomains((prev) =>
@@ -121,6 +123,10 @@ export function StepBriefing({ order, isGenerating, onLaunch, onBack }: StepBrie
               <h3 className="text-sm font-semibold text-desk-subtle uppercase tracking-wider mb-3">
                 Résumé client
               </h3>
+
+              <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
+                Source de lecture : {readingSource.source}
+              </p>
 
               {/* Client card */}
               <div className="bg-desk-card border border-desk-border rounded-xl p-4">

@@ -1,5 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const iPhone13 = devices['iPhone 13'];
+const iPhone13Chromium = {
+  userAgent: iPhone13.userAgent,
+  viewport: iPhone13.viewport,
+  screen: iPhone13.screen,
+  deviceScaleFactor: iPhone13.deviceScaleFactor,
+  isMobile: iPhone13.isMobile,
+  hasTouch: iPhone13.hasTouch,
+};
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30000,
@@ -20,14 +30,21 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
       testIgnore: /sanctuaire-mobile\.spec\.ts/,
     },
     {
-      // Chromium + mobile viewport (WebKit not required on Windows CI/dev)
+      // Chromium + mobile viewport (WebKit not required on Windows CI/dev).
+      // The sealed-intake journey is run here as an explicit mobile smoke test.
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
-      testMatch: /sanctuaire-mobile\.spec\.ts/,
+      testMatch: /sanctuaire-(mobile|intake-draft)\.spec\.ts/,
+    },
+    {
+      // Safari viewport and touch metrics without requiring WebKit on Windows CI/dev.
+      name: 'iPhone 13 Chrome',
+      use: iPhone13Chromium,
+      testMatch: /sanctuaire-intake-draft\.spec\.ts/,
     },
   ],
 

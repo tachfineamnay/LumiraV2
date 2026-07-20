@@ -325,8 +325,8 @@ export function ReadingPreparation({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto bg-abyss-900/98 backdrop-blur-xl">
-      <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col p-3 sm:p-6">
+    <div className="fixed inset-0 z-[100] overflow-hidden bg-abyss-900/98 backdrop-blur-xl">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col p-3 sm:p-6">
         <header className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-abyss-700/90 px-4 py-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
@@ -349,7 +349,7 @@ export function ReadingPreparation({
           </button>
         </header>
 
-        <div className="mt-3 grid flex-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="mt-3 grid min-h-0 flex-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="hidden rounded-3xl border border-white/[0.08] bg-abyss-700/80 p-4 lg:block">
             <p className="px-2 text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
               Progression
@@ -389,7 +389,7 @@ export function ReadingPreparation({
             </p>
           </aside>
 
-          <main className="flex min-h-[620px] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-700/90 shadow-abyss">
+          <main className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-700/90 shadow-abyss">
             <div className="border-b border-white/[0.06] px-5 py-5 sm:px-8 sm:py-7">
               <div className="flex justify-between text-xs text-stellar-500">
                 <span>
@@ -411,7 +411,7 @@ export function ReadingPreparation({
               </p>
             </div>
 
-            <div className="flex-1 px-5 py-6 sm:px-8 sm:py-8">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8">
               {current.key === 'control' && (
                 <div className="mx-auto max-w-2xl space-y-4">
                   <div className="rounded-3xl border border-horizon-400/20 bg-horizon-400/[0.07] p-6">
@@ -710,7 +710,7 @@ export function ReadingPreparation({
               )}
             </div>
 
-            <footer className="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-white/[0.06] bg-abyss-700/95 px-5 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <footer className="flex flex-col-reverse gap-3 border-t border-white/[0.06] bg-abyss-700/95 px-5 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-8">
               <button
                 type="button"
                 onClick={() => (step === 0 ? onClose() : setStep((currentStep) => currentStep - 1))}
