@@ -3,18 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
-
-const MODEL_CONFIG_KEY = 'MODEL_CONFIG';
-
-interface StoredModelConfig {
-  providerMode?: 'openai_only' | 'comparison';
-  agents?: Record<string, { model?: string }>;
-  heavyModel?: string;
-  flashModel?: string;
-  openaiFlashModel?: string;
-  openaiHeavyModel?: string;
-  agentProviders?: Record<string, string>;
-}
+import { normalizeAiModelConfig } from '../../services/factory/ai-model-config';
 import {
   AiCredentialsStatusResponse,
   AiErrorCategory,
@@ -33,6 +22,8 @@ import {
   sanitizeAiErrorMessage,
   withTimeout,
 } from './ai-provider-diagnostics.utils';
+
+const MODEL_CONFIG_KEY = 'MODEL_CONFIG';
 
 interface CachedProviderProbes {
   text: ProviderProbeResult;
@@ -60,37 +51,30 @@ export class AiProviderDiagnosticsService {
   }
 
   async getConfiguredGeminiModel(): Promise<string> {
-    const config = await this.loadModelConfig();
-    return config.heavyModel || config.flashModel;
+    const active = await this.loadStoredModelConfig();
+    if (active && typeof active === 'object') {
+      const record = active as Record<string, unknown>;
+      if (typeof record.heavyModel === 'string') return record.heavyModel;
+      if (typeof record.flashModel === 'string') return record.flashModel;
+    }
+    return 'gemini-2.5-flash';
   }
 
   async getConfiguredOpenAIModel(): Promise<string> {
-    const config = await this.loadModelConfig();
-    if (config.agents?.SCRIBE?.model) return config.agents.SCRIBE.model;
-    return config.openaiFlashModel || config.openaiHeavyModel;
+    const stored = await this.loadStoredModelConfig();
+    return normalizeAiModelConfig(stored).config.agents.SCRIBE.model;
   }
 
-  private async loadModelConfig(): Promise<StoredModelConfig> {
-    const defaults: StoredModelConfig = {
-      openaiHeavyModel: 'gpt-5.5',
-      openaiFlashModel: 'gpt-4o',
-      agents: { SCRIBE: { model: 'gpt-5.5' } },
-    };
-
+  private async loadStoredModelConfig(): Promise<unknown> {
     const active = await this.prisma.promptVersion.findFirst({
       where: { key: MODEL_CONFIG_KEY, isActive: true },
-      orderBy: { version: 'desc' },
+      orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
     });
-
-    if (!active?.value) {
-      return defaults;
-    }
-
+    if (!active?.value) return undefined;
     try {
-      const stored = JSON.parse(active.value) as Partial<StoredModelConfig>;
-      return { ...defaults, ...stored };
+      return JSON.parse(active.value);
     } catch {
-      return defaults;
+      return undefined;
     }
   }
 
@@ -105,18 +89,18 @@ export class AiProviderDiagnosticsService {
       openai: {
         configured: this.isOpenAIConfigured(),
         text: this.openaiCache?.text.status ?? 'not_tested',
+        multimodal: this.openaiCache?.multimodal?.status ?? 'not_tested',
         model: this.openaiCache?.text.model ?? 'pending',
       },
     };
   }
 
   async getAiHealthSnapshotWithModels(): Promise<AiHealthSnapshot> {
-    const [geminiModel, openaiModel, base] = await Promise.all([
+    const [geminiModel, openaiModel] = await Promise.all([
       this.getConfiguredGeminiModel(),
       this.getConfiguredOpenAIModel(),
-      Promise.resolve(this.getAiHealthSnapshot()),
     ]);
-
+    const base = this.getAiHealthSnapshot();
     return {
       gemini: {
         ...base.gemini,
@@ -147,7 +131,7 @@ export class AiProviderDiagnosticsService {
       this.isOpenAIConfigured(),
       openaiModel,
       this.openaiCache,
-      false,
+      true,
     );
 
     return {
@@ -173,36 +157,14 @@ export class AiProviderDiagnosticsService {
         userMessage: "GEMINI_API_KEY non configurée dans les variables d'environnement",
       });
     }
-
     if (!options?.force && this.isCacheValid(this.geminiCache)) {
       return this.buildResultFromCache('gemini', model, this.geminiCache!);
     }
 
-    this.logger.log(`Testing Gemini connection with model "${model}"`);
-
-    const textProbe = await this.runGeminiTextProbe(apiKey, model, timeoutMs);
-    const multimodalProbe = await this.runGeminiMultimodalProbe(apiKey, model, timeoutMs);
-
-    this.geminiCache = {
-      text: textProbe,
-      multimodal: multimodalProbe,
-      expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
-    };
-
-    const success = textProbe.status === 'ok';
-    const primaryError = textProbe.error ?? multimodalProbe.error;
-
-    return {
-      success,
-      provider: 'gemini',
-      model,
-      testedAt,
-      text: textProbe.status,
-      multimodal: multimodalProbe.status,
-      error: success ? multimodalProbe.error : primaryError,
-      errorCategory: success ? multimodalProbe.errorCategory : textProbe.errorCategory,
-      projectId: success ? 'gemini-api' : undefined,
-    };
+    const text = await this.runGeminiTextProbe(apiKey, model, timeoutMs);
+    const multimodal = await this.runGeminiMultimodalProbe(apiKey, model, timeoutMs);
+    this.geminiCache = { text, multimodal, expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS };
+    return this.buildResultFromCache('gemini', model, this.geminiCache);
   }
 
   async testOpenAIConnection(options?: {
@@ -220,33 +182,26 @@ export class AiProviderDiagnosticsService {
         userMessage: "OPENAI_API_KEY non configurée dans les variables d'environnement",
       });
     }
-
     if (!options?.force && this.isCacheValid(this.openaiCache)) {
       return this.buildResultFromCache('openai', model, this.openaiCache!);
     }
 
-    this.logger.log(`Testing OpenAI connection with model "${model}"`);
+    this.logger.log(`Testing OpenAI Responses text + vision with model "${model}"`);
+    const text = await this.runOpenAITextProbe(apiKey, model, timeoutMs);
+    const multimodal =
+      text.status === 'ok'
+        ? await this.runOpenAIMultimodalProbe(apiKey, model, timeoutMs)
+        : {
+            status: 'not_tested' as const,
+            model,
+            testedAt,
+            error: 'Vision non testée car le test texte a échoué.',
+          };
 
-    const textProbe = await this.runOpenAITextProbe(apiKey, model, timeoutMs);
-
-    this.openaiCache = {
-      text: textProbe,
-      expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
-    };
-
-    return {
-      success: textProbe.status === 'ok',
-      provider: 'openai',
-      model,
-      testedAt,
-      text: textProbe.status,
-      error: textProbe.error,
-      errorCategory: textProbe.errorCategory,
-      projectId: textProbe.status === 'ok' ? 'openai-api' : undefined,
-    };
+    this.openaiCache = { text, multimodal, expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS };
+    return this.buildResultFromCache('openai', model, this.openaiCache);
   }
 
-  /** Test-only helper to reset in-memory cache between specs. */
   clearCacheForTests(): void {
     this.geminiCache = null;
     this.openaiCache = null;
@@ -268,43 +223,35 @@ export class AiProviderDiagnosticsService {
     cache: CachedProviderProbes | null,
     includeMultimodal: boolean,
   ): ProviderCredentialStatus {
-    const textStatus: ProviderProbeStatus = cache?.text.status ?? 'not_tested';
-    const multimodalStatus: ProviderProbeStatus | undefined = includeMultimodal
+    const text = cache?.text.status ?? 'not_tested';
+    const multimodal = includeMultimodal
       ? (cache?.multimodal?.status ?? 'not_tested')
       : undefined;
-
+    const error = cache?.text.error ?? cache?.multimodal?.error;
+    const errorCategory = cache?.text.errorCategory ?? cache?.multimodal?.errorCategory;
     return {
       envVar,
       configured,
       model: cache?.text.model ?? model,
-      lastTestedAt: cache?.text.testedAt,
-      lastError: cache?.text.error ?? cache?.multimodal?.error,
-      text: textStatus,
-      multimodal: multimodalStatus,
-      state: this.resolveCredentialState(configured, textStatus, cache?.text.errorCategory),
+      lastTestedAt: cache?.text.testedAt ?? cache?.multimodal?.testedAt,
+      lastError: error,
+      text,
+      multimodal,
+      state: this.resolveCredentialState(configured, text, multimodal, errorCategory),
     };
   }
 
   private resolveCredentialState(
     configured: boolean,
-    textStatus: ProviderProbeStatus,
+    text: ProviderProbeStatus,
+    multimodal?: ProviderProbeStatus,
     errorCategory?: string,
   ): ProviderCredentialState {
-    if (!configured) {
-      return 'not_configured';
-    }
-    if (textStatus === 'not_tested') {
-      return 'not_tested';
-    }
-    if (textStatus === 'ok') {
-      return 'connection_ok';
-    }
-    if (errorCategory === 'quota') {
-      return 'quota_billing';
-    }
-    if (errorCategory === 'model_not_found') {
-      return 'model_inaccessible';
-    }
+    if (!configured) return 'not_configured';
+    if (text === 'not_tested') return 'not_tested';
+    if (text === 'ok' && (!multimodal || multimodal === 'ok')) return 'connection_ok';
+    if (errorCategory === 'quota') return 'quota_billing';
+    if (errorCategory === 'model_not_found') return 'model_inaccessible';
     return 'test_failed';
   }
 
@@ -313,7 +260,9 @@ export class AiProviderDiagnosticsService {
     model: string,
     cache: CachedProviderProbes,
   ): ProviderConnectionTestResult {
-    const success = cache.text.status === 'ok';
+    const success =
+      cache.text.status === 'ok' &&
+      (!cache.multimodal || cache.multimodal.status === 'ok');
     return {
       success,
       provider,
@@ -340,30 +289,14 @@ export class AiProviderDiagnosticsService {
       error: error.userMessage,
       errorCategory: error.category,
     };
-
-    if (provider === 'gemini') {
-      this.geminiCache = {
-        text: probe,
-        multimodal: { ...probe, status: 'not_tested' },
-        expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
-      };
-    } else {
-      this.openaiCache = {
-        text: probe,
-        expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
-      };
-    }
-
-    return {
-      success: false,
-      provider,
-      model,
-      testedAt,
-      text: 'error',
-      multimodal: provider === 'gemini' ? 'not_tested' : undefined,
-      error: error.userMessage,
-      errorCategory: error.category,
+    const cache: CachedProviderProbes = {
+      text: probe,
+      multimodal: { ...probe, status: 'not_tested' },
+      expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
     };
+    if (provider === 'gemini') this.geminiCache = cache;
+    else this.openaiCache = cache;
+    return this.buildResultFromCache(provider, model, cache);
   }
 
   private async runGeminiTextProbe(
@@ -374,9 +307,8 @@ export class AiProviderDiagnosticsService {
     const testedAt = new Date().toISOString();
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const generativeModel = genAI.getGenerativeModel({ model });
       const result = await withTimeout(
-        generativeModel.generateContent({
+        genAI.getGenerativeModel({ model }).generateContent({
           contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
           generationConfig: { maxOutputTokens: 8 },
         }),
@@ -398,20 +330,14 @@ export class AiProviderDiagnosticsService {
     const testedAt = new Date().toISOString();
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const generativeModel = genAI.getGenerativeModel({ model });
       const result = await withTimeout(
-        generativeModel.generateContent({
+        genAI.getGenerativeModel({ model }).generateContent({
           contents: [
             {
               role: 'user',
               parts: [
-                { text: 'Describe this image in one word.' },
-                {
-                  inlineData: {
-                    mimeType: 'image/png',
-                    data: MINIMAL_PNG_BASE64,
-                  },
-                },
+                { text: 'Décris cette image en un mot.' },
+                { inlineData: { mimeType: 'image/png', data: MINIMAL_PNG_BASE64 } },
               ],
             },
           ],
@@ -423,17 +349,31 @@ export class AiProviderDiagnosticsService {
       result.response.text();
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      const classified = this.probeFromError(model, testedAt, error, 'Gemini multimodal probe');
-      if (classified.errorCategory === 'model_not_found') {
-        return {
-          status: 'not_tested',
-          model,
-          testedAt,
-          error: 'Multimodal non testé : le modèle configuré ne supporte peut-être pas les images.',
-        };
-      }
-      return classified;
+      return this.probeFromError(model, testedAt, error, 'Gemini multimodal probe');
     }
+  }
+
+  private openAiProbeParameters(model: string): Record<string, unknown> {
+    return model.startsWith('gpt-5.')
+      ? { reasoning: { effort: 'low' }, text: { verbosity: 'low' } }
+      : { temperature: 0, top_p: 1 };
+  }
+
+  private healthJsonFormat(model: string): Record<string, unknown> {
+    return {
+      ...(model.startsWith('gpt-5.') ? { verbosity: 'low' } : {}),
+      format: {
+        type: 'json_schema',
+        name: 'lumira_health_probe',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: { ok: { type: 'boolean' } },
+          required: ['ok'],
+          additionalProperties: false,
+        },
+      },
+    };
   }
 
   private async runOpenAITextProbe(
@@ -443,24 +383,67 @@ export class AiProviderDiagnosticsService {
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     try {
-      const client = new OpenAI({ apiKey, timeout: timeoutMs });
+      const client = new OpenAI({ apiKey, timeout: timeoutMs, maxRetries: 0 });
       const response = await withTimeout(
-        client.chat.completions.create({
+        client.responses.create({
           model,
-          messages: [{ role: 'user', content: 'ping' }],
-          max_tokens: 8,
-        }),
+          instructions: 'Retourne uniquement le JSON demandé.',
+          input: 'Réponds avec ok=true.',
+          store: false,
+          max_output_tokens: 64,
+          ...this.openAiProbeParameters(model),
+          text: this.healthJsonFormat(model),
+        } as Parameters<typeof client.responses.create>[0]),
         timeoutMs,
-        'OpenAI text probe',
+        'OpenAI Responses text probe',
       );
-
-      if (!response.choices?.[0]?.message?.content) {
-        throw new Error('Réponse vide de l’API OpenAI');
-      }
-
+      const parsed = JSON.parse(response.output_text || '{}') as { ok?: boolean };
+      if (parsed.ok !== true) throw new Error('Réponse structurée OpenAI invalide');
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      return this.probeFromError(model, testedAt, error, 'OpenAI text probe');
+      return this.probeFromError(model, testedAt, error, 'OpenAI Responses text probe');
+    }
+  }
+
+  private async runOpenAIMultimodalProbe(
+    apiKey: string,
+    model: string,
+    timeoutMs: number,
+  ): Promise<ProviderProbeResult> {
+    const testedAt = new Date().toISOString();
+    try {
+      const client = new OpenAI({ apiKey, timeout: timeoutMs, maxRetries: 0 });
+      const input = [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: 'Observe cette image puis réponds avec ok=true.' },
+            {
+              type: 'input_image',
+              image_url: `data:image/png;base64,${MINIMAL_PNG_BASE64}`,
+              detail: 'high',
+            },
+          ],
+        },
+      ];
+      const response = await withTimeout(
+        client.responses.create({
+          model,
+          instructions: 'Retourne uniquement le JSON demandé après analyse de l image.',
+          input: input as unknown as Parameters<typeof client.responses.create>[0]['input'],
+          store: false,
+          max_output_tokens: 64,
+          ...this.openAiProbeParameters(model),
+          text: this.healthJsonFormat(model),
+        } as Parameters<typeof client.responses.create>[0]),
+        timeoutMs,
+        'OpenAI Responses multimodal probe',
+      );
+      const parsed = JSON.parse(response.output_text || '{}') as { ok?: boolean };
+      if (parsed.ok !== true) throw new Error('Réponse multimodale OpenAI invalide');
+      return { status: 'ok', model, testedAt };
+    } catch (error) {
+      return this.probeFromError(model, testedAt, error, 'OpenAI Responses multimodal probe');
     }
   }
 
@@ -468,11 +451,11 @@ export class AiProviderDiagnosticsService {
     model: string,
     testedAt: string,
     error: unknown,
-    context: string,
+    label: string,
   ): ProviderProbeResult {
-    const rawMessage = error instanceof Error ? error.message : String(error);
-    const classified = classifyAiError(rawMessage);
-    this.logger.error(`${context} failed: ${sanitizeAiErrorMessage(rawMessage)}`);
+    const raw = error instanceof Error ? error.message : String(error);
+    const classified = classifyAiError(raw);
+    this.logger.warn(`${label} failed: ${sanitizeAiErrorMessage(raw)}`);
     return {
       status: 'error',
       model,
