@@ -14,8 +14,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+env:
+  # Non-sensitive values for Next.js build and E2E (never use production secrets in CI).
+  NEXT_PUBLIC_API_URL: http://127.0.0.1:3100
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder_not_real
+  API_INTERNAL_URL: http://127.0.0.1:3100
+  JWT_SECRET: ci-test-jwt-secret-minimum-32-characters-long
+  PLAYWRIGHT_WEB_PORT: '3100'
 
 jobs:
   build:
@@ -30,7 +38,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 8.15.4
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -57,17 +65,20 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Build
-        run: pnpm build
-
       - name: Unit tests
         run: pnpm test
+
+      - name: Build
+        run: pnpm build
 
   e2e:
     name: Browser smoke tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: build
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -76,7 +87,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 8.15.4
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -91,13 +102,24 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm db:generate
 
-      - name: Build web application for browser smoke tests
+      - name: Build web application for Playwright
         run: pnpm --filter web... build
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium and system dependencies
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright E2E tests
         run: pnpm exec playwright test
         env:
           CI: true
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

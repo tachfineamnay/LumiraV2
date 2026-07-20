@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { Order, LEVEL_CONFIG } from '../types';
 import {
   Calendar,
@@ -15,16 +14,29 @@ import {
   Image as ImageIcon,
   User,
 } from 'lucide-react';
+import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 
 interface StepDossierProps {
   order: Order;
   onContinue: () => void;
 }
 
+function isHttpPhotoUrl(url: string | undefined | null): boolean {
+  return Boolean(url && /^https?:\/\//i.test(url));
+}
+
 export function StepDossier({ order, onContinue }: StepDossierProps) {
   const { user } = order;
   const profile = user.profile;
   const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
+  const historicalFiles = order.files.filter((file) => {
+    if (!isHttpPhotoUrl(file.url)) return false;
+    if (file.type === 'FACE_PHOTO' && profile?.facePhotoUrl) return false;
+    if (file.type === 'PALM_PHOTO' && profile?.palmPhotoUrl) return false;
+    return true;
+  });
+  const hasPhotos =
+    Boolean(profile?.facePhotoUrl) || Boolean(profile?.palmPhotoUrl) || historicalFiles.length > 0;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -174,17 +186,23 @@ export function StepDossier({ order, onContinue }: StepDossierProps) {
               )}
 
               {/* Photos card */}
-              {(profile?.facePhotoUrl || profile?.palmPhotoUrl || order.files.length > 0) && (
+              {hasPhotos && (
                 <DossierCard icon={<ImageIcon className="w-5 h-5" />} title="Photos" accent="slate">
                   <div className="grid grid-cols-2 gap-3">
                     {profile?.facePhotoUrl && (
-                      <PhotoCard url={profile.facePhotoUrl} label="Visage" />
+                      <div>
+                        <ExpertPrivatePhoto clientId={user.id} kind="face" alt="Visage" />
+                        <p className="mt-1 text-xs text-desk-muted">Visage</p>
+                      </div>
                     )}
                     {profile?.palmPhotoUrl && (
-                      <PhotoCard url={profile.palmPhotoUrl} label="Paume" />
+                      <div>
+                        <ExpertPrivatePhoto clientId={user.id} kind="palm" alt="Paume" />
+                        <p className="mt-1 text-xs text-desk-muted">Paume</p>
+                      </div>
                     )}
-                    {order.files.map((file) => (
-                      <PhotoCard
+                    {historicalFiles.map((file) => (
+                      <HttpPhotoCard
                         key={file.id}
                         url={file.url}
                         label={file.type === 'FACE_PHOTO' ? 'Visage' : 'Paume'}
@@ -266,14 +284,13 @@ function InfoLine({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-function PhotoCard({ url, label }: { url: string; label: string }) {
+function HttpPhotoCard({ url, label }: { url: string; label: string }) {
   return (
     <div className="group relative aspect-square rounded-lg overflow-hidden bg-desk-card border border-desk-border">
-      <Image
+      <img
         src={url}
         alt={label}
-        fill
-        className="object-cover group-hover:scale-105 transition-transform duration-300"
+        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
       />
       <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-2">
         <span className="text-xs text-white/80">{label}</span>

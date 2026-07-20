@@ -16,6 +16,12 @@ interface SmartPhotoUploaderProps {
   onChange: (dataUrl: string | null) => void;
   className?: string;
   compact?: boolean;
+  /**
+   * Secure same-origin preview for persisted private refs (`s3://onboarding/...`).
+   * Never pass the raw S3 reference as an image source.
+   */
+  privatePreviewUrl?: string;
+  privatePreviewNode?: React.ReactNode;
 }
 
 type UploadMode = 'idle' | 'file' | 'webcam' | 'mobile';
@@ -31,6 +37,8 @@ export const SmartPhotoUploader = ({
   onChange,
   className = '',
   compact = false,
+  privatePreviewUrl,
+  privatePreviewNode,
 }: SmartPhotoUploaderProps) => {
   const [mode, setMode] = useState<UploadMode>('idle');
   const [isCapturing, setIsCapturing] = useState(false);
@@ -193,10 +201,16 @@ export const SmartPhotoUploader = ({
           className={`relative ${compact ? 'aspect-square' : 'aspect-[4/3]'} rounded-xl overflow-hidden border border-horizon-400/30`}
         >
           {isPrivateStorageReference ? (
-            <div className="w-full h-full bg-abyss-700/70 flex flex-col items-center justify-center gap-2 text-emerald-400">
-              <Check className="w-7 h-7" />
-              <span className="text-xs font-medium">Photo enregistrée de façon privée</span>
-            </div>
+            privatePreviewNode ? (
+              privatePreviewNode
+            ) : privatePreviewUrl ? (
+              <img src={privatePreviewUrl} alt={label} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-abyss-700/70 flex flex-col items-center justify-center gap-2 text-emerald-400">
+                <Check className="w-7 h-7" />
+                <span className="text-xs font-medium">Photo enregistrée de façon privée</span>
+              </div>
+            )
           ) : (
             <img src={value} alt={label} className="w-full h-full object-cover" />
           )}

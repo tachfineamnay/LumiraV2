@@ -4,11 +4,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarDays,
+  Check,
   CheckCircle2,
+  HeartHandshake,
+  Image as ImageIcon,
   Loader2,
+  LockKeyhole,
   MapPin,
+  MessageSquareText,
+  Pencil,
   ShieldCheck,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { SmartPhotoUploader } from './SmartPhotoUploader';
 import sanctuaireApi from '../../lib/sanctuaireApi';
@@ -18,50 +26,152 @@ type PreparationData = {
   birthDate: string;
   birthTime: string;
   birthPlace: string;
+  specificQuestion: string;
+  objective: string;
   facePhoto: string;
   palmPhoto: string;
+  highs: string;
+  lows: string;
+  ailments: string;
+  fears: string;
+  rituals: string;
+  deliveryStyle: string;
+  pace: number;
   consent: boolean;
 };
 
-const EMPTY_PREPARATION: PreparationData = {
+type StepKey = 'control' | 'identity' | 'intention' | 'photos' | 'context' | 'review';
+
+const STEPS: Array<{
+  key: StepKey;
+  label: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  {
+    key: 'control',
+    label: 'Votre choix',
+    title: 'Vous gardez la main',
+    description: 'Rien ne part sans votre relecture et votre confirmation finale.',
+    icon: ShieldCheck,
+  },
+  {
+    key: 'identity',
+    label: 'Repères',
+    title: 'Vos repères essentiels',
+    description: 'La date et le lieu sont nécessaires. L’heure reste facultative.',
+    icon: CalendarDays,
+  },
+  {
+    key: 'intention',
+    label: 'Intention',
+    title: 'Ce que vous souhaitez éclairer',
+    description: 'Écrivez seulement ce que vous souhaitez réellement transmettre.',
+    icon: MessageSquareText,
+  },
+  {
+    key: 'photos',
+    label: 'Photos',
+    title: 'Visage et paume',
+    description: 'Les deux images sont facultatives et conservées dans le stockage privé Lumira.',
+    icon: ImageIcon,
+  },
+  {
+    key: 'context',
+    label: 'Contexte',
+    title: 'Votre contexte personnel',
+    description: 'Toutes les réponses de cette section sont facultatives.',
+    icon: HeartHandshake,
+  },
+  {
+    key: 'review',
+    label: 'Scellement',
+    title: 'Relire et sceller',
+    description: 'Modifiez chaque section si nécessaire, puis transmettez votre dossier de base.',
+    icon: LockKeyhole,
+  },
+];
+
+const EMPTY_DATA: PreparationData = {
   birthDate: '',
   birthTime: '',
   birthPlace: '',
+  specificQuestion: '',
+  objective: '',
   facePhoto: '',
   palmPhoto: '',
+  highs: '',
+  lows: '',
+  ailments: '',
+  fears: '',
+  rituals: '',
+  deliveryStyle: 'DOUX_ET_CLAIR',
+  pace: 50,
   consent: false,
 };
 
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
+const stringValue = (value: unknown) => (typeof value === 'string' ? value : '');
 
-function normalizeRemoteDraft(value: unknown): PreparationData {
-  if (!value || typeof value !== 'object') return EMPTY_PREPARATION;
+function normalize(value: unknown): Partial<PreparationData> {
+  if (!value || typeof value !== 'object') return {};
   const source = value as Record<string, unknown>;
   return {
-    birthDate: asString(source.birthDate),
-    birthTime: asString(source.birthTime),
-    birthPlace: asString(source.birthPlace),
-    facePhoto: asString(source.facePhoto),
-    palmPhoto: asString(source.palmPhoto),
-    consent: source.consent === true,
+    birthDate: stringValue(source.birthDate),
+    birthTime: stringValue(source.birthTime),
+    birthPlace: stringValue(source.birthPlace),
+    specificQuestion: stringValue(source.specificQuestion),
+    objective: stringValue(source.objective),
+    facePhoto: stringValue(source.facePhoto || source.facePhotoUrl),
+    palmPhoto: stringValue(source.palmPhoto || source.palmPhotoUrl),
+    highs: stringValue(source.highs),
+    lows: stringValue(source.lows),
+    ailments: stringValue(source.ailments),
+    fears: stringValue(source.fears),
+    rituals: stringValue(source.rituals),
+    deliveryStyle: stringValue(source.deliveryStyle) || 'DOUX_ET_CLAIR',
+    pace: typeof source.pace === 'number' ? source.pace : 50,
   };
 }
 
-/** Never send browser previews to the draft API; only private S3 references are durable. */
-function serializableDraft(data: PreparationData): Omit<
-  PreparationData,
-  'facePhoto' | 'palmPhoto'
-> & {
-  facePhoto: string;
-  palmPhoto: string;
-} {
+function draftPayload(data: PreparationData) {
   return {
     ...data,
+    consent: false,
     facePhoto: data.facePhoto.startsWith('s3://onboarding/') ? data.facePhoto : '',
     palmPhoto: data.palmPhoto.startsWith('s3://onboarding/') ? data.palmPhoto : '',
   };
+}
+
+const inputClass =
+  'mt-2 w-full rounded-xl border border-white/10 bg-abyss-600 px-3 py-3 text-stellar-100 placeholder:text-stellar-600 outline-none focus:border-horizon-400';
+
+function ReviewSection({
+  title,
+  onEdit,
+  children,
+}: {
+  title: string;
+  onEdit: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-stellar-100">{title}</h3>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs text-horizon-200 hover:bg-horizon-400/10"
+        >
+          <Pencil className="h-3.5 w-3.5" /> Modifier
+        </button>
+      </div>
+      <div className="mt-3 border-t border-white/[0.06] pt-3 text-sm leading-6 text-stellar-400">
+        {children}
+      </div>
+    </section>
+  );
 }
 
 export function ReadingPreparation({
@@ -72,69 +182,77 @@ export function ReadingPreparation({
   onClose: () => void;
 }) {
   const [step, setStep] = useState(0);
-  const [data, setData] = useState<PreparationData>(EMPTY_PREPARATION);
+  const [data, setData] = useState<PreparationData>(EMPTY_DATA);
   const [loaded, setLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     let active = true;
-    sanctuaireApi
-      .get('/users/onboarding')
-      .then((response) => {
-        if (!active || !response.data) return;
-        setData(normalizeRemoteDraft(response.data.data));
-        setStep(Math.min(Math.max(Number(response.data.currentStep) || 0, 0), 2));
+    Promise.all([
+      sanctuaireApi.get('/users/profile').catch(() => null),
+      sanctuaireApi.get('/users/onboarding').catch(() => null),
+    ])
+      .then(([profileResponse, draftResponse]) => {
+        if (!active) return;
+        const profile = normalize(profileResponse?.data?.profile);
+        const draft = normalize(draftResponse?.data?.data);
+        setData({ ...EMPTY_DATA, ...profile, ...draft, consent: false });
+        const savedStep = Number(draftResponse?.data?.currentStep);
+        if (Number.isFinite(savedStep)) setStep(Math.min(Math.max(savedStep, 0), STEPS.length - 1));
       })
-      .catch(() => {
-        // A new buyer has no draft yet. The page remains fully usable.
-      })
-      .finally(() => {
-        if (active) setLoaded(true);
-      });
+      .finally(() => active && setLoaded(true));
     return () => {
       active = false;
     };
   }, []);
 
-  const draft = useMemo(() => serializableDraft(data), [data]);
+  const serializableDraft = useMemo(() => draftPayload(data), [data]);
+  const current = STEPS[step];
+  const progress = Math.round(((step + 1) / STEPS.length) * 100);
 
   useEffect(() => {
-    if (!loaded || isComplete || isSubmitting) return;
+    if (!loaded || isSubmitting || isComplete) return;
+    setSaveState('saving');
     const timer = window.setTimeout(() => {
-      sanctuaireApi.patch('/users/onboarding', { currentStep: step, data: draft }).catch(() => {
-        setError(
-          'La sauvegarde automatique n’a pas abouti. Vérifiez votre connexion puis réessayez.',
-        );
-      });
-    }, 600);
+      sanctuaireApi
+        .patch('/users/onboarding', { currentStep: step, data: serializableDraft })
+        .then(() => setSaveState('saved'))
+        .catch(() => {
+          setSaveState('error');
+          setError('La sauvegarde automatique n’a pas abouti. Vos réponses restent affichées.');
+        });
+    }, 700);
     return () => window.clearTimeout(timer);
-  }, [draft, isComplete, isSubmitting, loaded, step]);
+  }, [isComplete, isSubmitting, loaded, serializableDraft, step]);
 
   const update = <Key extends keyof PreparationData>(key: Key, value: PreparationData[Key]) => {
     setError(null);
-    setData((current) => ({ ...current, [key]: value }));
+    setData((currentData) => ({ ...currentData, [key]: value }));
   };
 
   const next = () => {
-    if (step === 0 && (!data.birthDate || !data.birthPlace.trim())) {
-      setError('Indiquez votre date de naissance et votre lieu de naissance pour continuer.');
-      return;
-    }
-    if (step === 2 && !data.consent) {
-      setError('Votre consentement explicite est nécessaire pour valider ces éléments.');
+    if (current.key === 'identity' && (!data.birthDate || !data.birthPlace.trim())) {
+      setError('Ajoutez votre date et votre lieu de naissance pour continuer.');
       return;
     }
     setError(null);
-    setStep((current) => Math.min(current + 1, 2));
+    setStep((currentStep) => Math.min(currentStep + 1, STEPS.length - 1));
   };
 
   const submit = async () => {
-    if (!data.consent) {
-      setError('Votre consentement explicite est nécessaire pour valider ces éléments.');
+    if (!data.birthDate || !data.birthPlace.trim()) {
+      setStep(1);
+      setError('Ajoutez votre date et votre lieu de naissance avant de transmettre.');
       return;
     }
+    if (!data.consent) {
+      setError('Confirmez la transmission avant de sceller votre dossier.');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
@@ -146,19 +264,24 @@ export function ReadingPreparation({
         birthDate: data.birthDate,
         birthTime: data.birthTime || null,
         birthPlace: data.birthPlace.trim(),
+        specificQuestion: data.specificQuestion.trim() || null,
+        objective: data.objective.trim() || null,
         facePhotoUrl,
         palmPhotoUrl,
+        highs: data.highs.trim() || null,
+        lows: data.lows.trim() || null,
+        ailments: data.ailments.trim() || null,
+        fears: data.fears.trim() || null,
+        rituals: data.rituals.trim() || null,
+        deliveryStyle: data.deliveryStyle,
+        pace: data.pace,
         profileCompleted: true,
-        consent: { accepted: true, version: '2026-07-17' },
+        consent: { accepted: true, version: '2026-07-18-user-agency-v1' },
       });
       setIsComplete(true);
-      // The profile write is authoritative. A transient refresh failure must
-      // not replace a successful confirmation with a misleading error state.
       void onCompleted().catch(() => undefined);
     } catch {
-      setError(
-        'Vos éléments n’ont pas pu être validés. Rien n’a été perdu : réessayez dans un instant.',
-      );
+      setError('Le dossier n’a pas pu être scellé. Rien n’est perdu : réessayez dans un instant.');
     } finally {
       setIsSubmitting(false);
     }
@@ -172,185 +295,407 @@ export function ReadingPreparation({
     );
   }
 
+  if (isComplete) {
+    return (
+      <div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 backdrop-blur-xl">
+        <section className="w-full max-w-xl rounded-3xl border border-emerald-400/20 bg-abyss-700 p-7 text-center shadow-abyss sm:p-10">
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
+            <CheckCircle2 className="h-9 w-9" />
+          </span>
+          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
+            Dossier transmis
+          </p>
+          <h1 className="mt-3 font-playfair text-3xl italic text-stellar-100">
+            Votre lecture de base peut commencer
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-stellar-400">
+            Vous avez choisi, relu puis scellé les éléments transmis. Notre équipe vous écrira
+            lorsque votre lecture sera disponible.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-8 min-h-[48px] rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+          >
+            Retour à mon Sanctuaire
+          </button>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto bg-abyss-900/95 px-3 py-4 backdrop-blur-xl sm:grid sm:place-items-center sm:p-6">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reading-preparation-title"
-        className="mx-auto flex min-h-full w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/[0.09] bg-abyss-700 shadow-abyss sm:min-h-0"
-      >
-        {isComplete ? (
-          <div className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center">
-            <span className="mb-5 grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
-              <CheckCircle2 className="h-9 w-9" />
-            </span>
-            <h1
-              id="reading-preparation-title"
-              className="font-playfair text-3xl italic text-stellar-100"
-            >
-              Tout est bien reçu
-            </h1>
-            <p className="mt-4 max-w-md text-sm leading-6 text-stellar-400">
-              Vous n’avez plus rien à faire pour le moment. Nous vous écrirons dès que votre lecture
-              sera disponible.
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-abyss-900/98 backdrop-blur-xl">
+      <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col p-3 sm:p-6">
+        <header className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-abyss-700/90 px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+              Dossier de lecture
             </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-8 min-h-[48px] rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
-            >
-              Retour à mon espace
-            </button>
+            <p className="mt-1 text-xs text-stellar-500">
+              {saveState === 'saving' && 'Sauvegarde en cours…'}
+              {saveState === 'saved' && 'Brouillon sauvegardé'}
+              {saveState === 'error' && 'Sauvegarde à vérifier'}
+              {saveState === 'idle' && 'Vous pouvez reprendre plus tard'}
+            </p>
           </div>
-        ) : (
-          <>
-            <header className="border-b border-white/[0.06] px-5 py-5 sm:px-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
-                Étape {step + 1} sur 3
-              </p>
-              <h1
-                id="reading-preparation-title"
-                className="mt-2 font-playfair text-2xl italic text-stellar-100 sm:text-3xl"
-              >
-                Préparation de votre lecture
-              </h1>
-              <p className="mt-2 text-sm text-stellar-400">
-                Prenez votre temps. Vos éléments sont enregistrés automatiquement.
-              </p>
-              <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer et reprendre plus tard"
+            className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.08] text-stellar-400 hover:bg-white/[0.05]"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="mt-3 grid flex-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="hidden rounded-3xl border border-white/[0.08] bg-abyss-700/80 p-4 lg:block">
+            <p className="px-2 text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
+              Progression
+            </p>
+            <ol className="mt-3 space-y-1">
+              {STEPS.map((item, index) => {
+                const Icon = item.icon;
+                const active = index === step;
+                return (
+                  <li key={item.key}>
+                    <button
+                      type="button"
+                      onClick={() => setStep(index)}
+                      className={`flex min-h-[50px] w-full items-center gap-3 rounded-2xl px-3 text-left ${
+                        active
+                          ? 'bg-horizon-400/15 text-stellar-100'
+                          : 'text-stellar-400 hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <span
+                        className={`grid h-8 w-8 place-items-center rounded-xl ${active ? 'bg-horizon-400 text-abyss-900' : 'bg-white/[0.04]'}`}
+                      >
+                        {index < step ? (
+                          <Check className="h-4 w-4 text-emerald-300" />
+                        ) : (
+                          <Icon className="h-4 w-4" />
+                        )}
+                      </span>
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="mt-5 rounded-2xl border border-horizon-400/15 bg-horizon-400/[0.06] p-4 text-xs leading-5 text-stellar-400">
+              Rien n’est transmis avant l’étape finale.
+            </p>
+          </aside>
+
+          <main className="flex min-h-[620px] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-700/90 shadow-abyss">
+            <div className="border-b border-white/[0.06] px-5 py-5 sm:px-8 sm:py-7">
+              <div className="flex justify-between text-xs text-stellar-500">
+                <span>
+                  Étape {step + 1} sur {STEPS.length}
+                </span>
+                <span>{progress}%</span>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                 <div
                   className="h-full rounded-full bg-horizon-400 transition-all"
-                  style={{ width: `${((step + 1) / 3) * 100}%` }}
+                  style={{ width: `${progress}%` }}
                 />
               </div>
-            </header>
+              <h1 className="mt-5 font-playfair text-2xl italic text-stellar-100 sm:text-3xl">
+                {current.title}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
+                {current.description}
+              </p>
+            </div>
 
-            <div className="flex-1 px-5 py-6 sm:px-7">
-              {step === 0 && (
-                <div className="space-y-5">
-                  <div>
-                    <label
-                      htmlFor="birth-date"
-                      className="mb-2 block text-sm font-medium text-stellar-200"
-                    >
-                      Date de naissance
-                    </label>
-                    <input
-                      id="birth-date"
-                      type="date"
-                      value={data.birthDate}
-                      onChange={(event) => update('birthDate', event.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-abyss-600 px-3 py-3 text-stellar-100 outline-none focus:border-horizon-400"
-                    />
+            <div className="flex-1 px-5 py-6 sm:px-8 sm:py-8">
+              {current.key === 'control' && (
+                <div className="mx-auto max-w-2xl space-y-4">
+                  <div className="rounded-3xl border border-horizon-400/20 bg-horizon-400/[0.07] p-6">
+                    <Sparkles className="h-6 w-6 text-horizon-300" />
+                    <h2 className="mt-4 font-playfair text-xl italic text-stellar-100">
+                      Une préparation personnelle, à votre rythme
+                    </h2>
+                    <p className="mt-3 text-sm leading-7 text-stellar-400">
+                      Seuls la date et le lieu de naissance sont nécessaires. Votre intention, vos
+                      photos et votre contexte restent facultatifs. Vous pourrez tout modifier dans
+                      le récapitulatif avant l’envoi.
+                    </p>
                   </div>
-                  <div>
-                    <label
-                      htmlFor="birth-time"
-                      className="mb-2 block text-sm font-medium text-stellar-200"
-                    >
-                      Heure de naissance{' '}
-                      <span className="font-normal text-stellar-500">(facultative)</span>
-                    </label>
-                    <input
-                      id="birth-time"
-                      type="time"
-                      value={data.birthTime}
-                      onChange={(event) => update('birthTime', event.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-abyss-600 px-3 py-3 text-stellar-100 outline-none focus:border-horizon-400"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="birth-place"
-                      className="mb-2 block text-sm font-medium text-stellar-200"
-                    >
-                      Lieu de naissance
-                    </label>
-                    <div className="relative">
-                      <MapPin className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-stellar-500" />
-                      <input
-                        id="birth-place"
-                        value={data.birthPlace}
-                        onChange={(event) => update('birthPlace', event.target.value)}
-                        autoComplete="address-level2"
-                        placeholder="Ville, pays"
-                        className="w-full rounded-xl border border-white/10 bg-abyss-600 py-3 pl-11 pr-3 text-stellar-100 placeholder:text-stellar-600 outline-none focus:border-horizon-400"
-                      />
-                    </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {['Je choisis', 'Je relis', 'Je scelle'].map((label, index) => (
+                      <div
+                        key={label}
+                        className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"
+                      >
+                        <span className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-xs font-bold text-horizon-200">
+                          {index + 1}
+                        </span>
+                        <p className="mt-3 text-sm font-medium text-stellar-100">{label}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {step === 1 && (
-                <div className="space-y-5">
-                  <p className="text-sm leading-6 text-stellar-400">
-                    Ajoutez un visage et une paume si vous souhaitez les inclure à votre lecture.
-                    Ces fichiers sont envoyés dans le stockage privé Lumira.
-                  </p>
+              {current.key === 'identity' && (
+                <div className="mx-auto max-w-2xl space-y-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-stellar-200">
+                      Date de naissance
+                      <input
+                        type="date"
+                        value={data.birthDate}
+                        onChange={(event) => update('birthDate', event.target.value)}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Heure <span className="font-normal text-stellar-500">(facultative)</span>
+                      <input
+                        type="time"
+                        value={data.birthTime}
+                        onChange={(event) => update('birthTime', event.target.value)}
+                        className={inputClass}
+                      />
+                    </label>
+                  </div>
+                  <label className="text-sm font-medium text-stellar-200">
+                    Lieu de naissance
+                    <span className="relative block">
+                      <MapPin className="pointer-events-none absolute left-3 top-5 h-5 w-5 text-stellar-500" />
+                      <input
+                        value={data.birthPlace}
+                        onChange={(event) => update('birthPlace', event.target.value)}
+                        placeholder="Ville, pays"
+                        className={`${inputClass} pl-11`}
+                      />
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {current.key === 'intention' && (
+                <div className="mx-auto max-w-2xl space-y-5">
+                  <label className="block text-sm font-medium text-stellar-200">
+                    Votre question{' '}
+                    <span className="font-normal text-stellar-500">(facultative)</span>
+                    <textarea
+                      value={data.specificQuestion}
+                      onChange={(event) => update('specificQuestion', event.target.value)}
+                      rows={5}
+                      maxLength={2000}
+                      placeholder="Écrivez avec vos propres mots."
+                      className={`${inputClass} resize-y`}
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-stellar-200">
+                    Ce que vous souhaitez comprendre ou faire évoluer{' '}
+                    <span className="font-normal text-stellar-500">(facultatif)</span>
+                    <textarea
+                      value={data.objective}
+                      onChange={(event) => update('objective', event.target.value)}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Votre intention peut rester très simple."
+                      className={`${inputClass} resize-y`}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setData((currentData) => ({
+                        ...currentData,
+                        specificQuestion: '',
+                        objective: '',
+                      }))
+                    }
+                    className="text-xs text-stellar-500 hover:text-stellar-300"
+                  >
+                    Ne transmettre aucune intention particulière
+                  </button>
+                </div>
+              )}
+
+              {current.key === 'photos' && (
+                <div className="mx-auto max-w-3xl space-y-5">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <SmartPhotoUploader
                       label="Visage"
-                      description="Photo nette, en lumière naturelle"
+                      description="Photo nette, de face"
                       value={data.facePhoto}
                       onChange={(value) => update('facePhoto', value || '')}
+                      privatePreviewUrl={
+                        data.facePhoto.startsWith('s3://onboarding/')
+                          ? '/api/bff/users/profile/photos/face'
+                          : undefined
+                      }
                     />
                     <SmartPhotoUploader
                       label="Paume"
                       description="Paume ouverte et nette"
                       value={data.palmPhoto}
                       onChange={(value) => update('palmPhoto', value || '')}
+                      privatePreviewUrl={
+                        data.palmPhoto.startsWith('s3://onboarding/')
+                          ? '/api/bff/users/profile/photos/palm'
+                          : undefined
+                      }
                     />
+                  </div>
+                  <p className="text-center text-xs text-stellar-500">
+                    Continuez sans photo, avec une seule ou avec les deux.
+                  </p>
+                </div>
+              )}
+
+              {current.key === 'context' && (
+                <div className="mx-auto max-w-3xl space-y-5">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <label className="text-sm font-medium text-stellar-200">
+                      Ce qui vous porte{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.highs}
+                        onChange={(event) => update('highs', event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Ce qui vous freine{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.lows}
+                        onChange={(event) => update('lows', event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Gênes ou douleurs à mentionner{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.ailments}
+                        onChange={(event) => update('ailments', event.target.value)}
+                        rows={3}
+                        maxLength={1500}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Peurs ou blocages identifiés{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.fears}
+                        onChange={(event) => update('fears', event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-sm font-medium text-stellar-200">
+                    Pratiques ou rituels actuels{' '}
+                    <span className="font-normal text-stellar-500">(facultatif)</span>
+                    <textarea
+                      value={data.rituals}
+                      onChange={(event) => update('rituals', event.target.value)}
+                      rows={3}
+                      maxLength={1500}
+                      className={`${inputClass} resize-y`}
+                    />
+                  </label>
+                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+                    <p className="text-sm font-medium text-stellar-100">
+                      Style de lecture souhaité
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      {[
+                        ['DOUX_ET_CLAIR', 'Doux et clair'],
+                        ['DIRECT_ET_CONCRET', 'Direct et concret'],
+                        ['SYMBOLIQUE_ET_PROFOND', 'Symbolique et profond'],
+                      ].map(([value, label]) => (
+                        <label
+                          key={value}
+                          className={`cursor-pointer rounded-xl border p-3 text-sm ${data.deliveryStyle === value ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100' : 'border-white/[0.08] text-stellar-400'}`}
+                        >
+                          <input
+                            type="radio"
+                            name="deliveryStyle"
+                            value={value}
+                            checked={data.deliveryStyle === value}
+                            onChange={() => update('deliveryStyle', value)}
+                            className="sr-only"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <label className="mt-4 block text-sm text-stellar-300">
+                      Rythme : {data.pace}%
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={data.pace}
+                        onChange={(event) => update('pace', Number(event.target.value))}
+                        className="mt-2 w-full accent-amber-300"
+                      />
+                    </label>
                   </div>
                 </div>
               )}
 
-              {step === 2 && (
-                <div className="space-y-5">
-                  <div>
-                    <h2 className="font-playfair text-xl italic text-stellar-100">
-                      Vérifiez vos éléments
-                    </h2>
-                    <p className="mt-1 text-sm text-stellar-400">
-                      Vous pourrez modifier vos informations de profil ultérieurement.
-                    </p>
-                  </div>
-                  <dl className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-600/50">
-                    <div className="flex justify-between gap-4 p-4">
-                      <dt className="text-sm text-stellar-500">Naissance</dt>
-                      <dd className="text-right text-sm text-stellar-200">
-                        {data.birthDate}
-                        {data.birthTime ? ` · ${data.birthTime}` : ''}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-4 p-4">
-                      <dt className="text-sm text-stellar-500">Lieu</dt>
-                      <dd className="text-right text-sm text-stellar-200">{data.birthPlace}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4 p-4">
-                      <dt className="text-sm text-stellar-500">Visage</dt>
-                      <dd className="text-right text-sm text-stellar-200">
-                        {data.facePhoto ? 'Ajouté' : 'Non ajouté'}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-4 p-4">
-                      <dt className="text-sm text-stellar-500">Paume</dt>
-                      <dd className="text-right text-sm text-stellar-200">
-                        {data.palmPhoto ? 'Ajoutée' : 'Non ajoutée'}
-                      </dd>
-                    </div>
-                  </dl>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-stellar-300">
+              {current.key === 'review' && (
+                <div className="mx-auto max-w-3xl space-y-4">
+                  <p className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-stellar-300">
+                    <strong className="text-stellar-100">Rien n’est encore envoyé.</strong> Le
+                    bouton final scellera ces éléments comme base de votre lecture.
+                  </p>
+                  <ReviewSection title="Repères essentiels" onEdit={() => setStep(1)}>
+                    {data.birthDate || 'À compléter'}
+                    {data.birthTime ? ` · ${data.birthTime}` : ''}
+                    <br />
+                    {data.birthPlace || 'Lieu à compléter'}
+                  </ReviewSection>
+                  <ReviewSection title="Intention" onEdit={() => setStep(2)}>
+                    {data.specificQuestion || data.objective ? (
+                      <>
+                        <p>{data.specificQuestion || 'Aucune question précise'}</p>
+                        {data.objective && <p className="mt-2">Objectif : {data.objective}</p>}
+                      </>
+                    ) : (
+                      'Aucune intention particulière transmise.'
+                    )}
+                  </ReviewSection>
+                  <ReviewSection title="Photos" onEdit={() => setStep(3)}>
+                    Visage : {data.facePhoto ? 'transmis' : 'non transmis'} · Paume :{' '}
+                    {data.palmPhoto ? 'transmise' : 'non transmise'}
+                  </ReviewSection>
+                  <ReviewSection title="Contexte et préférence" onEdit={() => setStep(4)}>
+                    {
+                      [data.highs, data.lows, data.ailments, data.fears, data.rituals].filter(
+                        (value) => value.trim(),
+                      ).length
+                    }{' '}
+                    élément(s) facultatif(s) transmis · rythme {data.pace}%
+                  </ReviewSection>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300">
                     <input
                       type="checkbox"
                       checked={data.consent}
                       onChange={(event) => update('consent', event.target.checked)}
-                      className="mt-0.5 h-5 w-5 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
+                      className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
                     />
-                    <span>
-                      J’accepte que ces éléments soient utilisés pour personnaliser ma lecture
-                      Lumira.
-                    </span>
+                    J’ai relu ces éléments et je choisis de les transmettre à Lumira pour préparer
+                    ma lecture de base personnalisée.
                   </label>
                 </div>
               )}
@@ -358,48 +703,49 @@ export function ReadingPreparation({
               {error && (
                 <p
                   role="alert"
-                  className="mt-5 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200"
+                  className="mx-auto mt-6 max-w-3xl rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200"
                 >
                   {error}
                 </p>
               )}
             </div>
 
-            <footer className="flex items-center justify-between gap-3 border-t border-white/[0.06] px-5 py-4 sm:px-7">
+            <footer className="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-white/[0.06] bg-abyss-700/95 px-5 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-8">
               <button
                 type="button"
-                onClick={() => (step === 0 ? onClose() : setStep((current) => current - 1))}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl px-3 py-2 text-sm text-stellar-400 hover:bg-white/[0.05]"
+                onClick={() => (step === 0 ? onClose() : setStep((currentStep) => currentStep - 1))}
+                className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl px-4 text-sm text-stellar-400 hover:bg-white/[0.05]"
               >
-                <ArrowLeft className="h-4 w-4" /> {step === 0 ? 'Plus tard' : 'Retour'}
+                <ArrowLeft className="h-4 w-4" /> {step === 0 ? 'Reprendre plus tard' : 'Retour'}
               </button>
-              {step < 2 ? (
+              {current.key !== 'review' ? (
                 <button
                   type="button"
                   onClick={next}
-                  className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
                 >
-                  Continuer <ArrowRight className="h-4 w-4" />
+                  {current.key === 'control' ? 'Commencer mon dossier' : 'Continuer'}{' '}
+                  <ArrowRight className="h-4 w-4" />
                 </button>
               ) : (
                 <button
                   type="button"
                   disabled={isSubmitting || !data.consent}
                   onClick={submit}
-                  className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-5 py-3 text-sm font-bold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}{' '}
-                  Valider et lancer la préparation
+                    <LockKeyhole className="h-4 w-4" />
+                  )}
+                  Sceller et transmettre mon dossier
                 </button>
               )}
             </footer>
-          </>
-        )}
-      </section>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }

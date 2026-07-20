@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import expertApi from '@/lib/expertApi';
 import { toast } from 'sonner';
+import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 import { Avatar } from '../shared/Avatar';
 import { ClientFullData } from './types';
 
@@ -131,11 +132,19 @@ export function ClientIdentityHeader({
           {/* Avatar & Name */}
           <div className="flex items-center gap-4">
             <div className="relative">
-              <Avatar
-                name={`${client.firstName} ${client.lastName}`}
-                src={client.profile?.facePhotoUrl || undefined}
-                size="xl"
-              />
+              {client.profile?.facePhotoUrl ? (
+                <div className="h-16 w-16 overflow-hidden rounded-full border border-desk-border">
+                  <ExpertPrivatePhoto
+                    clientId={client.id}
+                    kind="face"
+                    alt={`${client.firstName} ${client.lastName}`}
+                    aspectClassName="aspect-square"
+                    className="h-full w-full"
+                  />
+                </div>
+              ) : (
+                <Avatar name={`${client.firstName} ${client.lastName}`} size="xl" />
+              )}
               {stats.isVip && (
                 <div className="absolute -top-1 -right-1 p-1 bg-amber-500 rounded-full">
                   <Crown className="w-3 h-3 text-white" />

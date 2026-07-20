@@ -15,12 +15,13 @@ test.describe('Sanctuaire mobile — navigation essentielle', () => {
     await mockFullSanctuaire(page, { profileCompleted: true });
   });
 
-  test('keeps the four primary destinations visible', async ({ page }) => {
+  test('keeps the five primary destinations visible', async ({ page }) => {
     await page.goto('/sanctuaire');
 
     const nav = page.getByRole('navigation', { name: 'Navigation principale' });
     await expect(nav).toBeVisible({ timeout: 20_000 });
     await expect(nav.getByRole('link', { name: 'Accueil' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Dossier' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Lectures' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Synthèse' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Éclairage' })).toBeVisible();
@@ -28,15 +29,19 @@ test.describe('Sanctuaire mobile — navigation essentielle', () => {
     await assertNoHorizontalOverflow(page);
   });
 
-  test('keeps the message composer above the bottom navigation', async ({ page }) => {
+  test('keeps the reply composer above the bottom navigation', async ({ page }) => {
     await page.goto('/sanctuaire/chat');
 
-    const input = page.getByLabel('Votre question');
+    await expect(page.getByRole('heading', { name: 'Demander un éclairage' })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const input = page.getByLabel('Ajouter un message');
     const nav = page.getByRole('navigation', { name: 'Navigation principale' });
     await expect(input).toBeVisible({ timeout: 20_000 });
-    await expect(
-      page.getByRole('button', { name: 'Envoyer ma demande d’éclairage' }),
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Envoyer mon message au Desk' })).toBeVisible();
+
+    await input.scrollIntoViewIfNeeded();
 
     const [inputBox, navBox] = await Promise.all([input.boundingBox(), nav.boundingBox()]);
     expect(inputBox).toBeTruthy();

@@ -11,11 +11,19 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
+  StreamableFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService, ModelConfig } from './admin-settings.service';
 import { AudioGenerationService } from '../../services/factory/AudioGenerationService';
+import {
+  OnboardingPhotoKind,
+  PrivateOnboardingPhotoService,
+} from '../uploads/private-onboarding-photo.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
@@ -41,6 +49,7 @@ export class ExpertController {
     private readonly expertService: ExpertService,
     private readonly adminSettingsService: AdminSettingsService,
     private readonly audioGenerationService: AudioGenerationService,
+    private readonly privateOnboardingPhotoService: PrivateOnboardingPhotoService,
   ) {}
 
   // ========================
@@ -363,13 +372,36 @@ export class ExpertController {
   }
 
   // ========================
-  // FILES
+  // PRIVATE CLIENT PHOTOS
   // ========================
 
-  @Get('files/presign')
-  async getPresignedUrl(@Query('url') url: string) {
-    const signedUrl = await this.expertService.getPresignedUrl(url);
-    return { url: signedUrl };
+  @Get('clients/:clientId/photos/:kind')
+  @Roles('EXPERT', 'ADMIN')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async streamClientPhoto(
+    @Param('clientId') clientId: string,
+    @Param('kind') kind: string,
+    @CurrentExpert() expert: Expert,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const photoKind = this.parsePhotoKind(kind);
+    const { stream, contentType, contentLength, etag, lastModified } =
+      await this.privateOnboardingPhotoService.getPhotoStream({
+        clientId,
+        kind: photoKind,
+        actorType: 'expert',
+        actorId: expert.id,
+      });
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (contentLength != null) res.setHeader('Content-Length', String(contentLength));
+    if (etag) res.setHeader('ETag', etag);
+    if (lastModified) res.setHeader('Last-Modified', lastModified.toUTCString());
+
+    return new StreamableFile(stream);
   }
 
   // ========================
@@ -491,5 +523,10 @@ export class ExpertController {
     @Body('changedBy') changedBy?: string,
   ) {
     return this.adminSettingsService.saveModelConfig(config, changedBy);
+  }
+
+  private parsePhotoKind(kind: string): OnboardingPhotoKind {
+    if (kind === 'face' || kind === 'palm') return kind;
+    throw new BadRequestException('Type de photo invalide');
   }
 }

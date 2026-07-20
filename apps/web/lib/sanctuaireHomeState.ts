@@ -30,9 +30,9 @@ export type SanctuaireHomeState =
   | { kind: 'READY'; title: string; description: string; order: SanctuaireHomeOrder };
 
 /**
- * The home view has one source of truth for wording and transitions. A reading
- * cannot be shown as in preparation until the client has completed their final
- * validation; order data remains server-owned.
+ * One source of truth for the client-facing reading lifecycle. Before the
+ * profile is sealed, wording must reinforce agency: the client chooses,
+ * reviews and explicitly transmits the information used for the base reading.
  */
 export function resolveSanctuaireHomeState({
   profile,
@@ -47,16 +47,18 @@ export function resolveSanctuaireHomeState({
     if (draft?.status === 'IN_PROGRESS') {
       return {
         kind: 'RESUME',
-        title: 'Votre préparation vous attend',
-        description: 'Prenez votre temps. Vos éléments sont enregistrés automatiquement.',
-        actionLabel: 'Reprendre ma préparation',
+        title: 'Votre dossier vous attend',
+        description:
+          'Relisez, complétez ou retirez les éléments que vous souhaitez transmettre. Rien ne part avant votre scellement final.',
+        actionLabel: 'Reprendre mon dossier',
       };
     }
     return {
       kind: 'PREPARE',
-      title: 'Préparez votre première lecture',
-      description: 'Prenez le temps nécessaire. Votre progression est enregistrée automatiquement.',
-      actionLabel: 'Préparer ma lecture',
+      title: 'Choisissez la base de votre lecture',
+      description:
+        'Vous décidez des informations, photos et éléments personnels transmis. Vous pourrez tout relire avant de sceller l’envoi.',
+      actionLabel: 'Préparer mon dossier',
     };
   }
 
@@ -77,18 +79,16 @@ export function resolveSanctuaireHomeState({
     return {
       kind: 'EXPERT_REVIEW',
       title: 'Votre lecture est en vérification',
-      description: 'Notre équipe vérifie les éléments avant leur mise à disposition.',
+      description: 'Notre équipe relit et sécurise le contenu avant sa mise à disposition.',
       order: latestOrder,
     };
   }
 
-  // This is based on the server-side profile validation. An order can be
-  // temporarily absent while its fulfilment record is being synchronized; do
-  // not manufacture an order client-side just to render this state.
   return {
     kind: 'PREPARING',
-    title: 'Votre lecture est en préparation',
-    description: 'Vous n’avez plus rien à faire. Nous vous écrirons dès qu’elle sera prête.',
+    title: 'Votre dossier a bien été transmis',
+    description:
+      'Les éléments que vous avez choisis sont maintenant utilisés pour préparer votre lecture. Nous vous écrirons dès qu’elle sera prête.',
     order: latestOrder,
   };
 }

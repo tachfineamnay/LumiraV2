@@ -15,10 +15,10 @@
     },
     "test": {},
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^db:generate"]
     },
     "type-check": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^db:generate"]
     },
     "db:generate": {
       "cache": false

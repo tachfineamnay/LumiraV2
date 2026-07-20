@@ -6,7 +6,15 @@ import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import dynamicImport from 'next/dynamic';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Download, FileText, Headphones, Loader2, Sparkles } from 'lucide-react';
+import {
+  BookOpen,
+  ClipboardCheck,
+  Download,
+  FileText,
+  Headphones,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 import { ReadingPreparation } from '../../components/onboarding/ReadingPreparation';
 import { MysticAudioPlayer } from '../../components/ui/MysticAudioPlayer';
 import { useSanctuaire } from '../../context/SanctuaireContext';
@@ -118,8 +126,6 @@ function SanctuaireHome() {
     }
   };
 
-  // Keep the preparation modal mounted during background refetch so the
-  // success screen is not torn down and remounted at step 3.
   const blockForInitialLoad = (authLoading || entitlementsLoading) && !showPreparation;
 
   if (blockForInitialLoad) {
@@ -156,7 +162,7 @@ function SanctuaireHome() {
         />
       )}
 
-      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
         <header className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
             Sanctuaire Lumira
@@ -165,14 +171,18 @@ function SanctuaireHome() {
             Bonjour {user?.firstName || ''}
           </h1>
           <p className="mt-3 text-base leading-7 text-stellar-400">
-            Votre espace Lumira rassemble vos lectures, votre synthèse personnelle et vos échanges.
+            Suivez votre dossier, retrouvez vos lectures et échangez avec l’équipe depuis un seul espace.
           </p>
         </header>
 
         <section className="mt-8 overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 shadow-abyss sm:p-7">
           <div className="flex items-start gap-4">
             <span
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${isReady ? 'bg-emerald-400/15 text-emerald-300' : 'bg-horizon-400/15 text-horizon-300'}`}
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${
+                isReady
+                  ? 'bg-emerald-400/15 text-emerald-300'
+                  : 'bg-horizon-400/15 text-horizon-300'
+              }`}
             >
               {isReady ? <Checkmark /> : <Sparkles className="h-5 w-5" />}
             </span>
@@ -190,26 +200,25 @@ function SanctuaireHome() {
               onClick={() => setShowPreparation(true)}
               className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
             >
-              <Sparkles className="h-4 w-4" /> {homeState.actionLabel}
+              <ClipboardCheck className="h-4 w-4" /> {homeState.actionLabel}
             </button>
           )}
 
-          {homeState.kind === 'EXPERT_REVIEW' && (
-            <Link
-              href="/sanctuaire/draws"
-              className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
-            >
-              <BookOpen className="h-4 w-4" /> Voir mes lectures
-            </Link>
-          )}
-
-          {homeState.kind === 'PREPARING' && (
-            <Link
-              href="/sanctuaire/draws"
-              className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
-            >
-              <BookOpen className="h-4 w-4" /> Voir mes lectures
-            </Link>
+          {(homeState.kind === 'EXPERT_REVIEW' || homeState.kind === 'PREPARING') && (
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/sanctuaire/dossier"
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+              >
+                <ClipboardCheck className="h-4 w-4" /> Voir ce que j’ai transmis
+              </Link>
+              <Link
+                href="/sanctuaire/draws"
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+              >
+                <BookOpen className="h-4 w-4" /> Suivre ma lecture
+              </Link>
+            </div>
           )}
 
           {isReady && (
@@ -259,15 +268,25 @@ function SanctuaireHome() {
           )}
         </section>
 
-        <section className="mt-6 grid gap-4 sm:grid-cols-2">
+        <section className="mt-6 grid gap-4 sm:grid-cols-3">
+          <Link
+            href="/sanctuaire/dossier"
+            className="rounded-2xl border border-horizon-400/20 bg-horizon-400/[0.055] p-5 transition-colors hover:bg-horizon-400/[0.09]"
+          >
+            <ClipboardCheck className="h-5 w-5 text-horizon-300" />
+            <h2 className="mt-4 text-base font-medium text-stellar-100">Mon dossier</h2>
+            <p className="mt-1 text-sm leading-6 text-stellar-500">
+              Voir les éléments choisis, le brouillon ou l’instantané scellé.
+            </p>
+          </Link>
           <Link
             href="/sanctuaire/draws"
             className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 transition-colors hover:bg-white/[0.06]"
           >
             <BookOpen className="h-5 w-5 text-horizon-300" />
             <h2 className="mt-4 text-base font-medium text-stellar-100">Mes lectures</h2>
-            <p className="mt-1 text-sm text-stellar-500">
-              Lire, écouter ou télécharger les éléments déjà disponibles.
+            <p className="mt-1 text-sm leading-6 text-stellar-500">
+              Suivre, lire, écouter ou télécharger les éléments disponibles.
             </p>
           </Link>
           <Link
@@ -276,8 +295,8 @@ function SanctuaireHome() {
           >
             <Sparkles className="h-5 w-5 text-horizon-300" />
             <h2 className="mt-4 text-base font-medium text-stellar-100">Ma synthèse</h2>
-            <p className="mt-1 text-sm text-stellar-500">
-              Retrouvez les enseignements validés par vos lectures.
+            <p className="mt-1 text-sm leading-6 text-stellar-500">
+              Retrouver les enseignements validés dans vos lectures.
             </p>
           </Link>
         </section>

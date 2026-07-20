@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   ChevronDown,
   Calendar,
   Clock,
@@ -19,6 +19,7 @@ import {
   ZoomIn,
 } from 'lucide-react';
 import { ClientFullData } from './types';
+import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 
 interface IncarnationPanelProps {
   client: ClientFullData;
@@ -31,7 +32,12 @@ interface CollapsibleSectionProps {
   defaultOpen?: boolean;
 }
 
-function CollapsibleSection({ title, icon, children, defaultOpen = true }: CollapsibleSectionProps) {
+function CollapsibleSection({
+  title,
+  icon,
+  children,
+  defaultOpen = true,
+}: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
@@ -44,7 +50,7 @@ function CollapsibleSection({ title, icon, children, defaultOpen = true }: Colla
           {icon}
           <span className="font-medium">{title}</span>
         </div>
-        <ChevronDown 
+        <ChevronDown
           className={`w-4 h-4 text-desk-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
@@ -56,9 +62,7 @@ function CollapsibleSection({ title, icon, children, defaultOpen = true }: Colla
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4">
-              {children}
-            </div>
+            <div className="px-4 pb-4">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -66,7 +70,15 @@ function CollapsibleSection({ title, icon, children, defaultOpen = true }: Colla
   );
 }
 
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string | null }) {
+function InfoRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value?: string | null;
+}) {
   if (!value) return null;
   return (
     <div className="flex items-start gap-2 py-1.5">
@@ -109,7 +121,8 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
   const hasPhotos = profile?.facePhotoUrl || profile?.palmPhotoUrl;
   const hasProblems = profile?.healthConcerns || profile?.fears;
   const hasDesires = profile?.objective || profile?.specificQuestion;
-  const hasPersonality = profile?.strongSide || profile?.weakSide || profile?.highs || profile?.lows;
+  const hasPersonality =
+    profile?.strongSide || profile?.weakSide || profile?.highs || profile?.lows;
 
   return (
     <>
@@ -128,23 +141,23 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         </div>
 
         {/* Natal Chart */}
-        <CollapsibleSection 
-          title="Carte Natale" 
+        <CollapsibleSection
+          title="Carte Natale"
           icon={<Calendar className="w-4 h-4 text-purple-600" />}
         >
           {hasNatalData ? (
             <div className="space-y-1">
-              <InfoRow 
+              <InfoRow
                 icon={<Calendar className="w-3.5 h-3.5" />}
                 label="Date de naissance"
                 value={formatBirthDate(profile?.birthDate)}
               />
-              <InfoRow 
+              <InfoRow
                 icon={<Clock className="w-3.5 h-3.5" />}
                 label="Heure de naissance"
                 value={profile?.birthTime}
               />
-              <InfoRow 
+              <InfoRow
                 icon={<MapPin className="w-3.5 h-3.5" />}
                 label="Lieu de naissance"
                 value={profile?.birthPlace}
@@ -156,27 +169,27 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         </CollapsibleSection>
 
         {/* Biometric Gallery */}
-        <CollapsibleSection 
-          title="Galerie Biométrique" 
+        <CollapsibleSection
+          title="Galerie Biométrique"
           icon={<Camera className="w-4 h-4 text-serenity-600" />}
         >
           {hasPhotos ? (
             <div className="grid grid-cols-2 gap-3">
               {profile?.facePhotoUrl && (
-                <PhotoThumbnail
-                  url={profile.facePhotoUrl}
-                  label="Visage"
-                  icon={<User className="w-4 h-4" />}
-                  onClick={() => setLightboxImage({ url: profile.facePhotoUrl!, label: 'Visage' })}
-                />
+                <div>
+                  <ExpertPrivatePhoto clientId={client.id} kind="face" alt="Visage" />
+                  <p className="mt-1 text-xs text-desk-muted flex items-center gap-1">
+                    <User className="w-3 h-3" /> Visage
+                  </p>
+                </div>
               )}
               {profile?.palmPhotoUrl && (
-                <PhotoThumbnail
-                  url={profile.palmPhotoUrl}
-                  label="Paume"
-                  icon={<Hand className="w-4 h-4" />}
-                  onClick={() => setLightboxImage({ url: profile.palmPhotoUrl!, label: 'Paume de la main' })}
-                />
+                <div>
+                  <ExpertPrivatePhoto clientId={client.id} kind="palm" alt="Paume de la main" />
+                  <p className="mt-1 text-xs text-desk-muted flex items-center gap-1">
+                    <Hand className="w-3 h-3" /> Paume
+                  </p>
+                </div>
               )}
             </div>
           ) : (
@@ -185,8 +198,8 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         </CollapsibleSection>
 
         {/* Personality Traits */}
-        <CollapsibleSection 
-          title="Personnalité" 
+        <CollapsibleSection
+          title="Personnalité"
           icon={<Sparkles className="w-4 h-4 text-amber-600" />}
           defaultOpen={false}
         >
@@ -194,14 +207,14 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
             <div className="space-y-3">
               {(profile?.strongSide || profile?.highs) && (
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                    <p className="text-xs text-emerald-600 font-medium mb-1">Forces</p>
-                    <p className="text-sm text-desk-text">{profile?.strongSide || profile?.highs}</p>
+                  <p className="text-xs text-emerald-600 font-medium mb-1">Forces</p>
+                  <p className="text-sm text-desk-text">{profile?.strongSide || profile?.highs}</p>
                 </div>
               )}
               {(profile?.weakSide || profile?.lows) && (
                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="text-xs text-red-600 font-medium mb-1">Zones de croissance</p>
-                    <p className="text-sm text-desk-text">{profile?.weakSide || profile?.lows}</p>
+                  <p className="text-xs text-red-600 font-medium mb-1">Zones de croissance</p>
+                  <p className="text-sm text-desk-text">{profile?.weakSide || profile?.lows}</p>
                 </div>
               )}
             </div>
@@ -211,8 +224,8 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         </CollapsibleSection>
 
         {/* Problems - Fears & Health */}
-        <CollapsibleSection 
-          title="Douleurs & Blocages" 
+        <CollapsibleSection
+          title="Douleurs & Blocages"
           icon={<AlertTriangle className="w-4 h-4 text-red-600" />}
           defaultOpen={false}
         >
@@ -220,14 +233,16 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
             <div className="space-y-3">
               {profile?.fears && (
                 <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-lg">
-                    <p className="text-xs text-red-600/70 font-medium mb-1">Peurs & Blocages</p>
-                    <p className="text-sm text-desk-text">{profile.fears}</p>
+                  <p className="text-xs text-red-600/70 font-medium mb-1">Peurs & Blocages</p>
+                  <p className="text-sm text-desk-text">{profile.fears}</p>
                 </div>
               )}
               {profile?.healthConcerns && (
                 <div className="p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
-                    <p className="text-xs text-orange-600/70 font-medium mb-1">Préoccupations santé</p>
-                    <p className="text-sm text-desk-text">{profile.healthConcerns}</p>
+                  <p className="text-xs text-orange-600/70 font-medium mb-1">
+                    Préoccupations santé
+                  </p>
+                  <p className="text-sm text-desk-text">{profile.healthConcerns}</p>
                 </div>
               )}
             </div>
@@ -237,8 +252,8 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
         </CollapsibleSection>
 
         {/* Desires - Questions & Objectives */}
-        <CollapsibleSection 
-          title="Désirs & Aspirations" 
+        <CollapsibleSection
+          title="Désirs & Aspirations"
           icon={<Target className="w-4 h-4 text-emerald-600" />}
           defaultOpen={false}
         >
@@ -246,7 +261,7 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
             <div className="space-y-3">
               {profile?.specificQuestion && (
                 <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
-                    <p className="text-xs text-blue-600/70 font-medium mb-1 flex items-center gap-1">
+                  <p className="text-xs text-blue-600/70 font-medium mb-1 flex items-center gap-1">
                     <HelpCircle className="w-3 h-3" />
                     Question posée
                   </p>
@@ -255,7 +270,7 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
               )}
               {profile?.objective && (
                 <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
-                    <p className="text-xs text-emerald-600/70 font-medium mb-1 flex items-center gap-1">
+                  <p className="text-xs text-emerald-600/70 font-medium mb-1 flex items-center gap-1">
                     <Target className="w-3 h-3" />
                     Objectif de vie
                   </p>
@@ -270,8 +285,8 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
 
         {/* Rituals */}
         {profile?.rituals && (
-          <CollapsibleSection 
-            title="Pratiques actuelles" 
+          <CollapsibleSection
+            title="Pratiques actuelles"
             icon={<Heart className="w-4 h-4 text-pink-600" />}
             defaultOpen={false}
           >
@@ -283,23 +298,20 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
       </motion.div>
 
       {/* Photo Lightbox with Zoom */}
-      <PhotoLightbox
-        image={lightboxImage}
-        onClose={() => setLightboxImage(null)}
-      />
+      <PhotoLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
     </>
   );
 }
 
 // Photo Thumbnail Component
-function PhotoThumbnail({ 
-  url, 
-  label, 
-  icon, 
-  onClick 
-}: { 
-  url: string; 
-  label: string; 
+function PhotoThumbnail({
+  url,
+  label,
+  icon,
+  onClick,
+}: {
+  url: string;
+  label: string;
   icon: React.ReactNode;
   onClick: () => void;
 }) {
@@ -327,10 +339,10 @@ function PhotoThumbnail({
 }
 
 // Photo Lightbox with Zoom
-function PhotoLightbox({ 
-  image, 
-  onClose 
-}: { 
+function PhotoLightbox({
+  image,
+  onClose,
+}: {
   image: { url: string; label: string } | null;
   onClose: () => void;
 }) {
@@ -339,7 +351,7 @@ function PhotoLightbox({
   if (!image) return null;
 
   const handleZoom = (direction: 'in' | 'out') => {
-    setScale(prev => {
+    setScale((prev) => {
       if (direction === 'in') return Math.min(prev + 0.5, 3);
       return Math.max(prev - 0.5, 0.5);
     });
@@ -372,16 +384,24 @@ function PhotoLightbox({
         {/* Zoom controls */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-4 py-2 bg-white/10 rounded-full">
           <button
-            onClick={(e) => { e.stopPropagation(); handleZoom('out'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleZoom('out');
+            }}
             className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
             disabled={scale <= 0.5}
             aria-label="Zoom arrière"
           >
             <span className="text-xl font-bold">−</span>
           </button>
-          <span className="text-sm text-white min-w-[60px] text-center">{Math.round(scale * 100)}%</span>
+          <span className="text-sm text-white min-w-[60px] text-center">
+            {Math.round(scale * 100)}%
+          </span>
           <button
-            onClick={(e) => { e.stopPropagation(); handleZoom('in'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleZoom('in');
+            }}
             className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
             disabled={scale >= 3}
             aria-label="Zoom avant"
@@ -401,7 +421,7 @@ function PhotoLightbox({
             src={image.url}
             alt={image.label}
             className="rounded-lg shadow-2xl"
-            style={{ 
+            style={{
               maxWidth: 'none',
               width: `${scale * 100}%`,
               minWidth: '300px',

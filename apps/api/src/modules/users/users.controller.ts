@@ -10,14 +10,29 @@ import {
   Query,
   ParseIntPipe,
   DefaultValuePipe,
+  Param,
+  Res,
+  StreamableFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
+import { ReadingIntakeService } from './reading-intake.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateOnboardingProgressDto, UpdateProfileDto } from './dto/update-profile.dto';
+import {
+  OnboardingPhotoKind,
+  PrivateOnboardingPhotoService,
+} from '../uploads/private-onboarding-photo.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly readingIntakeService: ReadingIntakeService,
+    private readonly privateOnboardingPhotoService: PrivateOnboardingPhotoService,
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -37,15 +52,6 @@ export class UsersController {
   /**
    * GET /api/users/entitlements
    * Returns the authenticated user's capabilities based on their purchased products.
-   *
-   * Response:
-   * {
-   *   "capabilities": ["content.basic", "readings.pdf", ...],
-   *   "products": ["initie", "mystique"],
-   *   "highestLevel": 2,
-   *   "levelMetadata": { "name": "Mystique", "color": "#7C3AED", "icon": "🔮" },
-   *   "orderCount": 2
-   * }
    */
   @Get('entitlements')
   @UseGuards(JwtAuthGuard)
@@ -54,9 +60,39 @@ export class UsersController {
   }
 
   /**
-   * GET /api/users/profile
-   * Returns the authenticated user's complete profile data.
+   * GET /api/users/profile/photos/:kind
+   * Streams the authenticated client's private face/palm photo.
+   * Ownership is always taken from the JWT — never from query params.
    */
+  @Get('profile/photos/:kind')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async streamOwnPhoto(
+    @Param('kind') kind: string,
+    @Request() req: { user: { userId: string } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const photoKind = this.parsePhotoKind(kind);
+    const { stream, contentType, contentLength, etag, lastModified } =
+      await this.privateOnboardingPhotoService.getPhotoStream({
+        clientId: req.user.userId,
+        kind: photoKind,
+        actorType: 'client',
+        actorId: req.user.userId,
+      });
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (contentLength != null) res.setHeader('Content-Length', String(contentLength));
+    if (etag) res.setHeader('ETag', etag);
+    if (lastModified) res.setHeader('Last-Modified', lastModified.toUTCString());
+
+    return new StreamableFile(stream);
+  }
+
+  /** Returns the authenticated user's complete profile data. */
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req: { user: { userId: string } }) {
@@ -98,10 +134,7 @@ export class UsersController {
     };
   }
 
-  /**
-   * GET /api/users/orders/completed
-   * Returns the authenticated user's completed/delivered orders.
-   */
+  /** Returns the authenticated user's completed/delivered orders. */
   @Get('orders/completed')
   @UseGuards(JwtAuthGuard)
   async getCompletedOrders(@Request() req: { user: { userId: string } }) {
@@ -110,7 +143,8 @@ export class UsersController {
 
   /**
    * PATCH /api/users/profile
-   * Updates the authenticated user's profile data.
+   * Normal profile edits remain possible outside an active reading. A completion
+   * request is different: it atomically seals the client intake into the paid order.
    */
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
@@ -118,6 +152,10 @@ export class UsersController {
     @Request() req: { user: { userId: string } },
     @Body() updateData: UpdateProfileDto,
   ) {
+    if (updateData.profileCompleted === true) {
+      return this.readingIntakeService.seal(req.user.userId, updateData);
+    }
+    await this.readingIntakeService.assertProfileEditable(req.user.userId);
     return this.usersService.updateProfile(req.user.userId, updateData);
   }
 
@@ -134,5 +172,10 @@ export class UsersController {
     @Body() dto: UpdateOnboardingProgressDto,
   ) {
     return this.usersService.saveOnboardingProgress(req.user.userId, dto);
+  }
+
+  private parsePhotoKind(kind: string): OnboardingPhotoKind {
+    if (kind === 'face' || kind === 'palm') return kind;
+    throw new BadRequestException('Type de photo invalide');
   }
 }

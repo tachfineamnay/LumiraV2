@@ -256,6 +256,7 @@ model Order {
   deliveries     DeliveryRecord[]
   generatedSteps PathStep[] // Steps generated from this reading
   chatContexts   ChatSession[] // Chat sessions related to this order
+  aiRuns         AiRun[]
 
   @@index([userId])
   @@index([userEmail])
@@ -687,4 +688,35 @@ model AiRoutingRule {
   @@index([productLevel])
   @@index([agent])
   @@index([isActive])
+}
+
+enum AiRunStatus {
+  SUCCESS
+  ERROR
+}
+
+model AiRun {
+  id              String        @id @default(cuid())
+  orderId         String?
+  order           Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  agent           String
+  mission         AiMission
+  productLevel    ProductLevel?
+  provider        String
+  model           String
+  promptVersionId String?
+  routingSource   String?
+  startedAt       DateTime      @default(now())
+  completedAt     DateTime?
+  durationMs      Int?
+  status          AiRunStatus
+  errorCode       String?
+  inputTokens     Int?
+  outputTokens    Int?
+  estimatedCost   Float?
+  createdAt       DateTime      @default(now())
+
+  @@index([orderId])
+  @@index([agent, mission])
+  @@index([startedAt(sort: Desc)])
 }

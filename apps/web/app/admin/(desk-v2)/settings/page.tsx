@@ -423,34 +423,244 @@ function AgentAccordion({
 // TABS CONTENT
 // =============================================================================
 
+type ProviderCredentialState =
+  | 'not_configured'
+  | 'configured'
+  | 'not_tested'
+  | 'connection_ok'
+  | 'test_failed'
+  | 'quota_billing'
+  | 'model_inaccessible';
+
+interface ProviderCredentialStatus {
+  envVar: string;
+  configured: boolean;
+  state: ProviderCredentialState;
+  model: string;
+  lastTestedAt?: string;
+  lastError?: string;
+  text: 'ok' | 'error' | 'not_tested';
+  multimodal?: 'ok' | 'error' | 'not_tested';
+}
+
+interface AiCredentialsStatus {
+  gemini: ProviderCredentialStatus;
+  openai: ProviderCredentialStatus;
+}
+
+interface ConnectionTestResult {
+  success: boolean;
+  provider: 'gemini' | 'openai';
+  model: string;
+  testedAt: string;
+  text: 'ok' | 'error' | 'not_tested';
+  multimodal?: 'ok' | 'error' | 'not_tested';
+  error?: string;
+}
+
+const CREDENTIAL_STATE_LABELS: Record<ProviderCredentialState, string> = {
+  not_configured: 'Non configurée',
+  configured: 'Configurée',
+  not_tested: 'Configurée — non testée',
+  connection_ok: 'Connexion réussie',
+  test_failed: 'Configurée — test en échec',
+  quota_billing: 'Quota ou facturation absente',
+  model_inaccessible: 'Modèle inaccessible',
+};
+
+const CREDENTIAL_STATE_STYLES: Record<
+  ProviderCredentialState,
+  { badge: string; icon: 'ok' | 'warn' | 'error' }
+> = {
+  not_configured: { badge: 'bg-red-500/10 border-red-500/30 text-red-600', icon: 'error' },
+  configured: { badge: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600', icon: 'ok' },
+  not_tested: { badge: 'bg-amber-500/10 border-amber-500/30 text-amber-600', icon: 'warn' },
+  connection_ok: { badge: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600', icon: 'ok' },
+  test_failed: { badge: 'bg-red-500/10 border-red-500/30 text-red-600', icon: 'error' },
+  quota_billing: { badge: 'bg-orange-500/10 border-orange-500/30 text-orange-600', icon: 'warn' },
+  model_inaccessible: { badge: 'bg-red-500/10 border-red-500/30 text-red-600', icon: 'error' },
+};
+
+function ProviderCredentialCard({
+  title,
+  envVar,
+  accent,
+  provider,
+  testing,
+  testResult,
+  onRetest,
+  showMultimodal = false,
+}: {
+  title: string;
+  envVar: string;
+  accent: 'emerald' | 'blue';
+  provider?: ProviderCredentialStatus;
+  testing: boolean;
+  testResult: ConnectionTestResult | null;
+  onRetest: () => void;
+  showMultimodal?: boolean;
+}) {
+  const state = provider?.state ?? 'not_configured';
+  const styles = CREDENTIAL_STATE_STYLES[state];
+  const accentClasses =
+    accent === 'emerald'
+      ? 'from-emerald-500/20 to-teal-600/20 border-emerald-500/30 text-emerald-600'
+      : 'from-blue-500/20 to-indigo-600/20 border-blue-500/30 text-blue-600';
+
+  const lastTestedAt = testResult?.testedAt ?? provider?.lastTestedAt;
+  const testedModel = testResult?.model ?? provider?.model;
+  const displayError = testResult?.error ?? provider?.lastError;
+
+  return (
+    <GlassCard className="p-6">
+      <div className="flex items-start gap-4">
+        <div
+          className={`w-12 h-12 rounded-xl bg-gradient-to-br border flex items-center justify-center ${accentClasses}`}
+        >
+          <Key className="w-6 h-6" />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-lg font-medium text-desk-text">{title}</h3>
+          <p className="text-sm text-desk-muted mt-1">
+            Variable d&apos;environnement attendue :{' '}
+            <code
+              className={`px-1.5 py-0.5 bg-desk-card rounded text-xs ${accentClasses.split(' ').pop()}`}
+            >
+              {envVar}
+            </code>
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${styles.badge}`}
+            >
+              {styles.icon === 'ok' ? (
+                <Check className="w-4 h-4" />
+              ) : styles.icon === 'warn' ? (
+                <AlertCircle className="w-4 h-4" />
+              ) : (
+                <X className="w-4 h-4" />
+              )}
+              <span className="text-sm">{CREDENTIAL_STATE_LABELS[state]}</span>
+            </div>
+
+            <button
+              onClick={onRetest}
+              disabled={testing}
+              className="flex items-center gap-2 px-4 py-1.5 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
+            >
+              {testing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <TestTube className="w-4 h-4" />
+              )}
+              {testResult || provider?.lastTestedAt ? 'Retester' : 'Tester la connexion'}
+            </button>
+          </div>
+
+          <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <dt className="text-desk-subtle">Modèle testé</dt>
+              <dd className="text-desk-text font-mono text-xs mt-0.5">{testedModel || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-desk-subtle">Dernier test</dt>
+              <dd className="text-desk-text text-xs mt-0.5">
+                {lastTestedAt
+                  ? new Date(lastTestedAt).toLocaleString('fr-FR')
+                  : 'Aucun test effectué'}
+              </dd>
+            </div>
+            {showMultimodal && (
+              <div>
+                <dt className="text-desk-subtle">Multimodal</dt>
+                <dd className="text-desk-text text-xs mt-0.5">
+                  {testResult?.multimodal === 'ok'
+                    ? 'OK'
+                    : testResult?.multimodal === 'error'
+                      ? 'Échec'
+                      : testResult?.multimodal === 'not_tested' ||
+                          provider?.multimodal === 'not_tested'
+                        ? 'Non testé'
+                        : provider?.multimodal === 'ok'
+                          ? 'OK'
+                          : '—'}
+                </dd>
+              </div>
+            )}
+          </dl>
+
+          {(testResult || displayError) && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`mt-4 p-3 rounded-lg ${
+                testResult?.success
+                  ? accent === 'emerald'
+                    ? 'bg-emerald-500/10 border border-emerald-500/30'
+                    : 'bg-blue-500/10 border border-blue-500/30'
+                  : 'bg-red-500/10 border border-red-500/30'
+              }`}
+            >
+              {testResult?.success ? (
+                <div
+                  className={`flex items-center gap-2 ${accent === 'emerald' ? 'text-emerald-600' : 'text-blue-600'}`}
+                >
+                  <Check className="w-4 h-4" />
+                  <span className="text-sm">
+                    Connexion texte réussie
+                    {showMultimodal && testResult.multimodal === 'ok' && ' · multimodal OK'}
+                    {showMultimodal &&
+                      testResult.multimodal === 'not_tested' &&
+                      testResult.error &&
+                      ` · ${testResult.error}`}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2 text-red-600">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm">{displayError || 'Test en échec'}</span>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </GlassCard>
+  );
+}
+
 function CredentialsTab() {
   const [testing, setTesting] = useState(false);
   const [testingOpenAI, setTestingOpenAI] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
-  const [openaiTestResult, setOpenaiTestResult] = useState<{
-    success: boolean;
-    error?: string;
-  } | null>(null);
-  const [configStatus, setConfigStatus] = useState<{
-    vertexConfigured: boolean;
-    openaiConfigured: boolean;
-    projectId?: string;
-  } | null>(null);
+  const [geminiTestResult, setGeminiTestResult] = useState<ConnectionTestResult | null>(null);
+  const [openaiTestResult, setOpenaiTestResult] = useState<ConnectionTestResult | null>(null);
+  const [configStatus, setConfigStatus] = useState<AiCredentialsStatus | null>(null);
 
-  useEffect(() => {
-    expertApi.get('/expert/settings/status').then(({ data }) => setConfigStatus(data));
+  const refreshStatus = useCallback(async () => {
+    const { data } = await expertApi.get('/expert/settings/status');
+    setConfigStatus(data);
   }, []);
 
-  const testConnection = async () => {
+  useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
+
+  const runGeminiTest = async () => {
     setTesting(true);
-    setTestResult(null);
+    setGeminiTestResult(null);
     try {
       const { data } = await expertApi.post('/expert/settings/vertex-test');
-      setTestResult(data);
+      setGeminiTestResult(data);
+      await refreshStatus();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
-      setTestResult({
+      setGeminiTestResult({
         success: false,
+        provider: 'gemini',
+        model: configStatus?.gemini.model ?? '',
+        testedAt: new Date().toISOString(),
+        text: 'error',
         error: error.response?.data?.error || 'Erreur de connexion',
       });
     } finally {
@@ -458,16 +668,21 @@ function CredentialsTab() {
     }
   };
 
-  const testOpenAIConnection = async () => {
+  const runOpenAITest = async () => {
     setTestingOpenAI(true);
     setOpenaiTestResult(null);
     try {
       const { data } = await expertApi.post('/expert/settings/openai-test');
       setOpenaiTestResult(data);
+      await refreshStatus();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       setOpenaiTestResult({
         success: false,
+        provider: 'openai',
+        model: configStatus?.openai.model ?? '',
+        testedAt: new Date().toISOString(),
+        text: 'error',
         error: error.response?.data?.error || 'Erreur de connexion',
       });
     } finally {
@@ -477,162 +692,26 @@ function CredentialsTab() {
 
   return (
     <div className="space-y-6">
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30 flex items-center justify-center">
-            <Key className="w-6 h-6 text-emerald-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-medium text-desk-text">Clé API Gemini</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              La clé API est configurée via la variable d&apos;environnement{' '}
-              <code className="px-1.5 py-0.5 bg-desk-card rounded text-amber-600 text-xs">
-                GEMINI_API_KEY
-              </code>
-            </p>
+      <ProviderCredentialCard
+        title="Clé API Gemini"
+        envVar="GEMINI_API_KEY"
+        accent="emerald"
+        provider={configStatus?.gemini}
+        testing={testing}
+        testResult={geminiTestResult}
+        onRetest={runGeminiTest}
+        showMultimodal
+      />
 
-            <div className="mt-4 flex items-center gap-3">
-              <div
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                  configStatus?.vertexConfigured
-                    ? 'bg-emerald-500/10 border border-emerald-500/30'
-                    : 'bg-red-500/10 border border-red-500/30'
-                }`}
-              >
-                {configStatus?.vertexConfigured ? (
-                  <>
-                    <Check className="w-4 h-4 text-emerald-600" />
-                    <span className="text-sm text-emerald-600">Configurée</span>
-                  </>
-                ) : (
-                  <>
-                    <X className="w-4 h-4 text-red-600" />
-                    <span className="text-sm text-red-600">Non configurée</span>
-                  </>
-                )}
-              </div>
-
-              <button
-                onClick={testConnection}
-                disabled={testing}
-                className="flex items-center gap-2 px-4 py-1.5 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
-              >
-                {testing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <TestTube className="w-4 h-4" />
-                )}
-                Tester la connexion
-              </button>
-            </div>
-
-            {testResult && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`mt-4 p-3 rounded-lg ${
-                  testResult.success
-                    ? 'bg-emerald-500/10 border border-emerald-500/30'
-                    : 'bg-red-500/10 border border-red-500/30'
-                }`}
-              >
-                {testResult.success ? (
-                  <div className="flex items-center gap-2 text-emerald-600">
-                    <Check className="w-4 h-4" />
-                    <span className="text-sm">
-                      Connexion réussie ! L&apos;API Gemini est opérationnelle.
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2 text-red-600">
-                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm">{testResult.error}</span>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </div>
-        </div>
-      </GlassCard>
-
-      {/* OpenAI Card */}
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center">
-            <Key className="w-6 h-6 text-blue-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-medium text-desk-text">Clé API OpenAI</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              La clé API est configurée via la variable d&apos;environnement{' '}
-              <code className="px-1.5 py-0.5 bg-desk-card rounded text-blue-600 text-xs">
-                OPENAI_API_KEY
-              </code>
-            </p>
-
-            <div className="mt-4 flex items-center gap-3">
-              <div
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                  configStatus?.openaiConfigured
-                    ? 'bg-blue-500/10 border border-blue-500/30'
-                    : 'bg-red-500/10 border border-red-500/30'
-                }`}
-              >
-                {configStatus?.openaiConfigured ? (
-                  <>
-                    <Check className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm text-blue-600">Configurée</span>
-                  </>
-                ) : (
-                  <>
-                    <X className="w-4 h-4 text-red-600" />
-                    <span className="text-sm text-red-600">Non configurée</span>
-                  </>
-                )}
-              </div>
-
-              <button
-                onClick={testOpenAIConnection}
-                disabled={testingOpenAI}
-                className="flex items-center gap-2 px-4 py-1.5 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
-              >
-                {testingOpenAI ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <TestTube className="w-4 h-4" />
-                )}
-                Tester la connexion
-              </button>
-            </div>
-
-            {openaiTestResult && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`mt-4 p-3 rounded-lg ${
-                  openaiTestResult.success
-                    ? 'bg-blue-500/10 border border-blue-500/30'
-                    : 'bg-red-500/10 border border-red-500/30'
-                }`}
-              >
-                {openaiTestResult.success ? (
-                  <div className="flex items-center gap-2 text-blue-600">
-                    <Check className="w-4 h-4" />
-                    <span className="text-sm">
-                      Connexion réussie ! L&apos;API OpenAI est opérationnelle.
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2 text-red-600">
-                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm">{openaiTestResult.error}</span>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </div>
-        </div>
-      </GlassCard>
+      <ProviderCredentialCard
+        title="Clé API OpenAI"
+        envVar="OPENAI_API_KEY"
+        accent="blue"
+        provider={configStatus?.openai}
+        testing={testingOpenAI}
+        testResult={openaiTestResult}
+        onRetest={runOpenAITest}
+      />
 
       <GlassCard className="p-4">
         <div className="flex items-start gap-3 text-desk-muted">
@@ -641,8 +720,8 @@ function CredentialsTab() {
             Pour modifier les clés API, mettez à jour les variables d&apos;environnement{' '}
             <code className="px-1 py-0.5 bg-desk-card rounded text-xs">GEMINI_API_KEY</code> et/ou{' '}
             <code className="px-1 py-0.5 bg-desk-card rounded text-xs">OPENAI_API_KEY</code> dans
-            votre configuration de déploiement (Coolify, .env, etc.) puis redémarrez
-            l&apos;expertApi.
+            votre configuration de déploiement (Coolify, .env, etc.) puis redémarrez le service API.
+            Les tests utilisent le modèle configuré dans l&apos;onglet Modèles.
           </p>
         </div>
       </GlassCard>

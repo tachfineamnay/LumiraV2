@@ -22,8 +22,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VertexOracle, OracleResponse, UserProfile, OrderContext } from './VertexOracle';
+import { productLevelFromAmountCents } from './product-level.util';
 import { PdfFactory, ReadingPdfData } from './PdfFactory';
 import { AudioGenerationService } from './AudioGenerationService';
+import {
+  OrderForReadingSource,
+  ReadingSourceResolver,
+  ResolvedReadingSource,
+} from './reading-source.resolver';
 import { PathActionType, InsightCategory } from '@prisma/client';
 import { isCanonicalReadingContent } from '../../modules/expert/reading-version';
 
@@ -67,6 +73,7 @@ export class DigitalSoulService {
     private readonly prisma: PrismaService,
     private readonly vertexOracle: VertexOracle,
     private readonly pdfFactory: PdfFactory,
+    private readonly readingSourceResolver: ReadingSourceResolver,
     @Optional() private readonly audioGenerationService?: AudioGenerationService,
   ) {
     this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
@@ -139,35 +146,10 @@ export class DigitalSoulService {
       }
 
       const user = order.user;
-      const profile = user.profile;
+      const { userProfile, readingSource } = this.resolveReadingProfile(order);
 
       this.logger.log(`👤 User: ${user.firstName} ${user.lastName}`);
-
-      // Build profiles - Include ALL fields from UserProfile
-      const userProfile: UserProfile = {
-        userId: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        birthDate: profile?.birthDate || '',
-        birthTime: profile?.birthTime || undefined,
-        birthPlace: profile?.birthPlace || undefined,
-        specificQuestion: profile?.specificQuestion || undefined,
-        objective: profile?.objective || undefined,
-        facePhotoUrl: profile?.facePhotoUrl || undefined,
-        palmPhotoUrl: profile?.palmPhotoUrl || undefined,
-        highs: profile?.highs || undefined,
-        lows: profile?.lows || undefined,
-        strongSide: profile?.strongSide || undefined,
-        weakSide: profile?.weakSide || undefined,
-        strongZone: profile?.strongZone || undefined,
-        weakZone: profile?.weakZone || undefined,
-        deliveryStyle: profile?.deliveryStyle || undefined,
-        pace: profile?.pace || undefined,
-        ailments: profile?.ailments || undefined,
-        fears: profile?.fears || undefined,
-        rituals: profile?.rituals || undefined,
-      };
+      this.logger.log(`📎 Reading source for generation: ${readingSource.source}`);
 
       const { level: orderLevel, productName: orderProductName } = this.getLevelFromAmount(
         order.amount,
@@ -176,6 +158,7 @@ export class DigitalSoulService {
         orderId: order.id,
         orderNumber: order.orderNumber,
         level: orderLevel,
+        productLevel: productLevelFromAmountCents(order.amount),
         productName: orderProductName,
         expertPrompt: order.expertPrompt ?? undefined,
         expertInstructions: order.expertInstructions ?? undefined,
@@ -259,7 +242,7 @@ export class DigitalSoulService {
         where: { id: orderId },
         data: {
           status: 'AWAITING_VALIDATION',
-          generatedContent: aiResponse as object,
+          generatedContent: this.withReadingSourceMetadata(aiResponse, readingSource),
           errorLog: null,
         },
       });
@@ -329,10 +312,11 @@ export class DigitalSoulService {
     const aiResponse = sealedReading.content as unknown as OracleResponse;
 
     const user = order.user;
-    const profile = user.profile;
+    const { userProfile, readingSource } = this.resolveReadingProfile(order);
 
     // Generate PDF
     this.logger.log(`📄 Generating PDF for ${user.firstName} ${user.lastName}...`);
+    this.logger.log(`📎 Reading source for PDF birth data: ${readingSource.source}`);
 
     const pdfData: ReadingPdfData = {
       userName: `${user.firstName} ${user.lastName}`,
@@ -349,9 +333,9 @@ export class DigitalSoulService {
       rituals: aiResponse.pdf_content.rituals || [],
       conclusion: aiResponse.pdf_content.conclusion,
       birthData: {
-        date: profile?.birthDate || '',
-        time: profile?.birthTime,
-        place: profile?.birthPlace,
+        date: userProfile.birthDate,
+        time: userProfile.birthTime,
+        place: userProfile.birthPlace,
       },
       generatedAt: new Date().toISOString(),
     };
@@ -561,46 +545,22 @@ export class DigitalSoulService {
       this.logger.log(`   📝 Status updated to PROCESSING (lock acquired)`);
 
       const user = order.user;
-      const profile = user.profile;
+      const { userProfile, readingSource } = this.resolveReadingProfile(order);
+      const readingFields = readingSource.profile;
 
-      this.logger.log(`\n👤 STEP 1b: User profile loaded`);
+      this.logger.log(`\n👤 STEP 1b: Reading source loaded`);
       this.logger.log(`   👤 Name: ${user.firstName} ${user.lastName}`);
       this.logger.log(`   📧 Email: ${user.email}`);
-      this.logger.log(`   🎂 Birth date: ${profile?.birthDate || 'NOT PROVIDED'}`);
-      this.logger.log(`   📍 Birth place: ${profile?.birthPlace || 'NOT PROVIDED'}`);
-      this.logger.log(`   🖼️ Face photo: ${profile?.facePhotoUrl ? 'YES' : 'NO'}`);
-      this.logger.log(`   ✋ Palm photo: ${profile?.palmPhotoUrl ? 'YES' : 'NO'}`);
+      this.logger.log(`   📎 Source: ${readingSource.source}`);
+      this.logger.log(`   🎂 Birth date: ${readingFields.birthDate || 'NOT PROVIDED'}`);
+      this.logger.log(`   📍 Birth place: ${readingFields.birthPlace || 'NOT PROVIDED'}`);
+      this.logger.log(`   🖼️ Face photo: ${readingFields.facePhotoUrl ? 'YES' : 'NO'}`);
+      this.logger.log(`   ✋ Palm photo: ${readingFields.palmPhotoUrl ? 'YES' : 'NO'}`);
       this.logger.log(`   📁 Files attached: ${order.files?.length || 0}`);
-      this.logger.log(`   ❓ Specific question: ${profile?.specificQuestion ? 'YES' : 'NO'}`);
-      this.logger.log(`   🎯 Objective: ${profile?.objective ? 'YES' : 'NO'}`);
-      this.logger.log(`   ⬆️ Highs: ${profile?.highs ? 'YES' : 'NO'}`);
-      this.logger.log(`   ⬇️ Lows: ${profile?.lows ? 'YES' : 'NO'}`);
-
-      // Build user profile for AI - Include ALL fields from UserProfile
-      const userProfile: UserProfile = {
-        userId: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        birthDate: profile?.birthDate || '',
-        birthTime: profile?.birthTime || undefined,
-        birthPlace: profile?.birthPlace || undefined,
-        specificQuestion: profile?.specificQuestion || undefined,
-        objective: profile?.objective || undefined,
-        facePhotoUrl: profile?.facePhotoUrl || undefined,
-        palmPhotoUrl: profile?.palmPhotoUrl || undefined,
-        highs: profile?.highs || undefined,
-        lows: profile?.lows || undefined,
-        strongSide: profile?.strongSide || undefined,
-        weakSide: profile?.weakSide || undefined,
-        strongZone: profile?.strongZone || undefined,
-        weakZone: profile?.weakZone || undefined,
-        deliveryStyle: profile?.deliveryStyle || undefined,
-        pace: profile?.pace || undefined,
-        ailments: profile?.ailments || undefined,
-        fears: profile?.fears || undefined,
-        rituals: profile?.rituals || undefined,
-      };
+      this.logger.log(`   ❓ Specific question: ${readingFields.specificQuestion ? 'YES' : 'NO'}`);
+      this.logger.log(`   🎯 Objective: ${readingFields.objective ? 'YES' : 'NO'}`);
+      this.logger.log(`   ⬆️ Highs: ${readingFields.highs ? 'YES' : 'NO'}`);
+      this.logger.log(`   ⬇️ Lows: ${readingFields.lows ? 'YES' : 'NO'}`);
 
       // Build order context — resolve level from order amount
       const { level: orderLevel, productName: orderProductName } = this.getLevelFromAmount(
@@ -610,6 +570,7 @@ export class DigitalSoulService {
         orderId: order.id,
         orderNumber: order.orderNumber,
         level: orderLevel,
+        productLevel: productLevelFromAmountCents(order.amount),
         productName: orderProductName,
         expertPrompt: order.expertPrompt ?? undefined,
         expertInstructions: order.expertInstructions ?? undefined,
@@ -830,11 +791,14 @@ export class DigitalSoulService {
           status: 'COMPLETED',
           deliveredAt: new Date(),
           errorLog: null,
-          generatedContent: {
-            ...aiResponse,
-            pdfUrl,
-            pdfKey,
-          } as object,
+          generatedContent: this.withReadingSourceMetadata(
+            {
+              ...aiResponse,
+              pdfUrl,
+              pdfKey,
+            },
+            readingSource,
+          ),
         },
       });
 
@@ -890,6 +854,29 @@ export class DigitalSoulService {
   // ===========================================================================
   // HELPER METHODS
   // ===========================================================================
+
+  private resolveReadingProfile(order: OrderForReadingSource & { files?: unknown[] }): {
+    userProfile: UserProfile;
+    readingSource: ResolvedReadingSource;
+  } {
+    const readingSource = this.readingSourceResolver.resolve(order);
+    const userProfile = this.readingSourceResolver.toVertexUserProfile(order.user, readingSource);
+    return { userProfile, readingSource };
+  }
+
+  private withReadingSourceMetadata(
+    payload: OracleResponse | Record<string, unknown>,
+    readingSource: ResolvedReadingSource,
+  ): object {
+    return {
+      ...(payload as Record<string, unknown>),
+      _readingSource: {
+        source: readingSource.source,
+        sealedAt: readingSource.sealedAt ?? null,
+        contentHash: readingSource.contentHash ?? null,
+      },
+    };
+  }
 
   /**
    * Saves error to order and sets status to FAILED

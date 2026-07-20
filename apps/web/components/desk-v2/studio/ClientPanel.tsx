@@ -17,6 +17,7 @@ import {
   Heart,
   AlertTriangle,
 } from 'lucide-react';
+import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 import { Order, LEVEL_CONFIG } from '../types';
 
 interface ClientPanelProps {
@@ -31,10 +32,8 @@ export function ClientPanel({ order }: ClientPanelProps) {
   const levelConfig = LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1];
 
   const toggleSection = (section: string) => {
-    setExpandedSections(prev =>
-      prev.includes(section)
-        ? prev.filter(s => s !== section)
-        : [...prev, section]
+    setExpandedSections((prev) =>
+      prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section],
     );
   };
 
@@ -43,9 +42,12 @@ export function ClientPanel({ order }: ClientPanelProps) {
       {/* Header with client avatar */}
       <div className="p-3 border-b border-desk-border">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-lg bg-amber-500 
-                          flex items-center justify-center text-sm font-bold text-white">
-            {user.firstName?.[0]}{user.lastName?.[0]}
+          <div
+            className="w-10 h-10 rounded-lg bg-amber-500 
+                          flex items-center justify-center text-sm font-bold text-white"
+          >
+            {user.firstName?.[0]}
+            {user.lastName?.[0]}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-desk-text truncate">
@@ -58,7 +60,9 @@ export function ClientPanel({ order }: ClientPanelProps) {
         {/* Order info */}
         <div className="mt-2.5 flex items-center gap-2">
           <span className="text-lg">{levelConfig.icon}</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getLevelColor(order.level)}`}>
+          <span
+            className={`px-2 py-0.5 rounded-full text-xs font-medium ${getLevelColor(order.level)}`}
+          >
             {levelConfig.name}
           </span>
           <span className="text-sm text-desk-subtle">•</span>
@@ -177,7 +181,9 @@ export function ClientPanel({ order }: ClientPanelProps) {
         )}
 
         {/* Photos */}
-        {(profile?.facePhotoUrl || profile?.palmPhotoUrl || order.files.length > 0) && (
+        {(profile?.facePhotoUrl ||
+          profile?.palmPhotoUrl ||
+          order.files.some((file) => isHttpPhotoUrl(file.url))) && (
           <CollapsibleSection
             title="Photos"
             icon={<ImageIcon className="w-4 h-4" />}
@@ -186,20 +192,42 @@ export function ClientPanel({ order }: ClientPanelProps) {
           >
             <div className="grid grid-cols-2 gap-2">
               {profile?.facePhotoUrl && (
-                <PhotoThumbnail url={profile.facePhotoUrl} label="Visage" />
+                <div>
+                  <ExpertPrivatePhoto clientId={user.id} kind="face" alt="Visage" />
+                  <p className="mt-1 text-[10px] text-desk-muted">Visage</p>
+                </div>
               )}
               {profile?.palmPhotoUrl && (
-                <PhotoThumbnail url={profile.palmPhotoUrl} label="Paume" />
+                <div>
+                  <ExpertPrivatePhoto clientId={user.id} kind="palm" alt="Paume" />
+                  <p className="mt-1 text-[10px] text-desk-muted">Paume</p>
+                </div>
               )}
-              {order.files.map(file => (
-                <PhotoThumbnail key={file.id} url={file.url} label={file.type} />
-              ))}
+              {order.files
+                .filter((file) => {
+                  if (!isHttpPhotoUrl(file.url)) return false;
+                  // Avoid duplicating a profile photo that is already streamed securely.
+                  if (file.type === 'FACE_PHOTO' && profile?.facePhotoUrl) return false;
+                  if (file.type === 'PALM_PHOTO' && profile?.palmPhotoUrl) return false;
+                  return true;
+                })
+                .map((file) => (
+                  <HttpPhotoThumbnail
+                    key={file.id}
+                    url={file.url}
+                    label={file.type === 'FACE_PHOTO' ? 'Visage' : 'Paume'}
+                  />
+                ))}
             </div>
           </CollapsibleSection>
         )}
       </div>
     </div>
   );
+}
+
+function isHttpPhotoUrl(url: string | undefined | null): boolean {
+  return Boolean(url && /^https?:\/\//i.test(url));
 }
 
 interface CollapsibleSectionProps {
@@ -220,7 +248,9 @@ function CollapsibleSection({
   children,
 }: CollapsibleSectionProps) {
   return (
-    <div className={`rounded-lg overflow-hidden ${highlight ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-desk-card'}`}>
+    <div
+      className={`rounded-lg overflow-hidden ${highlight ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-desk-card'}`}
+    >
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-desk-hover transition-colors"
@@ -266,7 +296,7 @@ function InfoRow({ icon, label, value }: InfoRowProps) {
   );
 }
 
-function PhotoThumbnail({ url, label }: { url: string; label: string }) {
+function HttpPhotoThumbnail({ url, label }: { url: string; label: string }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -319,10 +349,15 @@ function formatDate(dateStr: string): string {
 
 function getLevelColor(level: number): string {
   switch (level) {
-    case 1: return 'bg-emerald-500/20 text-emerald-600';
-    case 2: return 'bg-blue-500/20 text-blue-600';
-    case 3: return 'bg-purple-500/20 text-purple-600';
-    case 4: return 'bg-amber-500/20 text-amber-600';
-    default: return 'bg-slate-500/20 text-desk-muted';
+    case 1:
+      return 'bg-emerald-500/20 text-emerald-600';
+    case 2:
+      return 'bg-blue-500/20 text-blue-600';
+    case 3:
+      return 'bg-purple-500/20 text-purple-600';
+    case 4:
+      return 'bg-amber-500/20 text-amber-600';
+    default:
+      return 'bg-slate-500/20 text-desk-muted';
   }
 }

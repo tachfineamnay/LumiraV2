@@ -103,6 +103,10 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   if (cacheControl) {
     responseHeaders.set('cache-control', cacheControl);
   }
+  const nosniff = upstream.headers.get('x-content-type-options');
+  if (nosniff) {
+    responseHeaders.set('x-content-type-options', nosniff);
+  }
   const contentRange = upstream.headers.get('content-range');
   if (contentRange) {
     responseHeaders.set('content-range', contentRange);

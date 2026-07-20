@@ -86,6 +86,9 @@ describe('DreamsService', () => {
       akashicRecord: {
         findUnique: jest.fn(),
       },
+      order: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     };
 
     vertexOracle = {
@@ -134,6 +137,7 @@ describe('DreamsService', () => {
           content: dto.content,
           emotion: dto.emotion,
         }),
+        undefined,
       );
     });
 
@@ -190,6 +194,7 @@ describe('DreamsService', () => {
         expect.objectContaining({
           akashicSummary: expect.stringContaining('méditation'),
         }),
+        undefined,
       );
     });
 
@@ -206,6 +211,7 @@ describe('DreamsService', () => {
         expect.objectContaining({
           pastDreams: expect.any(Array),
         }),
+        undefined,
       );
     });
 

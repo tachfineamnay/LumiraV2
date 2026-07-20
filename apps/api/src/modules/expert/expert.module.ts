@@ -7,11 +7,13 @@ import { ProductionControlController } from './production-control.controller';
 import { ClientControlController } from './client-control.controller';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
+import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { ExpertGateway } from './expert.gateway';
 import { IdGenerator } from '../../utils/IdGenerator';
 import { ServicesModule } from '../../services/services.module';
+import { UploadsModule } from '../uploads/uploads.module';
 import { ProductionControlService } from './production-control.service';
 import { ProductionQueueInterceptor } from './production-queue.interceptor';
 import { ProductionCancelInterceptor } from './production-cancel.interceptor';
@@ -22,6 +24,7 @@ import { ClientControlService } from './client-control.service';
   imports: [
     ConfigModule,
     ServicesModule,
+    UploadsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -38,6 +41,7 @@ import { ClientControlService } from './client-control.service';
   providers: [
     ExpertService,
     AdminSettingsService,
+    AiProviderDiagnosticsService,
     ExpertAuthGuard,
     RolesGuard,
     ExpertGateway,
@@ -62,6 +66,7 @@ import { ClientControlService } from './client-control.service';
     RolesGuard,
     ProductionControlService,
     ClientControlService,
+    AiProviderDiagnosticsService,
     JwtModule,
   ],
 })
