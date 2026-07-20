@@ -20,55 +20,44 @@ export class AiExecutionResolverService {
   ) {}
 
   async resolve(ctx: AiExecutionContext, snapshot: AiPromptSnapshot): Promise<ResolvedAiExecution> {
-    const heavyAgents: AgentType[] = ['SCRIBE', 'GUIDE', 'EDITOR', 'NARRATOR'];
-    const isHeavy = heavyAgents.includes(ctx.agent);
+    const config = snapshot.modelConfig.agents[ctx.agent];
+    if (!config.enabled) {
+      throw new BadRequestException(`L'agent ${ctx.agent} est désactivé en V1.`);
+    }
 
-    let provider: 'gemini' | 'openai' = snapshot.agentProviders[ctx.agent] ?? 'gemini';
-    let model = isHeavy ? snapshot.modelConfig.heavyModel : snapshot.modelConfig.flashModel;
-    let temperature = isHeavy
-      ? snapshot.modelConfig.heavyTemperature
-      : snapshot.modelConfig.flashTemperature;
-    let topP = isHeavy ? snapshot.modelConfig.heavyTopP : snapshot.modelConfig.flashTopP;
-    let maxTokens = isHeavy
-      ? snapshot.modelConfig.heavyMaxTokens
-      : snapshot.modelConfig.flashMaxTokens;
+    let provider = config.provider;
+    let model = config.model;
+    let temperature = config.temperature;
+    let topP = config.topP;
+    let reasoningEffort = config.reasoningEffort;
+    let verbosity = config.verbosity;
+    let maxTokens = config.maxOutputTokens;
     let routingSource = `global:${ctx.agent}`;
     let rulePromptVersionId: string | undefined;
 
-    if (provider === 'openai') {
-      model = isHeavy
-        ? snapshot.modelConfig.openaiHeavyModel
-        : snapshot.modelConfig.openaiFlashModel;
-      temperature = isHeavy
-        ? snapshot.modelConfig.openaiHeavyTemperature
-        : snapshot.modelConfig.openaiFlashTemperature;
-      topP = isHeavy ? snapshot.modelConfig.openaiHeavyTopP : snapshot.modelConfig.openaiFlashTopP;
-      maxTokens = isHeavy
-        ? snapshot.modelConfig.openaiHeavyMaxTokens
-        : snapshot.modelConfig.openaiFlashMaxTokens;
-    }
-
     if (ctx.productLevel) {
       const rule = await this.aiRouting.resolveRule(ctx.productLevel, ctx.agent, ctx.mission);
-      if (rule) {
+      if (
+        rule &&
+        !(snapshot.modelConfig.providerMode === 'openai_only' && rule.provider === 'gemini')
+      ) {
         provider = rule.provider;
         model = rule.model;
         temperature = rule.temperature;
         maxTokens = rule.maxTokens;
+        reasoningEffort = undefined;
+        verbosity = undefined;
         rulePromptVersionId = rule.promptVersionId;
         routingSource = rule.source;
-        topP =
-          provider === 'openai'
-            ? isHeavy
-              ? snapshot.modelConfig.openaiHeavyTopP
-              : snapshot.modelConfig.openaiFlashTopP
-            : isHeavy
-              ? snapshot.modelConfig.heavyTopP
-              : snapshot.modelConfig.flashTopP;
+        topP = provider === 'openai' ? config.topP : undefined;
         this.logger.log(
           `[${ctx.agent}] Routing ${routingSource} → ${provider}/${model} mission=${ctx.mission}`,
         );
       }
+    }
+
+    if (snapshot.modelConfig.providerMode === 'openai_only') {
+      provider = 'openai';
     }
 
     const promptVersionId = ctx.promptVersionId ?? rulePromptVersionId;
@@ -82,6 +71,8 @@ export class AiExecutionResolverService {
       model,
       temperature,
       topP,
+      reasoningEffort,
+      verbosity,
       maxTokens,
       systemPrompt,
       promptVersionId,

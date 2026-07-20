@@ -22,7 +22,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ProductLevel, AiMission } from '@prisma/client';
 import {
   AgentType,
+  AiAgentModelConfig,
   AiExecutionContext,
+  AiModelConfigSnapshot,
   AiPromptSnapshot,
   ResolvedAiExecution,
 } from './ai-execution.types';
@@ -177,15 +179,6 @@ export interface DreamInterpretation {
 export type { AgentType, AiExecutionContext } from './ai-execution.types';
 
 type AIProvider = 'gemini' | 'openai';
-
-interface AgentProviders {
-  SCRIBE: AIProvider;
-  GUIDE: AIProvider;
-  EDITOR: AIProvider;
-  CONFIDANT: AIProvider;
-  ONIRIQUE: AIProvider;
-  NARRATOR: AIProvider;
-}
 
 // =============================================================================
 // DEFAULT PROMPTS - Used as fallback if DB is empty
@@ -380,32 +373,57 @@ RÈGLES ABSOLUES:
 
 // Default model configuration
 const DEFAULT_MODEL_CONFIG = {
-  heavyModel: 'gemini-2.5-flash',
-  flashModel: 'gemini-2.5-flash',
-  heavyTemperature: 0.8,
-  heavyTopP: 0.95,
-  heavyMaxTokens: 16384,
-  flashTemperature: 0.9,
-  flashTopP: 0.95,
-  flashMaxTokens: 2048,
-  // OpenAI defaults
-  openaiHeavyModel: 'gpt-4o',
-  openaiFlashModel: 'gpt-4o-mini',
-  openaiHeavyTemperature: 0.8,
-  openaiHeavyTopP: 0.95,
-  openaiHeavyMaxTokens: 16384,
-  openaiFlashTemperature: 0.9,
-  openaiFlashTopP: 0.95,
-  openaiFlashMaxTokens: 2048,
-  // Per-agent routing
-  agentProviders: {
-    SCRIBE: 'gemini' as AIProvider,
-    GUIDE: 'gemini' as AIProvider,
-    EDITOR: 'gemini' as AIProvider,
-    CONFIDANT: 'gemini' as AIProvider,
-    ONIRIQUE: 'gemini' as AIProvider,
-    NARRATOR: 'gemini' as AIProvider,
-  },
+  providerMode: 'openai_only' as const,
+  agents: {
+    SCRIBE: {
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-5.5',
+      reasoningEffort: 'high',
+      verbosity: 'high',
+      maxOutputTokens: 24000,
+    },
+    EDITOR: {
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-5.4',
+      reasoningEffort: 'medium',
+      verbosity: 'high',
+      maxOutputTokens: 16000,
+    },
+    GUIDE: {
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-5.4',
+      reasoningEffort: 'low',
+      verbosity: 'medium',
+      maxOutputTokens: 6000,
+    },
+    NARRATOR: {
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-4o',
+      temperature: 0.3,
+      topP: 0.9,
+      maxOutputTokens: 12000,
+    },
+    CONFIDANT: {
+      enabled: false,
+      provider: 'openai',
+      model: 'gpt-4o',
+      temperature: 0.6,
+      topP: 0.9,
+      maxOutputTokens: 1600,
+    },
+    ONIRIQUE: {
+      enabled: false,
+      provider: 'openai',
+      model: 'gpt-4o',
+      temperature: 0.65,
+      topP: 0.9,
+      maxOutputTokens: 2500,
+    },
+  } satisfies Record<AgentType, AiAgentModelConfig>,
 };
 
 // =============================================================================
@@ -436,8 +454,10 @@ export class VertexOracle implements OnModuleInit {
     ...DEFAULT_AGENT_CONTEXTS,
     ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT,
   };
-  private modelConfig = { ...DEFAULT_MODEL_CONFIG };
-  private agentProviders: AgentProviders = { ...DEFAULT_MODEL_CONFIG.agentProviders };
+  private modelConfig: AiModelConfigSnapshot = {
+    ...DEFAULT_MODEL_CONFIG,
+    agents: { ...DEFAULT_MODEL_CONFIG.agents },
+  };
   private promptsLoaded = false;
   // Dedicated JSON model for ONIRIQUE to guarantee structured output
   private oniricModel: GenerativeModel | null = null;
@@ -511,13 +531,11 @@ export class VertexOracle implements OnModuleInit {
           case 'MODEL_CONFIG':
             try {
               const parsed = JSON.parse(prompt.value);
-              this.modelConfig = { ...DEFAULT_MODEL_CONFIG, ...parsed };
-              if (parsed.agentProviders) {
-                this.agentProviders = {
-                  ...DEFAULT_MODEL_CONFIG.agentProviders,
-                  ...parsed.agentProviders,
-                };
-              }
+              this.modelConfig = {
+                ...DEFAULT_MODEL_CONFIG,
+                ...parsed,
+                agents: { ...DEFAULT_MODEL_CONFIG.agents, ...parsed.agents },
+              };
             } catch {
               this.logger.warn('Failed to parse MODEL_CONFIG, using defaults');
             }
@@ -545,48 +563,59 @@ export class VertexOracle implements OnModuleInit {
     }
 
     try {
-      this.logger.log('🔄 Initializing VertexOracle Multi-Agent system (Gemini API)...');
+      this.logger.log('🔄 Initializing VertexOracle Multi-Agent system...');
       this.lastCredentialsCheck = now;
 
       // Load prompts and config from DB first
       await this.loadPromptsFromDB();
 
-      // Get API Key from environment
-      const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+      const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+      if (!openaiKey) {
+        throw new Error('OPENAI_API_KEY not configured. It is required in openai_only mode.');
+      }
+      this.openaiClient = new OpenAI({ apiKey: openaiKey });
 
-      if (!apiKey) {
-        throw new Error('GEMINI_API_KEY not configured. Please set it in environment variables.');
+      if (this.modelConfig.providerMode === 'openai_only') {
+        // V1 deliberately does not construct any Google client or Gemini model.
+        this.genAI = null;
+        this.heavyModel = null;
+        this.flashModel = null;
+        this.oniricModel = null;
+        this.initialized = true;
+        this.logger.log('🚀 VertexOracle ready (OpenAI-only V1 mode)');
+        return;
       }
 
-      this.logger.log('🔑 Using GEMINI_API_KEY for authentication');
-
-      // Initialize Gemini API client
+      const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+      if (!apiKey) {
+        throw new Error('GEMINI_API_KEY not configured for comparison mode.');
+      }
       this.genAI = new GoogleGenerativeAI(apiKey);
 
       // Initialize HEAVY model (SCRIBE, GUIDE, EDITOR) with JSON response
       this.heavyModel = this.genAI.getGenerativeModel({
-        model: this.modelConfig.heavyModel,
+        model: 'gemini-2.5-flash',
         generationConfig: {
-          temperature: this.modelConfig.heavyTemperature,
-          topP: this.modelConfig.heavyTopP,
-          maxOutputTokens: this.modelConfig.heavyMaxTokens,
+          temperature: 0.8,
+          topP: 0.95,
+          maxOutputTokens: 16384,
           responseMimeType: 'application/json',
         },
       });
 
       // Initialize FLASH model (CONFIDANT) for fast chat
       this.flashModel = this.genAI.getGenerativeModel({
-        model: this.modelConfig.flashModel,
+        model: 'gemini-2.5-flash',
         generationConfig: {
-          temperature: this.modelConfig.flashTemperature,
-          topP: this.modelConfig.flashTopP,
-          maxOutputTokens: this.modelConfig.flashMaxTokens,
+          temperature: 0.9,
+          topP: 0.95,
+          maxOutputTokens: 2048,
         },
       });
 
       // Initialize ONIRIQUE model — JSON mode, moderate temperature for nuance
       this.oniricModel = this.genAI.getGenerativeModel({
-        model: this.modelConfig.flashModel,
+        model: 'gemini-2.5-flash',
         generationConfig: {
           temperature: 0.75,
           topP: 0.9,
@@ -595,33 +624,8 @@ export class VertexOracle implements OnModuleInit {
         },
       });
 
-      // Initialize OpenAI client (optional — only if key is set)
-      const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
-      if (openaiKey) {
-        this.openaiClient = new OpenAI({ apiKey: openaiKey });
-        this.logger.log('🔑 OpenAI client initialized');
-      } else {
-        this.openaiClient = null;
-        this.logger.log('ℹ️ OPENAI_API_KEY not set — OpenAI provider unavailable');
-      }
-
       this.initialized = true;
-      this.logger.log('🚀 VertexOracle ready (Gemini API mode)');
-      this.logger.log(
-        `   Heavy model: ${this.modelConfig.heavyModel} (temp=${this.modelConfig.heavyTemperature}, topP=${this.modelConfig.heavyTopP})`,
-      );
-      this.logger.log(
-        `   Flash model: ${this.modelConfig.flashModel} (temp=${this.modelConfig.flashTemperature}, topP=${this.modelConfig.flashTopP})`,
-      );
-      if (this.openaiClient) {
-        this.logger.log(
-          `   OpenAI Heavy: ${this.modelConfig.openaiHeavyModel} (temp=${this.modelConfig.openaiHeavyTemperature})`,
-        );
-        this.logger.log(
-          `   OpenAI Flash: ${this.modelConfig.openaiFlashModel} (temp=${this.modelConfig.openaiFlashTemperature})`,
-        );
-      }
-      this.logger.log(`   Agent providers: ${JSON.stringify(this.agentProviders)}`);
+      this.logger.log('🚀 VertexOracle ready (comparison mode)');
     } catch (error) {
       this.logger.error(`❌ Failed to initialize VertexOracle: ${error}`);
       throw new Error(
@@ -642,8 +646,7 @@ export class VertexOracle implements OnModuleInit {
       ...DEFAULT_AGENT_CONTEXTS,
       ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT,
     };
-    this.modelConfig = { ...DEFAULT_MODEL_CONFIG };
-    this.agentProviders = { ...DEFAULT_MODEL_CONFIG.agentProviders };
+    this.modelConfig = { ...DEFAULT_MODEL_CONFIG, agents: { ...DEFAULT_MODEL_CONFIG.agents } };
     this.oniricModel = null;
     this.openaiClient = null;
     this.logger.log('🔄 VertexOracle cache invalidated (prompts will reload)');
@@ -660,8 +663,7 @@ export class VertexOracle implements OnModuleInit {
     return {
       lumiraDna: this.lumiraDna,
       agentContexts: { ...this.agentContexts },
-      modelConfig: { ...this.modelConfig },
-      agentProviders: { ...this.agentProviders },
+      modelConfig: { ...this.modelConfig, agents: { ...this.modelConfig.agents } },
     };
   }
 
@@ -696,7 +698,7 @@ export class VertexOracle implements OnModuleInit {
     if (userProfile.facePhotoUrl) {
       try {
         const imageData = await this.fetchImageAsBase64(userProfile.facePhotoUrl);
-        images.push({ mimeType: 'image/jpeg', base64: imageData });
+        images.push(imageData);
         this.logger.log('📷 [SCRIBE] Face photo attached');
       } catch {
         this.logger.warn('[SCRIBE] Could not fetch face photo, continuing without it');
@@ -706,7 +708,7 @@ export class VertexOracle implements OnModuleInit {
     if (userProfile.palmPhotoUrl) {
       try {
         const imageData = await this.fetchImageAsBase64(userProfile.palmPhotoUrl);
-        images.push({ mimeType: 'image/jpeg', base64: imageData });
+        images.push(imageData);
         this.logger.log('📷 [SCRIBE] Palm photo attached');
       } catch {
         this.logger.warn('[SCRIBE] Could not fetch palm photo, continuing without it');
@@ -1027,8 +1029,10 @@ Génère le contenu affiné:
    * Returns the current agent providers configuration.
    * Used by AudioScriptService to check NARRATOR provider.
    */
-  getAgentProviders(): AgentProviders {
-    return { ...this.agentProviders };
+  getAgentProviders(): Record<AgentType, AIProvider> {
+    return Object.fromEntries(
+      Object.entries(this.modelConfig.agents).map(([agent, config]) => [agent, config.provider]),
+    ) as Record<AgentType, AIProvider>;
   }
 
   /**
@@ -1050,7 +1054,9 @@ Génère le contenu affiné:
    * Returns the provider for a given agent.
    */
   private getProviderForAgent(agent: AgentType): AIProvider {
-    return this.agentProviders[agent] || 'gemini';
+    return this.modelConfig.providerMode === 'openai_only'
+      ? 'openai'
+      : this.modelConfig.agents[agent]?.provider || 'gemini';
   }
 
   /**
@@ -1065,29 +1071,13 @@ Génère le contenu affiné:
     maxTokens: number;
   } {
     const provider = this.getProviderForAgent(agent);
-    // SCRIBE, GUIDE, EDITOR → heavy tier ; CONFIDANT, ONIRIQUE → flash tier
-    const isHeavy = ['SCRIBE', 'GUIDE', 'EDITOR'].includes(agent);
-
-    if (provider === 'openai') {
-      return {
-        provider,
-        model: isHeavy ? this.modelConfig.openaiHeavyModel : this.modelConfig.openaiFlashModel,
-        temperature: isHeavy
-          ? this.modelConfig.openaiHeavyTemperature
-          : this.modelConfig.openaiFlashTemperature,
-        topP: isHeavy ? this.modelConfig.openaiHeavyTopP : this.modelConfig.openaiFlashTopP,
-        maxTokens: isHeavy
-          ? this.modelConfig.openaiHeavyMaxTokens
-          : this.modelConfig.openaiFlashMaxTokens,
-      };
-    }
-
+    const config = this.modelConfig.agents[agent];
     return {
       provider,
-      model: isHeavy ? this.modelConfig.heavyModel : this.modelConfig.flashModel,
-      temperature: isHeavy ? this.modelConfig.heavyTemperature : this.modelConfig.flashTemperature,
-      topP: isHeavy ? this.modelConfig.heavyTopP : this.modelConfig.flashTopP,
-      maxTokens: isHeavy ? this.modelConfig.heavyMaxTokens : this.modelConfig.flashMaxTokens,
+      model: config.model,
+      temperature: config.temperature ?? 0.7,
+      topP: config.topP ?? 0.9,
+      maxTokens: config.maxOutputTokens,
     };
   }
 
@@ -1096,9 +1086,7 @@ Génère le contenu affiné:
    */
   private requireOpenAI(): OpenAI {
     if (!this.openaiClient) {
-      throw new Error(
-        "OPENAI_API_KEY non configurée. Ajoutez la clé dans les variables d'environnement ou basculez l'agent sur Gemini.",
-      );
+      throw new Error('OPENAI_API_KEY non configurée. Elle est obligatoire en mode OpenAI-only.');
     }
     return this.openaiClient;
   }
@@ -1107,7 +1095,7 @@ Génère le contenu affiné:
     ctx: AiExecutionContext,
     resolved: ResolvedAiExecution,
     timeoutMs: number,
-    operation: () => Promise<string>,
+    operation: () => Promise<{ text: string; inputTokens?: number; outputTokens?: number }>,
   ): Promise<string> {
     const startedAt = Date.now();
     const baseRun = {
@@ -1122,13 +1110,22 @@ Génère le contenu affiné:
     };
 
     try {
-      const text = await this.executeWithRetry(ctx.agent, operation, timeoutMs);
+      const result = await this.executeWithRetry(ctx.agent, operation, timeoutMs);
+      const estimatedCost = this.estimateCost(
+        resolved.model,
+        result.inputTokens,
+        result.outputTokens,
+      );
       await this.aiRunService.recordRun({
         ...baseRun,
         status: 'SUCCESS',
         durationMs: Date.now() - startedAt,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        estimatedCost,
       });
-      return text;
+      if (ctx.orderId && estimatedCost) await this.warnIfOrderCostExceeds(ctx.orderId);
+      return result.text;
     } catch (error) {
       const errorCode = error instanceof Error ? error.message.slice(0, 200) : 'unknown_error';
       await this.aiRunService.recordRun({
@@ -1138,6 +1135,64 @@ Génère le contenu affiné:
         errorCode,
       });
       throw error;
+    }
+  }
+
+  private openAIParameters(resolved: ResolvedAiExecution): Record<string, unknown> {
+    if (resolved.model.startsWith('gpt-5.')) {
+      return {
+        reasoning: { effort: resolved.reasoningEffort ?? 'medium' },
+        text: { verbosity: resolved.verbosity ?? 'medium' },
+        max_output_tokens: resolved.maxTokens,
+      };
+    }
+    return {
+      temperature: resolved.temperature,
+      top_p: resolved.topP,
+      max_output_tokens: resolved.maxTokens,
+    };
+  }
+
+  private openAIResult(response: unknown): {
+    text: string;
+    inputTokens?: number;
+    outputTokens?: number;
+  } {
+    const value = response as {
+      output_text?: unknown;
+      usage?: { input_tokens?: unknown; output_tokens?: unknown };
+    };
+    return {
+      text: typeof value.output_text === 'string' ? value.output_text : '',
+      inputTokens:
+        typeof value.usage?.input_tokens === 'number' ? value.usage.input_tokens : undefined,
+      outputTokens:
+        typeof value.usage?.output_tokens === 'number' ? value.usage.output_tokens : undefined,
+    };
+  }
+
+  private estimateCost(
+    model: string,
+    inputTokens?: number,
+    outputTokens?: number,
+  ): number | undefined {
+    if (inputTokens == null && outputTokens == null) return undefined;
+    const rates: Record<string, [number, number]> = {
+      'gpt-5.5': [5, 30],
+      'gpt-5.4': [2.5, 15],
+      'gpt-4o': [2.5, 10],
+    };
+    const [inputRate, outputRate] = rates[model] ?? [0, 0];
+    return ((inputTokens ?? 0) * inputRate + (outputTokens ?? 0) * outputRate) / 1_000_000;
+  }
+
+  private async warnIfOrderCostExceeds(orderId: string): Promise<void> {
+    const aggregate = await this.prisma.aiRun.aggregate({
+      where: { orderId },
+      _sum: { estimatedCost: true },
+    });
+    if ((aggregate._sum.estimatedCost ?? 0) > 1.5) {
+      this.logger.warn(`Estimated AI cost for order ${orderId} exceeds $1.50`);
     }
   }
 
@@ -1158,12 +1213,15 @@ Génère le contenu affiné:
           model: resolved.model,
           instructions: resolved.systemPrompt,
           input: userContent,
-          temperature: resolved.temperature,
-          top_p: resolved.topP,
-          max_output_tokens: resolved.maxTokens,
-          text: { format: { type: 'json_object' } },
-        });
-        return response.output_text ?? '';
+          ...this.openAIParameters(resolved),
+          text: {
+            ...(resolved.model.startsWith('gpt-5.')
+              ? { verbosity: resolved.verbosity ?? 'medium' }
+              : {}),
+            format: { type: 'json_object' },
+          },
+        } as Parameters<typeof client.responses.create>[0]);
+        return this.openAIResult(response);
       }
 
       const model = this.genAI!.getGenerativeModel({
@@ -1180,7 +1238,7 @@ Génère le contenu affiné:
           { role: 'user', parts: [{ text: `${resolved.systemPrompt}\n\n---\n\n${userContent}` }] },
         ],
       });
-      return response.response.text();
+      return { text: response.response.text() };
     });
   }
 
@@ -1204,11 +1262,11 @@ Génère le contenu affiné:
           model: resolved.model,
           instructions: resolved.systemPrompt,
           input: userContent,
-          temperature,
-          top_p: resolved.topP,
-          max_output_tokens: maxTokens,
-        });
-        return response.output_text ?? '';
+          ...(resolved.model.startsWith('gpt-5.')
+            ? this.openAIParameters({ ...resolved, maxTokens })
+            : { temperature, top_p: resolved.topP, max_output_tokens: maxTokens }),
+        } as Parameters<typeof client.responses.create>[0]);
+        return this.openAIResult(response);
       }
 
       const model = this.genAI!.getGenerativeModel({
@@ -1220,7 +1278,7 @@ Génère le contenu affiné:
           { role: 'user', parts: [{ text: `${resolved.systemPrompt}\n\n---\n\n${userContent}` }] },
         ],
       });
-      return response.response.text();
+      return { text: response.response.text() };
     });
   }
 
@@ -1249,11 +1307,9 @@ Génère le contenu affiné:
           model: resolved.model,
           instructions: systemPrompt,
           input,
-          temperature: resolved.temperature,
-          top_p: resolved.topP,
-          max_output_tokens: resolved.maxTokens,
-        });
-        return response.output_text ?? '';
+          ...this.openAIParameters(resolved),
+        } as Parameters<typeof client.responses.create>[0]);
+        return this.openAIResult(response);
       }
 
       const model = this.genAI!.getGenerativeModel({
@@ -1279,7 +1335,7 @@ Génère le contenu affiné:
       contents.push({ role: 'user', parts: [{ text: fullUserMessage }] });
 
       const response = await model.generateContent({ contents });
-      return response.response.text()?.trim() || '';
+      return { text: response.response.text()?.trim() || '' };
     });
   }
 
@@ -1297,26 +1353,33 @@ Génère le contenu affiné:
     return this.runTrackedCall(ctx, resolved, timeoutMs, async () => {
       if (resolved.provider === 'openai') {
         const client = this.requireOpenAI();
-        const inputParts: Array<{ type: string; text?: string; image_url?: string }> = [
-          { type: 'input_text', text: userContent },
-        ];
+        const inputParts: Array<{
+          type: string;
+          text?: string;
+          image_url?: string;
+          detail?: 'high';
+        }> = [{ type: 'input_text', text: userContent }];
         for (const img of images) {
           inputParts.push({
             type: 'input_image',
             image_url: `data:${img.mimeType};base64,${img.base64}`,
+            detail: 'high',
           });
         }
         const response = await client.responses.create({
           model: resolved.model,
           instructions: resolved.systemPrompt,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          input: inputParts as any,
-          temperature: resolved.temperature,
-          top_p: resolved.topP,
-          max_output_tokens: resolved.maxTokens,
-          text: { format: { type: 'json_object' } },
-        });
-        return response.output_text ?? '';
+          input: inputParts as unknown as Parameters<typeof client.responses.create>[0]['input'],
+          ...this.openAIParameters(resolved),
+          text: {
+            ...(resolved.model.startsWith('gpt-5.')
+              ? { verbosity: resolved.verbosity ?? 'medium' }
+              : {}),
+            format: { type: 'json_object' },
+          },
+        } as Parameters<typeof client.responses.create>[0]);
+        return this.openAIResult(response);
       }
 
       const model = this.genAI!.getGenerativeModel({
@@ -1337,7 +1400,7 @@ Génère le contenu affiné:
       const response = await model.generateContent({
         contents: [{ role: 'user', parts }],
       });
-      return response.response.text();
+      return { text: response.response.text() };
     });
   }
 
@@ -1396,7 +1459,7 @@ Génère le contenu affiné:
         lastError = error instanceof Error ? error : new Error(String(error));
         this.logger.error(`❌ [${agent}] Attempt ${attempt} failed: ${lastError.message}`);
 
-        if (attempt < maxRetries) {
+        if (attempt < maxRetries && this.isRetryableProviderError(lastError)) {
           const delay = attempt * 2000; // Exponential backoff
           this.logger.log(`⏳ [${agent}] Retrying in ${delay}ms...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -1449,7 +1512,11 @@ Génère le contenu affiné:
     }
 
     if (order.expertPrompt) {
-      parts.push('', '=== INSTRUCTIONS EXPERT ===', order.expertPrompt);
+      parts.push('', '=== GUIDANCE PRINCIPALE DE L’EXPERT ===', order.expertPrompt);
+    }
+
+    if (order.expertInstructions) {
+      parts.push('', '=== INSTRUCTIONS COMPLÉMENTAIRES DE L’EXPERT ===', order.expertInstructions);
     }
 
     parts.push('', 'Génère la lecture spirituelle complète au format JSON spécifié.');
@@ -1580,7 +1647,7 @@ Génère le timeline au format JSON spécifié (tableau de 10 objets).
   /**
    * Fetches an image from URL and converts to base64.
    */
-  private async fetchImageAsBase64(url: string): Promise<string> {
+  private async fetchImageAsBase64(url: string): Promise<{ base64: string; mimeType: string }> {
     this.logger.log(`📷 Fetching image: ${url.substring(0, 50)}...`);
     if (url.startsWith('s3://onboarding/')) {
       if (!this.onboardingBucket) {
@@ -1594,7 +1661,10 @@ Génère le timeline au format JSON spécifié (tableau de 10 objets).
         throw new Error('Private onboarding photo has no body');
       }
       const bytes = await response.Body.transformToByteArray();
-      return Buffer.from(bytes).toString('base64');
+      return {
+        base64: Buffer.from(bytes).toString('base64'),
+        mimeType: this.normalizeImageMimeType(response.ContentType),
+      };
     }
 
     const response = await axios.get(url, {
@@ -1603,7 +1673,29 @@ Génère le timeline au format JSON spécifié (tableau de 10 objets).
     });
     const size = Buffer.from(response.data).length;
     this.logger.log(`📷 Image fetched: ${Math.round(size / 1024)}KB`);
-    return Buffer.from(response.data).toString('base64');
+    return {
+      base64: Buffer.from(response.data).toString('base64'),
+      mimeType: this.normalizeImageMimeType(response.headers['content-type']),
+    };
+  }
+
+  private isRetryableProviderError(error: Error): boolean {
+    const status =
+      (error as Error & { status?: number; statusCode?: number }).status ??
+      (error as Error & { statusCode?: number }).statusCode;
+    return (
+      status === 429 ||
+      (typeof status === 'number' && status >= 500) ||
+      /network|socket|econn|etimedout|fetch failed/i.test(error.message)
+    );
+  }
+
+  private normalizeImageMimeType(contentType?: string): 'image/jpeg' | 'image/png' | 'image/webp' {
+    const normalized = contentType?.split(';')[0].trim().toLowerCase();
+    if (normalized === 'image/png' || normalized === 'image/webp' || normalized === 'image/jpeg') {
+      return normalized;
+    }
+    return 'image/jpeg';
   }
 
   /**
@@ -1615,6 +1707,11 @@ Génère le timeline au format JSON spécifié (tableau de 10 objets).
     currentDayNumber: number;
   }): Promise<string> {
     await this.ensureInitialized();
+
+    if (!this.modelConfig.agents.CONFIDANT.enabled) {
+      this.logger.debug('[CONFIDANT] Disabled in V1; daily mantra generation skipped');
+      return 'Je suis lumière, je suis guidance, je suis en paix.';
+    }
 
     const prompt = `
 Tu es Oracle Lumira. Génère un mantra court et puissant pour le jour ${params.currentDayNumber}.
@@ -1638,6 +1735,7 @@ Réponds uniquement avec le mantra, sans guillemets.
           model: params2.model,
           input: prompt,
           temperature: params2.temperature,
+          top_p: params2.topP,
           max_output_tokens: 200,
         });
         return (

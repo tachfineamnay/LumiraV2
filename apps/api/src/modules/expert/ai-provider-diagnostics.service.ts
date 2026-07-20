@@ -7,6 +7,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 const MODEL_CONFIG_KEY = 'MODEL_CONFIG';
 
 interface StoredModelConfig {
+  providerMode?: 'openai_only' | 'comparison';
+  agents?: Record<string, { model?: string }>;
   heavyModel?: string;
   flashModel?: string;
   openaiFlashModel?: string;
@@ -64,15 +66,15 @@ export class AiProviderDiagnosticsService {
 
   async getConfiguredOpenAIModel(): Promise<string> {
     const config = await this.loadModelConfig();
+    if (config.agents?.SCRIBE?.model) return config.agents.SCRIBE.model;
     return config.openaiFlashModel || config.openaiHeavyModel;
   }
 
   private async loadModelConfig(): Promise<StoredModelConfig> {
     const defaults: StoredModelConfig = {
-      heavyModel: 'gemini-2.5-flash',
-      flashModel: 'gemini-2.5-flash',
-      openaiHeavyModel: 'gpt-4o',
-      openaiFlashModel: 'gpt-4o-mini',
+      openaiHeavyModel: 'gpt-5.5',
+      openaiFlashModel: 'gpt-4o',
+      agents: { SCRIBE: { model: 'gpt-5.5' } },
     };
 
     const active = await this.prisma.promptVersion.findFirst({

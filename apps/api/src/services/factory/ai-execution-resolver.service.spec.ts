@@ -15,30 +15,57 @@ describe('AiExecutionResolverService', () => {
       NARRATOR: 'NARRATOR prompt',
     },
     modelConfig: {
-      heavyModel: 'gemini-2.5-flash',
-      flashModel: 'gemini-2.5-flash',
-      heavyTemperature: 0.8,
-      heavyTopP: 0.95,
-      heavyMaxTokens: 16384,
-      flashTemperature: 0.9,
-      flashTopP: 0.95,
-      flashMaxTokens: 2048,
-      openaiHeavyModel: 'gpt-4o',
-      openaiFlashModel: 'gpt-4o-mini',
-      openaiHeavyTemperature: 0.8,
-      openaiHeavyTopP: 0.95,
-      openaiHeavyMaxTokens: 16384,
-      openaiFlashTemperature: 0.9,
-      openaiFlashTopP: 0.95,
-      openaiFlashMaxTokens: 2048,
-    },
-    agentProviders: {
-      SCRIBE: 'gemini',
-      GUIDE: 'gemini',
-      EDITOR: 'gemini',
-      CONFIDANT: 'gemini',
-      ONIRIQUE: 'gemini',
-      NARRATOR: 'gemini',
+      providerMode: 'openai_only',
+      agents: {
+        SCRIBE: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-5.5',
+          reasoningEffort: 'high',
+          verbosity: 'high',
+          maxOutputTokens: 24000,
+        },
+        GUIDE: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-5.4',
+          reasoningEffort: 'low',
+          verbosity: 'medium',
+          maxOutputTokens: 6000,
+        },
+        EDITOR: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-5.4',
+          reasoningEffort: 'medium',
+          verbosity: 'high',
+          maxOutputTokens: 16000,
+        },
+        NARRATOR: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-4o',
+          temperature: 0.3,
+          topP: 0.9,
+          maxOutputTokens: 12000,
+        },
+        CONFIDANT: {
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-4o',
+          temperature: 0.6,
+          topP: 0.9,
+          maxOutputTokens: 1600,
+        },
+        ONIRIQUE: {
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-4o',
+          temperature: 0.65,
+          topP: 0.9,
+          maxOutputTokens: 2500,
+        },
+      },
     },
   };
 
@@ -71,6 +98,7 @@ describe('AiExecutionResolverService', () => {
     );
 
     expect(resolved.model).toBe('gpt-4o');
+    expect(resolved.provider).toBe('openai');
     expect(resolved.routingSource).toBe('rule:PROFOND/SCRIBE/READING_GENERATION');
   });
 
@@ -80,8 +108,26 @@ describe('AiExecutionResolverService', () => {
       snapshot,
     );
 
-    expect(resolved.model).toBe('gemini-2.5-flash');
+    expect(resolved.model).toBe('gpt-5.4');
     expect(resolved.routingSource).toBe('global:GUIDE');
+  });
+
+  it('ignores a legacy Gemini routing rule in openai_only mode', async () => {
+    aiRouting.resolveRule.mockResolvedValue({
+      provider: 'gemini',
+      model: 'gemini-2.5-flash',
+      temperature: 0.8,
+      maxTokens: 16384,
+      source: 'rule:INITIE/SCRIBE/READING_GENERATION',
+      isCustomRule: true,
+    });
+    const resolved = await service.resolve(
+      buildAiContext('SCRIBE', AiMission.READING_GENERATION, { productLevel: ProductLevel.INITIE }),
+      snapshot,
+    );
+    expect(resolved.provider).toBe('openai');
+    expect(resolved.model).toBe('gpt-5.5');
+    expect(resolved.routingSource).toBe('global:SCRIBE');
   });
 
   it('applies promptVersion when valid for the agent', async () => {
@@ -133,22 +179,13 @@ describe('AiExecutionResolverService', () => {
     expect(resolved.routingSource).toBe('global:NARRATOR');
   });
 
-  it('resolves CONFIDANT and ONIRIQUE with flash global config', async () => {
-    const confidant = await service.resolve(
-      buildAiContext('CONFIDANT', AiMission.CHAT_SESSION, {
-        productLevel: ProductLevel.INITIE,
-      }),
-      snapshot,
-    );
-    const onirique = await service.resolve(
-      buildAiContext('ONIRIQUE', AiMission.DREAM_INTERPRETATION),
-      snapshot,
-    );
-
-    expect(confidant.model).toBe('gemini-2.5-flash');
-    expect(confidant.routingSource).toBe('global:CONFIDANT');
-    expect(onirique.systemPrompt).toBe('ONIRIQUE prompt');
-    expect(onirique.routingSource).toBe('global:ONIRIQUE');
+  it('does not execute disabled CONFIDANT or ONIRIQUE agents', async () => {
+    await expect(
+      service.resolve(buildAiContext('CONFIDANT', AiMission.CHAT_SESSION), snapshot),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.resolve(buildAiContext('ONIRIQUE', AiMission.DREAM_INTERPRETATION), snapshot),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('uses controlled default when productLevel is absent', async () => {

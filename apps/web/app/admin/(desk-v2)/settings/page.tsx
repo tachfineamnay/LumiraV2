@@ -60,6 +60,9 @@ interface AgentProviders {
 }
 
 interface ModelConfig {
+  providerMode: 'openai_only' | 'comparison';
+  agents: Record<string, AgentModelConfig>;
+  // Legacy fields are retained only to render old persisted payloads safely.
   heavyModel: string;
   flashModel: string;
   heavyTemperature: number;
@@ -79,6 +82,17 @@ interface ModelConfig {
   agentProviders: AgentProviders;
 }
 
+interface AgentModelConfig {
+  enabled: boolean;
+  provider: 'openai';
+  model: 'gpt-5.5' | 'gpt-5.4' | 'gpt-4o';
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  verbosity?: 'low' | 'medium' | 'high';
+  temperature?: number;
+  topP?: number;
+  maxOutputTokens: number;
+}
+
 type TabId = 'credentials' | 'personality' | 'agents' | 'models' | 'routing';
 
 const AGENT_INFO: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
@@ -90,7 +104,7 @@ const AGENT_INFO: Record<string, { label: string; icon: React.ReactNode; descrip
   GUIDE: {
     label: 'GUIDE',
     icon: <Zap className="w-4 h-4" />,
-    description: 'Crée le parcours spirituel de 7 jours',
+    description: 'Crée le parcours mensuel de 30 jours, en 3 batches de 10 jours',
   },
   EDITOR: {
     label: 'EDITOR',
@@ -631,9 +645,7 @@ function ProviderCredentialCard({
 }
 
 function CredentialsTab() {
-  const [testing, setTesting] = useState(false);
   const [testingOpenAI, setTestingOpenAI] = useState(false);
-  const [geminiTestResult, setGeminiTestResult] = useState<ConnectionTestResult | null>(null);
   const [openaiTestResult, setOpenaiTestResult] = useState<ConnectionTestResult | null>(null);
   const [configStatus, setConfigStatus] = useState<AiCredentialsStatus | null>(null);
 
@@ -645,28 +657,6 @@ function CredentialsTab() {
   useEffect(() => {
     refreshStatus();
   }, [refreshStatus]);
-
-  const runGeminiTest = async () => {
-    setTesting(true);
-    setGeminiTestResult(null);
-    try {
-      const { data } = await expertApi.post('/expert/settings/vertex-test');
-      setGeminiTestResult(data);
-      await refreshStatus();
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      setGeminiTestResult({
-        success: false,
-        provider: 'gemini',
-        model: configStatus?.gemini.model ?? '',
-        testedAt: new Date().toISOString(),
-        text: 'error',
-        error: error.response?.data?.error || 'Erreur de connexion',
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
 
   const runOpenAITest = async () => {
     setTestingOpenAI(true);
@@ -692,16 +682,13 @@ function CredentialsTab() {
 
   return (
     <div className="space-y-6">
-      <ProviderCredentialCard
-        title="Clé API Gemini"
-        envVar="GEMINI_API_KEY"
-        accent="emerald"
-        provider={configStatus?.gemini}
-        testing={testing}
-        testResult={geminiTestResult}
-        onRetest={runGeminiTest}
-        showMultimodal
-      />
+      <GlassCard className="p-6">
+        <h3 className="text-lg font-medium text-desk-text">Gemini / Vertex</h3>
+        <p className="text-sm text-desk-muted mt-1">
+          Désactivé temporairement en V1. Les identifiants et tests Gemini restent disponibles côté
+          serveur pour une future phase de comparaison.
+        </p>
+      </GlassCard>
 
       <ProviderCredentialCard
         title="Clé API OpenAI"
@@ -718,7 +705,6 @@ function CredentialsTab() {
           <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="text-sm">
             Pour modifier les clés API, mettez à jour les variables d&apos;environnement{' '}
-            <code className="px-1 py-0.5 bg-desk-card rounded text-xs">GEMINI_API_KEY</code> et/ou{' '}
             <code className="px-1 py-0.5 bg-desk-card rounded text-xs">OPENAI_API_KEY</code> dans
             votre configuration de déploiement (Coolify, .env, etc.) puis redémarrez le service API.
             Les tests utilisent le modèle configuré dans l&apos;onglet Modèles.
@@ -791,7 +777,7 @@ function AgentsTab({
   onReset: (key: string) => Promise<void>;
   saving: boolean;
 }) {
-  const agentKeys = ['SCRIBE', 'GUIDE', 'EDITOR', 'CONFIDANT'];
+  const agentKeys = ['SCRIBE', 'EDITOR', 'GUIDE', 'NARRATOR', 'CONFIDANT', 'ONIRIQUE'];
 
   return (
     <div className="space-y-4">
@@ -818,7 +804,7 @@ function AgentsTab({
   );
 }
 
-function ModelsTab({
+function LegacyModelsTab({
   config,
   onSave,
   saving,
@@ -1184,6 +1170,155 @@ function ModelsTab({
 // =============================================================================
 // TABS CONTENT: ROUTING MATRIX
 // =============================================================================
+
+function ModelsTab({
+  config,
+  onSave,
+  saving,
+}: {
+  config: ModelConfig;
+  onSave: (config: Partial<ModelConfig>) => Promise<void>;
+  saving: boolean;
+}) {
+  const [agents, setAgents] = useState(config.agents);
+  const hasChanges = JSON.stringify(agents) !== JSON.stringify(config.agents);
+
+  useEffect(() => setAgents(config.agents), [config]);
+
+  const update = (agent: string, patch: Partial<AgentModelConfig>) => {
+    setAgents((previous) => ({ ...previous, [agent]: { ...previous[agent], ...patch } }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <GlassCard className="p-5 border-blue-500/30">
+        <h3 className="text-lg font-medium text-desk-text">OpenAI-only · V1</h3>
+        <p className="text-sm text-desk-muted mt-1">
+          La configuration est définie par agent. Gemini/Vertex est temporairement inactif.
+        </p>
+      </GlassCard>
+      {Object.entries(agents).map(([agent, item]) => {
+        const isGpt5 = item.model === 'gpt-5.5' || item.model === 'gpt-5.4';
+        return (
+          <GlassCard key={agent} className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="font-semibold text-desk-text">{agent}</h3>
+                <p className="text-xs text-desk-muted">{AGENT_INFO[agent]?.description}</p>
+              </div>
+              <span
+                className={cn(
+                  'px-2 py-1 rounded-full text-xs',
+                  item.enabled
+                    ? 'bg-emerald-500/15 text-emerald-600'
+                    : 'bg-desk-card text-desk-muted',
+                )}
+              >
+                {item.enabled ? 'Actif V1' : 'Désactivé V1'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <label className="text-desk-muted">
+                Modèle
+                <select
+                  value={item.model}
+                  onChange={(e) =>
+                    update(agent, { model: e.target.value as AgentModelConfig['model'] })
+                  }
+                  className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
+                >
+                  <option value="gpt-5.5">gpt-5.5 · $5/$30 par M</option>
+                  <option value="gpt-5.4">gpt-5.4 · $2.5/$15 par M</option>
+                  <option value="gpt-4o">gpt-4o · $2.5/$10 par M</option>
+                </select>
+              </label>
+              <label className="text-desk-muted">
+                Tokens de sortie max
+                <input
+                  type="number"
+                  value={item.maxOutputTokens}
+                  onChange={(e) => update(agent, { maxOutputTokens: Number(e.target.value) })}
+                  className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
+                />
+              </label>
+              {isGpt5 ? (
+                <>
+                  <label className="text-desk-muted">
+                    Reasoning effort
+                    <select
+                      value={item.reasoningEffort ?? 'medium'}
+                      onChange={(e) =>
+                        update(agent, {
+                          reasoningEffort: e.target.value as AgentModelConfig['reasoningEffort'],
+                        })
+                      }
+                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
+                    >
+                      <option>low</option>
+                      <option>medium</option>
+                      <option>high</option>
+                    </select>
+                  </label>
+                  <label className="text-desk-muted">
+                    Verbosity
+                    <select
+                      value={item.verbosity ?? 'medium'}
+                      onChange={(e) =>
+                        update(agent, {
+                          verbosity: e.target.value as AgentModelConfig['verbosity'],
+                        })
+                      }
+                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
+                    >
+                      <option>low</option>
+                      <option>medium</option>
+                      <option>high</option>
+                    </select>
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label className="text-desk-muted">
+                    Temperature
+                    <input
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      value={item.temperature ?? 0}
+                      onChange={(e) => update(agent, { temperature: Number(e.target.value) })}
+                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
+                    />
+                  </label>
+                  <label className="text-desk-muted">
+                    Top P
+                    <input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={item.topP ?? 1}
+                      onChange={(e) => update(agent, { topP: Number(e.target.value) })}
+                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+          </GlassCard>
+        );
+      })}
+      <button
+        onClick={() => onSave({ providerMode: 'openai_only', agents } as Partial<ModelConfig>)}
+        disabled={!hasChanges || saving}
+        className="flex items-center gap-2 px-4 py-2 bg-amber-500 disabled:opacity-50 text-black rounded-lg text-sm font-semibold"
+      >
+        <Save className="w-4 h-4" />
+        Enregistrer la configuration
+      </button>
+    </div>
+  );
+}
 
 type ProductLevel = 'INITIE' | 'MYSTIQUE' | 'PROFOND' | 'INTEGRALE';
 
@@ -1578,6 +1713,57 @@ export default function SettingsPage() {
   const [prompts, setPrompts] = useState<Record<string, PromptWithMeta>>({});
   const [defaults, setDefaults] = useState<Record<string, string>>({});
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
+    providerMode: 'openai_only',
+    agents: {
+      SCRIBE: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-5.5',
+        reasoningEffort: 'high',
+        verbosity: 'high',
+        maxOutputTokens: 24000,
+      },
+      EDITOR: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-5.4',
+        reasoningEffort: 'medium',
+        verbosity: 'high',
+        maxOutputTokens: 16000,
+      },
+      GUIDE: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-5.4',
+        reasoningEffort: 'low',
+        verbosity: 'medium',
+        maxOutputTokens: 6000,
+      },
+      NARRATOR: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-4o',
+        temperature: 0.3,
+        topP: 0.9,
+        maxOutputTokens: 12000,
+      },
+      CONFIDANT: {
+        enabled: false,
+        provider: 'openai',
+        model: 'gpt-4o',
+        temperature: 0.6,
+        topP: 0.9,
+        maxOutputTokens: 1600,
+      },
+      ONIRIQUE: {
+        enabled: false,
+        provider: 'openai',
+        model: 'gpt-4o',
+        temperature: 0.65,
+        topP: 0.9,
+        maxOutputTokens: 2500,
+      },
+    },
     heavyModel: 'gemini-2.5-flash',
     flashModel: 'gemini-2.5-flash',
     heavyTemperature: 0.8,
@@ -1718,12 +1904,14 @@ export default function SettingsPage() {
           icon={<Sliders className="w-4 h-4" />}
           label="Modèles"
         />
-        <TabButton
-          active={activeTab === 'routing'}
-          onClick={() => setActiveTab('routing')}
-          icon={<Sliders className="w-4 h-4" />}
-          label="Matrice IA"
-        />
+        {modelConfig.providerMode !== 'openai_only' && (
+          <TabButton
+            active={activeTab === 'routing'}
+            onClick={() => setActiveTab('routing')}
+            icon={<Sliders className="w-4 h-4" />}
+            label="Matrice IA"
+          />
+        )}
       </div>
 
       {/* Tab Content */}
@@ -1757,7 +1945,7 @@ export default function SettingsPage() {
           {activeTab === 'models' && (
             <ModelsTab config={modelConfig} onSave={handleSaveModelConfig} saving={saving} />
           )}
-          {activeTab === 'routing' && <RoutingTab />}
+          {activeTab === 'routing' && modelConfig.providerMode !== 'openai_only' && <RoutingTab />}
         </motion.div>
       </AnimatePresence>
     </div>

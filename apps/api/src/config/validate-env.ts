@@ -9,7 +9,7 @@ const REQUIRED_PRODUCTION_VARIABLES = [
   'SMTP_USER',
   'SMTP_PASS',
   'MAIL_FROM',
-  'GEMINI_API_KEY',
+  'OPENAI_API_KEY',
   'GOTENBERG_URL',
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
@@ -18,13 +18,7 @@ const REQUIRED_PRODUCTION_VARIABLES = [
   'AWS_UPLOADS_BUCKET_NAME',
 ] as const;
 
-const PLACEHOLDER_MARKERS = [
-  'change-me',
-  'generate-',
-  'your-',
-  'example.com',
-  'xxxxxxxx',
-];
+const PLACEHOLDER_MARKERS = ['change-me', 'generate-', 'your-', 'example.com', 'xxxxxxxx'];
 
 const BOOLEAN_VALUES = ['true', 'false', '1', '0'] as const;
 
@@ -36,7 +30,10 @@ function read(config: Record<string, unknown>, key: string): string {
 }
 
 function normalizeHost(host: string): string {
-  return host.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  return host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '');
 }
 
 function isLoopbackSmtpHost(host: string): boolean {
@@ -94,7 +91,9 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
 
   const smtpHost = read(config, 'SMTP_HOST');
   if (/^[a-z][a-z\d+.-]*:\/\//i.test(smtpHost) || /[\s/]/.test(smtpHost)) {
-    throw new Error('SMTP_HOST doit contenir uniquement le nom d’hôte du fournisseur, sans protocole');
+    throw new Error(
+      'SMTP_HOST doit contenir uniquement le nom d’hôte du fournisseur, sans protocole',
+    );
   }
   if (isLoopbackSmtpHost(smtpHost)) {
     throw new Error(

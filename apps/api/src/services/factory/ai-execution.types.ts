@@ -15,33 +15,34 @@ export interface AiPromptSnapshot {
   lumiraDna: string;
   agentContexts: Record<AgentType, string>;
   modelConfig: AiModelConfigSnapshot;
-  agentProviders: Record<AgentType, 'gemini' | 'openai'>;
+}
+
+export type AiProviderMode = 'openai_only' | 'comparison';
+export type AiProvider = 'gemini' | 'openai';
+
+export interface AiAgentModelConfig {
+  enabled: boolean;
+  provider: AiProvider;
+  model: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  verbosity?: 'low' | 'medium' | 'high';
+  temperature?: number;
+  topP?: number;
+  maxOutputTokens: number;
 }
 
 export interface AiModelConfigSnapshot {
-  heavyModel: string;
-  flashModel: string;
-  heavyTemperature: number;
-  heavyTopP: number;
-  heavyMaxTokens: number;
-  flashTemperature: number;
-  flashTopP: number;
-  flashMaxTokens: number;
-  openaiHeavyModel: string;
-  openaiFlashModel: string;
-  openaiHeavyTemperature: number;
-  openaiHeavyTopP: number;
-  openaiHeavyMaxTokens: number;
-  openaiFlashTemperature: number;
-  openaiFlashTopP: number;
-  openaiFlashMaxTokens: number;
+  providerMode: AiProviderMode;
+  agents: Record<AgentType, AiAgentModelConfig>;
 }
 
 export interface ResolvedAiExecution {
-  provider: 'gemini' | 'openai';
+  provider: AiProvider;
   model: string;
-  temperature: number;
-  topP: number;
+  temperature?: number;
+  topP?: number;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  verbosity?: 'low' | 'medium' | 'high';
   maxTokens: number;
   systemPrompt: string;
   promptVersionId?: string;

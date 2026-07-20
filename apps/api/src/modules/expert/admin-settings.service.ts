@@ -8,6 +8,11 @@ import {
   ProviderConnectionTestResult,
 } from './ai-provider-diagnostics.types';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import {
+  AiAgentModelConfig,
+  AiProviderMode,
+  AgentType,
+} from '../../services/factory/ai-execution.types';
 
 const VERTEX_CREDENTIALS_KEY = 'VERTEX_CREDENTIALS_JSON';
 const ENCRYPTED_VALUE_PREFIX = 'enc:v1';
@@ -19,43 +24,16 @@ export const PROMPT_KEYS = {
   GUIDE: 'GUIDE',
   EDITOR: 'EDITOR',
   CONFIDANT: 'CONFIDANT',
+  ONIRIQUE: 'ONIRIQUE',
+  NARRATOR: 'NARRATOR',
   MODEL_CONFIG: 'MODEL_CONFIG',
 } as const;
 
 export type PromptKey = keyof typeof PROMPT_KEYS;
 
-export type AIProvider = 'gemini' | 'openai';
-
-export interface AgentProviders {
-  SCRIBE: AIProvider;
-  GUIDE: AIProvider;
-  EDITOR: AIProvider;
-  CONFIDANT: AIProvider;
-  ONIRIQUE: AIProvider;
-  NARRATOR: AIProvider;
-}
-
 export interface ModelConfig {
-  // Gemini models
-  heavyModel: string;
-  flashModel: string;
-  heavyTemperature: number;
-  heavyTopP: number;
-  heavyMaxTokens: number;
-  flashTemperature: number;
-  flashTopP: number;
-  flashMaxTokens: number;
-  // OpenAI models
-  openaiHeavyModel: string;
-  openaiFlashModel: string;
-  openaiHeavyTemperature: number;
-  openaiHeavyTopP: number;
-  openaiHeavyMaxTokens: number;
-  openaiFlashTemperature: number;
-  openaiFlashTopP: number;
-  openaiFlashMaxTokens: number;
-  // Per-agent provider selection
-  agentProviders: AgentProviders;
+  providerMode: AiProviderMode;
+  agents: Record<AgentType, AiAgentModelConfig>;
 }
 
 export interface PromptWithMeta {
@@ -443,7 +421,7 @@ export class AdminSettingsService {
         return {
           ...defaults,
           ...stored,
-          agentProviders: { ...defaults.agentProviders, ...stored.agentProviders },
+          agents: { ...defaults.agents, ...stored.agents },
         };
       } catch {
         // Return defaults if parsing fails
@@ -461,7 +439,8 @@ export class AdminSettingsService {
     changedBy?: string,
   ): Promise<{ success: boolean }> {
     const current = await this.getModelConfig();
-    const merged = { ...current, ...config };
+    const merged = { ...current, ...config, agents: { ...current.agents, ...config.agents } };
+    this.validateModelConfig(merged);
 
     return this.savePrompt(
       PROMPT_KEYS.MODEL_CONFIG,
@@ -469,6 +448,25 @@ export class AdminSettingsService {
       changedBy,
       'Model config updated',
     );
+  }
+
+  private validateModelConfig(config: ModelConfig): void {
+    if (config.providerMode !== 'openai_only') {
+      throw new BadRequestException('Le mode de production V1 doit rester openai_only.');
+    }
+    const allowedModels = new Set(['gpt-5.5', 'gpt-5.4', 'gpt-4o']);
+    for (const [agent, settings] of Object.entries(config.agents)) {
+      if (settings.provider !== 'openai' || !allowedModels.has(settings.model)) {
+        throw new BadRequestException(
+          `Configuration invalide pour ${agent}: provider OpenAI et modèle V1 requis.`,
+        );
+      }
+      if (!Number.isInteger(settings.maxOutputTokens) || settings.maxOutputTokens < 1) {
+        throw new BadRequestException(
+          `Configuration invalide pour ${agent}: maxOutputTokens doit être positif.`,
+        );
+      }
+    }
   }
 
   /**
@@ -604,6 +602,14 @@ CONTEXTE UTILISÉ:
 
 FORMAT: Texte conversationnel naturel (pas JSON).`,
 
+      [PROMPT_KEYS.ONIRIQUE]: `MISSION ONIRIQUE:
+Tu proposes une interprétation symbolique et introspective des rêves, sans prédiction ni certitude.
+Réponds uniquement avec le JSON structuré attendu par le runtime.`,
+
+      [PROMPT_KEYS.NARRATOR]: `MISSION NARRATOR:
+Tu adaptes une lecture validée en script de narration audio chaleureux. Conserve le sens, supprime titres et listes.
+Retourne uniquement le texte de narration.`,
+
       [PROMPT_KEYS.MODEL_CONFIG]: JSON.stringify(this.getDefaultModelConfig(), null, 2),
     };
   }
@@ -613,31 +619,56 @@ FORMAT: Texte conversationnel naturel (pas JSON).`,
    */
   getDefaultModelConfig(): ModelConfig {
     return {
-      heavyModel: 'gemini-2.5-flash',
-      flashModel: 'gemini-2.5-flash',
-      heavyTemperature: 0.8,
-      heavyTopP: 0.95,
-      heavyMaxTokens: 16384,
-      flashTemperature: 0.9,
-      flashTopP: 0.95,
-      flashMaxTokens: 2048,
-      // OpenAI defaults
-      openaiHeavyModel: 'gpt-4o',
-      openaiFlashModel: 'gpt-4o-mini',
-      openaiHeavyTemperature: 0.8,
-      openaiHeavyTopP: 0.95,
-      openaiHeavyMaxTokens: 16384,
-      openaiFlashTemperature: 0.9,
-      openaiFlashTopP: 0.95,
-      openaiFlashMaxTokens: 2048,
-      // All agents default to Gemini (zero breaking change)
-      agentProviders: {
-        SCRIBE: 'gemini',
-        GUIDE: 'gemini',
-        EDITOR: 'gemini',
-        CONFIDANT: 'gemini',
-        ONIRIQUE: 'gemini',
-        NARRATOR: 'gemini',
+      providerMode: 'openai_only',
+      agents: {
+        SCRIBE: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-5.5',
+          reasoningEffort: 'high',
+          verbosity: 'high',
+          maxOutputTokens: 24000,
+        },
+        EDITOR: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-5.4',
+          reasoningEffort: 'medium',
+          verbosity: 'high',
+          maxOutputTokens: 16000,
+        },
+        GUIDE: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-5.4',
+          reasoningEffort: 'low',
+          verbosity: 'medium',
+          maxOutputTokens: 6000,
+        },
+        NARRATOR: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-4o',
+          temperature: 0.3,
+          topP: 0.9,
+          maxOutputTokens: 12000,
+        },
+        CONFIDANT: {
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-4o',
+          temperature: 0.6,
+          topP: 0.9,
+          maxOutputTokens: 1600,
+        },
+        ONIRIQUE: {
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-4o',
+          temperature: 0.65,
+          topP: 0.9,
+          maxOutputTokens: 2500,
+        },
       },
     };
   }
