@@ -1,3 +1,39 @@
+-- AI routing matrix + run telemetry (schema was missing from prior migrations).
+CREATE TYPE "AiMission" AS ENUM (
+  'DEFAULT',
+  'READING_GENERATION',
+  'TIMELINE_BATCH',
+  'DREAM_INTERPRETATION',
+  'CHAT_SESSION',
+  'CONTENT_REFINEMENT',
+  'AUDIO_NARRATION'
+);
+
+CREATE TABLE "AiRoutingRule" (
+    "id" TEXT NOT NULL,
+    "productLevel" "ProductLevel" NOT NULL,
+    "agent" TEXT NOT NULL,
+    "mission" "AiMission" NOT NULL DEFAULT 'DEFAULT',
+    "provider" TEXT NOT NULL DEFAULT 'gemini',
+    "model" TEXT NOT NULL,
+    "temperature" DOUBLE PRECISION NOT NULL DEFAULT 0.8,
+    "maxTokens" INTEGER NOT NULL DEFAULT 16384,
+    "promptVersionId" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "note" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AiRoutingRule_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "AiRoutingRule_productLevel_agent_mission_key" ON "AiRoutingRule"("productLevel", "agent", "mission");
+CREATE INDEX "AiRoutingRule_productLevel_idx" ON "AiRoutingRule"("productLevel");
+CREATE INDEX "AiRoutingRule_agent_idx" ON "AiRoutingRule"("agent");
+CREATE INDEX "AiRoutingRule_isActive_idx" ON "AiRoutingRule"("isActive");
+
+ALTER TABLE "AiRoutingRule" ADD CONSTRAINT "AiRoutingRule_promptVersionId_fkey" FOREIGN KEY ("promptVersionId") REFERENCES "PromptVersion"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
 -- CreateEnum
 CREATE TYPE "AiRunStatus" AS ENUM ('SUCCESS', 'ERROR');
 
