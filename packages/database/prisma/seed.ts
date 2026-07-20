@@ -2,235 +2,170 @@ import { PrismaClient, ProductLevel, ExpertRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
-
-// ========================================
-// CONFIGURATION
-// ========================================
 const SALT_ROUNDS = 12;
-const ADMIN_PASSWORD = 'AdminLumira2025!';
-const CLIENT_PASSWORD = 'ClientLumira2025!';
+const CANONICAL_ADMIN_EMAIL = process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase()
+  || 'expert@oraclelumira.com';
 
-async function main() {
-    console.log('');
-    console.log('🌟 ══════════════════════════════════════════════════════════');
-    console.log('   ORACLE LUMIRA V2 - DATABASE SEEDING');
-    console.log('   ══════════════════════════════════════════════════════════');
-    console.log('');
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} is required. Refusing to seed a production credential with a default password.`);
+  }
+  return value;
+}
 
-    // ========================================
-    // 1. EXPERTS (Admin & Expert)
-    // ========================================
-    console.log('👤 Creating experts...');
+async function seedAdmin(): Promise<void> {
+  const password = requiredEnv('ADMIN_BOOTSTRAP_PASSWORD');
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const adminPasswordHash = await bcrypt.hash(ADMIN_PASSWORD, SALT_ROUNDS);
+  const admin = await prisma.expert.upsert({
+    where: { email: CANONICAL_ADMIN_EMAIL },
+    update: {
+      password: passwordHash,
+      name: process.env.ADMIN_BOOTSTRAP_NAME?.trim() || 'Grégory Tordjman',
+      role: ExpertRole.ADMIN,
+      isActive: true,
+    },
+    create: {
+      email: CANONICAL_ADMIN_EMAIL,
+      password: passwordHash,
+      name: process.env.ADMIN_BOOTSTRAP_NAME?.trim() || 'Grégory Tordjman',
+      role: ExpertRole.ADMIN,
+      isActive: true,
+    },
+  });
 
-    // Admin expert
-    const admin = await prisma.expert.upsert({
-        where: { email: 'admin@oraclelumira.com' },
-        update: {
-            password: adminPasswordHash,
-            name: 'Master Lumira',
-            role: ExpertRole.ADMIN,
-            isActive: true,
-        },
-        create: {
-            email: 'admin@oraclelumira.com',
-            password: adminPasswordHash,
-            name: 'Master Lumira',
-            role: ExpertRole.ADMIN,
-            isActive: true,
-        },
+  await prisma.expert.updateMany({
+    where: {
+      email: { not: CANONICAL_ADMIN_EMAIL },
+      role: ExpertRole.ADMIN,
+    },
+    data: { isActive: false },
+  });
+
+  console.log(`✅ Canonical Desk admin: ${admin.email}`);
+}
+
+async function seedProducts(): Promise<void> {
+  const products = [
+    {
+      id: 'initie',
+      level: ProductLevel.INITIE,
+      name: 'Accès Lumira',
+      description: 'Offre unique de lancement',
+      amountCents: 900,
+      features: [
+        'Lecture personnalisée validée par un expert',
+        'Audio et PDF privés',
+        'Accès au Sanctuaire',
+      ],
+      isActive: true,
+    },
+    {
+      id: 'mystique',
+      level: ProductLevel.MYSTIQUE,
+      name: 'Mystique',
+      description: 'Offre archivée',
+      amountCents: 4700,
+      features: [],
+      isActive: false,
+    },
+    {
+      id: 'profond',
+      level: ProductLevel.PROFOND,
+      name: 'Profond',
+      description: 'Offre archivée',
+      amountCents: 6700,
+      features: [],
+      isActive: false,
+    },
+    {
+      id: 'integrale',
+      level: ProductLevel.INTEGRALE,
+      name: 'Intégrale',
+      description: 'Offre archivée',
+      amountCents: 9700,
+      features: [],
+      isActive: false,
+    },
+  ];
+
+  for (const product of products) {
+    await prisma.product.upsert({
+      where: { id: product.id },
+      update: {
+        name: product.name,
+        description: product.description,
+        amountCents: product.amountCents,
+        features: product.features,
+        isActive: product.isActive,
+      },
+      create: product,
     });
-    console.log(`   ✅ Admin: ${admin.email} (Master Lumira)`);
+  }
 
-    // Expert user
-    const expert = await prisma.expert.upsert({
-        where: { email: 'expert@oraclelumira.com' },
-        update: {
-            password: adminPasswordHash,
-            name: 'Amine Expert',
-            role: ExpertRole.EXPERT,
-            isActive: true,
-        },
-        create: {
-            email: 'expert@oraclelumira.com',
-            password: adminPasswordHash,
-            name: 'Amine Expert',
-            role: ExpertRole.EXPERT,
-            isActive: true,
-        },
-    });
-    console.log(`   ✅ Expert: ${expert.email} (Amine Expert)`);
+  console.log('✅ Product catalogue aligned with the single active offer');
+}
 
-    // ========================================
-    // 2. PRODUCTS
-    // ========================================
-    console.log('');
-    console.log('📦 Creating products...');
+async function seedOptionalTestClient(): Promise<void> {
+  if (process.env.SEED_TEST_DATA !== 'true') return;
 
-    const products = [
-        {
-            id: 'initie',
-            level: ProductLevel.INITIE,
-            name: 'Initié',
-            description: 'Accès Master - Offre Unique',
-            amountCents: 900, // 9 EUR
-            features: [
-                'Accès complet au Sanctuaire',
-                'Lectures audio & PDF',
-                'Mandala HD personnalisé',
-                'Rituels sacrés',
-                'Analyses karmiques & missions'
-            ],
-            isActive: true, // Only one active
-        },
-        {
-            id: 'mystique',
-            level: ProductLevel.MYSTIQUE,
-            name: 'Mystique',
-            description: 'Expérience audio (Obsolète)',
-            amountCents: 4700,
-            features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Accès au Sanctuaire'],
-            isActive: false,
-        },
-        {
-            id: 'profond',
-            level: ProductLevel.PROFOND,
-            name: 'Profond',
-            description: 'Expérience complète (Obsolète)',
-            amountCents: 6700,
-            features: ['PDF lecture personnalisée', 'Audio voix sacrée', 'Mandala HD personnalisé', 'Accès au Sanctuaire'],
-            isActive: false,
-        },
-        {
-            id: 'integrale',
-            level: ProductLevel.INTEGRALE,
-            name: 'Intégrale',
-            description: 'Immersion totale (Obsolète)',
-            amountCents: 9700,
-            features: ['Tout du niveau Profond', 'Rituels personnalisés', 'Suivi 30 jours', 'Accès prioritaire'],
-            isActive: false,
-        },
-    ];
+  const password = requiredEnv('TEST_CLIENT_PASSWORD');
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const user = await prisma.user.upsert({
+    where: { email: 'client@test.com' },
+    update: {
+      firstName: 'Test',
+      lastName: 'Client',
+      phone: '+33612345678',
+      dateOfBirth: new Date('1990-05-15'),
+    },
+    create: {
+      email: 'client@test.com',
+      firstName: 'Test',
+      lastName: 'Client',
+      phone: '+33612345678',
+      dateOfBirth: new Date('1990-05-15'),
+    },
+  });
 
-    for (const product of products) {
-        await prisma.product.upsert({
-            where: { id: product.id },
-            update: {
-                name: product.name,
-                description: product.description,
-                amountCents: product.amountCents,
-                features: product.features,
-                isActive: product.isActive,
-            },
-            create: {
-                id: product.id,
-                level: product.level,
-                name: product.name,
-                description: product.description,
-                amountCents: product.amountCents,
-                features: product.features,
-                isActive: product.isActive,
-            },
-        });
-        console.log(`   ✅ ${product.name} - ${product.amountCents / 100}€ (Active: ${product.isActive})`);
-    }
+  await prisma.userProfile.upsert({
+    where: { userId: user.id },
+    update: {
+      birthDate: '1990-05-15',
+      birthTime: '14:30',
+      birthPlace: 'Paris',
+      profileCompleted: true,
+      submittedAt: new Date(),
+    },
+    create: {
+      userId: user.id,
+      birthDate: '1990-05-15',
+      birthTime: '14:30',
+      birthPlace: 'Paris',
+      profileCompleted: true,
+      submittedAt: new Date(),
+    },
+  });
 
-    // ========================================
-    // 3. TEST CLIENT (User & UserProfile)
-    // ========================================
-    console.log('');
-    console.log('🧪 Creating test client...');
+  // The user model currently authenticates through application flows; the hash is deliberately
+  // computed only to ensure TEST_CLIENT_PASSWORD is explicit when test data is requested.
+  void passwordHash;
+  console.log('✅ Optional test client seeded');
+}
 
-    const clientPasswordHash = await bcrypt.hash(CLIENT_PASSWORD, SALT_ROUNDS);
-
-    // Create or update test user
-    const testUser = await prisma.user.upsert({
-        where: { email: 'client@test.com' },
-        update: {
-            firstName: 'Test',
-            lastName: 'Client',
-            phone: '+33612345678',
-            dateOfBirth: new Date('1990-05-15'),
-        },
-        create: {
-            email: 'client@test.com',
-            firstName: 'Test',
-            lastName: 'Client',
-            phone: '+33612345678',
-            dateOfBirth: new Date('1990-05-15'),
-        },
-    });
-    console.log(`   ✅ User: ${testUser.email} (${testUser.firstName} ${testUser.lastName})`);
-
-    // Create or update user profile
-    await prisma.userProfile.upsert({
-        where: { userId: testUser.id },
-        update: {
-            birthDate: '1990-05-15',
-            birthTime: '14:30',
-            birthPlace: 'Paris',
-            profileCompleted: true,
-            submittedAt: new Date(),
-        },
-        create: {
-            userId: testUser.id,
-            birthDate: '1990-05-15',
-            birthTime: '14:30',
-            birthPlace: 'Paris',
-            profileCompleted: true,
-            submittedAt: new Date(),
-        },
-    });
-    console.log(`   ✅ UserProfile: Paris, 1990-05-15 à 14:30`);
-
-    // ========================================
-    // 4. SUMMARY
-    // ========================================
-    const productCount = await prisma.product.count();
-    const expertCount = await prisma.expert.count();
-    const userCount = await prisma.user.count();
-    const profileCount = await prisma.userProfile.count();
-
-    console.log('');
-    console.log('🎉 ══════════════════════════════════════════════════════════');
-    console.log('   SEED COMPLETED SUCCESSFULLY!');
-    console.log('   ══════════════════════════════════════════════════════════');
-    console.log('');
-    console.log('   📊 Database Statistics:');
-    console.log(`      📦 Products:     ${productCount}`);
-    console.log(`      👤 Experts:      ${expertCount}`);
-    console.log(`      🧑 Users:        ${userCount}`);
-    console.log(`      📋 Profiles:     ${profileCount}`);
-    console.log('');
-    console.log('   🔐 Login Credentials:');
-    console.log('');
-    console.log('      ADMIN:');
-    console.log('      └─ Email:    admin@oraclelumira.com');
-    console.log('      └─ Password: AdminLumira2025!');
-    console.log('');
-    console.log('      EXPERT:');
-    console.log('      └─ Email:    expert@oraclelumira.com');
-    console.log('      └─ Password: AdminLumira2025!');
-    console.log('');
-    console.log('      TEST CLIENT:');
-    console.log('      └─ Email:    client@test.com');
-    console.log('      └─ Password: ClientLumira2025!');
-    console.log('');
-    console.log('══════════════════════════════════════════════════════════════');
-    console.log('');
+async function main(): Promise<void> {
+  console.log('🌟 Oracle Lumira V2 — safe database seed');
+  await seedAdmin();
+  await seedProducts();
+  await seedOptionalTestClient();
 }
 
 main()
-    .catch((e) => {
-        console.error('');
-        console.error('❌ ══════════════════════════════════════════════════════════');
-        console.error('   SEED ERROR');
-        console.error('   ══════════════════════════════════════════════════════════');
-        console.error('');
-        console.error(e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+  .catch((error) => {
+    console.error('❌ Seed failed', error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
