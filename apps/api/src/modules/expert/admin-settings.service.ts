@@ -1,8 +1,11 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import OpenAI from 'openai';
+import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
+import {
+  AiCredentialsStatusResponse,
+  ProviderConnectionTestResult,
+} from './ai-provider-diagnostics.types';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
 const VERTEX_CREDENTIALS_KEY = 'VERTEX_CREDENTIALS_JSON';
@@ -73,20 +76,9 @@ export interface PromptVersionHistory {
   createdAt: string;
 }
 
-export interface VertexTestResult {
-  success: boolean;
-  projectId?: string;
-  error?: string;
-}
+export type VertexTestResult = ProviderConnectionTestResult;
 
-export interface VertexConfigStatus {
-  vertexConfigured: boolean;
-  openaiConfigured: boolean;
-  projectId?: string;
-  clientEmail?: string;
-  lastTested?: string;
-  lastTestSuccess?: boolean;
-}
+export type VertexConfigStatus = AiCredentialsStatusResponse;
 
 @Injectable()
 export class AdminSettingsService {
@@ -95,6 +87,7 @@ export class AdminSettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly aiProviderDiagnostics: AiProviderDiagnosticsService,
   ) {}
 
   private getSettingsEncryptionKey(): Buffer {
@@ -203,31 +196,11 @@ export class AdminSettingsService {
   }
 
   /**
-   * Get configuration status for the admin dashboard.
-   * Returns metadata about the credentials (but not the actual secret values).
+   * Get AI provider credential status for the admin dashboard.
+   * Status is derived from real environment variables (GEMINI_API_KEY / OPENAI_API_KEY).
    */
   async getConfigStatus(): Promise<VertexConfigStatus> {
-    const setting = await this.prisma.systemSetting.findUnique({
-      where: { key: VERTEX_CREDENTIALS_KEY },
-    });
-
-    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
-
-    if (!setting?.value) {
-      return { vertexConfigured: false, openaiConfigured: !!openaiKey };
-    }
-
-    try {
-      const parsed = JSON.parse(this.decryptValue(setting.value));
-      return {
-        vertexConfigured: true,
-        openaiConfigured: !!openaiKey,
-        projectId: parsed.project_id || 'Inconnu',
-        clientEmail: parsed.client_email || 'Inconnu',
-      };
-    } catch {
-      return { vertexConfigured: true, openaiConfigured: !!openaiKey, projectId: 'Erreur parsing' };
-    }
+    return this.aiProviderDiagnostics.getCredentialsStatus();
   }
 
   /**
@@ -260,107 +233,17 @@ export class AdminSettingsService {
   }
 
   /**
-   * Test the Gemini API connection with the API key.
-   * Actually tries to call the model to verify access.
+   * Test the Gemini API connection using GEMINI_API_KEY and the configured model.
    */
   async testVertexConnection(): Promise<VertexTestResult> {
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-
-    if (!apiKey) {
-      return {
-        success: false,
-        error: "GEMINI_API_KEY non configurée dans les variables d'environnement",
-      };
-    }
-
-    try {
-      this.logger.log('🔄 Testing Gemini API connection...');
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash-preview-05-20',
-      });
-
-      // Try a minimal generation to verify full access
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
-      });
-
-      // If we get here, it works!
-      result.response.text();
-      this.logger.log(`✅ Gemini API connection test successful`);
-
-      return {
-        success: true,
-        projectId: 'gemini-api',
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`❌ Gemini API connection test failed: ${errorMessage}`);
-
-      // Extract meaningful error
-      let friendlyError = errorMessage;
-      if (errorMessage.includes('API_KEY_INVALID')) {
-        friendlyError = 'Clé API invalide. Vérifiez votre GEMINI_API_KEY.';
-      } else if (errorMessage.includes('403')) {
-        friendlyError = "Permission refusée (403). La clé API n'a pas accès au modèle.";
-      } else if (errorMessage.includes('401')) {
-        friendlyError = 'Non autorisé (401). La clé API est invalide.';
-      } else if (errorMessage.includes('RESOURCE_EXHAUSTED')) {
-        friendlyError = 'Quota dépassé. Attendez un moment ou augmentez vos limites.';
-      }
-
-      return {
-        success: false,
-        error: friendlyError,
-      };
-    }
+    return this.aiProviderDiagnostics.testGeminiConnection({ force: true });
   }
 
   /**
-   * Test the OpenAI API connection with the API key.
+   * Test the OpenAI API connection using OPENAI_API_KEY and the configured model.
    */
   async testOpenAIConnection(): Promise<VertexTestResult> {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-
-    if (!apiKey) {
-      return {
-        success: false,
-        error: "OPENAI_API_KEY non configurée dans les variables d'environnement",
-      };
-    }
-
-    try {
-      this.logger.log('🔄 Testing OpenAI API connection...');
-
-      const client = new OpenAI({ apiKey });
-      const response = await client.responses.create({
-        model: 'gpt-4o-mini',
-        input: 'Hi',
-        max_output_tokens: 10,
-      });
-
-      if (response.output_text) {
-        this.logger.log('✅ OpenAI API connection test successful');
-        return { success: true, projectId: 'openai-api' };
-      }
-
-      return { success: false, error: "Réponse vide de l'API OpenAI" };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`❌ OpenAI API connection test failed: ${errorMessage}`);
-
-      let friendlyError = errorMessage;
-      if (errorMessage.includes('auth') || errorMessage.includes('401')) {
-        friendlyError = 'Clé API invalide. Vérifiez votre OPENAI_API_KEY.';
-      } else if (errorMessage.includes('rate') || errorMessage.includes('429')) {
-        friendlyError = 'Quota dépassé. Attendez un moment ou vérifiez vos limites OpenAI.';
-      } else if (errorMessage.includes('403')) {
-        friendlyError = 'Permission refusée (403). Vérifiez les permissions de votre clé API.';
-      }
-
-      return { success: false, error: friendlyError };
-    }
+    return this.aiProviderDiagnostics.testOpenAIConnection({ force: true });
   }
 
   /**
