@@ -5,9 +5,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ExpertController } from './expert.controller';
 import { ProductionControlController } from './production-control.controller';
 import { ClientControlController } from './client-control.controller';
+import { AiProductionReadinessController } from './ai-production-readiness.controller';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
+import { AiProductionReadinessService } from './ai-production-readiness.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { ExpertGateway } from './expert.gateway';
@@ -37,11 +39,17 @@ import { ClientControlService } from './client-control.service';
       }),
     }),
   ],
-  controllers: [ExpertController, ProductionControlController, ClientControlController],
+  controllers: [
+    ExpertController,
+    ProductionControlController,
+    ClientControlController,
+    AiProductionReadinessController,
+  ],
   providers: [
     ExpertService,
     AdminSettingsService,
     AiProviderDiagnosticsService,
+    AiProductionReadinessService,
     ExpertAuthGuard,
     RolesGuard,
     ExpertGateway,
@@ -67,6 +75,7 @@ import { ClientControlService } from './client-control.service';
     ProductionControlService,
     ClientControlService,
     AiProviderDiagnosticsService,
+    AiProductionReadinessService,
     JwtModule,
   ],
 })
