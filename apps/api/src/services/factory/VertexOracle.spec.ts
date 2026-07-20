@@ -1,33 +1,23 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { VertexOracle, UserProfile, OrderContext } from './VertexOracle';
-import { PrismaService } from '../../prisma/prisma.service';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { AiMission, ProductLevel } from '@prisma/client';
+import { Test, TestingModule } from '@nestjs/testing';
 import OpenAI from 'openai';
-import { AiRoutingService } from '../../modules/settings/ai-routing.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { AiExecutionResolverService } from './ai-execution-resolver.service';
 import { AiRunService } from './ai-run.service';
 import { AiRuntimeCacheService } from './ai-runtime-cache.service';
-import { ProductLevel, AiMission } from '@prisma/client';
-
-// Mock the @google/generative-ai library (actual library used by VertexOracle)
-jest.mock('@google/generative-ai', () => {
-  return {
-    GoogleGenerativeAI: jest.fn(),
-  };
-});
+import { OrderContext, UserProfile, VertexOracle } from './VertexOracle';
 
 jest.mock('axios');
 jest.mock('openai', () => ({ __esModule: true, default: jest.fn() }));
 
-describe('VertexOracle', () => {
+describe('VertexOracle OpenAI-only runtime', () => {
   let service: VertexOracle;
-  let mockGenerateContent: jest.Mock;
-  let mockResponsesCreate: jest.Mock;
-  let aiRunService: { recordRun: jest.Mock };
-  let aiExecutionResolver: { resolve: jest.Mock };
+  let responsesCreate: jest.Mock;
+  let recordRun: jest.Mock;
+  let resolver: jest.Mock;
 
-  const mockUserProfile: UserProfile = {
+  const userProfile: UserProfile = {
     userId: 'user-123',
     firstName: 'Jean',
     lastName: 'Dupont',
@@ -35,64 +25,81 @@ describe('VertexOracle', () => {
     birthDate: '1990-01-01',
     birthTime: '12:00',
     birthPlace: 'Paris, France',
-    specificQuestion: 'Will I find love?',
-    objective: 'Spiritual growth',
+    specificQuestion: 'Quelle direction professionnelle est juste pour moi ?',
+    objective: 'Clarifier mon prochain choix',
   };
 
-  const mockOrderContext: OrderContext = {
+  const orderContext: OrderContext = {
     orderId: 'order-123',
     orderNumber: 'ORD-001',
     level: 1,
-    productName: 'Initiated',
+    productName: 'Accès Lumira',
     productLevel: ProductLevel.INITIE,
   };
 
-  const mockGeminiResponse = {
+  const sections = [
+    'spirituel',
+    'relations',
+    'mission',
+    'creativite',
+    'emotions',
+    'travail',
+    'sante',
+    'finance',
+  ].map((domain) => ({ domain, title: `Titre ${domain}`, content: `Contenu ${domain}` }));
+
+  const coreResponse = {
     pdf_content: {
-      introduction: 'Intro text',
-      archetype_reveal: 'You are the Sage',
-      sections: [],
-      karmic_insights: [],
-      life_mission: 'To learn',
-      rituals: [],
-      conclusion: 'End text',
+      introduction: 'Introduction personnalisée',
+      archetype_reveal: 'Le Sage se manifeste par une recherche de cohérence.',
+      sections,
+      karmic_insights: ['Comprendre avant d’agir'],
+      life_mission: 'Transformer la compréhension en décisions concrètes.',
+      rituals: [
+        {
+          name: 'Écriture claire',
+          description: 'Un temps court de clarification.',
+          instructions: ['Écrire la décision', 'Nommer la peur', 'Choisir une action'],
+        },
+      ],
+      conclusion: 'Avance avec précision et souplesse.',
     },
     synthesis: {
       archetype: 'Le Sage',
-      keywords: ['Wisdom'],
-      emotional_state: 'Calm',
-      key_blockage: 'block',
+      keywords: ['clarté', 'discernement', 'mesure', 'transmission', 'ancrage'],
+      emotional_state: 'Une tension entre prudence et passage à l’action.',
+      key_blockage: 'Attendre une certitude totale avant de décider.',
     },
-    timeline: [{ day: 1, title: 'Day 1', action: 'Act', mantra: 'Om', actionType: 'MEDITATION' }],
   };
 
-  beforeEach(async () => {
-    // 1. create the content mock function (fresh for each test)
-    mockGenerateContent = jest.fn();
-    mockResponsesCreate = jest.fn();
-    aiRunService = { recordRun: jest.fn().mockResolvedValue(undefined) };
-    aiExecutionResolver = {
-      resolve: jest.fn(async (ctx, snap) => ({
-        provider: 'openai',
-        model: ctx.agent === 'SCRIBE' ? 'gpt-5.5' : 'gpt-5.4',
-        temperature: 0.8,
-        topP: 0.95,
-        maxTokens: 16384,
-        reasoningEffort: ctx.agent === 'SCRIBE' ? 'high' : 'low',
-        verbosity: ctx.agent === 'SCRIBE' ? 'high' : 'medium',
-        systemPrompt: `${snap.lumiraDna}\n\n---\n\n${snap.agentContexts[ctx.agent]}`,
-        routingSource: `global:${ctx.agent}`,
-      })),
-    };
+  const timeline = Array.from({ length: 10 }, (_, index) => ({
+    day: index + 1,
+    title: `Jour ${index + 1}`,
+    action: `Action ${index + 1}`,
+    mantra: `Mantra ${index + 1}`,
+    actionType: index % 2 === 0 ? 'MEDITATION' : 'JOURNALING',
+  }));
 
-    // Gemini remains dormant in V1; configuring it lets this test prove it is not used.
-    (GoogleGenerativeAI as unknown as jest.Mock).mockImplementation(() => ({
-      getGenerativeModel: jest.fn(() => ({
-        generateContent: mockGenerateContent,
-      })),
-    }));
+  beforeEach(async () => {
+    responsesCreate = jest.fn();
+    recordRun = jest.fn().mockResolvedValue(undefined);
+    resolver = jest.fn(async (ctx, snapshot) => {
+      const config = snapshot.modelConfig.agents[ctx.agent];
+      return {
+        provider: 'openai',
+        model: config.model,
+        temperature: config.temperature,
+        topP: config.topP,
+        maxTokens: config.maxOutputTokens,
+        reasoningEffort: config.reasoningEffort,
+        verbosity: config.verbosity,
+        systemPrompt: `${snapshot.lumiraDna}\n\n---\n\n${snapshot.agentContexts[ctx.agent]}`,
+        routingSource: `global:${ctx.agent}`,
+      };
+    });
+
     (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
-      responses: { create: mockResponsesCreate },
+      responses: { create: responsesCreate },
     }));
 
     const module: TestingModule = await Test.createTestingModule({
@@ -103,8 +110,6 @@ describe('VertexOracle', () => {
           useValue: {
             get: jest.fn((key: string, defaultValue?: string) => {
               if (key === 'OPENAI_API_KEY') return 'test-openai-key';
-              if (key === 'GOOGLE_CLOUD_PROJECT') return 'test-project';
-              if (key === 'GOOGLE_CLOUD_LOCATION') return 'us-central1';
               return defaultValue;
             }),
           },
@@ -112,28 +117,17 @@ describe('VertexOracle', () => {
         {
           provide: PrismaService,
           useValue: {
-            systemSetting: {
-              findUnique: jest.fn().mockResolvedValue(null),
-            },
-            promptVersion: {
-              findMany: jest.fn().mockResolvedValue([]),
-            },
-            aiRun: {
-              aggregate: jest.fn().mockResolvedValue({ _sum: { estimatedCost: 0.01 } }),
-            },
+            promptVersion: { findMany: jest.fn().mockResolvedValue([]) },
+            aiRun: { aggregate: jest.fn().mockResolvedValue({ _sum: { estimatedCost: 0.01 } }) },
           },
         },
         {
-          provide: AiRoutingService,
-          useValue: { resolveRule: jest.fn().mockResolvedValue(null) },
-        },
-        {
           provide: AiExecutionResolverService,
-          useValue: aiExecutionResolver,
+          useValue: { resolve: resolver },
         },
         {
           provide: AiRunService,
-          useValue: aiRunService,
+          useValue: { recordRun },
         },
         {
           provide: AiRuntimeCacheService,
@@ -142,124 +136,159 @@ describe('VertexOracle', () => {
       ],
     }).compile();
 
-    service = module.get<VertexOracle>(VertexOracle);
-
-    // Clear mocks
+    service = module.get(VertexOracle);
     jest.clearAllMocks();
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-
-  describe('generateFullReading', () => {
-    it('should successfully generate and parse valid JSON response', async () => {
-      mockResponsesCreate.mockResolvedValue({
-        output_text: JSON.stringify(mockGeminiResponse),
+  it('generates SCRIBE and GUIDE through strict Responses schemas', async () => {
+    responsesCreate
+      .mockResolvedValueOnce({
+        status: 'completed',
+        output_text: JSON.stringify(coreResponse),
         usage: { input_tokens: 100, output_tokens: 200 },
+      })
+      .mockResolvedValueOnce({
+        status: 'completed',
+        output_text: JSON.stringify({ timeline }),
+        usage: { input_tokens: 50, output_tokens: 100 },
       });
 
-      const result = await service.generateFullReading(mockUserProfile, mockOrderContext);
+    const result = await service.generateFullReading(userProfile, orderContext);
 
-      expect(result).toEqual(mockGeminiResponse);
-      expect(mockResponsesCreate).toHaveBeenCalled();
-      expect(GoogleGenerativeAI).not.toHaveBeenCalled();
-      expect(mockResponsesCreate.mock.calls[0][0]).toEqual(
-        expect.objectContaining({
-          model: 'gpt-5.5',
-          reasoning: { effort: 'high' },
-          text: expect.objectContaining({ verbosity: 'high' }),
+    expect(result).toEqual({ ...coreResponse, timeline });
+    expect(responsesCreate).toHaveBeenCalledTimes(2);
+    expect(responsesCreate.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        model: 'gpt-5.5',
+        store: false,
+        reasoning: { effort: 'high' },
+        text: expect.objectContaining({
+          verbosity: 'high',
+          format: expect.objectContaining({ type: 'json_schema', strict: true }),
         }),
-      );
-      expect(mockResponsesCreate.mock.calls[0][0]).not.toHaveProperty('temperature');
-    });
-
-    it('should throw an error if Gemini returns empty content', async () => {
-      mockResponsesCreate.mockResolvedValue({ output_text: '' });
-
-      await expect(
-        service.generateFullReading(mockUserProfile, mockOrderContext),
-      ).rejects.toThrow();
-    });
-
-    it('records AiRun metadata on successful SCRIBE+GUIDE calls', async () => {
-      mockResponsesCreate.mockResolvedValue({
-        output_text: JSON.stringify(mockGeminiResponse),
-        usage: { input_tokens: 100, output_tokens: 200 },
-      });
-
-      await service.generateFullReading(mockUserProfile, mockOrderContext);
-
-      expect(aiRunService.recordRun).toHaveBeenCalled();
-      expect(aiRunService.recordRun.mock.calls[0][0]).toEqual(
-        expect.objectContaining({
-          agent: 'SCRIBE',
-          mission: AiMission.READING_GENERATION,
-          status: 'SUCCESS',
-        }),
-      );
-    });
+      }),
+    );
+    expect(responsesCreate.mock.calls[0][0]).not.toHaveProperty('temperature');
+    expect(responsesCreate.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        model: 'gpt-5.4',
+        reasoning: { effort: 'low' },
+      }),
+    );
+    expect(recordRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'SCRIBE',
+        mission: AiMission.READING_GENERATION,
+        status: 'SUCCESS',
+        inputTokens: 100,
+        outputTokens: 200,
+      }),
+    );
   });
 
-  describe('generateCoreReading multimodal', () => {
-    it('routes multimodal SCRIBE through the same execution context as text', async () => {
-      mockResponsesCreate.mockResolvedValue({
-        output_text: JSON.stringify({
-          pdf_content: mockGeminiResponse.pdf_content,
-          synthesis: mockGeminiResponse.synthesis,
-        }),
-        usage: { input_tokens: 100, output_tokens: 200 },
-      });
-
-      jest
-        .spyOn(
-          service as unknown as {
-            fetchImageAsBase64: () => Promise<{ base64: string; mimeType: string }>;
-          },
-          'fetchImageAsBase64',
-        )
-        .mockResolvedValue({ base64: 'ZmFrZS1pbWFnZQ==', mimeType: 'image/png' });
-
-      await service.generateCoreReading(
-        { ...mockUserProfile, facePhotoUrl: 'https://example.com/face.jpg' },
-        mockOrderContext,
-      );
-
-      expect(aiExecutionResolver.resolve).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agent: 'SCRIBE',
-          mission: AiMission.READING_GENERATION,
-          orderId: mockOrderContext.orderId,
-          productLevel: mockOrderContext.productLevel,
-        }),
-        expect.any(Object),
-      );
-      expect(mockResponsesCreate).toHaveBeenCalled();
-      expect(mockResponsesCreate.mock.calls[0][0].input).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: 'input_image',
-            detail: 'high',
-            image_url: expect.stringContaining('data:image/png'),
-          }),
-        ]),
-      );
+  it('sends face then palm with real MIME types and high detail', async () => {
+    responsesCreate.mockResolvedValue({
+      status: 'completed',
+      output_text: JSON.stringify(coreResponse),
+      usage: { input_tokens: 100, output_tokens: 200 },
     });
+
+    const fetchImage = jest
+      .spyOn(
+        service as unknown as {
+          fetchImageAsBase64: (url: string) => Promise<{
+            base64: string;
+            mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+          }>;
+        },
+        'fetchImageAsBase64',
+      )
+      .mockResolvedValueOnce({ base64: 'ZmFjZQ==', mimeType: 'image/png' })
+      .mockResolvedValueOnce({ base64: 'cGFsbQ==', mimeType: 'image/webp' });
+
+    await service.generateCoreReading(
+      {
+        ...userProfile,
+        facePhotoUrl: 'https://example.com/face.png',
+        palmPhotoUrl: 'https://example.com/palm.webp',
+      },
+      orderContext,
+    );
+
+    expect(fetchImage).toHaveBeenNthCalledWith(1, 'https://example.com/face.png');
+    expect(fetchImage).toHaveBeenNthCalledWith(2, 'https://example.com/palm.webp');
+    const content = responsesCreate.mock.calls[0][0].input[0].content;
+    expect(content[1]).toEqual(
+      expect.objectContaining({
+        type: 'input_image',
+        detail: 'high',
+        image_url: expect.stringContaining('data:image/png;base64,ZmFjZQ=='),
+      }),
+    );
+    expect(content[2]).toEqual(
+      expect.objectContaining({
+        type: 'input_image',
+        detail: 'high',
+        image_url: expect.stringContaining('data:image/webp;base64,cGFsbQ=='),
+      }),
+    );
   });
 
-  it('keeps expert guidance and complementary expert instructions separate in the SCRIBE prompt', () => {
+  it('rejects duplicate or missing SCRIBE domains even after structured output', async () => {
+    responsesCreate.mockResolvedValue({
+      status: 'completed',
+      output_text: JSON.stringify({
+        ...coreResponse,
+        pdf_content: {
+          ...coreResponse.pdf_content,
+          sections: sections.map((section) => ({ ...section, domain: 'spirituel' })),
+        },
+      }),
+    });
+
+    await expect(service.generateCoreReading(userProfile, orderContext)).rejects.toThrow(
+      'huit domaines uniques',
+    );
+  });
+
+  it('rejects invalid GUIDE day numbering', async () => {
+    responsesCreate.mockResolvedValue({
+      status: 'completed',
+      output_text: JSON.stringify({
+        timeline: timeline.map((day, index) => ({ ...day, day: index + 2 })),
+      }),
+    });
+
+    await expect(
+      service.generateTimelineBatch(userProfile, coreResponse.synthesis, 1),
+    ).rejects.toThrow('jour invalide');
+  });
+
+  it('keeps expert guidance and complementary instructions separate', () => {
     const prompt = (
       service as unknown as {
         buildScribePrompt: (profile: UserProfile, order: OrderContext) => string;
       }
-    ).buildScribePrompt(mockUserProfile, {
-      ...mockOrderContext,
+    ).buildScribePrompt(userProfile, {
+      ...orderContext,
       expertPrompt: 'Guidance principale',
       expertInstructions: 'Domaines à approfondir',
     });
+
     expect(prompt).toContain('=== GUIDANCE PRINCIPALE DE L’EXPERT ===\nGuidance principale');
     expect(prompt).toContain(
       '=== INSTRUCTIONS COMPLÉMENTAIRES DE L’EXPERT ===\nDomaines à approfondir',
+    );
+  });
+
+  it('records a tracked error for an empty provider response', async () => {
+    responsesCreate.mockResolvedValue({ status: 'completed', output_text: '' });
+
+    await expect(service.generateCoreReading(userProfile, orderContext)).rejects.toThrow(
+      'Réponse OpenAI vide',
+    );
+    expect(recordRun).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'SCRIBE', status: 'ERROR' }),
     );
   });
 });
