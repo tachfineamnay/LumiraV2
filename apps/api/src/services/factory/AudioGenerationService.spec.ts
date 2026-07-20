@@ -92,10 +92,12 @@ describe('AudioGenerationService managed sealed narration', () => {
 
   it('silently skips the historical fire-and-forget call without a managed audio job', async () => {
     const prisma = createPrisma(null);
-    const service = new AudioGenerationService(config, prisma as never);
+    const narrator = { reformulate: jest.fn() };
+    const service = new AudioGenerationService(config, prisma as never, narrator as never);
 
     await expect(service.generateAllAudio('order-1')).resolves.toBeNull();
 
+    expect(narrator.reformulate).not.toHaveBeenCalled();
     expect(mockSynthesizeSpeech).not.toHaveBeenCalled();
     expect(mockS3Send).not.toHaveBeenCalled();
   });
@@ -104,15 +106,17 @@ describe('AudioGenerationService managed sealed narration', () => {
     const prisma = createPrisma({
       production: { type: 'AUDIO_GENERATION', status: 'RUNNING', stage: 'GENERATING_AUDIO' },
     });
-    const service = new AudioGenerationService(config, prisma as never);
+    const narrator = { reformulate: jest.fn() };
+    const service = new AudioGenerationService(config, prisma as never, narrator as never);
 
     await expect(service.generateAllAudio('order-1')).rejects.toThrow(
       'Aucune version scellée et valide',
     );
+    expect(narrator.reformulate).not.toHaveBeenCalled();
     expect(mockSynthesizeSpeech).not.toHaveBeenCalled();
   });
 
-  it('stores the full audio under the exact sealed version content hash', async () => {
+  it('adapts the sealed reading with NARRATOR before TTS and stores the exact version hash', async () => {
     const prisma = createPrisma(
       {
         production: { type: 'AUDIO_GENERATION', status: 'RUNNING', stage: 'GENERATING_AUDIO' },
@@ -127,10 +131,18 @@ describe('AudioGenerationService managed sealed narration', () => {
         },
       ],
     );
-    const service = new AudioGenerationService(config, prisma as never);
+    const narrator = {
+      reformulate: jest.fn().mockResolvedValue('Narration audio validée par NARRATOR.'),
+    };
+    const service = new AudioGenerationService(config, prisma as never, narrator as never);
 
     const result = await service.generateAllAudio('order-1');
 
+    expect(narrator.reformulate).toHaveBeenCalledWith({
+      text: expect.stringContaining('Vous avancez avec une grande capacité de perception'),
+      type: 'synthesis',
+      orderId: 'order-1',
+    });
     expect(result).toEqual({
       fileId: 'audio-file-1',
       storageKey: 'audio/readings/LUM-1/v2-1234567890abcdef-lecture-complete.mp3',
@@ -139,6 +151,9 @@ describe('AudioGenerationService managed sealed narration', () => {
       size: 4,
     });
     expect(mockSynthesizeSpeech).toHaveBeenCalledTimes(1);
+    expect(mockSynthesizeSpeech.mock.calls[0][0].input.ssml).toContain(
+      'Narration audio validée par NARRATOR.',
+    );
     expect(PutObjectCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         Key: result?.storageKey,
