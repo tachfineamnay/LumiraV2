@@ -3,16 +3,50 @@ name: Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lumira-production-deploy
+  cancel-in-progress: true
 
 jobs:
   ci:
+    name: Validate production revision
     uses: ./.github/workflows/ci.yml
 
   deploy:
+    name: Trigger Coolify production deployment
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
-      - name: Trigger Coolify Deploy
+      - name: Validate deployment secrets
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors -X POST "${{ secrets.COOLIFY_WEBHOOK_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+          test -n "$COOLIFY_WEBHOOK_URL" || { echo "Missing GitHub secret: COOLIFY_WEBHOOK_URL"; exit 1; }
+          test -n "$COOLIFY_TOKEN" || { echo "Missing GitHub secret: COOLIFY_TOKEN"; exit 1; }
+
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 3 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            -X POST "$COOLIFY_WEBHOOK_URL" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN"
+
+          echo "Coolify deployment accepted."
