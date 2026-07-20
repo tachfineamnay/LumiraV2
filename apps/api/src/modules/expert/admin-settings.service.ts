@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
+import { AiRuntimeCacheService } from '../../services/factory/ai-runtime-cache.service';
 import {
   AiCredentialsStatusResponse,
   ProviderConnectionTestResult,
@@ -88,6 +89,7 @@ export class AdminSettingsService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly aiProviderDiagnostics: AiProviderDiagnosticsService,
+    private readonly aiRuntimeCache: AiRuntimeCacheService,
   ) {}
 
   private getSettingsEncryptionKey(): Buffer {
@@ -356,6 +358,7 @@ export class AdminSettingsService {
     });
 
     this.logger.log(`✅ Prompt ${key} saved as version ${newVersion} by ${changedBy || 'system'}`);
+    this.aiRuntimeCache.invalidateAll(`prompt:${key}`);
 
     return { success: true, version: newVersion };
   }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductLevel, AiMission } from '@prisma/client';
+import { AiRuntimeCacheService } from '../../services/factory/ai-runtime-cache.service';
 
 export type AiProvider = 'gemini' | 'openai';
 
@@ -33,7 +34,10 @@ export interface UpsertRoutingRuleDto {
 export class AiRoutingService {
   private readonly logger = new Logger(AiRoutingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aiRuntimeCache: AiRuntimeCacheService,
+  ) {}
 
   /**
    * Resolve the AI routing params for a given (productLevel, agent, mission) triple.
@@ -167,6 +171,7 @@ export class AiRoutingService {
     this.logger.log(
       `✅ [AI Routing] Rule upserted: ${productLevel}/${agent}/${mission} → ${rest.provider}/${rest.model}`,
     );
+    this.aiRuntimeCache.invalidateAll(`routing:${productLevel}/${agent}/${mission}`);
     return rule;
   }
 
@@ -176,6 +181,7 @@ export class AiRoutingService {
   async deleteRule(id: string) {
     await this.prisma.aiRoutingRule.delete({ where: { id } });
     this.logger.log(`🗑️ [AI Routing] Rule deleted: ${id}`);
+    this.aiRuntimeCache.invalidateAll(`routing:delete:${id}`);
   }
 
   /**
@@ -186,6 +192,7 @@ export class AiRoutingService {
       where: { productLevel, agent },
     });
     this.logger.log(`🔄 [AI Routing] Reset ${deleted.count} rules for ${productLevel}/${agent}`);
+    this.aiRuntimeCache.invalidateAll(`routing:reset:${productLevel}/${agent}`);
     return deleted;
   }
 }

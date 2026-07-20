@@ -22,10 +22,16 @@ import { AudioGenerationService } from './factory/AudioGenerationService';
 import { AudioScriptService } from './factory/AudioScriptService';
 import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
 import { AiRoutingService } from '../modules/settings/ai-routing.service';
+import { AiExecutionResolverService } from './factory/ai-execution-resolver.service';
+import { AiRunService } from './factory/ai-run.service';
+import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';
 
 @Module({
   imports: [ConfigModule, PrismaModule, ScheduleModule.forRoot()],
   providers: [
+    AiRuntimeCacheService,
+    AiExecutionResolverService,
+    AiRunService,
     VertexOracle,
     PdfFactory,
     ContextDispatcher,
@@ -37,6 +43,9 @@ import { AiRoutingService } from '../modules/settings/ai-routing.service';
     AiRoutingService,
   ],
   exports: [
+    AiRuntimeCacheService,
+    AiExecutionResolverService,
+    AiRunService,
     VertexOracle,
     PdfFactory,
     ContextDispatcher,

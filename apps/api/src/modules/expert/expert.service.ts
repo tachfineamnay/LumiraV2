@@ -14,6 +14,7 @@ import { IdGenerator } from '../../utils/IdGenerator';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DigitalSoulService } from '../../services/factory/DigitalSoulService';
 import { VertexOracle } from '../../services/factory/VertexOracle';
+import { productLevelFromAmountCents } from '../../services/factory/product-level.util';
 import { ExpertGateway } from './expert.gateway';
 import * as bcrypt from 'bcryptjs';
 import { Expert, Order, Prisma, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
@@ -997,26 +998,19 @@ export class ExpertService {
     );
 
     try {
-      // Build the refinement prompt - matching spec exactly
-      const systemPrompt = `Tu es Oracle Lumira, un guide spirituel expert en lectures karmiques et astrologiques.
-Voici un texte sacré. Voici l'instruction de l'Expert : [Instruction].
-Réécris le texte en appliquant la modification.
-Garde le même format Markdown.
-IMPORTANT: Retourne UNIQUEMENT le contenu modifié, sans explications ni commentaires.`;
-
-      const userPrompt = `## Instruction de l'Expert:
-${dto.instruction}
-
-## Texte sacré à modifier:
-${dto.currentContent}
-
-## Texte modifié:`;
-
-      const refinedContent = await this.vertexOracle.refineText(userPrompt, {
-        systemPrompt,
-        maxTokens: 4096,
-        temperature: 0.7,
-      });
+      const refinedContent = await this.vertexOracle.refineContent(
+        dto.currentContent,
+        dto.instruction,
+        {
+          preserveStructure: true,
+          maxTokens: 4096,
+          temperature: 0.7,
+          routing: {
+            orderId: order.id,
+            productLevel: productLevelFromAmountCents(order.amount),
+          },
+        },
+      );
 
       // Update order with refined content AND save version history
       const currentGenerated = (order.generatedContent as Record<string, unknown>) || {};

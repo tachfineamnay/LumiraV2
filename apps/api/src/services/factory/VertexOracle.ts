@@ -12,15 +12,23 @@
  * @module services/factory/VertexOracle
  */
 
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, GenerativeModel, Content, Part } from '@google/generative-ai';
 import OpenAI from 'openai';
 import axios from 'axios';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AiRoutingService } from '../../modules/settings/ai-routing.service';
 import { ProductLevel, AiMission } from '@prisma/client';
+import {
+  AgentType,
+  AiExecutionContext,
+  AiPromptSnapshot,
+  ResolvedAiExecution,
+} from './ai-execution.types';
+import { AiExecutionResolverService, buildAiContext } from './ai-execution-resolver.service';
+import { AiRunService } from './ai-run.service';
+import { AiRuntimeCacheService } from './ai-runtime-cache.service';
 
 // =============================================================================
 // TYPES & INTERFACES
@@ -55,6 +63,7 @@ export interface OrderContext {
   orderId: string;
   orderNumber: string;
   level: number;
+  productLevel?: ProductLevel;
   productId?: string;
   productName: string;
   expertPrompt?: string;
@@ -164,8 +173,8 @@ export interface DreamInterpretation {
   pattern: string | null;
 }
 
-// Agent type for logging
-type AgentType = 'SCRIBE' | 'GUIDE' | 'EDITOR' | 'CONFIDANT' | 'ONIRIQUE';
+// Agent type exported via ai-execution.types.ts
+export type { AgentType, AiExecutionContext } from './ai-execution.types';
 
 type AIProvider = 'gemini' | 'openai';
 
@@ -323,6 +332,12 @@ CONTEXTE UTILISÉ:
 
 FORMAT: Texte conversationnel naturel (pas JSON).
 `.trim(),
+  NARRATOR: `
+MISSION NARRATOR:
+Tu transformes un texte de lecture spirituelle en script de narration audio méditatif.
+Supprime titres, listes et symboles visuels. Conserve le sens exact. Tutoiement chaleureux.
+Retourne uniquement le texte reformulé.
+`.trim(),
 };
 
 // =============================================================================
@@ -398,7 +413,7 @@ const DEFAULT_MODEL_CONFIG = {
 // =============================================================================
 
 @Injectable()
-export class VertexOracle {
+export class VertexOracle implements OnModuleInit {
   private readonly logger = new Logger(VertexOracle.name);
 
   // Gemini API client
@@ -433,7 +448,9 @@ export class VertexOracle {
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => PrismaService))
     private readonly prisma: PrismaService,
-    private readonly aiRouting: AiRoutingService,
+    private readonly aiExecutionResolver: AiExecutionResolverService,
+    private readonly aiRunService: AiRunService,
+    private readonly aiRuntimeCache: AiRuntimeCacheService,
   ) {
     this.onboardingBucket = this.configService.get<string>(
       'AWS_UPLOADS_BUCKET_NAME',
@@ -446,6 +463,10 @@ export class VertexOracle {
         secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY', ''),
       },
     });
+  }
+
+  onModuleInit(): void {
+    this.aiRuntimeCache.registerInvalidator(() => this.invalidateCache());
   }
 
   // =========================================================================
@@ -483,6 +504,9 @@ export class VertexOracle {
             break;
           case 'ONIRIQUE':
             this.agentContexts.ONIRIQUE = prompt.value;
+            break;
+          case 'NARRATOR':
+            this.agentContexts.NARRATOR = prompt.value;
             break;
           case 'MODEL_CONFIG':
             try {
@@ -614,7 +638,10 @@ export class VertexOracle {
     this.lastCredentialsCheck = 0;
     this.promptsLoaded = false; // Also reload prompts
     this.lumiraDna = DEFAULT_LUMIRA_DNA;
-    this.agentContexts = { ...DEFAULT_AGENT_CONTEXTS, ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT };
+    this.agentContexts = {
+      ...DEFAULT_AGENT_CONTEXTS,
+      ONIRIQUE: DEFAULT_ONIRIQUE_PROMPT,
+    };
     this.modelConfig = { ...DEFAULT_MODEL_CONFIG };
     this.agentProviders = { ...DEFAULT_MODEL_CONFIG.agentProviders };
     this.oniricModel = null;
@@ -623,10 +650,23 @@ export class VertexOracle {
   }
 
   /**
-   * Builds the complete system prompt for an agent.
+   * Builds the complete system prompt for an agent (global active prompts).
    */
   private getSystemPrompt(agent: AgentType): string {
     return `${this.lumiraDna}\n\n---\n\n${this.agentContexts[agent]}`;
+  }
+
+  private getPromptSnapshot(): AiPromptSnapshot {
+    return {
+      lumiraDna: this.lumiraDna,
+      agentContexts: { ...this.agentContexts },
+      modelConfig: { ...this.modelConfig },
+      agentProviders: { ...this.agentProviders },
+    };
+  }
+
+  private async resolveExecution(ctx: AiExecutionContext): Promise<ResolvedAiExecution> {
+    return this.aiExecutionResolver.resolve(ctx, this.getPromptSnapshot());
   }
 
   // =========================================================================
@@ -644,7 +684,10 @@ export class VertexOracle {
     await this.ensureInitialized();
     this.logger.log(`📜 [SCRIBE] Generating reading for ${orderContext.orderNumber}`);
 
-    const systemPrompt = this.getSystemPrompt('SCRIBE');
+    const execCtx = buildAiContext('SCRIBE', AiMission.READING_GENERATION, {
+      orderId: orderContext.orderId,
+      productLevel: orderContext.productLevel,
+    });
     const userPrompt = this.buildScribePrompt(userProfile, orderContext);
 
     // Collect images if available
@@ -673,11 +716,8 @@ export class VertexOracle {
     // Use multimodal adapter if images, otherwise plain JSON adapter
     const textContent =
       images.length > 0
-        ? await this.callAIMultimodal('SCRIBE', systemPrompt, userPrompt, images, 120000)
-        : await this.callAIJSON('SCRIBE', systemPrompt, userPrompt, 120000, {
-            productLevel: orderContext.productId as ProductLevel,
-            mission: AiMission.READING_GENERATION,
-          });
+        ? await this.callAIMultimodal(execCtx, userPrompt, images, 120000)
+        : await this.callAIJSON(execCtx, userPrompt, 120000);
 
     if (!textContent) {
       throw new Error('[SCRIBE] Empty response from model');
@@ -729,6 +769,7 @@ export class VertexOracle {
     synthesis: ReadingSynthesis,
     batchNumber: 1 | 2 | 3 = 1,
     pastDreams?: Array<{ content: string; symbols: string[]; createdAt: string }>,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
   ): Promise<TimelineDay[]> {
     await this.ensureInitialized();
     const startDay = (batchNumber - 1) * 10 + 1; // 1, 11, or 21
@@ -737,7 +778,7 @@ export class VertexOracle {
       `🗓️ [GUIDE] Batch ${batchNumber} (days ${startDay}-${endDay}) for archetype: ${synthesis.archetype}`,
     );
 
-    const systemPrompt = this.getSystemPrompt('GUIDE');
+    const execCtx = buildAiContext('GUIDE', AiMission.TIMELINE_BATCH, routing);
     const userPrompt = this.buildGuidePrompt(
       userProfile,
       synthesis,
@@ -747,10 +788,7 @@ export class VertexOracle {
       pastDreams,
     );
 
-    const textContent = await this.callAIJSON('GUIDE', systemPrompt, userPrompt, 90000, {
-      productLevel: undefined, // no productLevel available on synthesis, use global defaults
-      mission: AiMission.TIMELINE_BATCH,
-    });
+    const textContent = await this.callAIJSON(execCtx, userPrompt, 90000);
     if (!textContent) throw new Error('[GUIDE] Empty response from model');
 
     const cleanedContent = textContent.replace(/```json|```/g, '').trim();
@@ -781,8 +819,9 @@ export class VertexOracle {
   async generateTimeline(
     userProfile: UserProfile,
     synthesis: ReadingSynthesis,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
   ): Promise<TimelineDay[]> {
-    return this.generateTimelineBatch(userProfile, synthesis, 1);
+    return this.generateTimelineBatch(userProfile, synthesis, 1, undefined, routing);
   }
 
   // =========================================================================
@@ -794,14 +833,17 @@ export class VertexOracle {
    * STRICT: no predictions, no astrology, no divination.
    * Output is always a valid DreamInterpretation JSON.
    */
-  async generateDreamInterpretation(ctx: DreamContext): Promise<DreamInterpretation> {
+  async generateDreamInterpretation(
+    ctx: DreamContext,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
+  ): Promise<DreamInterpretation> {
     await this.ensureInitialized();
     this.logger.log(`🌙 [ONIRIQUE] Interpreting dream for user ${ctx.userId.substring(0, 8)}...`);
 
-    const systemPrompt = this.agentContexts.ONIRIQUE;
+    const execCtx = buildAiContext('ONIRIQUE', AiMission.DREAM_INTERPRETATION, routing);
     const userPrompt = this.buildOniriquePrompt(ctx);
 
-    const textContent = await this.callAIJSON('ONIRIQUE', systemPrompt, userPrompt, 30000);
+    const textContent = await this.callAIJSON(execCtx, userPrompt, 30000);
     if (!textContent) throw new Error('[ONIRIQUE] Empty response from model');
 
     // Strip any accidental markdown fences just-in-case.
@@ -852,12 +894,13 @@ export class VertexOracle {
       preserveStructure?: boolean;
       maxTokens?: number;
       temperature?: number;
+      routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel' | 'promptVersionId'>;
     },
   ): Promise<string> {
     await this.ensureInitialized();
     this.logger.log(`✏️ [EDITOR] Refining content (${originalContent.length} chars)`);
 
-    const systemPrompt = this.getSystemPrompt('EDITOR');
+    const execCtx = buildAiContext('EDITOR', AiMission.CONTENT_REFINEMENT, options?.routing);
     const userPrompt = `
 CONTENU ORIGINAL:
 ---
@@ -872,7 +915,7 @@ ${options?.preserveStructure ? 'IMPORTANT: Préserve la structure et le formatag
 Génère le contenu affiné:
 `.trim();
 
-    const refined = await this.callAIText('EDITOR', systemPrompt, userPrompt, 60000, {
+    const refined = await this.callAIText(execCtx, userPrompt, 60000, {
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens ?? 8192,
     });
@@ -897,18 +940,22 @@ Génère le contenu affiné:
     userMessage: string,
     context: ChatContext,
     conversationHistory: ChatMessage[] = [],
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
   ): Promise<string> {
     await this.ensureInitialized();
     this.logger.log(`💬 [CONFIDANT] Chat for user ${context.userId.substring(0, 8)}...`);
 
-    const systemPrompt = this.buildConfidantSystemPrompt(context);
+    const execCtx = buildAiContext('CONFIDANT', AiMission.CHAT_SESSION, routing);
+    const resolved = await this.resolveExecution(execCtx);
+    const systemPrompt = this.buildConfidantSystemPrompt(context, resolved.systemPrompt);
 
     const reply = await this.callAIChat(
-      'CONFIDANT',
+      execCtx,
       systemPrompt,
       conversationHistory,
       userMessage,
       30000,
+      resolved,
     );
 
     if (!reply) {
@@ -937,7 +984,10 @@ Génère le contenu affiné:
     const { pdf_content, synthesis } = await this.generateCoreReading(userProfile, orderContext);
 
     // Step 2: GUIDE generates timeline based on synthesis
-    const timeline = await this.generateTimeline(userProfile, synthesis);
+    const timeline = await this.generateTimeline(userProfile, synthesis, {
+      orderId: orderContext.orderId,
+      productLevel: orderContext.productLevel,
+    });
 
     this.logger.log(`✅ Full reading complete for ${userProfile.firstName}`);
 
@@ -1042,56 +1092,6 @@ Génère le contenu affiné:
   }
 
   /**
-   * Resolves model params using the AiRoutingRule matrix first, then falls back
-   * to the global agent defaults.  This is the preferred method for all agents.
-   *
-   * @param agent       The agent type (SCRIBE, GUIDE, etc.)
-   * @param productLevel Optional product level from the order (INITIE, MYSTIQUE, PROFOND, INTEGRALE)
-   * @param mission     Optional mission key matching AiMission enum (DEFAULT, READING_GENERATION, etc.)
-   */
-  private async getModelParamsWithRouting(
-    agent: AgentType,
-    productLevel?: ProductLevel,
-    mission: AiMission = AiMission.DEFAULT,
-  ): Promise<{
-    provider: AIProvider;
-    model: string;
-    temperature: number;
-    topP: number;
-    maxTokens: number;
-  }> {
-    // Try the routing matrix if a productLevel is provided
-    if (productLevel) {
-      const rule = await this.aiRouting.resolveRule(productLevel, agent, mission);
-      if (rule) {
-        this.logger.log(
-          `🗺️ [${agent}] Routing rule applied (${rule.source}): ${rule.provider}/${rule.model} @ temp=${rule.temperature}`,
-        );
-        // topP: keep global default for the provider/tier as routing rules don't override it
-        const isHeavy = ['SCRIBE', 'GUIDE', 'EDITOR'].includes(agent);
-        const topP =
-          rule.provider === 'openai'
-            ? isHeavy
-              ? this.modelConfig.openaiHeavyTopP
-              : this.modelConfig.openaiFlashTopP
-            : isHeavy
-              ? this.modelConfig.heavyTopP
-              : this.modelConfig.flashTopP;
-        return {
-          provider: rule.provider as AIProvider,
-          model: rule.model,
-          temperature: rule.temperature,
-          topP,
-          maxTokens: rule.maxTokens,
-        };
-      }
-    }
-
-    // Fallback: global defaults
-    return this.getModelParams(agent);
-  }
-
-  /**
    * Ensures the OpenAI client is available or throws.
    */
   private requireOpenAI(): OpenAI {
@@ -1103,253 +1103,259 @@ Génère le contenu affiné:
     return this.openaiClient;
   }
 
-  /**
-   * Adapter: Call AI with JSON response. Routes to Gemini or OpenAI.
-   * Pass routingCtx to enable per-product routing matrix lookup.
-   */
-  private async callAIJSON(
-    agent: AgentType,
-    systemPrompt: string,
-    userContent: string,
+  private async runTrackedCall(
+    ctx: AiExecutionContext,
+    resolved: ResolvedAiExecution,
     timeoutMs: number,
-    routingCtx?: { productLevel?: ProductLevel; mission?: AiMission },
+    operation: () => Promise<string>,
   ): Promise<string> {
-    const params = routingCtx
-      ? await this.getModelParamsWithRouting(agent, routingCtx.productLevel, routingCtx.mission)
-      : this.getModelParams(agent);
-    this.logger.log(`🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model}`);
+    const startedAt = Date.now();
+    const baseRun = {
+      orderId: ctx.orderId,
+      agent: ctx.agent,
+      mission: ctx.mission,
+      productLevel: ctx.productLevel,
+      provider: resolved.provider,
+      model: resolved.model,
+      promptVersionId: resolved.promptVersionId,
+      routingSource: resolved.routingSource,
+    };
 
-    if (params.provider === 'openai') {
-      const client = this.requireOpenAI();
-      const result = await this.executeWithRetry(
-        agent,
-        async () => {
-          const response = await client.responses.create({
-            model: params.model,
-            instructions: systemPrompt,
-            input: userContent,
-            temperature: params.temperature,
-            top_p: params.topP,
-            max_output_tokens: params.maxTokens,
-            text: { format: { type: 'json_object' } },
-          });
-          return response.output_text;
-        },
-        timeoutMs,
-      );
-      return result;
+    try {
+      const text = await this.executeWithRetry(ctx.agent, operation, timeoutMs);
+      await this.aiRunService.recordRun({
+        ...baseRun,
+        status: 'SUCCESS',
+        durationMs: Date.now() - startedAt,
+      });
+      return text;
+    } catch (error) {
+      const errorCode = error instanceof Error ? error.message.slice(0, 200) : 'unknown_error';
+      await this.aiRunService.recordRun({
+        ...baseRun,
+        status: 'ERROR',
+        durationMs: Date.now() - startedAt,
+        errorCode,
+      });
+      throw error;
     }
-
-    // Gemini path
-    const model = this.genAI!.getGenerativeModel({
-      model: params.model,
-      generationConfig: {
-        temperature: params.temperature,
-        topP: params.topP,
-        maxOutputTokens: params.maxTokens,
-        responseMimeType: 'application/json',
-      },
-    });
-    const result = await this.executeWithRetry(
-      agent,
-      async () => {
-        const response = await model.generateContent({
-          contents: [
-            { role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userContent}` }] },
-          ],
-        });
-        return response.response;
-      },
-      timeoutMs,
-    );
-    return result.text();
   }
 
-  /**
-   * Adapter: Call AI with text (non-JSON) response. Routes to Gemini or OpenAI.
-   */
+  private async callAIJSON(
+    ctx: AiExecutionContext,
+    userContent: string,
+    timeoutMs: number,
+  ): Promise<string> {
+    const resolved = await this.resolveExecution(ctx);
+    this.logger.log(
+      `🤖 [${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}`,
+    );
+
+    return this.runTrackedCall(ctx, resolved, timeoutMs, async () => {
+      if (resolved.provider === 'openai') {
+        const client = this.requireOpenAI();
+        const response = await client.responses.create({
+          model: resolved.model,
+          instructions: resolved.systemPrompt,
+          input: userContent,
+          temperature: resolved.temperature,
+          top_p: resolved.topP,
+          max_output_tokens: resolved.maxTokens,
+          text: { format: { type: 'json_object' } },
+        });
+        return response.output_text ?? '';
+      }
+
+      const model = this.genAI!.getGenerativeModel({
+        model: resolved.model,
+        generationConfig: {
+          temperature: resolved.temperature,
+          topP: resolved.topP,
+          maxOutputTokens: resolved.maxTokens,
+          responseMimeType: 'application/json',
+        },
+      });
+      const response = await model.generateContent({
+        contents: [
+          { role: 'user', parts: [{ text: `${resolved.systemPrompt}\n\n---\n\n${userContent}` }] },
+        ],
+      });
+      return response.response.text();
+    });
+  }
+
   private async callAIText(
-    agent: AgentType,
-    systemPrompt: string,
+    ctx: AiExecutionContext,
     userContent: string,
     timeoutMs: number,
     overrideParams?: { temperature?: number; maxTokens?: number },
   ): Promise<string> {
-    const params = this.getModelParams(agent);
-    const temp = overrideParams?.temperature ?? params.temperature;
-    const maxTok = overrideParams?.maxTokens ?? params.maxTokens;
-    this.logger.log(`🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model}`);
-
-    if (params.provider === 'openai') {
-      const client = this.requireOpenAI();
-      const result = await this.executeWithRetry(
-        agent,
-        async () => {
-          const response = await client.responses.create({
-            model: params.model,
-            instructions: systemPrompt,
-            input: userContent,
-            temperature: temp,
-            top_p: params.topP,
-            max_output_tokens: maxTok,
-          });
-          return response.output_text;
-        },
-        timeoutMs,
-      );
-      return result;
-    }
-
-    // Gemini path
-    const model = this.genAI!.getGenerativeModel({
-      model: params.model,
-      generationConfig: { temperature: temp, maxOutputTokens: maxTok },
-    });
-    const result = await this.executeWithRetry(
-      agent,
-      async () => {
-        const response = await model.generateContent({
-          contents: [
-            { role: 'user', parts: [{ text: `${systemPrompt}\n\n---\n\n${userContent}` }] },
-          ],
-        });
-        return response.response;
-      },
-      timeoutMs,
+    const resolved = await this.resolveExecution(ctx);
+    const temperature = overrideParams?.temperature ?? resolved.temperature;
+    const maxTokens = overrideParams?.maxTokens ?? resolved.maxTokens;
+    this.logger.log(
+      `🤖 [${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}`,
     );
-    return result.text();
+
+    return this.runTrackedCall(ctx, resolved, timeoutMs, async () => {
+      if (resolved.provider === 'openai') {
+        const client = this.requireOpenAI();
+        const response = await client.responses.create({
+          model: resolved.model,
+          instructions: resolved.systemPrompt,
+          input: userContent,
+          temperature,
+          top_p: resolved.topP,
+          max_output_tokens: maxTokens,
+        });
+        return response.output_text ?? '';
+      }
+
+      const model = this.genAI!.getGenerativeModel({
+        model: resolved.model,
+        generationConfig: { temperature, topP: resolved.topP, maxOutputTokens: maxTokens },
+      });
+      const response = await model.generateContent({
+        contents: [
+          { role: 'user', parts: [{ text: `${resolved.systemPrompt}\n\n---\n\n${userContent}` }] },
+        ],
+      });
+      return response.response.text();
+    });
   }
 
-  /**
-   * Adapter: Call AI for chat (multi-turn). Routes to Gemini or OpenAI.
-   */
   private async callAIChat(
-    agent: AgentType,
+    ctx: AiExecutionContext,
     systemPrompt: string,
     history: ChatMessage[],
     currentMessage: string,
     timeoutMs: number,
+    preResolved?: ResolvedAiExecution,
   ): Promise<string> {
-    const params = this.getModelParams(agent);
-    this.logger.log(`🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model}`);
-
-    if (params.provider === 'openai') {
-      const client = this.requireOpenAI();
-      // Build OpenAI input array from history
-      const input: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-      for (const msg of history) {
-        input.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
-      }
-      input.push({ role: 'user', content: currentMessage });
-
-      const result = await this.executeWithRetry(
-        agent,
-        async () => {
-          const response = await client.responses.create({
-            model: params.model,
-            instructions: systemPrompt,
-            input,
-            temperature: params.temperature,
-            top_p: params.topP,
-            max_output_tokens: params.maxTokens,
-          });
-          return response.output_text;
-        },
-        timeoutMs,
-      );
-      return result;
-    }
-
-    // Gemini path — build contents array
-    const contents: Content[] = [];
-    const recentHistory = history.slice(-10);
-    for (const msg of recentHistory) {
-      contents.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }],
-      });
-    }
-    const fullUserMessage =
-      contents.length === 0 ? `${systemPrompt}\n\n---\n\nUSER:\n${currentMessage}` : currentMessage;
-    contents.push({ role: 'user', parts: [{ text: fullUserMessage }] });
-
-    const result = await this.executeWithRetry(
-      agent,
-      async () => {
-        const response = await this.flashModel!.generateContent({ contents });
-        return response.response;
-      },
-      timeoutMs,
+    const resolved = preResolved ?? (await this.resolveExecution(ctx));
+    this.logger.log(
+      `🤖 [${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}`,
     );
-    return result.text()?.trim() || '';
+
+    return this.runTrackedCall(ctx, resolved, timeoutMs, async () => {
+      if (resolved.provider === 'openai') {
+        const client = this.requireOpenAI();
+        const input: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+        for (const msg of history) {
+          input.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
+        }
+        input.push({ role: 'user', content: currentMessage });
+        const response = await client.responses.create({
+          model: resolved.model,
+          instructions: systemPrompt,
+          input,
+          temperature: resolved.temperature,
+          top_p: resolved.topP,
+          max_output_tokens: resolved.maxTokens,
+        });
+        return response.output_text ?? '';
+      }
+
+      const model = this.genAI!.getGenerativeModel({
+        model: resolved.model,
+        generationConfig: {
+          temperature: resolved.temperature,
+          topP: resolved.topP,
+          maxOutputTokens: resolved.maxTokens,
+        },
+      });
+
+      const contents: Content[] = [];
+      for (const msg of history.slice(-10)) {
+        contents.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }],
+        });
+      }
+      const fullUserMessage =
+        contents.length === 0
+          ? `${systemPrompt}\n\n---\n\nUSER:\n${currentMessage}`
+          : currentMessage;
+      contents.push({ role: 'user', parts: [{ text: fullUserMessage }] });
+
+      const response = await model.generateContent({ contents });
+      return response.response.text()?.trim() || '';
+    });
   }
 
-  /**
-   * Adapter: Call AI with multimodal (text + images). Routes to Gemini or OpenAI.
-   * Used by SCRIBE for face/palm photos.
-   */
   private async callAIMultimodal(
-    agent: AgentType,
-    systemPrompt: string,
+    ctx: AiExecutionContext,
     userContent: string,
     images: Array<{ mimeType: string; base64: string }>,
     timeoutMs: number,
   ): Promise<string> {
-    const params = this.getModelParams(agent);
+    const resolved = await this.resolveExecution(ctx);
     this.logger.log(
-      `🤖 [${agent}] Provider: ${params.provider} | Model: ${params.model} | Images: ${images.length}`,
+      `🤖 [${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model} | Images: ${images.length}`,
     );
 
-    if (params.provider === 'openai') {
-      const client = this.requireOpenAI();
-      // Build multimodal input for OpenAI Responses API
-      const inputParts: Array<{ type: string; text?: string; image_url?: string }> = [
-        { type: 'input_text', text: userContent },
-      ];
-      for (const img of images) {
-        inputParts.push({
-          type: 'input_image',
-          image_url: `data:${img.mimeType};base64,${img.base64}`,
+    return this.runTrackedCall(ctx, resolved, timeoutMs, async () => {
+      if (resolved.provider === 'openai') {
+        const client = this.requireOpenAI();
+        const inputParts: Array<{ type: string; text?: string; image_url?: string }> = [
+          { type: 'input_text', text: userContent },
+        ];
+        for (const img of images) {
+          inputParts.push({
+            type: 'input_image',
+            image_url: `data:${img.mimeType};base64,${img.base64}`,
+          });
+        }
+        const response = await client.responses.create({
+          model: resolved.model,
+          instructions: resolved.systemPrompt,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          input: inputParts as any,
+          temperature: resolved.temperature,
+          top_p: resolved.topP,
+          max_output_tokens: resolved.maxTokens,
+          text: { format: { type: 'json_object' } },
         });
+        return response.output_text ?? '';
       }
 
-      const result = await this.executeWithRetry(
-        agent,
-        async () => {
-          const response = await client.responses.create({
-            model: params.model,
-            instructions: systemPrompt,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            input: inputParts as any,
-            temperature: params.temperature,
-            top_p: params.topP,
-            max_output_tokens: params.maxTokens,
-            text: { format: { type: 'json_object' } },
-          });
-          return response.output_text;
+      const model = this.genAI!.getGenerativeModel({
+        model: resolved.model,
+        generationConfig: {
+          temperature: resolved.temperature,
+          topP: resolved.topP,
+          maxOutputTokens: resolved.maxTokens,
+          responseMimeType: 'application/json',
         },
-        timeoutMs,
-      );
-      return result;
-    }
+      });
+      const parts: Part[] = [
+        { text: `${resolved.systemPrompt}\n\n---\n\nUSER REQUEST:\n${userContent}` },
+      ];
+      for (const img of images) {
+        parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+      }
+      const response = await model.generateContent({
+        contents: [{ role: 'user', parts }],
+      });
+      return response.response.text();
+    });
+  }
 
-    // Gemini path
-    const parts: Part[] = [{ text: `${systemPrompt}\n\n---\n\nUSER REQUEST:\n${userContent}` }];
-    for (const img of images) {
-      parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
-    }
-
-    const result = await this.executeWithRetry(
-      agent,
-      async () => {
-        const response = await this.heavyModel!.generateContent({
-          contents: [{ role: 'user', parts }],
-        });
-        return response.response;
-      },
-      timeoutMs,
-    );
-    return result.text();
+  /**
+   * NARRATOR: reformulate text for audio using matrix routing.
+   */
+  async narrateScript(
+    text: string,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
+  ): Promise<string> {
+    await this.ensureInitialized();
+    const execCtx = buildAiContext('NARRATOR', AiMission.AUDIO_NARRATION, routing);
+    const userPrompt = `Transforme ce texte en narration audio :\n\n${text}`;
+    const result = await this.callAIText(execCtx, userPrompt, 20_000, {
+      temperature: 0.3,
+      maxTokens: 8192,
+    });
+    return result?.trim() || text;
   }
 
   /**
@@ -1542,8 +1548,8 @@ Génère le timeline au format JSON spécifié (tableau de 10 objets).
   /**
    * Builds the enriched system prompt for CONFIDANT with Akashic context.
    */
-  private buildConfidantSystemPrompt(context: ChatContext): string {
-    let enrichedPrompt = this.getSystemPrompt('CONFIDANT');
+  private buildConfidantSystemPrompt(context: ChatContext, basePrompt?: string): string {
+    let enrichedPrompt = basePrompt ?? this.getSystemPrompt('CONFIDANT');
 
     // Add archetype context
     if (context.archetype) {
