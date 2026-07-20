@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ArrowLeft,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -116,15 +117,12 @@ export default function GuidancePage() {
       );
       setRequests(requestList);
       setReadings(readingList);
-      if (requestList[0]) await loadDetail(requestList[0].id);
     } catch {
-      setError(
-        'Vos demandes ne peuvent pas être chargées. Vérifiez votre connexion puis réessayez.',
-      );
+      setError('Vos demandes ne peuvent pas être chargées. Vérifiez votre connexion puis réessayez.');
     } finally {
       setIsLoading(false);
     }
-  }, [loadDetail]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -150,7 +148,7 @@ export default function GuidancePage() {
       setCategory('READING_CLARIFICATION');
       setShowComposer(false);
     } catch {
-      setError('Votre demande n’a pas pu être créée. Vérifiez les informations puis réessayez.');
+      setError('Votre demande n’a pas pu être créée. Votre texte est conservé pour réessayer.');
     } finally {
       setIsCreating(false);
     }
@@ -170,12 +168,13 @@ export default function GuidancePage() {
         current
           .map((item) => (item.id === data.id ? { ...item, ...data, messages: undefined } : item))
           .sort(
-            (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+            (left, right) =>
+              new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
           ),
       );
       setReply('');
     } catch {
-      setError('Votre message n’a pas pu être envoyé. Réessayez dans un instant.');
+      setError('Votre message n’a pas pu être envoyé. Votre texte est conservé.');
     } finally {
       setIsSending(false);
     }
@@ -200,8 +199,8 @@ export default function GuidancePage() {
                 Demander un éclairage
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
-                Votre message arrive dans le Desk Lumira et reste lié à votre dossier. Une personne
-                de l’équipe vous répond ici ; il ne s’agit pas d’une réponse automatique.
+                Votre demande est transmise à l’équipe Lumira et reste liée à votre dossier. Il ne
+                s’agit pas d’une réponse automatique.
               </p>
             </div>
           </div>
@@ -297,7 +296,7 @@ export default function GuidancePage() {
           <div className="mt-4 flex justify-end">
             <button
               type="button"
-              onClick={createRequest}
+              onClick={() => void createRequest()}
               disabled={subject.trim().length < 3 || content.trim().length < 10 || isCreating}
               className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-horizon-400 px-5 py-2 text-sm font-semibold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -306,28 +305,37 @@ export default function GuidancePage() {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-              Envoyer au Desk
+              Envoyer à l’équipe
             </button>
           </div>
         </section>
       )}
 
       <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.55fr)]">
-        <aside className="overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50">
+        <aside
+          className={`overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 ${
+            selected ? 'hidden lg:block' : 'block'
+          }`}
+        >
           <div className="border-b border-white/[0.06] px-4 py-3">
             <h2 className="text-sm font-semibold text-stellar-200">Mes demandes</h2>
           </div>
           {isLoading ? (
-            <div className="grid min-h-[220px] place-items-center">
-              <Loader2 className="h-6 w-6 animate-spin text-horizon-300" />
-            </div>
+            <RequestListSkeleton />
           ) : requests.length === 0 ? (
-            <div className="p-6 text-center">
+            <div className="p-8 text-center">
               <MessageCircle className="mx-auto h-7 w-7 text-stellar-600" />
               <p className="mt-3 text-sm text-stellar-500">Aucune demande pour le moment.</p>
+              <button
+                type="button"
+                onClick={() => setShowComposer(true)}
+                className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/[0.1] px-4 text-sm text-stellar-200 hover:bg-white/[0.05]"
+              >
+                <Plus className="h-4 w-4" /> Créer ma première demande
+              </button>
             </div>
           ) : (
-            <div className="max-h-[360px] divide-y divide-white/[0.06] overflow-y-auto lg:max-h-none">
+            <div className="max-h-[calc(100dvh-17rem)] divide-y divide-white/[0.06] overflow-y-auto lg:max-h-none">
               {requests.map((item) => {
                 const itemStatus = statusPresentation(item.status);
                 const active = selected?.id === item.id;
@@ -336,7 +344,9 @@ export default function GuidancePage() {
                     key={item.id}
                     type="button"
                     onClick={() => void loadDetail(item.id)}
-                    className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors ${active ? 'bg-horizon-400/10' : 'hover:bg-white/[0.04]'}`}
+                    className={`flex min-h-[72px] w-full items-center gap-3 px-4 py-4 text-left transition-colors ${
+                      active ? 'bg-horizon-400/10' : 'hover:bg-white/[0.04]'
+                    }`}
                   >
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${itemStatus.dot}`} />
                     <span className="min-w-0 flex-1">
@@ -360,9 +370,13 @@ export default function GuidancePage() {
           )}
         </aside>
 
-        <section className="flex min-h-[min(440px,calc(100dvh-14rem))] min-w-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 lg:min-h-[440px]">
+        <section
+          className={`min-h-[min(500px,calc(100dvh-10rem))] min-w-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 lg:flex lg:min-h-[500px] ${
+            selected ? 'flex' : 'hidden'
+          }`}
+        >
           {isDetailLoading ? (
-            <div className="grid flex-1 place-items-center">
+            <div className="grid flex-1 place-items-center" role="status">
               <Loader2 className="h-7 w-7 animate-spin text-horizon-300" />
             </div>
           ) : !selected ? (
@@ -377,30 +391,41 @@ export default function GuidancePage() {
           ) : (
             <>
               <div className="border-b border-white/[0.06] px-4 py-4 sm:px-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="font-playfair text-xl italic text-stellar-100">
-                      {selected.subject}
-                    </h2>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stellar-500">
-                      <span className={`rounded-full px-2 py-1 ${status?.badge}`}>
-                        {status?.label}
-                      </span>
-                      {selected.relatedReading?.orderNumber && (
-                        <span className="inline-flex items-center gap-1">
-                          <BookOpen className="h-3.5 w-3.5" /> {selected.relatedReading.orderNumber}
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelected(null)}
+                    aria-label="Retour à mes demandes"
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] text-stellar-400 hover:bg-white/[0.05] lg:hidden"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="break-words font-playfair text-xl italic text-stellar-100">
+                        {selected.subject}
+                      </h2>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stellar-500">
+                        <span className={`rounded-full px-2 py-1 ${status?.badge}`}>
+                          {status?.label}
                         </span>
-                      )}
-                      {selected.assignedExpert?.name && (
-                        <span>Suivi par {selected.assignedExpert.name}</span>
-                      )}
+                        {selected.relatedReading?.orderNumber && (
+                          <span className="inline-flex items-center gap-1">
+                            <BookOpen className="h-3.5 w-3.5" />{' '}
+                            {selected.relatedReading.orderNumber}
+                          </span>
+                        )}
+                        {selected.assignedExpert?.name && (
+                          <span>Suivi par {selected.assignedExpert.name}</span>
+                        )}
+                      </div>
                     </div>
+                    {selected.status === 'RESOLVED' && (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
+                        <CheckCircle2 className="h-4 w-4" /> Demande résolue
+                      </span>
+                    )}
                   </div>
-                  {selected.status === 'RESOLVED' && (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300">
-                      <CheckCircle2 className="h-4 w-4" /> Demande résolue
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -414,7 +439,11 @@ export default function GuidancePage() {
                         className={`flex ${clientMessage ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[76%] ${clientMessage ? 'rounded-br-sm bg-horizon-400/15 text-stellar-100' : 'rounded-bl-sm bg-white/[0.06] text-stellar-300'}`}
+                          className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[76%] ${
+                            clientMessage
+                              ? 'rounded-br-sm bg-horizon-400/15 text-stellar-100'
+                              : 'rounded-bl-sm bg-white/[0.06] text-stellar-300'
+                          }`}
                         >
                           {!clientMessage && (
                             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-horizon-300">
@@ -432,7 +461,7 @@ export default function GuidancePage() {
                 </div>
               </div>
 
-              <div className="border-t border-white/[0.06] p-3 sm:p-4">
+              <div className="border-t border-white/[0.06] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
                 {selected.status === 'ARCHIVED' ? (
                   <p className="rounded-xl bg-white/[0.04] p-3 text-center text-xs text-stellar-500">
                     Cette demande est archivée.
@@ -457,9 +486,9 @@ export default function GuidancePage() {
                     />
                     <button
                       type="button"
-                      onClick={sendReply}
+                      onClick={() => void sendReply()}
                       disabled={!reply.trim() || isSending}
-                      aria-label="Envoyer mon message au Desk"
+                      aria-label="Envoyer mon message à l’équipe"
                       className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-horizon-400 text-abyss-900 hover:bg-horizon-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isSending ? (
@@ -472,8 +501,8 @@ export default function GuidancePage() {
                 )}
                 {selected.status === 'WAITING_EXPERT' && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs text-stellar-500">
-                    <Clock3 className="h-3.5 w-3.5" /> Votre message est en attente de réponse du
-                    Desk.
+                    <Clock3 className="h-3.5 w-3.5" /> Votre message est en attente de réponse de
+                    l’équipe.
                   </p>
                 )}
               </div>
@@ -481,6 +510,22 @@ export default function GuidancePage() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function RequestListSkeleton() {
+  return (
+    <div className="animate-pulse divide-y divide-white/[0.06]">
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="flex min-h-[72px] items-center gap-3 px-4 py-4">
+          <div className="h-2.5 w-2.5 rounded-full bg-white/[0.08]" />
+          <div className="flex-1">
+            <div className="h-4 w-3/4 rounded-full bg-white/[0.07]" />
+            <div className="mt-2 h-3 w-1/2 rounded-full bg-white/[0.05]" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -498,7 +543,7 @@ function statusPresentation(status: RequestStatus) {
       badge: 'bg-violet-400/15 text-violet-200',
     },
     WAITING_EXPERT: {
-      label: 'En attente du Desk',
+      label: 'En attente de l’équipe',
       dot: 'bg-amber-300',
       badge: 'bg-amber-400/15 text-amber-200',
     },
