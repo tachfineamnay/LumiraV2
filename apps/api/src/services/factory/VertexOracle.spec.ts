@@ -159,7 +159,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
     expect(responsesCreate).toHaveBeenCalledTimes(2);
     expect(responsesCreate.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'gpt-5.5',
+        model: 'gpt-5.5-2026-04-23',
         store: false,
         reasoning: { effort: 'high' },
         text: expect.objectContaining({
@@ -171,7 +171,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
     expect(responsesCreate.mock.calls[0][0]).not.toHaveProperty('temperature');
     expect(responsesCreate.mock.calls[1][0]).toEqual(
       expect.objectContaining({
-        model: 'gpt-5.4',
+        model: 'gpt-5.4-2026-03-05',
         reasoning: { effort: 'low' },
       }),
     );
