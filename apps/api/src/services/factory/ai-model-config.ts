@@ -1,6 +1,10 @@
 import { AgentType, AiAgentModelConfig, AiModelConfigSnapshot } from './ai-execution.types';
 
-export const OPENAI_V1_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-4o'] as const;
+export const OPENAI_V1_MODELS = [
+  'gpt-5.5-2026-04-23',
+  'gpt-5.4-2026-03-05',
+  'gpt-4o-2024-11-20',
+] as const;
 export type OpenAiV1Model = (typeof OPENAI_V1_MODELS)[number];
 
 export const OPENAI_MODEL_PRICING_USD_PER_MILLION: Record<string, [number, number]> = {
@@ -9,6 +13,7 @@ export const OPENAI_MODEL_PRICING_USD_PER_MILLION: Record<string, [number, numbe
   'gpt-5.4': [2.5, 15],
   'gpt-5.4-2026-03-05': [2.5, 15],
   'gpt-4o': [2.5, 10],
+  'gpt-4o-2024-11-20': [2.5, 10],
 };
 
 export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
@@ -17,7 +22,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
     SCRIBE: {
       enabled: true,
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: 'gpt-5.5-2026-04-23',
       reasoningEffort: 'high',
       verbosity: 'high',
       maxOutputTokens: 24000,
@@ -25,7 +30,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
     EDITOR: {
       enabled: true,
       provider: 'openai',
-      model: 'gpt-5.4',
+      model: 'gpt-5.4-2026-03-05',
       reasoningEffort: 'medium',
       verbosity: 'high',
       maxOutputTokens: 16000,
@@ -33,7 +38,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
     GUIDE: {
       enabled: true,
       provider: 'openai',
-      model: 'gpt-5.4',
+      model: 'gpt-5.4-2026-03-05',
       reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 6000,
@@ -41,7 +46,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
     NARRATOR: {
       enabled: true,
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-4o-2024-11-20',
       temperature: 0.3,
       topP: 0.9,
       maxOutputTokens: 12000,
@@ -49,7 +54,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
     CONFIDANT: {
       enabled: false,
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-4o-2024-11-20',
       temperature: 0.6,
       topP: 0.9,
       maxOutputTokens: 1600,
@@ -57,7 +62,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
     ONIRIQUE: {
       enabled: false,
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-4o-2024-11-20',
       temperature: 0.65,
       topP: 0.9,
       maxOutputTokens: 2500,
@@ -108,7 +113,7 @@ function normalizeAgent(
       ? value.model
       : fallback.model;
   if (model !== value.model) {
-    issues.push(`${agent}: modèle non autorisé, ${fallback.model} restauré`);
+    issues.push(`${agent}: snapshot non autorisé, ${fallback.model} restauré`);
   }
 
   const enabled = typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled;
