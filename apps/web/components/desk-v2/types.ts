@@ -1,6 +1,6 @@
 // ============== ORDER TYPES ==============
 
-export type OrderStatus = 
+export type OrderStatus =
   | 'PENDING'
   | 'PAID'
   | 'PROCESSING'
@@ -34,6 +34,24 @@ export interface UserProfile {
   ailments?: string;
   deliveryStyle?: string;
   pace?: number;
+  strongSide?: string;
+  weakSide?: string;
+  strongZone?: string;
+  weakZone?: string;
+}
+
+export interface ReadingIntake {
+  id?: string;
+  orderId?: string;
+  status: 'DRAFT' | 'SEALED' | string;
+  schemaVersion?: string;
+  currentStep?: number;
+  revision?: number;
+  data?: unknown;
+  contentHash?: string | null;
+  sealedAt?: string | null;
+  consentRecordId?: string | null;
+  updatedAt?: string;
 }
 
 export interface User {
@@ -90,6 +108,8 @@ export interface Order {
   expertPrompt?: string;
   expertInstructions?: string;
   expertReview?: Record<string, unknown>;
+  intakeRequired?: boolean;
+  readingIntake?: ReadingIntake | null;
   /**
    * Immutable client material sealed for this order.  The Desk must prefer it
    * over the mutable profile when it is present.
@@ -164,9 +184,22 @@ export interface DeskStats {
 
 export interface SocketEvents {
   // Server -> Client
-  'connected': { expertId: string; connectedAt: string };
+  connected: { expertId: string; connectedAt: string };
   'online-count': { count: number };
-  'order:new': Order & { timestamp: string };
+  'order:new': {
+    orderId: string;
+    orderNumber: string;
+    status: 'PAID';
+    intakeRequired: boolean;
+    timestamp: string;
+  };
+  'order:intake-ready': {
+    orderId: string;
+    orderNumber?: string;
+    userId?: string;
+    sealedAt: string;
+    timestamp: string;
+  };
   'order:status-changed': {
     id: string;
     orderNumber: string;
@@ -204,7 +237,7 @@ export interface SocketEvents {
     expertId: string;
   };
   'stats:update': DeskStats & { timestamp: string };
-  'pong': { timestamp: number };
+  pong: { timestamp: number };
 
   // Client -> Server
   'order:focus': { orderId: string };
@@ -214,7 +247,7 @@ export interface SocketEvents {
     position: number;
     selection?: { from: number; to: number };
   };
-  'ping': void;
+  ping: void;
 }
 
 // ============== UI TYPES ==============

@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { SocketEvents, DeskStats, Order } from '../types';
+import type { SocketEvents, DeskStats } from '../types';
 
 interface UseSocketOptions {
   autoConnect?: boolean;
-  onNewOrder?: (order: Order) => void;
+  onNewOrder?: (data: SocketEvents['order:new']) => void;
+  onIntakeReady?: (data: SocketEvents['order:intake-ready']) => void;
   onStatusChange?: (data: SocketEvents['order:status-changed']) => void;
   onGenerationComplete?: (data: SocketEvents['order:generation-complete']) => void;
   onOrderClaimed?: (data: SocketEvents['order:claimed']) => void;
@@ -22,6 +23,7 @@ export function useSocket(options: UseSocketOptions = {}) {
   const {
     autoConnect = true,
     onNewOrder,
+    onIntakeReady,
     onStatusChange,
     onGenerationComplete,
     onOrderClaimed,
@@ -37,6 +39,7 @@ export function useSocket(options: UseSocketOptions = {}) {
   // Store callbacks in refs to avoid reconnection loops
   const callbacksRef = useRef({
     onNewOrder,
+    onIntakeReady,
     onStatusChange,
     onGenerationComplete,
     onOrderClaimed,
@@ -47,12 +50,20 @@ export function useSocket(options: UseSocketOptions = {}) {
   useEffect(() => {
     callbacksRef.current = {
       onNewOrder,
+      onIntakeReady,
       onStatusChange,
       onGenerationComplete,
       onOrderClaimed,
       onStatsUpdate,
     };
-  }, [onNewOrder, onStatusChange, onGenerationComplete, onOrderClaimed, onStatsUpdate]);
+  }, [
+    onNewOrder,
+    onIntakeReady,
+    onStatusChange,
+    onGenerationComplete,
+    onOrderClaimed,
+    onStatsUpdate,
+  ]);
 
   const connect = useCallback(() => {
     // Prevent multiple connections
@@ -67,7 +78,7 @@ export function useSocket(options: UseSocketOptions = {}) {
     }
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    
+
     socketRef.current = io(`${apiUrl}/expert`, {
       auth: { token },
       transports: ['websocket', 'polling'],
@@ -97,9 +108,14 @@ export function useSocket(options: UseSocketOptions = {}) {
       setOnlineCount(data.count);
     });
 
-    socket.on('order:new', (order) => {
-      console.log('[Socket] 📦 New order:', order.orderNumber);
-      callbacksRef.current.onNewOrder?.(order);
+    socket.on('order:new', (data: SocketEvents['order:new']) => {
+      console.log('[Socket] 📦 New order:', data.orderNumber);
+      callbacksRef.current.onNewOrder?.(data);
+    });
+
+    socket.on('order:intake-ready', (data: SocketEvents['order:intake-ready']) => {
+      console.log('[Socket] 📋 Intake ready:', data.orderNumber || data.orderId);
+      callbacksRef.current.onIntakeReady?.(data);
     });
 
     socket.on('order:status-changed', (data) => {
@@ -118,18 +134,21 @@ export function useSocket(options: UseSocketOptions = {}) {
     });
 
     socket.on('order:viewer-joined', (data: SocketEvents['order:viewer-joined']) => {
-      setOrderViewers(prev => {
+      setOrderViewers((prev) => {
         const viewers = prev[data.orderId] || [];
-        if (viewers.some(v => v.expertId === data.expertId)) return prev;
-        return { ...prev, [data.orderId]: [...viewers, { expertId: data.expertId, expertEmail: data.expertEmail }] };
+        if (viewers.some((v) => v.expertId === data.expertId)) return prev;
+        return {
+          ...prev,
+          [data.orderId]: [...viewers, { expertId: data.expertId, expertEmail: data.expertEmail }],
+        };
       });
     });
 
     socket.on('order:viewer-left', (data: SocketEvents['order:viewer-left']) => {
-      setOrderViewers(prev => {
+      setOrderViewers((prev) => {
         const viewers = prev[data.orderId];
         if (!viewers) return prev;
-        const filtered = viewers.filter(v => v.expertId !== data.expertId);
+        const filtered = viewers.filter((v) => v.expertId !== data.expertId);
         if (filtered.length === 0) {
           const next = { ...prev };
           delete next[data.orderId];
@@ -175,9 +194,12 @@ export function useSocket(options: UseSocketOptions = {}) {
     socketRef.current?.emit('order:blur', { orderId });
   }, []);
 
-  const sendCursor = useCallback((orderId: string, position: number, selection?: { from: number; to: number }) => {
-    socketRef.current?.emit('editor:cursor', { orderId, position, selection });
-  }, []);
+  const sendCursor = useCallback(
+    (orderId: string, position: number, selection?: { from: number; to: number }) => {
+      socketRef.current?.emit('editor:cursor', { orderId, position, selection });
+    },
+    [],
+  );
 
   useEffect(() => {
     if (autoConnect) {

@@ -1,6 +1,11 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 
@@ -12,6 +17,14 @@ export interface S3ObjectResult {
   contentLength?: number;
   etag?: string;
   lastModified?: Date;
+}
+
+export interface S3ObjectMetadata {
+  contentType?: string;
+  contentLength?: number;
+  etag?: string;
+  lastModified?: Date;
+  versionId?: string;
 }
 
 @Injectable()
@@ -47,13 +60,13 @@ export class S3Service {
     return name;
   }
 
-  async getUploadPresignedUrl(key: string, contentType: string) {
+  async getUploadPresignedUrl(key: string, contentType: string, expiresInSeconds = 600) {
     const command = new PutObjectCommand({
-      Bucket: this.uploadBucket,
+      Bucket: this.resolveBucket('uploads'),
       Key: key,
       ContentType: contentType,
     });
-    return getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
+    return getSignedUrl(this.s3Client, command, { expiresIn: expiresInSeconds });
   }
 
   async getDownloadPresignedUrl(key: string, bucket: S3BucketKind = 'readings') {
@@ -92,6 +105,33 @@ export class S3Service {
         throw new NotFoundException('Fichier introuvable');
       }
       this.logger.error(`S3 getObject failed (${bucket})`);
+      throw error;
+    }
+  }
+
+  async headObject(key: string, bucket: S3BucketKind = 'uploads'): Promise<S3ObjectMetadata> {
+    try {
+      const response = await this.s3Client.send(
+        new HeadObjectCommand({
+          Bucket: this.resolveBucket(bucket),
+          Key: key,
+        }),
+      );
+      return {
+        contentType: response.ContentType,
+        contentLength: response.ContentLength,
+        etag: response.ETag,
+        lastModified: response.LastModified,
+        versionId: response.VersionId,
+      };
+    } catch (error) {
+      const name = (error as { name?: string })?.name;
+      const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata
+        ?.httpStatusCode;
+      if (name === 'NoSuchKey' || name === 'NotFound' || status === 404) {
+        throw new NotFoundException('Fichier introuvable');
+      }
+      this.logger.error(`S3 headObject failed (${bucket})`);
       throw error;
     }
   }

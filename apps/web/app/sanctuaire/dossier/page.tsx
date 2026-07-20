@@ -31,12 +31,12 @@ function text(value: unknown): string {
 }
 
 function pickField(
-  sealed: boolean,
+  preferIntake: boolean,
   profileValue: string | null | undefined,
-  draftValue: string,
+  intakeValue: string,
 ): string {
-  if (sealed) return profileValue || draftValue;
-  return draftValue || profileValue || '';
+  if (preferIntake) return intakeValue || profileValue || '';
+  return profileValue || intakeValue || '';
 }
 
 function deliveryStyleLabel(value: string): string {
@@ -91,7 +91,7 @@ export default function ReadingDossierPage() {
   const { onboardingProgress, orders, profile, refetchData } = useSanctuaireAuth();
   const [showPreparation, setShowPreparation] = useState(false);
 
-  const draft = (onboardingProgress?.data || {}) as DraftRecord;
+  const progressData = (onboardingProgress?.data || {}) as DraftRecord;
   const latestOrder = useMemo(
     () =>
       [...orders].sort(
@@ -99,65 +99,90 @@ export default function ReadingDossierPage() {
       )[0],
     [orders],
   );
-  const sealed = profile?.profileCompleted === true;
+  const intakeMatchesLatestOrder = latestOrder?.intakeRequired
+    ? Boolean(
+        onboardingProgress?.orderId &&
+        latestOrder.id &&
+        onboardingProgress.orderId === latestOrder.id,
+      )
+    : Boolean(
+        onboardingProgress &&
+        (!onboardingProgress.orderId ||
+          !latestOrder?.id ||
+          onboardingProgress.orderId === latestOrder.id),
+      );
+  const draft = intakeMatchesLatestOrder ? progressData : {};
+  const orderScopedSealed = Boolean(
+    latestOrder?.intakeStatus === 'SEALED' ||
+    latestOrder?.intakeSealedAt ||
+    (intakeMatchesLatestOrder && onboardingProgress?.status === 'COMPLETED'),
+  );
+  const sealed = latestOrder?.intakeRequired
+    ? orderScopedSealed
+    : orderScopedSealed || profile?.profileCompleted === true;
+  const intakeIsAuthoritative = Boolean(
+    intakeMatchesLatestOrder && (!sealed || onboardingProgress?.status === 'COMPLETED'),
+  );
   const productionActive =
     sealed && Boolean(latestOrder && ACTIVE_STATUSES.has(latestOrder.status));
   const delivered = latestOrder?.status === 'COMPLETED';
 
-  const birthDate = pickField(sealed, profile?.birthDate, text(draft.birthDate));
-  const birthTime = pickField(sealed, profile?.birthTime, text(draft.birthTime));
-  const birthPlace = pickField(sealed, profile?.birthPlace, text(draft.birthPlace));
+  const birthDate = pickField(intakeIsAuthoritative, profile?.birthDate, text(draft.birthDate));
+  const birthTime = pickField(intakeIsAuthoritative, profile?.birthTime, text(draft.birthTime));
+  const birthPlace = pickField(intakeIsAuthoritative, profile?.birthPlace, text(draft.birthPlace));
   const specificQuestion = pickField(
-    sealed,
+    intakeIsAuthoritative,
     profile?.specificQuestion,
     text(draft.specificQuestion),
   );
-  const objective = pickField(sealed, profile?.objective, text(draft.objective));
+  const objective = pickField(intakeIsAuthoritative, profile?.objective, text(draft.objective));
+  const openReading = intakeIsAuthoritative
+    ? draft.openReading === true
+    : profile?.openReading === true || draft.openReading === true;
   const facePhoto = pickField(
-    sealed,
+    intakeIsAuthoritative,
     profile?.facePhotoUrl,
     text(draft.facePhoto) || text(draft.facePhotoUrl),
   );
   const palmPhoto = pickField(
-    sealed,
+    intakeIsAuthoritative,
     profile?.palmPhotoUrl,
     text(draft.palmPhoto) || text(draft.palmPhotoUrl),
   );
   const deliveryStyle = pickField(
-    sealed,
+    intakeIsAuthoritative,
     profile?.deliveryStyle,
     text(draft.deliveryStyle) || 'DOUX_ET_CLAIR',
   );
-  const rawPace = sealed ? profile?.pace : draft.pace ?? profile?.pace;
+  const rawPace = intakeIsAuthoritative
+    ? (draft.pace ?? profile?.pace)
+    : (profile?.pace ?? draft.pace);
   const pace = typeof rawPace === 'number' ? rawPace : 50;
 
   const contextFields = [
     {
       label: 'Ce qui vous porte',
-      value: pickField(sealed, profile?.highs, text(draft.highs)),
+      value: pickField(intakeIsAuthoritative, profile?.highs, text(draft.highs)),
     },
     {
       label: 'Ce qui vous freine',
-      value: pickField(sealed, profile?.lows, text(draft.lows)),
+      value: pickField(intakeIsAuthoritative, profile?.lows, text(draft.lows)),
     },
     {
       label: 'Contexte corporel déclaré',
-      value: pickField(sealed, profile?.ailments, text(draft.ailments)),
+      value: pickField(intakeIsAuthoritative, profile?.ailments, text(draft.ailments)),
     },
     {
       label: 'Peurs ou blocages identifiés',
-      value: pickField(sealed, profile?.fears, text(draft.fears)),
+      value: pickField(intakeIsAuthoritative, profile?.fears, text(draft.fears)),
     },
     {
       label: 'Pratiques ou rituels actuels',
-      value: pickField(sealed, profile?.rituals, text(draft.rituals)),
+      value: pickField(intakeIsAuthoritative, profile?.rituals, text(draft.rituals)),
     },
   ].filter((field) => Boolean(field.value));
 
-  const draftProgress = Math.min(
-    100,
-    Math.round((((onboardingProgress?.currentStep ?? 0) + 1) / 6) * 100),
-  );
+  const savedDraftStep = Math.min(5, Math.max(1, (onboardingProgress?.currentStep ?? 0) + 1));
 
   return (
     <>
@@ -207,7 +232,7 @@ export default function ReadingDossierPage() {
               </span>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
-                  {sealed ? 'Version confirmée' : 'Brouillon privé'}
+                  {sealed ? 'Dossier scellé' : 'Brouillon privé'}
                 </p>
                 <h2 className="mt-2 font-playfair text-2xl italic text-stellar-100">
                   {sealed
@@ -236,7 +261,7 @@ export default function ReadingDossierPage() {
               >
                 <Pencil className="h-4 w-4" />
                 {onboardingProgress?.status === 'IN_PROGRESS'
-                  ? 'Continuer mon dossier'
+                  ? 'Reprendre mon dossier'
                   : 'Préparer mon dossier'}
               </button>
             ) : delivered ? (
@@ -250,17 +275,14 @@ export default function ReadingDossierPage() {
           </div>
 
           {!sealed && (
-            <div className="mt-6 max-w-xl" aria-label={`Brouillon complété à ${draftProgress}%`}>
-              <div className="flex justify-between text-xs text-stellar-500">
-                <span>Progression du brouillon</span>
-                <span>{draftProgress}%</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-                <div
-                  className="h-full rounded-full bg-horizon-400"
-                  style={{ width: `${draftProgress}%` }}
-                />
-              </div>
+            <div
+              className="mt-6 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs text-stellar-400"
+              aria-label={`Brouillon sauvegardé à l’étape ${savedDraftStep} sur 5`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
+              <span>Brouillon sauvegardé automatiquement</span>
+              <span aria-hidden>·</span>
+              <span>Étape {savedDraftStep} sur 5</span>
             </div>
           )}
         </section>
@@ -290,10 +312,16 @@ export default function ReadingDossierPage() {
           <SummaryCard
             icon={<MessageSquareText className="h-5 w-5" />}
             title="Votre intention"
-            status={specificQuestion || objective ? 'Transmise' : 'Facultative'}
+            status={specificQuestion || objective || openReading ? 'Transmise' : 'À compléter'}
           >
-            {specificQuestion || objective ? (
+            {specificQuestion || objective || openReading ? (
               <div className="space-y-3">
+                {openReading && (
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.12em] text-stellar-500">Cadre</p>
+                    <p className="mt-1 text-stellar-300">Lecture ouverte, sans question imposée</p>
+                  </div>
+                )}
                 {specificQuestion && (
                   <div>
                     <p className="text-xs uppercase tracking-[0.12em] text-stellar-500">Question</p>
@@ -392,8 +420,9 @@ export default function ReadingDossierPage() {
             <div>
               <h2 className="text-sm font-medium text-stellar-100">Vous gardez le contrôle</h2>
               <p className="mt-2 text-sm leading-6 text-stellar-500">
-                Le brouillon reste modifiable jusqu’à votre confirmation. Une fois le dossier scellé,
-                la version confirmée reste liée à cette lecture et ne change pas silencieusement.
+                Le brouillon reste modifiable jusqu’à votre confirmation. Une fois le dossier
+                scellé, la version confirmée reste liée à cette lecture et ne change pas
+                silencieusement.
               </p>
             </div>
           </div>

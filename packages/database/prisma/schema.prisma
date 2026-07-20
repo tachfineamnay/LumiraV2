@@ -90,6 +90,11 @@ enum OnboardingStatus {
   COMPLETED
 }
 
+enum ReadingIntakeStatus {
+  DRAFT
+  SEALED
+}
+
 enum ProductLevel {
   INITIE
   MYSTIQUE
@@ -141,6 +146,7 @@ model User {
   sanctuaireLoginTokens SanctuaireLoginToken[]
   consents      ConsentRecord[]
   onboardingProgress OnboardingProgress?
+  readingIntakes ReadingIntake[]
 
   @@index([email])
   @@index([refId])
@@ -232,6 +238,9 @@ model Order {
   paidAt             DateTime?
   formData           Json
   clientInputs       Json?
+  /// New purchases require an order-scoped, client-sealed intake before production.
+  /// Existing orders default to false and retain the legacy profile fallback.
+  intakeRequired     Boolean         @default(false)
   expertPrompt       String?         @db.Text
   expertInstructions String?         @db.Text
   generatedContent   Json?
@@ -257,6 +266,7 @@ model Order {
   generatedSteps PathStep[] // Steps generated from this reading
   chatContexts   ChatSession[] // Chat sessions related to this order
   aiRuns         AiRun[]
+  readingIntake  ReadingIntake?
 
   @@index([userId])
   @@index([userEmail])
@@ -281,6 +291,7 @@ model ConsentRecord {
   acceptedAt DateTime @default(now())
   revokedAt  DateTime?
   createdAt  DateTime @default(now())
+  readingIntakes ReadingIntake[]
 
   @@unique([userId, purpose, version])
   @@index([userId, acceptedAt(sort: Desc)])
@@ -300,6 +311,31 @@ model OnboardingProgress {
   updatedAt   DateTime         @updatedAt
 
   @@index([status, updatedAt(sort: Desc)])
+}
+
+/// Canonical, order-scoped client material for one reading. Drafts remain
+/// editable indefinitely; a SEALED row is immutable application data.
+model ReadingIntake {
+  id              String              @id @default(cuid())
+  orderId         String              @unique
+  order           Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          ReadingIntakeStatus @default(DRAFT)
+  schemaVersion   String
+  currentStep     Int                 @default(0)
+  data            Json
+  revision        Int                 @default(0)
+  contentHash     String?
+  sealedAt        DateTime?
+  consentRecordId String?
+  consentRecord   ConsentRecord?      @relation(fields: [consentRecordId], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([userId, status, updatedAt(sort: Desc)])
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([contentHash])
 }
 
 model ReadingVersion {

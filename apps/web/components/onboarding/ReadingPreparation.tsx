@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { FieldPath, useForm } from 'react-hook-form';
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,33 +16,25 @@ import {
   MapPin,
   MessageSquareText,
   Pencil,
+  RefreshCw,
+  Save,
   ShieldCheck,
   Sparkles,
   X,
 } from 'lucide-react';
-import { SmartPhotoUploader } from './SmartPhotoUploader';
+import { SmartPhotoUploader, PhotoUploadState } from './SmartPhotoUploader';
 import sanctuaireApi from '../../lib/sanctuaireApi';
 import { uploadOnboardingPhoto } from '../../lib/onboarding-upload';
+import {
+  DELIVERY_STYLES,
+  readingPreparationSchema,
+  readingPreparationSubmissionSchema,
+  type ReadingPreparationData,
+} from '../../lib/onboardingSchema';
 
-type PreparationData = {
-  birthDate: string;
-  birthTime: string;
-  birthPlace: string;
-  specificQuestion: string;
-  objective: string;
-  facePhoto: string;
-  palmPhoto: string;
-  highs: string;
-  lows: string;
-  ailments: string;
-  fears: string;
-  rituals: string;
-  deliveryStyle: string;
-  pace: number;
-  consent: boolean;
-};
-
-type StepKey = 'control' | 'identity' | 'intention' | 'photos' | 'context' | 'review';
+type StepKey = 'identity' | 'intention' | 'context' | 'photos' | 'review';
+type LoadState = 'loading' | 'ready' | 'error' | 'sealed';
+type SaveState = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
 
 type StepDefinition = {
   key: StepKey;
@@ -50,64 +44,80 @@ type StepDefinition = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
+type DraftResponse = {
+  currentStep?: number;
+  status?: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+  data?: Record<string, unknown>;
+  revision?: number;
+  updatedAt?: string;
+  orderId?: string;
+  canEdit?: boolean;
+};
+
+type PersistedDraftData = Omit<ReadingPreparationData, 'consent'> & {
+  schemaVersion: 2;
+};
+
+type DraftSnapshot = {
+  currentStep: number;
+  data: PersistedDraftData;
+  signature: string;
+};
+
 const STEPS: StepDefinition[] = [
-  {
-    key: 'control',
-    label: 'Votre choix',
-    title: 'Vous gardez la main',
-    description:
-      'Votre brouillon privé est sauvegardé automatiquement. Il ne sera transmis à la production qu’après votre confirmation finale.',
-    icon: ShieldCheck,
-  },
   {
     key: 'identity',
     label: 'Repères',
     title: 'Vos repères essentiels',
-    description: 'La date et le lieu sont nécessaires. L’heure reste facultative.',
+    description: 'La date et le lieu nous donnent une base fiable. L’heure reste facultative.',
     icon: CalendarDays,
   },
   {
     key: 'intention',
     label: 'Intention',
-    title: 'Ce que vous souhaitez éclairer',
-    description: 'Écrivez seulement ce que vous souhaitez réellement transmettre.',
+    title: 'Ce qui vous amène',
+    description:
+      'Quelques mots suffisent. Vous pouvez aussi raconter librement ce qui compte pour vous.',
     icon: MessageSquareText,
-  },
-  {
-    key: 'photos',
-    label: 'Photos',
-    title: 'Visage et paume',
-    description: 'Les deux images sont facultatives et conservées dans l’espace privé Lumira.',
-    icon: ImageIcon,
   },
   {
     key: 'context',
     label: 'Contexte',
     title: 'Votre contexte personnel',
-    description: 'Toutes les réponses de cette section sont facultatives.',
+    description:
+      'Tout est facultatif : partagez seulement ce qui aidera à mieux comprendre votre situation.',
     icon: HeartHandshake,
   },
   {
+    key: 'photos',
+    label: 'Photos',
+    title: 'Vos photos privées',
+    description:
+      'Visage et paume sont facultatifs. Chaque image est enregistrée dans votre espace privé.',
+    icon: ImageIcon,
+  },
+  {
     key: 'review',
-    label: 'Confirmation',
+    label: 'Relecture',
     title: 'Relire et confirmer',
-    description: 'Vérifiez chaque section, puis transmettez la version qui servira à votre lecture.',
+    description: 'Vérifiez chaque mot. Cette version deviendra la base immuable de cette lecture.',
     icon: LockKeyhole,
   },
 ];
 
 const STYLE_OPTIONS = [
-  ['DOUX_ET_CLAIR', 'Doux et clair'],
-  ['DIRECT_ET_CONCRET', 'Direct et concret'],
-  ['SYMBOLIQUE_ET_PROFOND', 'Symbolique et profond'],
+  ['DOUX_ET_CLAIR', 'Doux et clair', 'Une formulation apaisée et accessible'],
+  ['DIRECT_ET_CONCRET', 'Direct et concret', 'Des repères francs et immédiatement lisibles'],
+  ['SYMBOLIQUE_ET_PROFOND', 'Symbolique et profond', 'Une lecture plus imagée et introspective'],
 ] as const;
 
-const EMPTY_DATA: PreparationData = {
+const EMPTY_DATA: ReadingPreparationData = {
   birthDate: '',
   birthTime: '',
   birthPlace: '',
   specificQuestion: '',
   objective: '',
+  openReading: false,
   facePhoto: '',
   palmPhoto: '',
   highs: '',
@@ -120,39 +130,1421 @@ const EMPTY_DATA: PreparationData = {
   consent: false,
 };
 
-const inputClass =
-  'mt-2 w-full rounded-xl border border-white/10 bg-abyss-600 px-3 py-3 text-stellar-100 placeholder:text-stellar-600 outline-none focus:border-horizon-400 focus-visible:ring-2 focus-visible:ring-horizon-400/30';
+const baseInputClass =
+  'mt-2 w-full rounded-xl border bg-abyss-600 px-3 py-3 text-base text-stellar-100 placeholder:text-stellar-600 outline-none transition-colors focus-visible:ring-2';
 
-const stringValue = (value: unknown) => (typeof value === 'string' ? value : '');
+function inputClass(hasError: boolean) {
+  return `${baseInputClass} ${
+    hasError
+      ? 'border-rose-400/60 focus:border-rose-300 focus-visible:ring-rose-300/30'
+      : 'border-white/10 focus:border-horizon-400 focus-visible:ring-horizon-400/30'
+  }`;
+}
 
-function normalize(value: unknown): Partial<PreparationData> {
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function normalize(value: unknown): Partial<ReadingPreparationData> {
   if (!value || typeof value !== 'object') return {};
   const source = value as Record<string, unknown>;
+  const normalized: Partial<ReadingPreparationData> = {};
+  const has = (key: string) => Object.prototype.hasOwnProperty.call(source, key);
+
+  if (has('birthDate')) {
+    const rawBirthDate = stringValue(source.birthDate);
+    normalized.birthDate = rawBirthDate.includes('T') ? rawBirthDate.slice(0, 10) : rawBirthDate;
+  }
+  if (has('birthTime')) normalized.birthTime = stringValue(source.birthTime);
+  if (has('birthPlace')) normalized.birthPlace = stringValue(source.birthPlace);
+  if (has('specificQuestion')) normalized.specificQuestion = stringValue(source.specificQuestion);
+  else if (has('spiritualQuestion')) {
+    normalized.specificQuestion = stringValue(source.spiritualQuestion);
+  }
+  if (has('objective')) normalized.objective = stringValue(source.objective);
+  if (has('openReading')) normalized.openReading = source.openReading === true;
+  if (has('facePhoto') || has('facePhotoUrl')) {
+    normalized.facePhoto = stringValue(source.facePhoto || source.facePhotoUrl);
+  }
+  if (has('palmPhoto') || has('palmPhotoUrl')) {
+    normalized.palmPhoto = stringValue(source.palmPhoto || source.palmPhotoUrl);
+  }
+  if (has('highs')) normalized.highs = stringValue(source.highs);
+  else if (has('strongSide') || has('strongZone')) {
+    normalized.highs = [stringValue(source.strongSide), stringValue(source.strongZone)]
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (has('lows')) normalized.lows = stringValue(source.lows);
+  else if (has('weakSide') || has('weakZone')) {
+    normalized.lows = [stringValue(source.weakSide), stringValue(source.weakZone)]
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (has('strongSide')) normalized.strongSide = stringValue(source.strongSide);
+  if (has('weakSide')) normalized.weakSide = stringValue(source.weakSide);
+  if (has('strongZone')) normalized.strongZone = stringValue(source.strongZone);
+  if (has('weakZone')) normalized.weakZone = stringValue(source.weakZone);
+  if (has('ailments')) normalized.ailments = stringValue(source.ailments);
+  if (has('fears')) normalized.fears = stringValue(source.fears);
+  if (has('rituals')) normalized.rituals = stringValue(source.rituals);
+  if (has('deliveryStyle')) {
+    const style = stringValue(source.deliveryStyle);
+    normalized.deliveryStyle = DELIVERY_STYLES.includes(style as (typeof DELIVERY_STYLES)[number])
+      ? (style as ReadingPreparationData['deliveryStyle'])
+      : 'DOUX_ET_CLAIR';
+  }
+  if (has('pace')) {
+    normalized.pace =
+      typeof source.pace === 'number' && Number.isFinite(source.pace) ? source.pace : 50;
+  }
+  return normalized;
+}
+
+function persistedData(data: ReadingPreparationData): PersistedDraftData {
   return {
-    birthDate: stringValue(source.birthDate),
-    birthTime: stringValue(source.birthTime),
-    birthPlace: stringValue(source.birthPlace),
-    specificQuestion: stringValue(source.specificQuestion),
-    objective: stringValue(source.objective),
-    facePhoto: stringValue(source.facePhoto || source.facePhotoUrl),
-    palmPhoto: stringValue(source.palmPhoto || source.palmPhotoUrl),
-    highs: stringValue(source.highs),
-    lows: stringValue(source.lows),
-    ailments: stringValue(source.ailments),
-    fears: stringValue(source.fears),
-    rituals: stringValue(source.rituals),
-    deliveryStyle: stringValue(source.deliveryStyle) || 'DOUX_ET_CLAIR',
-    pace: typeof source.pace === 'number' ? source.pace : 50,
+    schemaVersion: 2,
+    birthDate: data.birthDate,
+    birthTime: data.birthTime,
+    birthPlace: data.birthPlace,
+    specificQuestion: data.specificQuestion,
+    objective: data.objective,
+    openReading: data.openReading,
+    facePhoto: data.facePhoto.startsWith('s3://onboarding/') ? data.facePhoto : '',
+    palmPhoto: data.palmPhoto.startsWith('s3://onboarding/') ? data.palmPhoto : '',
+    highs: data.highs,
+    lows: data.lows,
+    strongSide: data.strongSide,
+    weakSide: data.weakSide,
+    strongZone: data.strongZone,
+    weakZone: data.weakZone,
+    ailments: data.ailments,
+    fears: data.fears,
+    rituals: data.rituals,
+    deliveryStyle: data.deliveryStyle,
+    pace: data.pace,
   };
 }
 
-function draftPayload(data: PreparationData) {
-  return {
-    ...data,
-    consent: false,
-    facePhoto: data.facePhoto.startsWith('s3://onboarding/') ? data.facePhoto : '',
-    palmPhoto: data.palmPhoto.startsWith('s3://onboarding/') ? data.palmPhoto : '',
-  };
+function makeSnapshot(step: number, data: ReadingPreparationData): DraftSnapshot {
+  const snapshot = { currentStep: step, data: persistedData(data) };
+  return { ...snapshot, signature: JSON.stringify(snapshot) };
+}
+
+function normalizeSavedStep(value: unknown, rawData: Record<string, unknown>): number {
+  const saved = Number(value);
+  if (!Number.isFinite(saved)) return 0;
+  if (rawData.schemaVersion === 2) return Math.min(Math.max(saved, 0), STEPS.length - 1);
+
+  // Six-step legacy flow: intro, identity, intention, photos, context, review.
+  const legacyMap = [0, 0, 1, 3, 2, 4];
+  return legacyMap[Math.min(Math.max(saved, 0), legacyMap.length - 1)] ?? 0;
+}
+
+function requestStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidate = error as { status?: number; response?: { status?: number } };
+  return candidate.status ?? candidate.response?.status;
+}
+
+function savedTime(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(date);
+}
+
+function formatBirthDate(value: string): string {
+  if (!value) return 'À compléter';
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+export function ReadingPreparation({
+  onCompleted,
+  onClose,
+}: {
+  onCompleted: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const {
+    register,
+    reset,
+    getValues,
+    setValue,
+    setError,
+    setFocus,
+    trigger,
+    watch,
+    formState: { errors },
+  } = useForm<ReadingPreparationData>({
+    resolver: zodResolver(readingPreparationSchema),
+    defaultValues: EMPTY_DATA,
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+  });
+
+  const [step, setStep] = useState(0);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [loadError, setLoadError] = useState('');
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
+  const [draftLoadKey, setDraftLoadKey] = useState(0);
+  const [photoStates, setPhotoStates] = useState<Record<'face' | 'palm', PhotoUploadState>>({
+    face: 'idle',
+    palm: 'idle',
+  });
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const mountedRef = useRef(true);
+  const loadRequestRef = useRef(0);
+  const stepRef = useRef(0);
+  const formValuesRef = useRef<ReadingPreparationData>(EMPTY_DATA);
+  const revisionRef = useRef<number | undefined>(undefined);
+  const orderIdRef = useRef<string | undefined>(undefined);
+  const submittingRef = useRef(false);
+  const saveEpochRef = useRef(0);
+  const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const activeSaveRequestsRef = useRef<Set<AbortController>>(new Set());
+  const latestQueuedSignatureRef = useRef('');
+  const lastSavedSignatureRef = useRef('');
+  const failedSignatureRef = useRef('');
+  const pendingPhotoUploadsRef = useRef<Set<Promise<string>>>(new Set());
+
+  const formValues = watch();
+  formValuesRef.current = formValues;
+  stepRef.current = step;
+
+  const current = STEPS[step];
+  const positionProgress = Math.round(((step + 1) / STEPS.length) * 100);
+  const orderScopeQuery = orderIdRef.current
+    ? `?orderId=${encodeURIComponent(orderIdRef.current)}`
+    : '';
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const contextEntries = useMemo(
+    () => [
+      ['Ce qui vous soutient', formValues.highs],
+      ['Ce qui vous pèse ou se répète', formValues.lows],
+      ['Contexte corporel partagé', formValues.ailments],
+      ['À aborder avec douceur', formValues.fears],
+      ['Pratiques qui comptent pour vous', formValues.rituals],
+    ],
+    [formValues.ailments, formValues.fears, formValues.highs, formValues.lows, formValues.rituals],
+  );
+
+  const queueDraftSave = useCallback(
+    (snapshot: DraftSnapshot, options: { keepalive?: boolean; force?: boolean } = {}) => {
+      const saveEpoch = saveEpochRef.current;
+      if (!options.force && snapshot.signature === lastSavedSignatureRef.current) {
+        return Promise.resolve(true);
+      }
+      if (!options.force && snapshot.signature === latestQueuedSignatureRef.current) {
+        return saveQueueRef.current;
+      }
+
+      latestQueuedSignatureRef.current = snapshot.signature;
+      failedSignatureRef.current = '';
+      if (mountedRef.current) setSaveState('saving');
+
+      const execute = async (): Promise<boolean> => {
+        if (saveEpoch !== saveEpochRef.current) return true;
+        const payload: {
+          currentStep: number;
+          data: PersistedDraftData;
+          revision?: number;
+          orderId?: string;
+        } = {
+          currentStep: snapshot.currentStep,
+          data: snapshot.data,
+        };
+        if (revisionRef.current !== undefined) payload.revision = revisionRef.current;
+        if (orderIdRef.current) payload.orderId = orderIdRef.current;
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 15_000);
+        activeSaveRequestsRef.current.add(controller);
+
+        try {
+          const response = await fetch('/api/bff/users/onboarding', {
+            method: 'PATCH',
+            credentials: 'include',
+            // Every small draft mutation is allowed to finish if the browser
+            // backgrounds or tears down the page; explicit flushes still drain
+            // the ordered CAS queue before closing the dialog.
+            keepalive: true,
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) {
+            const failure = new Error('Draft save failed') as Error & { status?: number };
+            failure.status = response.status;
+            throw failure;
+          }
+          const responseData = (await response.json().catch(() => null)) as DraftResponse | null;
+
+          if (saveEpoch !== saveEpochRef.current) return true;
+          if (typeof responseData?.revision === 'number') {
+            revisionRef.current = responseData.revision;
+          }
+          const nextUpdatedAt = responseData?.updatedAt || new Date().toISOString();
+          lastSavedSignatureRef.current = snapshot.signature;
+          failedSignatureRef.current = '';
+          if (mountedRef.current) {
+            setUpdatedAt(nextUpdatedAt);
+            setSaveState('saved');
+            setActionError((currentError) =>
+              currentError?.startsWith('La sauvegarde') ? null : currentError,
+            );
+          }
+          return true;
+        } catch (saveError) {
+          if (saveEpoch !== saveEpochRef.current) return true;
+          failedSignatureRef.current = snapshot.signature;
+          if (latestQueuedSignatureRef.current === snapshot.signature) {
+            latestQueuedSignatureRef.current = '';
+          }
+          if (mountedRef.current) {
+            if (requestStatus(saveError) === 409) {
+              setSaveState('conflict');
+              setActionError(
+                'Une version plus récente de ce brouillon existe. Rechargez-la avant de continuer.',
+              );
+            } else {
+              setSaveState('error');
+              setActionError(
+                'La sauvegarde automatique a échoué. Rien ne sera fermé avant une sauvegarde réussie.',
+              );
+            }
+          }
+          return false;
+        } finally {
+          window.clearTimeout(timeout);
+          activeSaveRequestsRef.current.delete(controller);
+        }
+      };
+
+      const queued = saveQueueRef.current.then(execute, execute);
+      saveQueueRef.current = queued;
+      return queued;
+    },
+    [],
+  );
+
+  const flushDraft = useCallback(
+    async (options: { keepalive?: boolean } = {}) => {
+      // Drain every save that was queued before the flush. A user can type B,
+      // return to the last-saved value A, then close while B is still in flight;
+      // checking A too early would let B overwrite the server after the dialog closes.
+      let observedQueue: Promise<boolean>;
+      do {
+        observedQueue = saveQueueRef.current;
+        await observedQueue;
+      } while (observedQueue !== saveQueueRef.current);
+
+      const snapshot = makeSnapshot(stepRef.current, formValuesRef.current);
+      if (snapshot.signature === lastSavedSignatureRef.current) return true;
+      return queueDraftSave(snapshot, { keepalive: options.keepalive });
+    },
+    [queueDraftSave],
+  );
+
+  const loadServerDraft = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    saveEpochRef.current += 1;
+    activeSaveRequestsRef.current.forEach((controller) => controller.abort());
+    activeSaveRequestsRef.current.clear();
+    await saveQueueRef.current.catch(() => false);
+    saveQueueRef.current = Promise.resolve(true);
+    setLoadState('loading');
+    setLoadError('');
+    setActionError(null);
+    setSaveState('idle');
+
+    try {
+      const onboardingRequest = sanctuaireApi
+        .get('/users/onboarding', { timeout: 15_000 })
+        .catch((error: unknown) => {
+          if (requestStatus(error) === 404) return { data: null };
+          throw error;
+        });
+      const [profileResponse, draftResponse] = await Promise.all([
+        sanctuaireApi.get('/users/profile', { timeout: 15_000 }),
+        onboardingRequest,
+      ]);
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+
+      const serverDraft = (draftResponse.data ?? null) as DraftResponse | null;
+      if (serverDraft?.status === 'COMPLETED' || serverDraft?.canEdit === false) {
+        setLoadState('sealed');
+        return;
+      }
+
+      const rawDraft = serverDraft?.data || {};
+      const initialData: ReadingPreparationData = {
+        ...EMPTY_DATA,
+        ...normalize(profileResponse.data?.profile),
+        ...normalize(rawDraft),
+        consent: false,
+      };
+      const initialStep = normalizeSavedStep(serverDraft?.currentStep, rawDraft);
+      const savedServerSnapshot = makeSnapshot(initialStep, {
+        ...EMPTY_DATA,
+        ...normalize(rawDraft),
+        consent: false,
+      });
+
+      revisionRef.current =
+        typeof serverDraft?.revision === 'number' ? serverDraft.revision : undefined;
+      orderIdRef.current = serverDraft?.orderId;
+      lastSavedSignatureRef.current = savedServerSnapshot.signature;
+      latestQueuedSignatureRef.current = savedServerSnapshot.signature;
+      failedSignatureRef.current = '';
+      formValuesRef.current = initialData;
+      stepRef.current = initialStep;
+      reset(initialData);
+      setStep(initialStep);
+      setPhotoStates({ face: 'idle', palm: 'idle' });
+      setDraftLoadKey((value) => value + 1);
+      setUpdatedAt(serverDraft?.updatedAt || null);
+      setSaveState(serverDraft ? 'saved' : 'idle');
+      setLoadState('ready');
+    } catch (error) {
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+      const status = requestStatus(error);
+      setLoadError(
+        status === 401 || status === 403
+          ? 'Votre session doit être renouvelée avant de retrouver ce brouillon.'
+          : 'Votre brouillon ne peut pas être chargé pour le moment. Aucune donnée ne sera écrasée.',
+      );
+      setLoadState('error');
+    }
+  }, [reset]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    void loadServerDraft();
+
+    return () => {
+      mountedRef.current = false;
+      loadRequestRef.current += 1;
+      saveEpochRef.current += 1;
+      activeSaveRequestsRef.current.forEach((controller) => controller.abort());
+      activeSaveRequestsRef.current.clear();
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus?.();
+    };
+  }, [loadServerDraft]);
+
+  useEffect(() => {
+    if (loadState !== 'ready' || isSubmitting || isComplete || saveState === 'conflict') return;
+    const snapshot = makeSnapshot(step, formValues);
+    if (
+      snapshot.signature === lastSavedSignatureRef.current ||
+      snapshot.signature === latestQueuedSignatureRef.current ||
+      snapshot.signature === failedSignatureRef.current
+    ) {
+      return;
+    }
+
+    setSaveState('unsaved');
+    const timer = window.setTimeout(() => {
+      void queueDraftSave(snapshot);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [formValues, isComplete, isSubmitting, loadState, queueDraftSave, saveState, step]);
+
+  useEffect(() => {
+    if (loadState !== 'ready' || isComplete) return;
+    const persistWhenLeaving = () => {
+      if (document.visibilityState === 'hidden') void flushDraft({ keepalive: true });
+    };
+    const persistOnPageHide = () => void flushDraft({ keepalive: true });
+    document.addEventListener('visibilitychange', persistWhenLeaving);
+    window.addEventListener('pagehide', persistOnPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', persistWhenLeaving);
+      window.removeEventListener('pagehide', persistOnPageHide);
+    };
+  }, [flushDraft, isComplete, loadState]);
+
+  useEffect(() => {
+    if (loadState !== 'ready') return;
+    const frame = window.requestAnimationFrame(() => titleRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [loadState, step]);
+
+  useEffect(() => {
+    if (!isComplete) return;
+    const frame = window.requestAnimationFrame(() => titleRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [isComplete]);
+
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      setMobileViewportHeight(
+        window.innerWidth < 1024
+          ? Math.round(window.visualViewport?.height ?? window.innerHeight)
+          : null,
+      );
+    };
+    updateViewportHeight();
+    window.addEventListener('resize', updateViewportHeight);
+    window.visualViewport?.addEventListener('resize', updateViewportHeight);
+    window.visualViewport?.addEventListener('scroll', updateViewportHeight);
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight);
+      window.visualViewport?.removeEventListener('resize', updateViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
+    };
+  }, []);
+
+  const waitForPhotoUploads = useCallback(async () => {
+    const pending = Array.from(pendingPhotoUploadsRef.current);
+    if (!pending.length) return true;
+    const results = await Promise.allSettled(pending);
+    return results.every((result) => result.status === 'fulfilled');
+  }, []);
+
+  const handleClose = useCallback(async () => {
+    if (isSubmitting || isClosing) return;
+    if (isPhotoBusy) {
+      setActionError(
+        'Votre photo est encore en cours d’enregistrement privé. Attendez sa confirmation avant de quitter.',
+      );
+      return;
+    }
+    setIsClosing(true);
+    setActionError(null);
+    const uploadsSucceeded = await waitForPhotoUploads();
+    await Promise.resolve();
+    if (!uploadsSucceeded) {
+      setActionError(
+        'Une photo n’a pas pu être enregistrée. Réessayez ou retirez-la avant de quitter.',
+      );
+      setIsClosing(false);
+      return;
+    }
+    const saved = loadState === 'ready' ? await flushDraft() : true;
+    if (!saved) {
+      setIsClosing(false);
+      return;
+    }
+    onClose();
+  }, [flushDraft, isClosing, isPhotoBusy, isSubmitting, loadState, onClose, waitForPhotoUploads]);
+
+  useEffect(() => {
+    if (!['ready', 'error', 'sealed'].includes(loadState)) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (loadState === 'error' || loadState === 'sealed') onClose();
+        else void handleClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [handleClose, loadState, onClose]);
+
+  const uploadPrivatePhoto = useCallback((preview: string, kind: 'FACE' | 'PALM') => {
+    const base = uploadOnboardingPhoto(preview, kind, orderIdRef.current).then((storageRef) => {
+      if (!storageRef) throw new Error("La photo n'a pas pu être enregistrée.");
+      return storageRef;
+    });
+    let tracked: Promise<string>;
+    tracked = base.finally(() => pendingPhotoUploadsRef.current.delete(tracked));
+    pendingPhotoUploadsRef.current.add(tracked);
+    return tracked;
+  }, []);
+
+  const goToStep = useCallback(
+    async (index: number) => {
+      if (current.key === 'photos' && isPhotoBusy) {
+        setActionError(
+          'Attendez la confirmation de l’enregistrement privé de la photo avant de changer d’étape.',
+        );
+        return;
+      }
+      const target = Math.min(Math.max(index, 0), STEPS.length - 1);
+      if (target > 0) {
+        const identityValid = await trigger(['birthDate', 'birthPlace'], {
+          shouldFocus: step === 0,
+        });
+        if (!identityValid) {
+          setStep(0);
+          return;
+        }
+      }
+      setActionError(null);
+      setStep(target);
+    },
+    [current.key, isPhotoBusy, step, trigger],
+  );
+
+  const next = useCallback(async () => {
+    if (current.key === 'photos' && isPhotoBusy) {
+      setActionError(
+        'Attendez la confirmation de l’enregistrement privé de la photo avant de continuer.',
+      );
+      return;
+    }
+    if (current.key === 'identity') {
+      const valid = await trigger(['birthDate', 'birthPlace'], { shouldFocus: true });
+      if (!valid) return;
+    }
+    if (
+      current.key === 'photos' &&
+      (photoStates.face === 'error' || photoStates.palm === 'error')
+    ) {
+      setActionError('Réessayez l’envoi de la photo en erreur ou retirez-la pour continuer.');
+      return;
+    }
+    setActionError(null);
+    setStep((currentStep) => Math.min(currentStep + 1, STEPS.length - 1));
+  }, [current.key, isPhotoBusy, photoStates.face, photoStates.palm, trigger]);
+
+  const focusIssue = useCallback(
+    (field: FieldPath<ReadingPreparationData>, message: string) => {
+      setError(field, { type: 'manual', message });
+      const targetStep =
+        field === 'birthDate' || field === 'birthTime' || field === 'birthPlace'
+          ? 0
+          : field === 'specificQuestion' || field === 'objective'
+            ? 1
+            : ['highs', 'lows', 'ailments', 'fears', 'rituals', 'deliveryStyle', 'pace'].includes(
+                  field,
+                )
+              ? 2
+              : field === 'facePhoto' || field === 'palmPhoto'
+                ? 3
+                : 4;
+      setStep(targetStep);
+      window.setTimeout(() => setFocus(field), 0);
+    },
+    [setError, setFocus],
+  );
+
+  const submit = useCallback(async () => {
+    if (submittingRef.current || isSubmitting || isClosing) return;
+    if (isPhotoBusy) {
+      setActionError(
+        'Attendez la confirmation de l’enregistrement privé de la photo avant de transmettre.',
+      );
+      return;
+    }
+    const parsed = readingPreparationSubmissionSchema.safeParse(getValues());
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      focusIssue(issue.path[0] as FieldPath<ReadingPreparationData>, issue.message);
+      return;
+    }
+    if (photoStates.face === 'error' || photoStates.palm === 'error') {
+      setStep(3);
+      setActionError('Réessayez l’envoi de la photo en erreur ou retirez-la avant de confirmer.');
+      return;
+    }
+
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      const uploadsSucceeded = await waitForPhotoUploads();
+      if (!uploadsSucceeded) {
+        setStep(3);
+        setActionError('Une photo n’a pas pu être enregistrée. Réessayez ou retirez-la.');
+        return;
+      }
+      await Promise.resolve();
+      const saved = await flushDraft();
+      if (!saved) return;
+
+      const values = getValues();
+      const [facePhotoUrl, palmPhotoUrl] = await Promise.all([
+        uploadOnboardingPhoto(values.facePhoto, 'FACE', orderIdRef.current),
+        uploadOnboardingPhoto(values.palmPhoto, 'PALM', orderIdRef.current),
+      ]);
+      await sanctuaireApi.patch(
+        '/users/profile',
+        {
+          ...(orderIdRef.current && { orderId: orderIdRef.current }),
+          birthDate: values.birthDate,
+          birthTime: values.birthTime || null,
+          birthPlace: values.birthPlace.trim(),
+          specificQuestion: values.specificQuestion.trim() || null,
+          objective: values.objective.trim() || null,
+          openReading: values.openReading,
+          facePhotoUrl,
+          palmPhotoUrl,
+          highs: values.highs.trim() || null,
+          lows: values.lows.trim() || null,
+          strongSide: values.strongSide?.trim() || null,
+          weakSide: values.weakSide?.trim() || null,
+          strongZone: values.strongZone?.trim() || null,
+          weakZone: values.weakZone?.trim() || null,
+          ailments: values.ailments.trim() || null,
+          fears: values.fears.trim() || null,
+          rituals: values.rituals.trim() || null,
+          deliveryStyle: values.deliveryStyle,
+          pace: values.pace,
+          profileCompleted: true,
+          ...(revisionRef.current !== undefined && { intakeRevision: revisionRef.current }),
+          consent: { accepted: true },
+        },
+        { timeout: 30_000 },
+      );
+      setIsComplete(true);
+      await onCompleted().catch(() => undefined);
+    } catch (error) {
+      setActionError(
+        requestStatus(error) === 409
+          ? 'Ce dossier vient d’être scellé ou la production a commencé. Rechargez votre Sanctuaire.'
+          : 'Le dossier n’a pas pu être transmis. Votre brouillon reste sauvegardé : réessayez dans un instant.',
+      );
+    } finally {
+      submittingRef.current = false;
+      if (mountedRef.current) setIsSubmitting(false);
+    }
+  }, [
+    flushDraft,
+    focusIssue,
+    getValues,
+    isClosing,
+    isPhotoBusy,
+    isSubmitting,
+    onCompleted,
+    photoStates.face,
+    photoStates.palm,
+    waitForPhotoUploads,
+  ]);
+
+  const retrySave = useCallback(() => {
+    failedSignatureRef.current = '';
+    setActionError(null);
+    void queueDraftSave(makeSnapshot(stepRef.current, formValuesRef.current), { force: true });
+  }, [queueDraftSave]);
+
+  const completionByStep = useMemo(
+    () => [
+      Boolean(formValues.birthDate && formValues.birthPlace.trim()),
+      Boolean(
+        formValues.specificQuestion.trim() || formValues.objective.trim() || formValues.openReading,
+      ),
+      contextEntries.some(([, value]) => value.trim()),
+      Boolean(formValues.facePhoto || formValues.palmPhoto),
+      formValues.consent,
+    ],
+    [contextEntries, formValues],
+  );
+
+  if (loadState === 'loading') {
+    return <LoadingDialog />;
+  }
+
+  if (loadState === 'error') {
+    return (
+      <BlockingDialog
+        dialogRef={dialogRef}
+        title="Impossible de retrouver votre brouillon"
+        description={loadError}
+        primaryLabel="Réessayer"
+        onPrimary={() => void loadServerDraft()}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (loadState === 'sealed') {
+    return (
+      <BlockingDialog
+        dialogRef={dialogRef}
+        title="Ce dossier est déjà confirmé"
+        description="La version transmise pour cette lecture est désormais immuable. Vous pouvez la consulter depuis Mon dossier."
+        primaryLabel="Retour à mon Sanctuaire"
+        onPrimary={onClose}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (isComplete) {
+    return (
+      <div
+        ref={dialogRef}
+        className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reading-preparation-complete-title"
+      >
+        <section className="w-full max-w-xl rounded-3xl border border-emerald-400/20 bg-abyss-700 p-6 text-center shadow-abyss sm:p-9">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
+            <CheckCircle2 className="h-8 w-8" />
+          </span>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
+            Dossier transmis
+          </p>
+          <h1
+            ref={titleRef}
+            id="reading-preparation-complete-title"
+            tabIndex={-1}
+            className="mt-3 font-playfair text-3xl italic text-stellar-100"
+          >
+            Votre lecture peut commencer
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-stellar-400">
+            La version que vous venez de relire est maintenant liée à cette lecture. L’équipe vous
+            écrira lorsqu’elle sera disponible.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-7 min-h-[48px] w-full rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 sm:w-auto"
+          >
+            Retour à mon Sanctuaire
+          </button>
+        </section>
+      </div>
+    );
+  }
+
+  const isPhotoBusy =
+    photoStates.face === 'preparing' ||
+    photoStates.face === 'uploading' ||
+    photoStates.palm === 'preparing' ||
+    photoStates.palm === 'uploading';
+  const saveLabel = getSaveLabel(saveState, updatedAt);
+
+  return (
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 z-[100] overflow-hidden bg-abyss-900/98 backdrop-blur-xl lg:grid lg:place-items-center lg:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reading-preparation-title"
+      aria-describedby="reading-preparation-description"
+    >
+      <div
+        className="mx-auto flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-abyss-800 lg:h-[min(760px,calc(100dvh-3rem))] lg:rounded-3xl lg:border lg:border-white/[0.08] lg:shadow-abyss"
+        style={mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined}
+      >
+        <header className="shrink-0 border-b border-white/[0.07] bg-abyss-700/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 lg:pt-3">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-horizon-300">
+                Dossier de lecture
+              </p>
+              <p className="mt-1 truncate text-xs text-stellar-500" aria-live="polite">
+                {saveLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleClose()}
+              disabled={isSubmitting || isClosing}
+              aria-label="Enregistrer et reprendre plus tard"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/[0.08] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
+            >
+              {isClosing ? <Loader2 className="h-5 w-5 animate-spin" /> : <X className="h-5 w-5" />}
+            </button>
+          </div>
+          <div className="mt-3 lg:hidden">
+            <div className="flex items-center justify-between text-xs text-stellar-500">
+              <span>
+                Étape {step + 1} sur {STEPS.length} · {current.label}
+              </span>
+              <span>{positionProgress}%</span>
+            </div>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
+              <div
+                className="h-full rounded-full bg-horizon-400 transition-[width] motion-reduce:transition-none"
+                style={{ width: `${positionProgress}%` }}
+              />
+            </div>
+          </div>
+        </header>
+
+        <div className="grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="hidden min-h-0 border-r border-white/[0.07] bg-abyss-700/60 p-4 lg:flex lg:flex-col">
+            <p className="px-2 text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
+              Progression
+            </p>
+            <ol className="mt-3 space-y-1">
+              {STEPS.map((item, index) => {
+                const Icon = item.icon;
+                const active = index === step;
+                return (
+                  <li key={item.key}>
+                    <button
+                      type="button"
+                      onClick={() => void goToStep(index)}
+                      aria-current={active ? 'step' : undefined}
+                      className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
+                        active
+                          ? 'bg-horizon-400/15 text-stellar-100'
+                          : 'text-stellar-400 hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <span
+                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+                          active ? 'bg-horizon-400 text-abyss-900' : 'bg-white/[0.04]'
+                        }`}
+                      >
+                        {completionByStep[index] && !active ? (
+                          <Check className="h-4 w-4 text-emerald-300" />
+                        ) : (
+                          <Icon className="h-4 w-4" />
+                        )}
+                      </span>
+                      <span className="text-sm font-medium">{item.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="mt-auto rounded-xl border border-horizon-400/15 bg-horizon-400/[0.06] p-3 text-xs leading-5 text-stellar-400">
+              Votre brouillon privé reste reprenable sans expiration, demain comme plus tard.
+            </p>
+          </aside>
+
+          <form
+            className="flex min-h-0 min-w-0 flex-col"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (current.key === 'review') void submit();
+              else void next();
+            }}
+          >
+            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 [scroll-padding-bottom:7rem] sm:px-8 sm:py-7">
+              <div className="mx-auto max-w-3xl">
+                <h1
+                  ref={titleRef}
+                  id="reading-preparation-title"
+                  tabIndex={-1}
+                  className="font-playfair text-2xl italic text-stellar-100 outline-none sm:text-3xl"
+                >
+                  {current.title}
+                </h1>
+                <p
+                  id="reading-preparation-description"
+                  className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400"
+                >
+                  {current.description}
+                </p>
+
+                {(actionError || saveState === 'conflict') && (
+                  <div
+                    role="alert"
+                    className="mt-4 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm leading-6 text-rose-100"
+                  >
+                    <p>{actionError}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {saveState === 'error' && (
+                        <button
+                          type="button"
+                          onClick={retrySave}
+                          className="inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-xs font-semibold hover:bg-rose-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                        >
+                          <RefreshCw className="h-4 w-4" /> Réessayer la sauvegarde
+                        </button>
+                      )}
+                      {saveState === 'conflict' && (
+                        <button
+                          type="button"
+                          onClick={() => void loadServerDraft()}
+                          className="inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-xs font-semibold hover:bg-rose-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                        >
+                          <RefreshCw className="h-4 w-4" /> Charger la version sauvegardée
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6">
+                  {current.key === 'identity' && (
+                    <IdentityStep
+                      register={register}
+                      errors={errors}
+                      today={today}
+                      birthTimeKnown={Boolean(formValues.birthTime)}
+                      onUnknownTime={() => setValue('birthTime', '', { shouldDirty: true })}
+                    />
+                  )}
+
+                  {current.key === 'intention' && (
+                    <IntentionStep register={register} errors={errors} values={formValues} />
+                  )}
+
+                  {current.key === 'context' && (
+                    <ContextStep register={register} errors={errors} values={formValues} />
+                  )}
+
+                  {current.key === 'photos' && (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <SmartPhotoUploader
+                          key={`face-${draftLoadKey}`}
+                          label="Visage"
+                          description="Une photo nette, de face, avec une lumière naturelle."
+                          value={formValues.facePhoto}
+                          onChange={(value) =>
+                            setValue('facePhoto', value || '', {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                          uploadPhoto={(preview) => uploadPrivatePhoto(preview, 'FACE')}
+                          onUploadStateChange={(state) =>
+                            setPhotoStates((currentStates) => ({ ...currentStates, face: state }))
+                          }
+                          captureFacingMode="user"
+                          privatePreviewUrl={
+                            formValues.facePhoto.startsWith('s3://onboarding/')
+                              ? `/api/bff/users/onboarding/photos/face${orderScopeQuery}`
+                              : undefined
+                          }
+                        />
+                        <SmartPhotoUploader
+                          key={`palm-${draftLoadKey}`}
+                          label="Paume"
+                          description="Main ouverte, cadrée de près, lignes bien visibles."
+                          value={formValues.palmPhoto}
+                          onChange={(value) =>
+                            setValue('palmPhoto', value || '', {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                          uploadPhoto={(preview) => uploadPrivatePhoto(preview, 'PALM')}
+                          onUploadStateChange={(state) =>
+                            setPhotoStates((currentStates) => ({ ...currentStates, palm: state }))
+                          }
+                          captureFacingMode="environment"
+                          privatePreviewUrl={
+                            formValues.palmPhoto.startsWith('s3://onboarding/')
+                              ? `/api/bff/users/onboarding/photos/palm${orderScopeQuery}`
+                              : undefined
+                          }
+                        />
+                      </div>
+                      <p className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-xs leading-5 text-stellar-500">
+                        Vous pouvez continuer sans photo, avec une seule ou avec les deux. Une photo
+                        réussie est enregistrée immédiatement afin de rester disponible après un
+                        abandon ou un changement d’appareil.
+                      </p>
+                    </div>
+                  )}
+
+                  {current.key === 'review' && (
+                    <ReviewStep
+                      data={formValues}
+                      contextEntries={contextEntries}
+                      registerConsent={register('consent')}
+                      consentError={errors.consent?.message}
+                      onEdit={(index) => void goToStep(index)}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <footer className="shrink-0 border-t border-white/[0.07] bg-abyss-700/98 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-6 lg:pb-3">
+              <div className="mx-auto flex max-w-3xl items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => (step === 0 ? void handleClose() : setStep((value) => value - 1))}
+                  disabled={isSubmitting || isClosing}
+                  aria-label={
+                    step === 0
+                      ? 'Enregistrer et reprendre plus tard'
+                      : 'Revenir à l’étape précédente'
+                  }
+                  className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.09] px-3 text-sm text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50 min-[380px]:px-4"
+                >
+                  {step === 0 ? <Save className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
+                  <span className="hidden min-[380px]:inline">
+                    {step === 0 ? 'Plus tard' : 'Retour'}
+                  </span>
+                </button>
+                {current.key !== 'review' ? (
+                  <button
+                    type="submit"
+                    disabled={isClosing || isPhotoBusy}
+                    className="inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isPhotoBusy ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Enregistrement…
+                      </>
+                    ) : (
+                      <>
+                        Continuer <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || isClosing || isPhotoBusy || !formValues.consent}
+                    className="inline-flex min-h-[50px] min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-3 py-3 text-sm font-bold text-abyss-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LockKeyhole className="h-4 w-4" />
+                    )}
+                    <span className="truncate">Confirmer et transmettre mon dossier</span>
+                  </button>
+                )}
+              </div>
+            </footer>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IdentityStep({
+  register,
+  errors,
+  today,
+  birthTimeKnown,
+  onUnknownTime,
+}: {
+  register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
+  errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
+  today: string;
+  birthTimeKnown: boolean;
+  onUnknownTime: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <label className="text-sm font-medium text-stellar-200">
+          Date de naissance <span className="text-horizon-300">*</span>
+          <input
+            type="date"
+            max={today}
+            autoComplete="bday"
+            aria-invalid={Boolean(errors.birthDate)}
+            aria-describedby={errors.birthDate ? 'birthDate-error' : undefined}
+            className={inputClass(Boolean(errors.birthDate))}
+            {...register('birthDate')}
+          />
+          <FieldError id="birthDate-error" message={errors.birthDate?.message} />
+        </label>
+        <label className="text-sm font-medium text-stellar-200">
+          Heure <span className="font-normal text-stellar-500">(facultative)</span>
+          <input
+            type="time"
+            aria-invalid={Boolean(errors.birthTime)}
+            aria-describedby={errors.birthTime ? 'birthTime-error' : 'birthTime-help'}
+            className={inputClass(Boolean(errors.birthTime))}
+            {...register('birthTime')}
+          />
+          <span id="birthTime-help" className="mt-2 block text-xs leading-5 text-stellar-500">
+            Si vous ne la connaissez pas, laissez simplement ce champ vide.
+          </span>
+          {birthTimeKnown && (
+            <button
+              type="button"
+              onClick={onUnknownTime}
+              className="mt-1 min-h-[36px] rounded-lg px-1 text-xs text-horizon-200 hover:bg-horizon-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+            >
+              Je ne connais pas mon heure
+            </button>
+          )}
+          <FieldError id="birthTime-error" message={errors.birthTime?.message} />
+        </label>
+      </div>
+      <label className="block text-sm font-medium text-stellar-200">
+        Lieu de naissance <span className="text-horizon-300">*</span>
+        <span className="relative block">
+          <MapPin className="pointer-events-none absolute left-3 top-5 h-5 w-5 text-stellar-500" />
+          <input
+            type="text"
+            maxLength={180}
+            placeholder="Ville, pays — par exemple Lyon, France"
+            enterKeyHint="next"
+            aria-invalid={Boolean(errors.birthPlace)}
+            aria-describedby={errors.birthPlace ? 'birthPlace-error' : 'birthPlace-help'}
+            className={`${inputClass(Boolean(errors.birthPlace))} pl-11`}
+            {...register('birthPlace')}
+          />
+        </span>
+        <span id="birthPlace-help" className="mt-2 block text-xs leading-5 text-stellar-500">
+          La ville et le pays suffisent ; aucune adresse précise n’est nécessaire.
+        </span>
+        <FieldError id="birthPlace-error" message={errors.birthPlace?.message} />
+      </label>
+      <TrustNote />
+    </div>
+  );
+}
+
+function IntentionStep({
+  register,
+  errors,
+  values,
+}: {
+  register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
+  errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
+  values: ReadingPreparationData;
+}) {
+  return (
+    <div className="space-y-5">
+      <TextareaField
+        label="Si cette lecture pouvait éclairer une seule question, laquelle serait-ce ?"
+        helper="Une situation, une décision, une relation ou un schéma qui se répète : écrivez avec vos propres mots."
+        placeholder="En ce moment, je me demande…"
+        maxLength={2000}
+        valueLength={values.specificQuestion.length}
+        error={errors.specificQuestion?.message}
+        registration={register('specificQuestion')}
+      />
+      <TextareaField
+        label="À la fin, qu’aimeriez-vous comprendre, décider ou voir autrement ?"
+        helper="Décrire ce qui rendrait cette lecture utile aide l’expert à garder le bon cap."
+        placeholder="J’aimerais repartir avec plus de clarté sur…"
+        maxLength={2000}
+        valueLength={values.objective.length}
+        error={errors.objective?.message}
+        registration={register('objective')}
+      />
+      <label
+        className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm leading-6 focus-within:ring-2 focus-within:ring-horizon-400 ${
+          values.openReading
+            ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-200'
+            : 'border-white/[0.09] bg-white/[0.025] text-stellar-400'
+        }`}
+      >
+        <input
+          type="checkbox"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
+          {...register('openReading')}
+        />
+        <span>
+          <strong className="block font-medium text-stellar-100">
+            Je préfère une lecture ouverte
+          </strong>
+          <span className="mt-1 block text-xs leading-5 text-stellar-500">
+            Je ne souhaite pas orienter la lecture avec une question précise ; l’expert partira de
+            mes repères et du contexte que j’ai choisi de partager.
+          </span>
+        </span>
+      </label>
+      <TrustNote />
+    </div>
+  );
+}
+
+function ContextStep({
+  register,
+  errors,
+  values,
+}: {
+  register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
+  errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
+  values: ReadingPreparationData;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-5 md:grid-cols-2">
+        <TextareaField
+          label="Ce qui vous soutient actuellement"
+          helper="Personnes, projets, qualités ou élans sur lesquels vous pouvez compter."
+          maxLength={2000}
+          valueLength={values.highs.length}
+          error={errors.highs?.message}
+          registration={register('highs')}
+        />
+        <TextareaField
+          label="Ce qui vous pèse ou se répète"
+          helper="Une difficulté, une tension ou une situation qui demande votre attention."
+          maxLength={2000}
+          valueLength={values.lows.length}
+          error={errors.lows?.message}
+          registration={register('lows')}
+        />
+        <TextareaField
+          label="Ce que vous préférez que nous abordions avec douceur"
+          helper="Une peur, une limite ou un sujet sensible — sans obligation de tout détailler."
+          maxLength={2000}
+          valueLength={values.fears.length}
+          error={errors.fears?.message}
+          registration={register('fears')}
+        />
+        <TextareaField
+          label="Pratiques qui comptent pour vous"
+          helper="Rituel, méditation, écriture, prière ou toute pratique personnelle."
+          maxLength={1500}
+          valueLength={values.rituals.length}
+          error={errors.rituals?.message}
+          registration={register('rituals')}
+        />
+      </div>
+      <TextareaField
+        label="Contexte corporel que vous souhaitez partager"
+        helper="Facultatif. Mentionnez seulement ce qui vous paraît utile ; Lumira ne pose aucun diagnostic médical."
+        maxLength={1500}
+        valueLength={values.ailments.length}
+        error={errors.ailments?.message}
+        registration={register('ailments')}
+      />
+
+      <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+        <h2 className="text-sm font-medium text-stellar-100">
+          Comment souhaitez-vous recevoir la lecture ?
+        </h2>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {STYLE_OPTIONS.map(([value, label, helper]) => (
+            <label
+              key={value}
+              className={`cursor-pointer rounded-xl border p-3 focus-within:ring-2 focus-within:ring-horizon-400 ${
+                values.deliveryStyle === value
+                  ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
+                  : 'border-white/[0.08] text-stellar-400'
+              }`}
+            >
+              <input
+                type="radio"
+                value={value}
+                className="sr-only"
+                {...register('deliveryStyle')}
+              />
+              <span className="block text-sm font-medium">{label}</span>
+              <span className="mt-1 block text-xs leading-5 text-stellar-500">{helper}</span>
+            </label>
+          ))}
+        </div>
+        <label className="mt-5 block text-sm text-stellar-300">
+          Niveau de détail souhaité :{' '}
+          <strong className="text-stellar-100">{paceLabel(values.pace)}</strong>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            className="mt-3 h-11 w-full accent-amber-300"
+            {...register('pace', { valueAsNumber: true })}
+          />
+          <span className="flex justify-between text-xs text-stellar-500">
+            <span>Essentiel</span>
+            <span>Très détaillé</span>
+          </span>
+        </label>
+      </section>
+      <TrustNote />
+    </div>
+  );
+}
+
+function ReviewStep({
+  data,
+  contextEntries,
+  registerConsent,
+  consentError,
+  onEdit,
+}: {
+  data: ReadingPreparationData;
+  contextEntries: string[][];
+  registerConsent: ReturnType<ReturnType<typeof useForm<ReadingPreparationData>>['register']>;
+  consentError?: string;
+  onEdit: (index: number) => void;
+}) {
+  const transmittedContext = contextEntries.filter(([, value]) => value.trim());
+  return (
+    <div className="space-y-4">
+      <p className="rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-stellar-300">
+        <strong className="text-stellar-100">
+          Le brouillon reste modifiable tant que vous ne confirmez pas.
+        </strong>{' '}
+        Après confirmation, cette version sera conservée telle quelle pour cette lecture.
+      </p>
+      <ReviewSection title="Repères essentiels" onEdit={() => onEdit(0)}>
+        <ReviewValue label="Date" value={formatBirthDate(data.birthDate)} />
+        <ReviewValue label="Heure" value={data.birthTime || 'Non transmise'} />
+        <ReviewValue label="Lieu" value={data.birthPlace || 'À compléter'} />
+      </ReviewSection>
+      <ReviewSection title="Ce qui vous amène" onEdit={() => onEdit(1)}>
+        {data.openReading && (
+          <ReviewValue label="Cadre choisi" value="Lecture ouverte, sans question imposée" />
+        )}
+        <ReviewValue
+          label="Question"
+          value={data.specificQuestion || 'Aucune question précise transmise'}
+        />
+        <ReviewValue
+          label="Intention"
+          value={data.objective || 'Aucune intention supplémentaire transmise'}
+        />
+      </ReviewSection>
+      <ReviewSection title="Votre contexte" onEdit={() => onEdit(2)}>
+        {transmittedContext.length ? (
+          transmittedContext.map(([label, value]) => (
+            <ReviewValue key={label} label={label} value={value} />
+          ))
+        ) : (
+          <p>Aucun contexte personnel supplémentaire transmis.</p>
+        )}
+        <ReviewValue label="Style" value={styleLabel(data.deliveryStyle)} />
+        <ReviewValue label="Niveau de détail" value={paceLabel(data.pace)} />
+      </ReviewSection>
+      <ReviewSection title="Photos privées" onEdit={() => onEdit(3)}>
+        <ReviewValue
+          label="Visage"
+          value={data.facePhoto ? 'Photo enregistrée' : 'Non transmise'}
+        />
+        <ReviewValue label="Paume" value={data.palmPhoto ? 'Photo enregistrée' : 'Non transmise'} />
+      </ReviewSection>
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300 focus-within:ring-2 focus-within:ring-horizon-400">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
+          aria-invalid={Boolean(consentError)}
+          aria-describedby={consentError ? 'consent-error' : undefined}
+          {...registerConsent}
+        />
+        <span>
+          J’ai relu l’ensemble de ces éléments et je choisis de transmettre cette version à Lumira
+          pour préparer ma lecture personnalisée.
+        </span>
+      </label>
+      <FieldError id="consent-error" message={consentError} />
+    </div>
+  );
 }
 
 function ReviewSection({
@@ -167,7 +1559,7 @@ function ReviewSection({
   return (
     <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium text-stellar-100">{title}</h3>
+        <h2 className="text-sm font-medium text-stellar-100">{title}</h2>
         <button
           type="button"
           onClick={onEdit}
@@ -176,637 +1568,170 @@ function ReviewSection({
           <Pencil className="h-3.5 w-3.5" /> Modifier
         </button>
       </div>
-      <div className="mt-3 border-t border-white/[0.06] pt-3 text-sm leading-6 text-stellar-400">
+      <div className="mt-3 space-y-3 border-t border-white/[0.06] pt-3 text-sm leading-6 text-stellar-400">
         {children}
       </div>
     </section>
   );
 }
 
-export function ReadingPreparation({
-  onCompleted,
-  onClose,
+function ReviewValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stellar-600">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-stellar-300">{value}</p>
+    </div>
+  );
+}
+
+function TextareaField({
+  label,
+  helper,
+  placeholder,
+  maxLength,
+  valueLength,
+  error,
+  registration,
 }: {
-  onCompleted: () => Promise<void>;
-  onClose: () => void;
+  label: string;
+  helper: string;
+  placeholder?: string;
+  maxLength: number;
+  valueLength: number;
+  error?: string;
+  registration: ReturnType<ReturnType<typeof useForm<ReadingPreparationData>>['register']>;
 }) {
-  const [step, setStep] = useState(0);
-  const [data, setData] = useState<PreparationData>(EMPTY_DATA);
-  const [loaded, setLoaded] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const errorId = `${registration.name}-error`;
+  const helperId = `${registration.name}-help`;
+  return (
+    <label className="block text-sm font-medium text-stellar-200">
+      {label} <span className="font-normal text-stellar-500">(facultatif)</span>
+      <span id={helperId} className="mt-1 block text-xs font-normal leading-5 text-stellar-500">
+        {helper}
+      </span>
+      <textarea
+        rows={3}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        spellCheck
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : helperId}
+        className={`${inputClass(Boolean(error))} min-h-[104px] resize-y leading-6`}
+        onInput={(event) => {
+          const target = event.currentTarget;
+          target.style.height = 'auto';
+          target.style.height = `${Math.min(target.scrollHeight, 240)}px`;
+        }}
+        {...registration}
+      />
+      <span className="mt-1 flex items-start justify-between gap-3">
+        <FieldError id={errorId} message={error} />
+        <span className="ml-auto shrink-0 text-xs font-normal tabular-nums text-stellar-600">
+          {valueLength}/{maxLength}
+        </span>
+      </span>
+    </label>
+  );
+}
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      sanctuaireApi.get('/users/profile').catch(() => null),
-      sanctuaireApi.get('/users/onboarding').catch(() => null),
-    ])
-      .then(([profileResponse, draftResponse]) => {
-        if (!active) return;
-        const profile = normalize(profileResponse?.data?.profile);
-        const draft = normalize(draftResponse?.data?.data);
-        setData({ ...EMPTY_DATA, ...profile, ...draft, consent: false });
-        const savedStep = Number(draftResponse?.data?.currentStep);
-        if (Number.isFinite(savedStep)) {
-          setStep(Math.min(Math.max(savedStep, 0), STEPS.length - 1));
-        }
-      })
-      .finally(() => active && setLoaded(true));
-    return () => {
-      active = false;
-    };
-  }, []);
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <span id={id} className="mt-1 block text-xs font-normal leading-5 text-rose-300" role="alert">
+      {message}
+    </span>
+  );
+}
 
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isSubmitting) onClose();
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [isSubmitting, onClose]);
+function TrustNote() {
+  return (
+    <p className="flex items-start gap-2 rounded-xl border border-horizon-400/15 bg-horizon-400/[0.055] p-3 text-xs leading-5 text-stellar-400">
+      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-horizon-300" />
+      Votre brouillon est privé, sauvegardé automatiquement et reprenable sans expiration. Rien
+      n’est transmis à l’expert avant votre confirmation finale.
+    </p>
+  );
+}
 
-  const serializableDraft = useMemo(() => draftPayload(data), [data]);
-  const current = STEPS[step];
-  const progress = Math.round(((step + 1) / STEPS.length) * 100);
-  const contextCount = [data.highs, data.lows, data.ailments, data.fears, data.rituals].filter(
-    (value) => value.trim(),
-  ).length;
-
-  useEffect(() => {
-    if (!loaded || isSubmitting || isComplete) return;
-    setSaveState('saving');
-    const timer = window.setTimeout(() => {
-      sanctuaireApi
-        .patch('/users/onboarding', { currentStep: step, data: serializableDraft })
-        .then(() => setSaveState('saved'))
-        .catch(() => {
-          setSaveState('error');
-          setError('La sauvegarde automatique n’a pas abouti. Vos réponses restent affichées.');
-        });
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [isComplete, isSubmitting, loaded, serializableDraft, step]);
-
-  const update = <Key extends keyof PreparationData>(key: Key, value: PreparationData[Key]) => {
-    setError(null);
-    setData((currentData) => ({ ...currentData, [key]: value }));
-  };
-
-  const goToStep = (index: number) => {
-    setError(null);
-    setStep(Math.min(Math.max(index, 0), STEPS.length - 1));
-  };
-
-  const next = () => {
-    if (current.key === 'identity' && (!data.birthDate || !data.birthPlace.trim())) {
-      setError('Ajoutez votre date et votre lieu de naissance pour continuer.');
-      return;
-    }
-    goToStep(step + 1);
-  };
-
-  const submit = async () => {
-    if (!data.birthDate || !data.birthPlace.trim()) {
-      goToStep(1);
-      setError('Ajoutez votre date et votre lieu de naissance avant de transmettre.');
-      return;
-    }
-    if (!data.consent) {
-      setError('Confirmez la transmission avant de sceller votre dossier.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const [facePhotoUrl, palmPhotoUrl] = await Promise.all([
-        uploadOnboardingPhoto(data.facePhoto, 'FACE'),
-        uploadOnboardingPhoto(data.palmPhoto, 'PALM'),
-      ]);
-      await sanctuaireApi.patch('/users/profile', {
-        birthDate: data.birthDate,
-        birthTime: data.birthTime || null,
-        birthPlace: data.birthPlace.trim(),
-        specificQuestion: data.specificQuestion.trim() || null,
-        objective: data.objective.trim() || null,
-        facePhotoUrl,
-        palmPhotoUrl,
-        highs: data.highs.trim() || null,
-        lows: data.lows.trim() || null,
-        ailments: data.ailments.trim() || null,
-        fears: data.fears.trim() || null,
-        rituals: data.rituals.trim() || null,
-        deliveryStyle: data.deliveryStyle,
-        pace: data.pace,
-        profileCompleted: true,
-        consent: { accepted: true, version: '2026-07-18-user-agency-v1' },
-      });
-      setIsComplete(true);
-      void onCompleted().catch(() => undefined);
-    } catch {
-      setError('Le dossier n’a pas pu être scellé. Rien n’est perdu : réessayez dans un instant.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!loaded) {
-    return (
-      <div
-        className="fixed inset-0 z-[100] grid place-items-center bg-abyss-900/95"
-        role="status"
-        aria-label="Chargement du dossier"
-      >
-        <div className="w-full max-w-sm animate-pulse px-6">
-          <div className="mx-auto h-12 w-12 rounded-2xl bg-white/[0.07]" />
-          <div className="mx-auto mt-5 h-6 w-48 rounded-xl bg-white/[0.07]" />
-          <div className="mx-auto mt-3 h-4 w-64 max-w-full rounded-full bg-white/[0.05]" />
-        </div>
-      </div>
-    );
-  }
-
-  if (isComplete) {
-    return (
-      <div
-        className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 backdrop-blur-xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reading-preparation-complete-title"
-      >
-        <section className="w-full max-w-xl rounded-3xl border border-emerald-400/20 bg-abyss-700 p-7 text-center shadow-abyss sm:p-10">
-          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
-            <CheckCircle2 className="h-9 w-9" />
-          </span>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
-            Dossier transmis
-          </p>
-          <h1
-            id="reading-preparation-complete-title"
-            className="mt-3 font-playfair text-3xl italic text-stellar-100"
-          >
-            Votre lecture peut commencer
-          </h1>
-          <p className="mt-4 text-sm leading-7 text-stellar-400">
-            Vous avez choisi, relu puis confirmé les éléments transmis. L’équipe vous écrira lorsque
-            votre lecture sera disponible.
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-8 min-h-[48px] rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"
-          >
-            Retour à mon Sanctuaire
-          </button>
-        </section>
-      </div>
-    );
-  }
-
+function LoadingDialog() {
   return (
     <div
-      className="fixed inset-0 z-[100] overflow-hidden bg-abyss-900/98 backdrop-blur-xl"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="reading-preparation-title"
+      className="fixed inset-0 z-[100] grid place-items-center bg-abyss-900/98 p-6"
+      role="status"
+      aria-label="Chargement du brouillon"
     >
-      <div className="mx-auto flex h-[100dvh] min-h-0 w-full max-w-6xl flex-col p-2 sm:p-6">
-        <header className="flex shrink-0 items-center justify-between rounded-2xl border border-white/[0.08] bg-abyss-700/95 px-4 py-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
-              Dossier de lecture
-            </p>
-            <p className="mt-1 text-xs text-stellar-500" aria-live="polite">
-              {saveState === 'saving' && 'Sauvegarde du brouillon en cours…'}
-              {saveState === 'saved' && 'Brouillon privé sauvegardé'}
-              {saveState === 'error' && 'Sauvegarde à vérifier'}
-              {saveState === 'idle' && 'Vous pouvez reprendre plus tard'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            aria-label="Fermer et reprendre plus tard"
-            className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.08] text-stellar-400 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </header>
-
-        <div className="mt-2 grid min-h-0 flex-1 gap-3 lg:mt-3 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="hidden rounded-3xl border border-white/[0.08] bg-abyss-700/80 p-4 lg:block">
-            <p className="px-2 text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
-              Progression
-            </p>
-            <ol className="mt-3 space-y-1">
-              {STEPS.map((item, index) => {
-                const Icon = item.icon;
-                const active = index === step;
-                return (
-                  <li key={item.key}>
-                    <button
-                      type="button"
-                      onClick={() => goToStep(index)}
-                      aria-current={active ? 'step' : undefined}
-                      className={`flex min-h-[50px] w-full items-center gap-3 rounded-2xl px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
-                        active
-                          ? 'bg-horizon-400/15 text-stellar-100'
-                          : 'text-stellar-400 hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      <span
-                        className={`grid h-8 w-8 place-items-center rounded-xl ${
-                          active ? 'bg-horizon-400 text-abyss-900' : 'bg-white/[0.04]'
-                        }`}
-                      >
-                        {index < step ? (
-                          <Check className="h-4 w-4 text-emerald-300" />
-                        ) : (
-                          <Icon className="h-4 w-4" />
-                        )}
-                      </span>
-                      <span className="text-sm font-medium">{item.label}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-            <p className="mt-5 rounded-2xl border border-horizon-400/15 bg-horizon-400/[0.06] p-4 text-xs leading-5 text-stellar-400">
-              Votre brouillon privé est sauvegardé automatiquement. La production ne commence
-              qu’après votre confirmation finale.
-            </p>
-          </aside>
-
-          <main className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-700/90 shadow-abyss">
-            <div className="shrink-0 border-b border-white/[0.06] px-5 py-4 sm:px-8 sm:py-6">
-              <div className="flex justify-between text-xs text-stellar-500">
-                <span>
-                  Étape {step + 1} sur {STEPS.length} · {current.label}
-                </span>
-                <span>{progress}%</span>
-              </div>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="h-full rounded-full bg-horizon-400 transition-[width]"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <h1
-                id="reading-preparation-title"
-                className="mt-4 font-playfair text-2xl italic text-stellar-100 sm:mt-5 sm:text-3xl"
-              >
-                {current.title}
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
-                {current.description}
-              </p>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-8">
-              {current.key === 'control' && (
-                <div className="mx-auto max-w-2xl space-y-4">
-                  <div className="rounded-3xl border border-horizon-400/20 bg-horizon-400/[0.07] p-6">
-                    <Sparkles className="h-6 w-6 text-horizon-300" />
-                    <h2 className="mt-4 font-playfair text-xl italic text-stellar-100">
-                      Une préparation personnelle, à votre rythme
-                    </h2>
-                    <p className="mt-3 text-sm leading-7 text-stellar-400">
-                      Seuls la date et le lieu de naissance sont nécessaires. Votre intention, vos
-                      photos et votre contexte restent facultatifs. Vous relirez l’ensemble avant de
-                      confirmer la transmission.
-                    </p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {['Je choisis', 'Je relis', 'Je confirme'].map((label, index) => (
-                      <div
-                        key={label}
-                        className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"
-                      >
-                        <span className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-xs font-bold text-horizon-200">
-                          {index + 1}
-                        </span>
-                        <p className="mt-3 text-sm font-medium text-stellar-100">{label}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {current.key === 'identity' && (
-                <div className="mx-auto max-w-2xl space-y-5">
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <label className="text-sm font-medium text-stellar-200">
-                      Date de naissance
-                      <input
-                        type="date"
-                        value={data.birthDate}
-                        onChange={(event) => update('birthDate', event.target.value)}
-                        className={inputClass}
-                        required
-                      />
-                    </label>
-                    <label className="text-sm font-medium text-stellar-200">
-                      Heure <span className="font-normal text-stellar-500">(facultative)</span>
-                      <input
-                        type="time"
-                        value={data.birthTime}
-                        onChange={(event) => update('birthTime', event.target.value)}
-                        className={inputClass}
-                      />
-                    </label>
-                  </div>
-                  <label className="text-sm font-medium text-stellar-200">
-                    Lieu de naissance
-                    <span className="relative block">
-                      <MapPin className="pointer-events-none absolute left-3 top-5 h-5 w-5 text-stellar-500" />
-                      <input
-                        value={data.birthPlace}
-                        onChange={(event) => update('birthPlace', event.target.value)}
-                        placeholder="Ville, pays"
-                        className={`${inputClass} pl-11`}
-                        required
-                      />
-                    </span>
-                  </label>
-                </div>
-              )}
-
-              {current.key === 'intention' && (
-                <div className="mx-auto max-w-2xl space-y-5">
-                  <label className="block text-sm font-medium text-stellar-200">
-                    Votre question <span className="font-normal text-stellar-500">(facultative)</span>
-                    <textarea
-                      value={data.specificQuestion}
-                      onChange={(event) => update('specificQuestion', event.target.value)}
-                      rows={5}
-                      maxLength={2000}
-                      placeholder="Écrivez avec vos propres mots."
-                      className={`${inputClass} resize-y`}
-                    />
-                  </label>
-                  <label className="block text-sm font-medium text-stellar-200">
-                    Ce que vous souhaitez comprendre ou faire évoluer{' '}
-                    <span className="font-normal text-stellar-500">(facultatif)</span>
-                    <textarea
-                      value={data.objective}
-                      onChange={(event) => update('objective', event.target.value)}
-                      rows={4}
-                      maxLength={2000}
-                      placeholder="Votre intention peut rester très simple."
-                      className={`${inputClass} resize-y`}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setData((currentData) => ({
-                        ...currentData,
-                        specificQuestion: '',
-                        objective: '',
-                      }))
-                    }
-                    className="min-h-[40px] rounded-xl px-2 text-xs text-stellar-500 hover:bg-white/[0.04] hover:text-stellar-300"
-                  >
-                    Ne transmettre aucune intention particulière
-                  </button>
-                </div>
-              )}
-
-              {current.key === 'photos' && (
-                <div className="mx-auto max-w-3xl space-y-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <SmartPhotoUploader
-                      label="Visage"
-                      description="Photo nette, de face"
-                      value={data.facePhoto}
-                      onChange={(value) => update('facePhoto', value || '')}
-                      privatePreviewUrl={
-                        data.facePhoto.startsWith('s3://onboarding/')
-                          ? '/api/bff/users/profile/photos/face'
-                          : undefined
-                      }
-                    />
-                    <SmartPhotoUploader
-                      label="Paume"
-                      description="Paume ouverte et nette"
-                      value={data.palmPhoto}
-                      onChange={(value) => update('palmPhoto', value || '')}
-                      privatePreviewUrl={
-                        data.palmPhoto.startsWith('s3://onboarding/')
-                          ? '/api/bff/users/profile/photos/palm'
-                          : undefined
-                      }
-                    />
-                  </div>
-                  <p className="text-center text-xs text-stellar-500">
-                    Continuez sans photo, avec une seule ou avec les deux.
-                  </p>
-                </div>
-              )}
-
-              {current.key === 'context' && (
-                <div className="mx-auto max-w-3xl space-y-5">
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <OptionalTextarea
-                      label="Ce qui vous porte"
-                      value={data.highs}
-                      onChange={(value) => update('highs', value)}
-                    />
-                    <OptionalTextarea
-                      label="Ce qui vous freine"
-                      value={data.lows}
-                      onChange={(value) => update('lows', value)}
-                    />
-                    <OptionalTextarea
-                      label="Gênes ou douleurs à mentionner"
-                      value={data.ailments}
-                      onChange={(value) => update('ailments', value)}
-                      maxLength={1500}
-                    />
-                    <OptionalTextarea
-                      label="Peurs ou blocages identifiés"
-                      value={data.fears}
-                      onChange={(value) => update('fears', value)}
-                    />
-                  </div>
-                  <OptionalTextarea
-                    label="Pratiques ou rituels actuels"
-                    value={data.rituals}
-                    onChange={(value) => update('rituals', value)}
-                    maxLength={1500}
-                  />
-                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
-                    <p className="text-sm font-medium text-stellar-100">
-                      Style de lecture souhaité
-                    </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      {STYLE_OPTIONS.map(([value, label]) => (
-                        <label
-                          key={value}
-                          className={`cursor-pointer rounded-xl border p-3 text-sm focus-within:ring-2 focus-within:ring-horizon-400 ${
-                            data.deliveryStyle === value
-                              ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
-                              : 'border-white/[0.08] text-stellar-400'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="deliveryStyle"
-                            value={value}
-                            checked={data.deliveryStyle === value}
-                            onChange={() => update('deliveryStyle', value)}
-                            className="sr-only"
-                          />
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                    <label className="mt-4 block text-sm text-stellar-300">
-                      Intensité souhaitée : {paceLabel(data.pace)}
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={data.pace}
-                        onChange={(event) => update('pace', Number(event.target.value))}
-                        className="mt-3 w-full accent-amber-300"
-                      />
-                      <span className="mt-2 flex justify-between text-xs text-stellar-500">
-                        <span>Très posée</span>
-                        <span>Très approfondie</span>
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {current.key === 'review' && (
-                <div className="mx-auto max-w-3xl space-y-4">
-                  <p className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-stellar-300">
-                    <strong className="text-stellar-100">Votre brouillon est sauvegardé, mais la production n’a pas commencé.</strong>{' '}
-                    Le bouton final confirmera ces éléments comme base de votre lecture.
-                  </p>
-                  <ReviewSection title="Repères essentiels" onEdit={() => goToStep(1)}>
-                    {data.birthDate || 'À compléter'}
-                    {data.birthTime ? ` · ${data.birthTime}` : ''}
-                    <br />
-                    {data.birthPlace || 'Lieu à compléter'}
-                  </ReviewSection>
-                  <ReviewSection title="Intention" onEdit={() => goToStep(2)}>
-                    {data.specificQuestion || data.objective ? (
-                      <>
-                        <p>{data.specificQuestion || 'Aucune question précise'}</p>
-                        {data.objective && <p className="mt-2">Objectif : {data.objective}</p>}
-                      </>
-                    ) : (
-                      'Aucune intention particulière transmise.'
-                    )}
-                  </ReviewSection>
-                  <ReviewSection title="Photos" onEdit={() => goToStep(3)}>
-                    Visage : {data.facePhoto ? 'transmis' : 'non transmis'} · Paume :{' '}
-                    {data.palmPhoto ? 'transmise' : 'non transmise'}
-                  </ReviewSection>
-                  <ReviewSection title="Contexte et préférence" onEdit={() => goToStep(4)}>
-                    <p>
-                      {contextCount} élément{contextCount > 1 ? 's' : ''} facultatif
-                      {contextCount > 1 ? 's' : ''} transmis
-                    </p>
-                    <p className="mt-2">
-                      Style : {styleLabel(data.deliveryStyle)} · Intensité : {paceLabel(data.pace)}
-                    </p>
-                  </ReviewSection>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300 focus-within:ring-2 focus-within:ring-horizon-400">
-                    <input
-                      type="checkbox"
-                      checked={data.consent}
-                      onChange={(event) => update('consent', event.target.checked)}
-                      className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
-                    />
-                    J’ai relu ces éléments et je choisis de les transmettre à Lumira pour préparer ma
-                    lecture personnalisée.
-                  </label>
-                </div>
-              )}
-
-              {error && (
-                <p
-                  role="alert"
-                  className="mx-auto mt-6 max-w-3xl rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200"
-                >
-                  {error}
-                </p>
-              )}
-            </div>
-
-            <footer className="flex shrink-0 flex-col-reverse gap-3 border-t border-white/[0.06] bg-abyss-700/95 px-5 py-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-4">
-              <button
-                type="button"
-                onClick={() => (step === 0 ? onClose() : goToStep(step - 1))}
-                disabled={isSubmitting}
-                className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl px-4 text-sm text-stellar-400 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
-              >
-                <ArrowLeft className="h-4 w-4" /> {step === 0 ? 'Reprendre plus tard' : 'Retour'}
-              </button>
-              {current.key !== 'review' ? (
-                <button
-                  type="button"
-                  onClick={next}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"
-                >
-                  {current.key === 'control' ? 'Commencer mon dossier' : 'Continuer'}{' '}
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={isSubmitting || !data.consent}
-                  onClick={() => void submit()}
-                  className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-5 py-3 text-sm font-bold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <LockKeyhole className="h-4 w-4" />
-                  )}
-                  Confirmer et transmettre mon dossier
-                </button>
-              )}
-            </footer>
-          </main>
-        </div>
+      <div className="w-full max-w-sm animate-pulse motion-reduce:animate-none">
+        <div className="mx-auto h-12 w-12 rounded-2xl bg-white/[0.07]" />
+        <div className="mx-auto mt-5 h-6 w-48 rounded-xl bg-white/[0.07]" />
+        <div className="mx-auto mt-3 h-4 w-64 max-w-full rounded-full bg-white/[0.05]" />
       </div>
     </div>
   );
 }
 
-function OptionalTextarea({
-  label,
-  value,
-  onChange,
-  maxLength = 2000,
+function BlockingDialog({
+  dialogRef,
+  title,
+  description,
+  primaryLabel,
+  onPrimary,
+  onClose,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  maxLength?: number;
+  dialogRef: React.RefObject<HTMLDivElement>;
+  title: string;
+  description: string;
+  primaryLabel: string;
+  onPrimary: () => void;
+  onClose: () => void;
 }) {
   return (
-    <label className="block text-sm font-medium text-stellar-200">
-      {label} <span className="font-normal text-stellar-500">(facultatif)</span>
-      <textarea
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={3}
-        maxLength={maxLength}
-        className={`${inputClass} resize-y`}
-      />
-    </label>
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reading-preparation-blocked-title"
+    >
+      <section className="relative w-full max-w-lg rounded-3xl border border-white/[0.09] bg-abyss-700 p-6 text-center shadow-abyss sm:p-8">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer"
+          className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-xl text-stellar-400 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-horizon-400/10 text-horizon-300">
+          <RefreshCw className="h-7 w-7" />
+        </span>
+        <h1
+          id="reading-preparation-blocked-title"
+          className="mt-5 font-playfair text-2xl italic text-stellar-100"
+        >
+          {title}
+        </h1>
+        <p className="mt-3 text-sm leading-7 text-stellar-400">{description}</p>
+        <button
+          type="button"
+          onClick={onPrimary}
+          autoFocus
+          className="mt-6 min-h-[48px] w-full rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 sm:w-auto"
+        >
+          {primaryLabel}
+        </button>
+      </section>
+    </div>
   );
+}
+
+function getSaveLabel(state: SaveState, updatedAt: string | null): string {
+  if (state === 'unsaved') return 'Modifications en attente…';
+  if (state === 'saving') return 'Sauvegarde du brouillon…';
+  if (state === 'error') return 'Sauvegarde à réessayer';
+  if (state === 'conflict') return 'Version plus récente détectée';
+  const time = savedTime(updatedAt);
+  if (state === 'saved') return time ? `Brouillon sauvegardé à ${time}` : 'Brouillon sauvegardé';
+  return 'Brouillon reprenable sans expiration';
 }
 
 function styleLabel(value: string): string {
@@ -814,7 +1739,8 @@ function styleLabel(value: string): string {
 }
 
 function paceLabel(value: number): string {
-  if (value >= 70) return 'approfondie';
-  if (value <= 30) return 'très posée';
-  return 'équilibrée';
+  if (value >= 75) return 'très détaillé';
+  if (value >= 55) return 'approfondi';
+  if (value <= 25) return 'essentiel';
+  return 'équilibré';
 }

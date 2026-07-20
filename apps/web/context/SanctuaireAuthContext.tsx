@@ -23,6 +23,7 @@ interface UserProfile {
   birthPlace: string | null;
   specificQuestion: string | null;
   objective: string | null;
+  openReading?: boolean | null;
   facePhotoUrl: string | null;
   palmPhotoUrl: string | null;
   highs: string | null;
@@ -47,13 +48,20 @@ interface CompletedOrder {
   status: string;
   deliveredAt: string | null;
   createdAt: string;
+  intakeRequired?: boolean;
+  intakeStatus?: 'DRAFT' | 'SEALED' | null;
+  intakeSealedAt?: string | null;
 }
 
 export interface OnboardingProgress {
+  orderId?: string;
   currentStep: number;
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
   data: Record<string, unknown>;
+  revision?: number;
+  updatedAt?: string | null;
   completedAt: string | null;
+  canEdit?: boolean;
 }
 
 interface LevelMetadata {

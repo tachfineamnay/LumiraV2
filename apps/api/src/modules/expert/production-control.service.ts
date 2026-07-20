@@ -27,6 +27,11 @@ import {
   readExpertReview,
   toJson,
 } from './production-control.types';
+import {
+  assertOrderIntakeReady,
+  readOrderIntakeReadiness,
+  READING_INTAKE_REQUIRED_CODE,
+} from './reading-intake-readiness';
 
 interface ClaimedProductionJob {
   orderId: string;
@@ -195,6 +200,7 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
       where: { id: orderId },
       include: {
         user: { include: { profile: true, consents: { orderBy: { acceptedAt: 'desc' } } } },
+        readingIntake: true,
         files: { orderBy: { uploadedAt: 'desc' } },
         readingVersions: { orderBy: { version: 'desc' }, take: 10 },
         deliveries: { orderBy: { createdAt: 'desc' }, take: 5 },
@@ -208,20 +214,45 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
     const latestDelivery = order.deliveries[0] || null;
     const audioFile = order.files.find((file) => file.type === 'AUDIO_READING') || null;
     const profile = order.user.profile;
+    const intakeReadiness = readOrderIntakeReadiness(order);
+    const intakeData = intakeReadiness.data;
+    const hasIntakeValue = (...keys: string[]) =>
+      keys.some((key) => {
+        const value = intakeData[key];
+        return typeof value === 'string' ? Boolean(value.trim()) : value != null;
+      });
     const checklist = {
-      paymentConfirmed: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'].includes(
-        order.status,
-      ),
-      profileValidated: profile?.profileCompleted === true,
-      birthData: Boolean(profile?.birthDate && profile?.birthPlace),
-      facePhoto: Boolean(profile?.facePhotoUrl),
-      palmPhoto: Boolean(profile?.palmPhotoUrl),
-      consent: order.user.consents.some((consent) => !consent.revokedAt),
+      paymentConfirmed: [
+        'PAID',
+        'PROCESSING',
+        'AWAITING_VALIDATION',
+        'COMPLETED',
+        'FAILED',
+      ].includes(order.status),
+      intakeRequired: intakeReadiness.required,
+      intakeStatus: intakeReadiness.status,
+      intakeSealed: intakeReadiness.ready,
+      contentHash: intakeReadiness.contentHash,
+      profileValidated: intakeReadiness.required
+        ? intakeReadiness.ready
+        : profile?.profileCompleted === true,
+      birthData: intakeReadiness.required
+        ? hasIntakeValue('birthDate') && hasIntakeValue('birthPlace')
+        : Boolean(profile?.birthDate && profile?.birthPlace),
+      facePhoto: intakeReadiness.required
+        ? hasIntakeValue('facePhoto', 'facePhotoUrl')
+        : Boolean(profile?.facePhotoUrl),
+      palmPhoto: intakeReadiness.required
+        ? hasIntakeValue('palmPhoto', 'palmPhotoUrl')
+        : Boolean(profile?.palmPhotoUrl),
+      consent: intakeReadiness.required
+        ? Boolean(order.readingIntake?.consentRecordId)
+        : order.user.consents.some((consent) => !consent.revokedAt),
     };
 
     const workflowState = this.resolveWorkflowState({
       orderStatus: order.status,
-      profileCompleted: checklist.profileValidated,
+      intakeReady: intakeReadiness.ready,
       production,
       hasSealedVersion: order.readingVersions.some((version) => version.status === 'SEALED'),
       hasPdf: Boolean(latestDelivery?.pdfKey),
@@ -232,6 +263,7 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
       order,
       workflowState,
       checklist,
+      intakeReadiness,
       production: production || null,
       productionHistory: review.productionHistory || [],
       assets: {
@@ -355,11 +387,15 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
   ) {
     return this.prisma.$transaction(
       async (tx) => {
-        const order = await tx.order.findUnique({ where: { id: orderId } });
+        const order = await tx.order.findUnique({
+          where: { id: orderId },
+          include: { readingIntake: true },
+        });
         if (!order) throw new NotFoundException('Commande non trouvée');
 
         this.assertAssignment(order.expertReview, expert);
         this.assertJobPrerequisites(order.status, type);
+        if (type === 'READING_GENERATION') assertOrderIntakeReady(order);
 
         const review = readExpertReview(order.expertReview);
         const current = review.production;
@@ -375,7 +411,9 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
             select: { id: true },
           });
           if (existingAudio) {
-            throw new ConflictException('Un audio existe déjà. Utilisez la régénération explicitement.');
+            throw new ConflictException(
+              'Un audio existe déjà. Utilisez la régénération explicitement.',
+            );
           }
         }
 
@@ -496,7 +534,14 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
           async (tx) => {
             const currentOrder = await tx.order.findUnique({
               where: { id: candidate.id },
-              select: { id: true, orderNumber: true, status: true, expertReview: true },
+              select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                intakeRequired: true,
+                expertReview: true,
+                readingIntake: true,
+              },
             });
             if (!currentOrder) return null;
             const currentJob = readCurrentProduction(currentOrder.expertReview);
@@ -505,6 +550,31 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
             }
 
             const now = new Date().toISOString();
+            const intakeReadiness = readOrderIntakeReadiness(currentOrder);
+            if (currentJob.type === 'READING_GENERATION' && !intakeReadiness.ready) {
+              const review = readExpertReview(currentOrder.expertReview);
+              const failed: ProductionJobState = {
+                ...currentJob,
+                status: 'FAILED',
+                stage: 'WAITING_CLIENT',
+                failedAt: now,
+                heartbeatAt: now,
+                error: {
+                  code: READING_INTAKE_REQUIRED_CODE,
+                  message:
+                    'Le dossier client n’est plus prêt : la production reste bloquée jusqu’au scellement.',
+                },
+              };
+              await tx.order.update({
+                where: { id: currentOrder.id },
+                data: { expertReview: toJson({ ...review, production: failed }) },
+              });
+              this.logger.warn(
+                `Blocked queued reading ${currentJob.id} for ${currentOrder.orderNumber}: intake ${intakeReadiness.status}`,
+              );
+              return null;
+            }
+
             const running: ProductionJobState = {
               ...currentJob,
               status: 'RUNNING',
@@ -596,12 +666,7 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
       const message = error instanceof Error ? error.message : String(error);
       await this.failJob(claimed.orderId, claimed.job.id, message);
       if (claimed.job.type === 'READING_GENERATION') {
-        this.gateway.notifyGenerationComplete(
-          claimed.orderId,
-          claimed.orderNumber,
-          false,
-          message,
-        );
+        this.gateway.notifyGenerationComplete(claimed.orderId, claimed.orderNumber, false, message);
       }
     } finally {
       clearInterval(heartbeat);
@@ -730,13 +795,13 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
 
   private resolveWorkflowState(input: {
     orderStatus: string;
-    profileCompleted: boolean;
+    intakeReady: boolean;
     production?: ProductionJobState;
     hasSealedVersion: boolean;
     hasPdf: boolean;
     hasAudio: boolean;
   }): ProductionWorkflowState {
-    if (!input.profileCompleted) return 'WAITING_CLIENT';
+    if (!input.intakeReady) return 'WAITING_CLIENT';
     if (input.production?.status === 'FAILED' || input.orderStatus === 'FAILED') return 'INCIDENT';
     if (input.production?.status === 'QUEUED' || input.production?.status === 'RUNNING') {
       return input.production.type === 'AUDIO_GENERATION'

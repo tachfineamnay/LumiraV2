@@ -97,16 +97,28 @@ export class ExpertGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * Broadcast when a new order is paid
    */
-  notifyNewOrder(order: {
-    id: string;
-    orderNumber: string;
-    level: number;
-    clientName: string;
-    amount: number;
-  }) {
+  notifyNewOrder(order: { id: string; orderNumber: string; intakeRequired?: boolean }) {
     this.logger.log(`📦 Broadcasting new order: ${order.orderNumber}`);
     this.server.to('experts').emit('order:new', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: 'PAID',
+      intakeRequired: order.intakeRequired === true,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /** Broadcast once an order-scoped client dossier becomes production-ready. */
+  notifyOrderIntakeReady(order: {
+    orderId: string;
+    orderNumber?: string;
+    userId?: string;
+    sealedAt: Date | string;
+  }) {
+    this.logger.log(`🔒 Client intake ready: ${order.orderNumber || order.orderId}`);
+    this.server.to('experts').emit('order:intake-ready', {
       ...order,
+      sealedAt: order.sealedAt instanceof Date ? order.sealedAt.toISOString() : order.sealedAt,
       timestamp: new Date().toISOString(),
     });
   }

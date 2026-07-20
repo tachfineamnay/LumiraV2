@@ -12,6 +12,7 @@ const MAX_PHOTO_BYTES = 1_200_000;
 export async function uploadOnboardingPhoto(
   previewOrStorageRef: string | null | undefined,
   kind: OnboardingPhotoKind,
+  orderId?: string,
 ): Promise<string | null> {
   if (!previewOrStorageRef) return null;
   if (previewOrStorageRef.startsWith('s3://onboarding/')) return previewOrStorageRef;
@@ -24,15 +25,28 @@ export async function uploadOnboardingPhoto(
     throw new Error('La photo doit être une image JPEG, PNG ou WebP de 1,2 Mo maximum');
   }
 
-  const { data } = await sanctuaireApi.post('/uploads/onboarding-presign', {
-    kind,
-    contentType: blob.type,
-  });
-  const upload = await fetch(data.uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': blob.type },
-    body: blob,
-  });
+  const { data } = await sanctuaireApi.post(
+    '/uploads/onboarding-presign',
+    {
+      kind,
+      contentType: blob.type,
+      ...(orderId && { orderId }),
+    },
+    { timeout: 15_000 },
+  );
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  let upload: Response;
+  try {
+    upload = await fetch(data.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': blob.type },
+      body: blob,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!upload.ok) {
     throw new Error('Le stockage privé de la photo a échoué');
   }

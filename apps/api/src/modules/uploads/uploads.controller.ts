@@ -8,6 +8,7 @@ import {
   Query,
   Request,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { S3Service } from './s3.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -35,9 +36,10 @@ export class UploadsController {
       throw new BadRequestException('Format de photo non autorisé');
     }
 
-    const key = `onboarding/${req.user.userId}/${body.kind.toLowerCase()}-${Date.now()}.${extension}`;
-    const uploadUrl = await this.s3Service.getUploadPresignedUrl(key, body.contentType);
-    return { uploadUrl, key, storageRef: `s3://${key}` };
+    const key = `onboarding/${req.user.userId}/${body.kind.toLowerCase()}-${randomUUID()}.${extension}`;
+    const expiresIn = 600;
+    const uploadUrl = await this.s3Service.getUploadPresignedUrl(key, body.contentType, expiresIn);
+    return { uploadUrl, key, storageRef: `s3://${key}`, expiresIn };
   }
 
   @Roles('CLIENT')

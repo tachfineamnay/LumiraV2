@@ -232,6 +232,7 @@ export class PaymentsService {
         amount: amountCents,
         currency: 'eur',
         status: 'PENDING',
+        intakeRequired: true,
         paymentIntentId: paymentIntent.id,
         formData: { phone: dto.phone || '' } as Prisma.JsonObject,
       },
@@ -658,6 +659,7 @@ export class PaymentsService {
         },
         data: {
           status: 'PAID',
+          intakeRequired: true,
           paidAt: new Date(),
         },
       });
@@ -772,6 +774,7 @@ export class PaymentsService {
           amount: paymentIntent.amount,
           currency: paymentIntent.currency,
           status: 'PAID',
+          intakeRequired: true,
           paidAt: new Date(),
           paymentIntentId: paymentIntent.id,
           formData: { phone } as Prisma.JsonObject,

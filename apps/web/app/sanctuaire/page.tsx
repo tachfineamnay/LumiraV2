@@ -73,12 +73,13 @@ function SanctuaireHome() {
     draft: onboardingProgress,
     orders,
   });
+  const isPreparation = homeState.kind === 'PREPARE' || homeState.kind === 'RESUME';
 
   useEffect(() => {
-    if (searchParams.get('onboarding') === '1' && !profile?.profileCompleted) {
+    if (searchParams.get('onboarding') === '1' && isPreparation) {
       setShowPreparation(true);
     }
-  }, [profile?.profileCompleted, searchParams]);
+  }, [isPreparation, searchParams]);
 
   const refreshReadings = useCallback(async () => {
     if (!profile?.profileCompleted) {
@@ -149,13 +150,12 @@ function SanctuaireHome() {
 
   if (blockForInitialLoad) return <SanctuaireHomeSkeleton />;
 
-  const isPreparation = homeState.kind === 'PREPARE' || homeState.kind === 'RESUME';
   const isReady = homeState.kind === 'READY';
   const hasPdf = Boolean(latestReading?.assets.pdf);
   const audioUrl = toBffAssetUrl(latestReading?.assets.audio);
-  const draftProgress =
+  const savedDraftStep =
     homeState.kind === 'RESUME'
-      ? Math.min(100, Math.round((((onboardingProgress?.currentStep ?? 0) + 1) / 6) * 100))
+      ? Math.min(5, Math.max(1, (onboardingProgress?.currentStep ?? 0) + 1))
       : null;
 
   return (
@@ -222,18 +222,15 @@ function SanctuaireHome() {
             </div>
           </div>
 
-          {draftProgress !== null && (
-            <div className="mt-6 max-w-xl" aria-label={`Dossier complété à ${draftProgress}%`}>
-              <div className="flex items-center justify-between text-xs text-stellar-500">
-                <span>Progression du brouillon</span>
-                <span>{draftProgress}%</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-                <div
-                  className="h-full rounded-full bg-horizon-400"
-                  style={{ width: `${draftProgress}%` }}
-                />
-              </div>
+          {savedDraftStep !== null && (
+            <div
+              className="mt-6 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs text-stellar-400"
+              aria-label={`Brouillon sauvegardé à l’étape ${savedDraftStep} sur 5`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
+              <span>Brouillon sauvegardé</span>
+              <span aria-hidden>·</span>
+              <span>Étape {savedDraftStep} sur 5</span>
             </div>
           )}
 

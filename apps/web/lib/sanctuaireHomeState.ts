@@ -11,6 +11,9 @@ export interface SanctuaireHomeOrder {
   status: ReadingOrderStatus;
   deliveredAt: string | null;
   createdAt: string;
+  intakeRequired?: boolean;
+  intakeStatus?: 'DRAFT' | 'SEALED' | null;
+  intakeSealedAt?: string | null;
 }
 
 export interface SanctuaireHomeProfile {
@@ -20,6 +23,7 @@ export interface SanctuaireHomeProfile {
 export interface SanctuaireHomeDraft {
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
   currentStep: number;
+  orderId?: string;
 }
 
 export type SanctuaireHomeState =
@@ -43,28 +47,37 @@ export function resolveSanctuaireHomeState({
   draft: SanctuaireHomeDraft | null;
   orders: SanctuaireHomeOrder[];
 }): SanctuaireHomeState {
-  if (!profile?.profileCompleted) {
-    if (draft?.status === 'IN_PROGRESS') {
+  const latestOrder = [...orders].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  )[0];
+  const draftMatchesLatestOrder = latestOrder?.intakeRequired
+    ? Boolean(draft?.orderId && latestOrder.id && draft.orderId === latestOrder.id)
+    : !draft?.orderId || !latestOrder?.id || draft.orderId === latestOrder.id;
+  const latestIntakeIsSealed = Boolean(
+    latestOrder?.intakeStatus === 'SEALED' ||
+    latestOrder?.intakeSealedAt ||
+    (draftMatchesLatestOrder && draft?.status === 'COMPLETED'),
+  );
+  const needsOrderIntake = Boolean(latestOrder?.intakeRequired && !latestIntakeIsSealed);
+
+  if (!profile?.profileCompleted || needsOrderIntake) {
+    if (draftMatchesLatestOrder && draft?.status === 'IN_PROGRESS') {
       return {
         kind: 'RESUME',
         title: 'Votre brouillon est prêt à être repris',
         description:
-          'Votre brouillon privé est sauvegardé automatiquement. Relisez, complétez ou retirez ce que vous souhaitez transmettre ; il ne sera envoyé à la production qu’après votre confirmation finale.',
-        actionLabel: 'Continuer mon dossier',
+          'Votre brouillon privé reste disponible, même si vous revenez demain ou plus tard. Relisez, complétez ou retirez ce que vous souhaitez transmettre avant de le sceller.',
+        actionLabel: 'Reprendre mon dossier',
       };
     }
     return {
       kind: 'PREPARE',
       title: 'Préparez la base de votre lecture',
       description:
-        'Comptez quelques minutes pour renseigner vos repères et, si vous le souhaitez, votre intention et vos photos. Vous relirez tout avant la transmission.',
+        'Quelques minutes suffisent pour partager vos repères et ce qui compte pour vous. Tout reste privé, modifiable et reprenable jusqu’à votre scellement final.',
       actionLabel: 'Préparer mon dossier',
     };
   }
-
-  const latestOrder = [...orders].sort(
-    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-  )[0];
 
   if (latestOrder?.status === 'COMPLETED') {
     return {

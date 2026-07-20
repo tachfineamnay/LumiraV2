@@ -59,6 +59,36 @@ export class UsersController {
     return this.usersService.getEntitlements(req.user.userId);
   }
 
+  /** Streams the exact private photo referenced by the current order-scoped intake. */
+  @Get('onboarding/photos/:kind')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async streamOnboardingPhoto(
+    @Param('kind') kind: string,
+    @Request() req: { user: { userId: string } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const photoKind = this.parsePhotoKind(kind);
+    const { stream, contentType, contentLength, etag, lastModified } =
+      await this.privateOnboardingPhotoService.getPhotoStream({
+        clientId: req.user.userId,
+        kind: photoKind,
+        actorType: 'client',
+        actorId: req.user.userId,
+        source: 'onboarding',
+      });
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (contentLength != null) res.setHeader('Content-Length', String(contentLength));
+    if (etag) res.setHeader('ETag', etag);
+    if (lastModified) res.setHeader('Last-Modified', lastModified.toUTCString());
+
+    return new StreamableFile(stream);
+  }
+
   /**
    * GET /api/users/profile/photos/:kind
    * Streams the authenticated client's private face/palm photo.

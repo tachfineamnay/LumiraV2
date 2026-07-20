@@ -24,6 +24,7 @@ import {
   CanonicalReadingContent,
   hashReadingContent,
 } from './reading-version';
+import { assertOrderIntakeReady } from './reading-intake-readiness';
 
 type ExpertWithoutPassword = Omit<Expert, 'password'>;
 
@@ -304,6 +305,7 @@ export class ExpertService {
           user: {
             include: { profile: true },
           },
+          readingIntake: true,
           files: true,
         },
       }),
@@ -354,7 +356,7 @@ export class ExpertService {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
-        include: { user: true, files: true },
+        include: { user: true, readingIntake: true, files: true },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -390,7 +392,7 @@ export class ExpertService {
         orderBy: { updatedAt: 'desc' },
         skip,
         take: limit,
-        include: { user: true, files: true },
+        include: { user: true, readingIntake: true, files: true },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -425,7 +427,7 @@ export class ExpertService {
         orderBy: { updatedAt: 'desc' },
         skip,
         take: limit,
-        include: { user: true, files: true },
+        include: { user: true, readingIntake: true, files: true },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -464,7 +466,7 @@ export class ExpertService {
         orderBy: { updatedAt: 'desc' },
         skip,
         take: limit,
-        include: { user: true },
+        include: { user: true, readingIntake: true },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -483,7 +485,11 @@ export class ExpertService {
   ): Promise<Order & { user: User & { profile: UserProfile | null }; files: OrderFile[] }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { user: { include: { profile: true } }, files: true },
+      include: {
+        user: { include: { profile: true } },
+        readingIntake: true,
+        files: true,
+      },
     });
 
     if (!order) {
@@ -491,6 +497,63 @@ export class ExpertService {
     }
 
     return order;
+  }
+
+  async getOrderPhotoReference(
+    orderId: string,
+    kind: 'face' | 'palm',
+  ): Promise<{ userId: string; storageRef: string }> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        userId: true,
+        intakeRequired: true,
+        clientInputs: true,
+        readingIntake: true,
+        user: {
+          select: {
+            profile: { select: { facePhotoUrl: true, palmPhotoUrl: true } },
+          },
+        },
+      },
+    });
+    if (!order) throw new NotFoundException('Commande non trouvée');
+
+    const asRecord = (value: unknown): Record<string, unknown> =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+    const firstString = (...values: unknown[]): string | null => {
+      for (const value of values) {
+        if (typeof value === 'string' && value.trim()) return value.trim();
+      }
+      return null;
+    };
+
+    const intake = asRecord(order.readingIntake);
+    const intakeData = asRecord(intake.data);
+    if (order.intakeRequired) assertOrderIntakeReady(order);
+
+    const relationalRef =
+      kind === 'face'
+        ? firstString(intakeData.facePhoto, intakeData.facePhotoUrl)
+        : firstString(intakeData.palmPhoto, intakeData.palmPhotoUrl);
+    if (relationalRef && (order.intakeRequired || intake.status === 'SEALED')) {
+      return { userId: order.userId, storageRef: relationalRef };
+    }
+
+    const legacyIntake = asRecord(asRecord(order.clientInputs).readingIntake);
+    const legacyData = asRecord(legacyIntake.profile ?? legacyIntake.data);
+    const legacyRef =
+      kind === 'face'
+        ? firstString(legacyData.facePhoto, legacyData.facePhotoUrl)
+        : firstString(legacyData.palmPhoto, legacyData.palmPhotoUrl);
+    const profileRef =
+      kind === 'face' ? order.user.profile?.facePhotoUrl : order.user.profile?.palmPhotoUrl;
+    const storageRef = legacyRef || firstString(profileRef);
+    if (!storageRef) throw new NotFoundException('Photo introuvable');
+
+    return { userId: order.userId, storageRef };
   }
 
   async assignOrder(orderId: string, expertId: string): Promise<Order> {
@@ -503,36 +566,41 @@ export class ExpertService {
       throw new NotFoundException('Expert non trouvé');
     }
 
-    const existing = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      select: { status: true, expertReview: true },
-    });
-    if (!existing) {
-      throw new NotFoundException('Commande non trouvée');
-    }
-    if (!['PAID', 'AWAITING_VALIDATION', 'FAILED'].includes(existing.status)) {
-      throw new BadRequestException(
-        `Cette commande ne peut pas être prise (statut: ${existing.status})`,
-      );
-    }
-    const assignedBy = (existing.expertReview as Record<string, unknown> | null)?.assignedBy;
-    if (assignedBy && assignedBy !== expertId) {
-      throw new ConflictException('Cette commande est déjà assignée à un autre expert');
-    }
+    const updatedOrder = await this.prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.order.findUnique({
+          where: { id: orderId },
+          include: { readingIntake: true },
+        });
+        if (!existing) {
+          throw new NotFoundException('Commande non trouvée');
+        }
+        if (!['PAID', 'AWAITING_VALIDATION', 'FAILED'].includes(existing.status)) {
+          throw new BadRequestException(
+            `Cette commande ne peut pas être prise (statut: ${existing.status})`,
+          );
+        }
+        assertOrderIntakeReady(existing);
+        const assignedBy = (existing.expertReview as Record<string, unknown> | null)?.assignedBy;
+        if (assignedBy && assignedBy !== expertId) {
+          throw new ConflictException('Cette commande est déjà assignée à un autre expert');
+        }
 
-    // Claiming an order records ownership but does not pretend that AI work
-    // has started. Only the generation lock may move an order to PROCESSING.
-    const updatedOrder = await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        expertReview: {
-          ...((existing.expertReview as Record<string, unknown>) || {}),
-          assignedBy: expertId,
-          assignedName: expert.name,
-          assignedAt: new Date().toISOString(),
-        },
+        // Claiming records ownership but does not pretend that AI work started.
+        return tx.order.update({
+          where: { id: orderId },
+          data: {
+            expertReview: {
+              ...((existing.expertReview as Record<string, unknown>) || {}),
+              assignedBy: expertId,
+              assignedName: expert.name,
+              assignedAt: new Date().toISOString(),
+            },
+          },
+        });
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     this.logger.log(`📋 Order ${updatedOrder.orderNumber} assigned to expert ${expertId}`);
 
@@ -566,22 +634,31 @@ export class ExpertService {
       PENDING: [],
     };
 
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) {
-      throw new NotFoundException('Commande non trouvée');
-    }
+    return this.prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id: orderId },
+          include: { readingIntake: true },
+        });
+        if (!order) {
+          throw new NotFoundException('Commande non trouvée');
+        }
 
-    const allowed = EXPERT_TRANSITIONS[order.status] || [];
-    if (!allowed.includes(status)) {
-      throw new BadRequestException(
-        `Cannot transition from ${order.status} to ${status}. Allowed: ${allowed.join(', ') || 'none'}`,
-      );
-    }
+        const allowed = EXPERT_TRANSITIONS[order.status] || [];
+        if (!allowed.includes(status)) {
+          throw new BadRequestException(
+            `Cannot transition from ${order.status} to ${status}. Allowed: ${allowed.join(', ') || 'none'}`,
+          );
+        }
+        if (status === 'PROCESSING') assertOrderIntakeReady(order);
 
-    return this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: status as Order['status'] },
-    });
+        return tx.order.update({
+          where: { id: orderId },
+          data: { status: status as Order['status'] },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   /**
@@ -642,12 +719,17 @@ export class ExpertService {
   ): Promise<Order & { generationResult?: { archetype: string; stepsCreated: number } }> {
     const order = await this.prisma.order.findUnique({
       where: { id: dto.orderId },
-      include: { user: { include: { profile: true } }, files: true },
+      include: {
+        user: { include: { profile: true } },
+        readingIntake: true,
+        files: true,
+      },
     });
 
     if (!order) {
       throw new NotFoundException('Commande non trouvée');
     }
+    assertOrderIntakeReady(order);
 
     // PROCESSING is an active generation lease, never a requestable state.
     const validStatuses = ['PAID', 'AWAITING_VALIDATION', 'FAILED'];
@@ -795,11 +877,13 @@ export class ExpertService {
   async validateContent(dto: ValidateContentDto, expert: ExpertEntity): Promise<Order> {
     const order = await this.prisma.order.findUnique({
       where: { id: dto.orderId },
+      include: { readingIntake: true },
     });
 
     if (!order) {
       throw new NotFoundException('Commande non trouvée');
     }
+    assertOrderIntakeReady(order);
 
     if (order.status !== 'AWAITING_VALIDATION') {
       throw new BadRequestException("Cette commande n'est pas en attente de validation");
@@ -872,12 +956,13 @@ export class ExpertService {
   ): Promise<Order & { generationResult?: { archetype: string; stepsCreated: number } }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { user: { include: { profile: true } } },
+      include: { user: { include: { profile: true } }, readingIntake: true },
     });
 
     if (!order) {
       throw new NotFoundException('Commande non trouvée');
     }
+    assertOrderIntakeReady(order);
 
     if (!order.expertPrompt) {
       throw new BadRequestException('Aucun prompt expert enregistré pour cette commande');
@@ -922,10 +1007,14 @@ export class ExpertService {
     archetype: string;
     stepsCreated: number;
   }> {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { readingIntake: true },
+    });
     if (!order) {
       throw new NotFoundException('Commande non trouvée');
     }
+    assertOrderIntakeReady(order);
     if (!['PAID', 'AWAITING_VALIDATION', 'FAILED'].includes(order.status)) {
       throw new BadRequestException(
         `Cette commande n’est pas prête pour la génération (statut: ${order.status})`,
@@ -986,12 +1075,13 @@ export class ExpertService {
   ): Promise<{ message: string; updatedContent?: string }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { user: { include: { profile: true } } },
+      include: { user: { include: { profile: true } }, readingIntake: true },
     });
 
     if (!order) {
       throw new NotFoundException('Commande non trouvée');
     }
+    assertOrderIntakeReady(order);
 
     this.logger.log(
       `🎨 Refining content for order ${order.orderNumber} with instruction: "${dto.instruction}"`,

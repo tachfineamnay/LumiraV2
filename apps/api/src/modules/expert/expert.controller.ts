@@ -24,6 +24,7 @@ import {
   OnboardingPhotoKind,
   PrivateOnboardingPhotoService,
 } from '../uploads/private-onboarding-photo.service';
+import { S3Service } from '../uploads/s3.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
@@ -50,6 +51,7 @@ export class ExpertController {
     private readonly adminSettingsService: AdminSettingsService,
     private readonly audioGenerationService: AudioGenerationService,
     private readonly privateOnboardingPhotoService: PrivateOnboardingPhotoService,
+    private readonly s3Service: S3Service,
   ) {}
 
   // ========================
@@ -374,6 +376,44 @@ export class ExpertController {
   // ========================
   // PRIVATE CLIENT PHOTOS
   // ========================
+
+  @Get('orders/:orderId/photos/:kind')
+  @Roles('EXPERT', 'ADMIN')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async streamOrderPhoto(
+    @Param('orderId') orderId: string,
+    @Param('kind') kind: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const photoKind = this.parsePhotoKind(kind);
+    const reference = await this.expertService.getOrderPhotoReference(orderId, photoKind);
+    const key = this.privateOnboardingPhotoService.parseStorageReference(
+      reference.storageRef,
+      reference.userId,
+    );
+    const object = await this.s3Service.getObject(key, 'uploads');
+    const contentType = object.contentType?.startsWith('image/')
+      ? object.contentType
+      : key.toLowerCase().endsWith('.png')
+        ? 'image/png'
+        : key.toLowerCase().endsWith('.webp')
+          ? 'image/webp'
+          : 'image/jpeg';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (object.contentLength != null) {
+      res.setHeader('Content-Length', String(object.contentLength));
+    }
+    if (object.etag) res.setHeader('ETag', object.etag);
+    if (object.lastModified) {
+      res.setHeader('Last-Modified', object.lastModified.toUTCString());
+    }
+
+    return new StreamableFile(object.stream);
+  }
 
   @Get('clients/:clientId/photos/:kind')
   @Roles('EXPERT', 'ADMIN')

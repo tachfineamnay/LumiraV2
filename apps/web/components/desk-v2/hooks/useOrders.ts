@@ -17,7 +17,7 @@ interface OrdersState {
 }
 
 export function useOrders(options: UseOrdersOptions = {}) {
-  const { autoFetch = true, pollInterval = null } = options;
+  const { autoFetch = true, pollInterval = 30_000 } = options;
 
   const [orders, setOrders] = useState<OrdersState>({
     paid: [],
@@ -62,25 +62,28 @@ export function useOrders(options: UseOrdersOptions = {}) {
     }
   }, []);
 
-  const moveOrder = useCallback((orderId: string, fromColumn: KanbanColumnId, toColumn: KanbanColumnId) => {
-    setOrders(prev => {
-      const order = prev[fromColumn].find(o => o.id === orderId);
-      if (!order) return prev;
+  const moveOrder = useCallback(
+    (orderId: string, fromColumn: KanbanColumnId, toColumn: KanbanColumnId) => {
+      setOrders((prev) => {
+        const order = prev[fromColumn].find((o) => o.id === orderId);
+        if (!order) return prev;
 
-      return {
-        ...prev,
-        [fromColumn]: prev[fromColumn].filter(o => o.id !== orderId),
-        [toColumn]: [order, ...prev[toColumn]],
-      };
-    });
-  }, []);
+        return {
+          ...prev,
+          [fromColumn]: prev[fromColumn].filter((o) => o.id !== orderId),
+          [toColumn]: [order, ...prev[toColumn]],
+        };
+      });
+    },
+    [],
+  );
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
-    setOrders(prev => {
+    setOrders((prev) => {
       const result = { ...prev };
       for (const column of Object.keys(result) as KanbanColumnId[]) {
-        result[column] = result[column].map(order =>
-          order.id === orderId ? { ...order, ...updates } : order
+        result[column] = result[column].map((order) =>
+          order.id === orderId ? { ...order, ...updates } : order,
         );
       }
       return result;
@@ -90,7 +93,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
   const addOrder = useCallback((order: Order) => {
     const column = getColumnForStatus(order.status);
     if (column) {
-      setOrders(prev => ({
+      setOrders((prev) => ({
         ...prev,
         [column]: [order, ...prev[column]],
       }));
@@ -98,10 +101,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
   }, []);
 
   const removeOrder = useCallback((orderId: string) => {
-    setOrders(prev => {
+    setOrders((prev) => {
       const result = { ...prev };
       for (const column of Object.keys(result) as KanbanColumnId[]) {
-        result[column] = result[column].filter(o => o.id !== orderId);
+        result[column] = result[column].filter((o) => o.id !== orderId);
       }
       return result;
     });

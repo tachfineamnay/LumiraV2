@@ -1,406 +1,341 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Upload, Camera, Smartphone, X, Check, Loader2, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import imageCompression from 'browser-image-compression';
+import Image from 'next/image';
+import { Camera, Check, ImagePlus, Loader2, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 
-// =============================================================================
-// TYPES
-// =============================================================================
+export type PhotoUploadState = 'idle' | 'preparing' | 'uploading' | 'saved' | 'error';
 
 interface SmartPhotoUploaderProps {
   label: string;
   description: string;
   value?: string;
-  onChange: (dataUrl: string | null) => void;
+  onChange: (storageRefOrPreview: string | null) => void;
+  /** Uploads a compressed browser preview and returns its private storage reference. */
+  uploadPhoto?: (previewDataUrl: string) => Promise<string>;
+  onUploadStateChange?: (state: PhotoUploadState) => void;
+  captureFacingMode?: 'user' | 'environment';
   className?: string;
   compact?: boolean;
-  /**
-   * Secure same-origin preview for persisted private refs (`s3://onboarding/...`).
-   * Never pass the raw S3 reference as an image source.
-   */
+  /** Same-origin preview endpoint for an already persisted private reference. */
   privatePreviewUrl?: string;
   privatePreviewNode?: React.ReactNode;
 }
 
-type UploadMode = 'idle' | 'file' | 'webcam' | 'mobile';
+const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 
-// =============================================================================
-// COMPONENT
-// =============================================================================
+function readAsDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("La photo n'a pas pu être lue."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function preparePhoto(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Choisissez un fichier image.');
+  }
+  if (file.size > MAX_SOURCE_BYTES) {
+    throw new Error('Cette image est trop volumineuse. Choisissez une photo de moins de 20 Mo.');
+  }
+
+  const compressed = await imageCompression(file, {
+    maxSizeMB: 1,
+    maxWidthOrHeight: 1600,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+    initialQuality: 0.9,
+  });
+  return readAsDataUrl(compressed);
+}
 
 export const SmartPhotoUploader = ({
   label,
   description,
   value,
   onChange,
+  uploadPhoto,
+  onUploadStateChange,
+  captureFacingMode = 'environment',
   className = '',
   compact = false,
   privatePreviewUrl,
   privatePreviewNode,
 }: SmartPhotoUploaderProps) => {
-  const [mode, setMode] = useState<UploadMode>('idle');
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const attemptRef = useRef(0);
+  const uploadStateCallbackRef = useRef(onUploadStateChange);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [retryPreview, setRetryPreview] = useState<string | null>(null);
+  const [uploadState, setUploadState] = useState<PhotoUploadState>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [privatePreviewFailed, setPrivatePreviewFailed] = useState(false);
 
-  // =========================================================================
-  // FILE UPLOAD
-  // =========================================================================
+  useEffect(() => {
+    uploadStateCallbackRef.current = onUploadStateChange;
+  }, [onUploadStateChange]);
 
-  const handleFileSelect = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  useEffect(() => {
+    uploadStateCallbackRef.current?.(uploadState);
+  }, [uploadState]);
 
-      if (!file.type.startsWith('image/')) {
-        setError('Veuillez sélectionner une image');
+  useEffect(() => {
+    setPrivatePreviewFailed(false);
+  }, [privatePreviewUrl, value]);
+
+  const persistPreview = useCallback(
+    async (preview: string, existingAttempt?: number) => {
+      const attempt = existingAttempt ?? ++attemptRef.current;
+      setLocalPreview(preview);
+      setRetryPreview(preview);
+      setError(null);
+
+      if (!uploadPhoto) {
+        onChange(preview);
+        setUploadState('saved');
         return;
       }
 
+      setUploadState('uploading');
       try {
-        const options = {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 800,
-          useWebWorker: true,
-        };
-
-        const compressedFile = await imageCompression(file, options);
-        const reader = new FileReader();
-
-        reader.onload = () => {
-          onChange(reader.result as string);
-          setMode('idle');
-          setError(null);
-        };
-        reader.onerror = () => setError('Erreur lors de la lecture du fichier');
-        reader.readAsDataURL(compressedFile);
-      } catch (error) {
-        console.error(error);
-        setError("Erreur lors de la compression de l'image");
+        const storageRef = await uploadPhoto(preview);
+        if (attempt !== attemptRef.current) return;
+        onChange(storageRef);
+        setRetryPreview(null);
+        setUploadState('saved');
+      } catch (uploadError) {
+        if (attempt !== attemptRef.current) return;
+        setUploadState('error');
+        setError(
+          uploadError instanceof Error
+            ? uploadError.message
+            : "L'envoi privé de la photo a échoué. Réessayez.",
+        );
       }
     },
-    [onChange],
+    [onChange, uploadPhoto],
   );
 
-  // =========================================================================
-  // WEBCAM
-  // =========================================================================
-
-  const startWebcam = useCallback(async () => {
-    setMode('webcam');
-    setError(null);
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+  const processFile = useCallback(
+    async (file: File | undefined) => {
+      if (!file) return;
+      const attempt = ++attemptRef.current;
+      setUploadState('preparing');
+      setError(null);
+      try {
+        const preview = await preparePhoto(file);
+        if (attempt !== attemptRef.current) return;
+        await persistPreview(preview, attempt);
+      } catch (preparationError) {
+        if (attempt !== attemptRef.current) return;
+        setUploadState('error');
+        setError(
+          preparationError instanceof Error
+            ? preparationError.message
+            : "Cette photo n'a pas pu être préparée.",
+        );
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (cameraInputRef.current) cameraInputRef.current.value = '';
       }
-    } catch {
-      setError("Impossible d'accéder à la caméra. Vérifiez les permissions.");
-      setMode('idle');
-    }
-  }, []);
-
-  const stopWebcam = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-  }, []);
-
-  const capturePhoto = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    setIsCapturing(true);
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-
-    if (ctx) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-
-      canvas.toBlob(
-        async (blob) => {
-          if (blob) {
-            try {
-              const file = new File([blob], 'webcam-capture.jpg', { type: 'image/jpeg' });
-              const options = {
-                maxSizeMB: 1,
-                maxWidthOrHeight: 800,
-                useWebWorker: true,
-              };
-              const compressedFile = await imageCompression(file, options);
-
-              const reader = new FileReader();
-              reader.onload = () => {
-                onChange(reader.result as string);
-                // Cleanup after successful read
-                stopWebcam();
-                setIsCapturing(false);
-                setMode('idle');
-              };
-              reader.onerror = () => {
-                setError('Erreur lors de la lecture du fichier capturé');
-                setIsCapturing(false);
-                setMode('idle');
-                stopWebcam();
-              };
-              reader.readAsDataURL(compressedFile);
-            } catch (err) {
-              console.error(err);
-              setError('Erreur compression webcam');
-              setIsCapturing(false);
-              setMode('idle');
-              stopWebcam();
-            }
-          } else {
-            setError("Erreur lors de la création du blob d'image");
-            setIsCapturing(false);
-            setMode('idle');
-            stopWebcam();
-          }
-        },
-        'image/jpeg',
-        0.9,
-      );
-    }
-  }, [onChange, stopWebcam]);
-
-  // =========================================================================
-  // REMOVE PHOTO
-  // =========================================================================
+    },
+    [persistPreview],
+  );
 
   const handleRemove = useCallback(() => {
+    attemptRef.current += 1;
+    setLocalPreview(null);
+    setRetryPreview(null);
+    setError(null);
+    setUploadState('idle');
     onChange(null);
-    stopWebcam();
-    setMode('idle');
-  }, [onChange, stopWebcam]);
+  }, [onChange]);
 
-  // =========================================================================
-  // RENDER
-  // =========================================================================
+  const retry = useCallback(() => {
+    if (retryPreview) void persistPreview(retryPreview);
+  }, [persistPreview, retryPreview]);
 
-  // If photo already captured
-  if (value) {
-    const isPrivateStorageReference = value.startsWith('s3://onboarding/');
-    return (
-      <div className={`relative group ${className}`}>
-        <div
-          className={`relative ${compact ? 'aspect-square' : 'aspect-[4/3]'} rounded-xl overflow-hidden border border-horizon-400/30`}
-        >
-          {isPrivateStorageReference ? (
-            privatePreviewNode ? (
-              privatePreviewNode
-            ) : privatePreviewUrl ? (
-              <img src={privatePreviewUrl} alt={label} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-abyss-700/70 flex flex-col items-center justify-center gap-2 text-emerald-400">
-                <Check className="w-7 h-7" />
-                <span className="text-xs font-medium">Photo enregistrée de façon privée</span>
-              </div>
-            )
-          ) : (
-            <img src={value} alt={label} className="w-full h-full object-cover" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+  const isBusy = uploadState === 'preparing' || uploadState === 'uploading';
+  const isPrivateStorageReference = Boolean(value?.startsWith('s3://onboarding/'));
+  const hasPhoto = Boolean(localPreview || value);
+  const statusText =
+    uploadState === 'preparing'
+      ? 'Préparation de la photo…'
+      : uploadState === 'uploading'
+        ? 'Enregistrement privé…'
+        : uploadState === 'saved'
+          ? 'Photo enregistrée dans votre brouillon privé'
+          : isPrivateStorageReference
+            ? 'Photo présente dans votre brouillon privé'
+            : null;
 
-          <div
-            className={`absolute ${compact ? 'bottom-2 left-2 right-2' : 'bottom-3 left-3 right-3'} flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity`}
-          >
-            <div className="flex items-center gap-1.5 text-emerald-400">
-              <Check className={compact ? 'w-3 h-3' : 'w-4 h-4'} />
-              <span className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium`}>{label}</span>
-            </div>
-            <button
-              onClick={handleRemove}
-              aria-label="Supprimer la photo"
-              className={`${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors`}
-            >
-              <X className={compact ? 'w-3 h-3' : 'w-4 h-4'} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Webcam mode
-  if (mode === 'webcam') {
-    return (
-      <div className={`relative ${className}`}>
-        <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-abyss-600 border border-white/10">
-          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-          <canvas ref={canvasRef} className="hidden" />
-
-          <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-4">
-            <button
-              onClick={() => {
-                stopWebcam();
-                setMode('idle');
-              }}
-              aria-label="Annuler la capture"
-              className="p-3 rounded-full bg-abyss-700/80 backdrop-blur-sm text-stellar-400 hover:text-stellar-200 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={capturePhoto}
-              disabled={isCapturing}
-              className="p-4 rounded-full bg-horizon-400 text-abyss-800 hover:bg-horizon-300 transition-colors disabled:opacity-50"
-            >
-              {isCapturing ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <Camera className="w-6 h-6" />
-              )}
-            </button>
-
-            <button
-              onClick={() => {
-                stopWebcam();
-                startWebcam();
-              }}
-              aria-label="Réinitialiser la caméra"
-              className="p-3 rounded-full bg-abyss-700/80 backdrop-blur-sm text-stellar-400 hover:text-stellar-200 transition-colors"
-            >
-              <RefreshCw className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Mobile QR mode
-  if (mode === 'mobile') {
-    return (
-      <div className={`relative ${className}`}>
-        <div className="aspect-[4/3] rounded-2xl bg-abyss-600/50 border border-white/10 flex flex-col items-center justify-center p-6">
-          <div className="w-32 h-32 bg-white rounded-lg mb-4 flex items-center justify-center">
-            <span className="text-abyss-800 text-xs text-center">
-              QR Code
-              <br />
-              (Coming Soon)
-            </span>
-          </div>
-          <p className="text-stellar-400 text-sm text-center mb-4">
-            Scannez ce code avec votre téléphone
-          </p>
-          <button
-            onClick={() => setMode('idle')}
-            className="text-stellar-500 text-xs hover:text-stellar-300 transition-colors"
-          >
-            Retour
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Idle mode - show options
   return (
-    <div className={className}>
+    <section
+      className={`rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3 sm:p-4 ${className}`}
+      aria-label={label}
+    >
       <input
         ref={fileInputRef}
         type="file"
+        tabIndex={-1}
         accept="image/*"
-        onChange={handleFileSelect}
-        aria-label="Sélectionner une photo"
-        className="hidden"
+        onChange={(event) => void processFile(event.target.files?.[0])}
+        aria-label={`Choisir une photo pour ${label.toLowerCase()}`}
+        className="sr-only"
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        tabIndex={-1}
+        accept="image/*"
+        capture={captureFacingMode}
+        onChange={(event) => void processFile(event.target.files?.[0])}
+        aria-label={`Prendre une photo pour ${label.toLowerCase()}`}
+        className="sr-only"
       />
 
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-2 p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs"
-        >
-          {error}
-        </motion.div>
-      )}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-stellar-100">{label}</h3>
+          <p className="mt-1 text-xs leading-5 text-stellar-500">{description}</p>
+        </div>
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">
+          <ShieldCheck className="h-3.5 w-3.5" /> Privée
+        </span>
+      </div>
 
-      <div
-        className={`${compact ? 'aspect-square rounded-xl' : 'aspect-[4/3] rounded-2xl'} bg-abyss-600/30 border-2 border-dashed border-white/10 hover:border-horizon-400/30 transition-all overflow-hidden`}
-      >
-        <div
-          className={`h-full flex flex-col items-center justify-center ${compact ? 'p-2' : 'p-4'}`}
-        >
-          {/* Icon */}
-          <div className={`relative ${compact ? 'mb-2' : 'mb-4'}`}>
-            <div className="absolute inset-0 bg-horizon-400/20 blur-xl rounded-full" />
-            <div
-              className={`relative ${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full bg-abyss-600 border border-white/10 flex items-center justify-center`}
-            >
-              <Camera className={`${compact ? 'w-4 h-4' : 'w-6 h-6'} text-horizon-400`} />
-            </div>
+      {hasPhoto ? (
+        <div className="mt-3">
+          <div
+            className={`relative overflow-hidden rounded-xl border border-horizon-400/25 bg-abyss-700/70 ${
+              compact ? 'aspect-square' : 'aspect-[4/3]'
+            }`}
+          >
+            {localPreview ? (
+              <Image
+                src={localPreview}
+                alt={`Aperçu — ${label}`}
+                fill
+                unoptimized
+                sizes="(max-width: 640px) 100vw, 360px"
+                className="h-full w-full object-cover"
+              />
+            ) : isPrivateStorageReference ? (
+              privatePreviewNode ? (
+                privatePreviewNode
+              ) : privatePreviewUrl && !privatePreviewFailed ? (
+                <Image
+                  src={privatePreviewUrl}
+                  alt={`Aperçu privé — ${label}`}
+                  fill
+                  unoptimized
+                  sizes="(max-width: 640px) 100vw, 360px"
+                  className="h-full w-full object-cover"
+                  onError={() => setPrivatePreviewFailed(true)}
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-emerald-300">
+                  <Check className="h-7 w-7" />
+                  <span className="text-xs font-medium">Photo enregistrée de façon privée</span>
+                </div>
+              )
+            ) : (
+              <Image
+                src={value || ''}
+                alt={`Aperçu — ${label}`}
+                fill
+                unoptimized
+                sizes="(max-width: 640px) 100vw, 360px"
+                className="h-full w-full object-cover"
+              />
+            )}
+
+            {isBusy && (
+              <div className="absolute inset-0 grid place-items-center bg-abyss-900/75 backdrop-blur-sm">
+                <span className="inline-flex items-center gap-2 rounded-full bg-abyss-700 px-3 py-2 text-xs text-stellar-200">
+                  <Loader2 className="h-4 w-4 animate-spin" /> {statusText}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Label */}
-          <p className={`text-stellar-200 font-medium ${compact ? 'text-xs mb-0.5' : 'mb-1'}`}>
-            {label}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isBusy}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-3 py-2 text-xs font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
+            >
+              <ImagePlus className="h-4 w-4" /> Remplacer
+            </button>
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={isBusy}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-rose-400/20 px-3 py-2 text-xs font-medium text-rose-200 hover:bg-rose-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" /> Retirer
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl border border-dashed border-white/[0.12] bg-abyss-700/35 p-4 text-center">
+          <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-horizon-400/10 text-horizon-300">
+            <Camera className="h-5 w-5" />
+          </span>
+          <p className="mt-3 text-xs leading-5 text-stellar-500">
+            JPEG, PNG ou WebP · compression automatique · 1,2 Mo maximum après préparation
           </p>
-          {!compact && <p className="text-stellar-500 text-xs text-center mb-4">{description}</p>}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isBusy}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-3 py-2 text-xs font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
+            >
+              {uploadState === 'preparing' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImagePlus className="h-4 w-4" />
+              )}
+              Choisir
+            </button>
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={isBusy}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-horizon-400/12 px-3 py-2 text-xs font-medium text-horizon-200 hover:bg-horizon-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
+            >
+              <Camera className="h-4 w-4" /> Prendre
+            </button>
+          </div>
+        </div>
+      )}
 
-          {/* Buttons */}
-          {compact ? (
-            <div className="flex items-center gap-1.5 mt-2">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-1.5 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 transition-colors border border-white/5"
-                title="Fichier"
-              >
-                <Upload className="w-3 h-3" />
-              </button>
-              <button
-                onClick={startWebcam}
-                className="p-1.5 rounded-lg bg-horizon-400/10 hover:bg-horizon-400/20 text-horizon-300 transition-colors border border-horizon-400/20"
-                title="Webcam"
-              >
-                <Camera className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 text-xs transition-colors border border-white/5"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Fichier
-              </button>
+      {statusText && !isBusy && !error && (
+        <p className="mt-3 flex items-center gap-2 text-xs text-emerald-300" role="status">
+          <Check className="h-4 w-4" /> {statusText}
+        </p>
+      )}
 
-              <button
-                onClick={startWebcam}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-horizon-400/10 hover:bg-horizon-400/20 text-horizon-300 text-xs transition-colors border border-horizon-400/20"
-              >
-                <Camera className="w-3.5 h-3.5" />
-                Webcam
-              </button>
-
-              <button
-                onClick={() => setMode('mobile')}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-abyss-500/50 hover:bg-abyss-400/50 text-stellar-300 text-xs transition-colors border border-white/5"
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                Mobile
-              </button>
-            </div>
+      {error && (
+        <div className="mt-3 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3" role="alert">
+          <p className="text-xs leading-5 text-rose-100">{error}</p>
+          {retryPreview && (
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-2 inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-xs font-semibold text-rose-100 hover:bg-rose-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+            >
+              <RefreshCw className="h-4 w-4" /> Réessayer l’envoi
+            </button>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </section>
   );
 };
