@@ -1,59 +1,8 @@
 import { ExpertRole } from '@prisma/client';
+import { DEFAULT_AI_MODEL_CONFIG } from '../../services/factory/ai-model-config';
 import { AiProductionReadinessService } from './ai-production-readiness.service';
 
-const modelConfig = {
-  providerMode: 'openai_only',
-  agents: {
-    SCRIBE: {
-      enabled: true,
-      provider: 'openai',
-      model: 'gpt-5.5',
-      reasoningEffort: 'high',
-      verbosity: 'high',
-      maxOutputTokens: 24000,
-    },
-    EDITOR: {
-      enabled: true,
-      provider: 'openai',
-      model: 'gpt-5.4',
-      reasoningEffort: 'medium',
-      verbosity: 'high',
-      maxOutputTokens: 16000,
-    },
-    GUIDE: {
-      enabled: true,
-      provider: 'openai',
-      model: 'gpt-5.4',
-      reasoningEffort: 'low',
-      verbosity: 'medium',
-      maxOutputTokens: 6000,
-    },
-    NARRATOR: {
-      enabled: true,
-      provider: 'openai',
-      model: 'gpt-4o',
-      temperature: 0.3,
-      topP: 0.9,
-      maxOutputTokens: 12000,
-    },
-    CONFIDANT: {
-      enabled: false,
-      provider: 'openai',
-      model: 'gpt-4o',
-      temperature: 0.6,
-      topP: 0.9,
-      maxOutputTokens: 1600,
-    },
-    ONIRIQUE: {
-      enabled: false,
-      provider: 'openai',
-      model: 'gpt-4o',
-      temperature: 0.65,
-      topP: 0.9,
-      maxOutputTokens: 2500,
-    },
-  },
-};
+const modelConfig = DEFAULT_AI_MODEL_CONFIG;
 
 describe('AiProductionReadinessService', () => {
   function createService(options?: {
@@ -91,7 +40,7 @@ describe('AiProductionReadinessService', () => {
         agent: 'SCRIBE',
         mission: 'READING_GENERATION',
         provider: 'openai',
-        model: 'gpt-5.5',
+        model: 'gpt-5.5-2026-04-23',
         routingSource: 'global:SCRIBE',
         status: 'SUCCESS',
         inputTokens: 100,
@@ -121,7 +70,7 @@ describe('AiProductionReadinessService', () => {
           configured: true,
           text: options?.text ?? 'ok',
           multimodal: options?.multimodal ?? 'ok',
-          model: 'gpt-5.5',
+          model: 'gpt-5.5-2026-04-23',
           state: 'connection_ok',
           envVar: 'OPENAI_API_KEY',
         },
@@ -144,6 +93,7 @@ describe('AiProductionReadinessService', () => {
     expect(result.ready).toBe(true);
     expect(result.summary.failures).toBe(0);
     expect(result.summary.warnings).toBe(0);
+    expect(result.effectiveConfig.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
     expect(result.recentRunSummary.estimatedCost).toBe(0.0065);
   });
 
