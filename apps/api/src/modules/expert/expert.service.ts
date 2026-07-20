@@ -2343,19 +2343,7 @@ MESSAGE DE L'EXPERT:`;
     }
   }
 
-  // ========================
-  // FILES
-  // ========================
-
-  async getPresignedUrl(fileUrl: string): Promise<string> {
-    // If already a signed URL or not S3, return as-is
-    if (!fileUrl || (!fileUrl.includes('s3.') && !fileUrl.includes('amazonaws.com'))) {
-      return fileUrl;
-    }
-
-    // For now, return the URL directly
-    // In production, you would generate a presigned URL using AWS SDK
-    // This would be integrated with the S3Service
-    return fileUrl;
-  }
+  // FILES: private onboarding photos are streamed via
+  // GET /api/expert/clients/:clientId/photos/:kind
+  // The legacy GET /expert/files/presign stub was removed.
 }

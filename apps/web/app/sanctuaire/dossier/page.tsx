@@ -6,7 +6,6 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   CalendarDays,
-  CheckCircle2,
   ClipboardCheck,
   Clock3,
   Eye,
@@ -19,6 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { ReadingPreparation } from '../../../components/onboarding/ReadingPreparation';
+import { SanctuairePrivatePhoto } from '../../../components/private-media/SanctuairePrivatePhoto';
 import { useSanctuaireAuth } from '../../../context/SanctuaireAuthContext';
 
 const ACTIVE_STATUSES = new Set(['PAID', 'PROCESSING', 'AWAITING_VALIDATION']);
@@ -27,6 +27,15 @@ type DraftRecord = Record<string, unknown>;
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function pickField(
+  sealed: boolean,
+  profileValue: string | null | undefined,
+  draftValue: string,
+): string {
+  if (sealed) return profileValue || draftValue;
+  return draftValue || profileValue || '';
 }
 
 function SummaryCard({
@@ -69,22 +78,35 @@ export default function ReadingDossierPage() {
     [orders],
   );
   const sealed = profile?.profileCompleted === true;
-  const productionActive = sealed && Boolean(latestOrder && ACTIVE_STATUSES.has(latestOrder.status));
+  const productionActive =
+    sealed && Boolean(latestOrder && ACTIVE_STATUSES.has(latestOrder.status));
   const delivered = latestOrder?.status === 'COMPLETED';
 
-  const birthDate = profile?.birthDate || text(draft.birthDate);
-  const birthTime = profile?.birthTime || text(draft.birthTime);
-  const birthPlace = profile?.birthPlace || text(draft.birthPlace);
-  const specificQuestion = profile?.specificQuestion || text(draft.specificQuestion);
-  const objective = profile?.objective || text(draft.objective);
-  const facePhoto = profile?.facePhotoUrl || text(draft.facePhoto);
-  const palmPhoto = profile?.palmPhotoUrl || text(draft.palmPhoto);
+  const birthDate = pickField(sealed, profile?.birthDate, text(draft.birthDate));
+  const birthTime = pickField(sealed, profile?.birthTime, text(draft.birthTime));
+  const birthPlace = pickField(sealed, profile?.birthPlace, text(draft.birthPlace));
+  const specificQuestion = pickField(
+    sealed,
+    profile?.specificQuestion,
+    text(draft.specificQuestion),
+  );
+  const objective = pickField(sealed, profile?.objective, text(draft.objective));
+  const facePhoto = pickField(
+    sealed,
+    profile?.facePhotoUrl,
+    text(draft.facePhoto) || text(draft.facePhotoUrl),
+  );
+  const palmPhoto = pickField(
+    sealed,
+    profile?.palmPhotoUrl,
+    text(draft.palmPhoto) || text(draft.palmPhotoUrl),
+  );
   const contextCount = [
-    profile?.highs || text(draft.highs),
-    profile?.lows || text(draft.lows),
-    profile?.ailments || text(draft.ailments),
-    profile?.fears || text(draft.fears),
-    profile?.rituals || text(draft.rituals),
+    pickField(sealed, profile?.highs, text(draft.highs)),
+    pickField(sealed, profile?.lows, text(draft.lows)),
+    pickField(sealed, profile?.ailments, text(draft.ailments)),
+    pickField(sealed, profile?.fears, text(draft.fears)),
+    pickField(sealed, profile?.rituals, text(draft.rituals)),
   ].filter(Boolean).length;
 
   return (
@@ -123,10 +145,16 @@ export default function ReadingDossierPage() {
             <div className="flex items-start gap-4">
               <span
                 className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${
-                  sealed ? 'bg-emerald-400/15 text-emerald-300' : 'bg-horizon-400/15 text-horizon-300'
+                  sealed
+                    ? 'bg-emerald-400/15 text-emerald-300'
+                    : 'bg-horizon-400/15 text-horizon-300'
                 }`}
               >
-                {sealed ? <FileLock2 className="h-6 w-6" /> : <ClipboardCheck className="h-6 w-6" />}
+                {sealed ? (
+                  <FileLock2 className="h-6 w-6" />
+                ) : (
+                  <ClipboardCheck className="h-6 w-6" />
+                )}
               </span>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
@@ -156,7 +184,9 @@ export default function ReadingDossierPage() {
                 className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
               >
                 <Pencil className="h-4 w-4" />
-                {onboardingProgress?.status === 'IN_PROGRESS' ? 'Reprendre et modifier' : 'Préparer mon dossier'}
+                {onboardingProgress?.status === 'IN_PROGRESS'
+                  ? 'Reprendre et modifier'
+                  : 'Préparer mon dossier'}
               </button>
             ) : delivered ? (
               <Link
@@ -212,15 +242,27 @@ export default function ReadingDossierPage() {
             status={facePhoto || palmPhoto ? 'Sélectionnées' : 'Aucune'}
           >
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
-                <ShieldCheck className="h-5 w-5 text-emerald-300" />
-                <p className="mt-2 text-sm text-stellar-300">Visage</p>
-                <p className="mt-1 text-xs text-stellar-500">{facePhoto ? 'Transmis en privé' : 'Non transmis'}</p>
+              <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.025]">
+                {facePhoto ? (
+                  <SanctuairePrivatePhoto kind="face" alt="Photo de visage privée" />
+                ) : (
+                  <div className="flex aspect-[4/3] flex-col items-center justify-center p-4">
+                    <ShieldCheck className="h-5 w-5 text-emerald-300" />
+                    <p className="mt-2 text-sm text-stellar-300">Visage</p>
+                    <p className="mt-1 text-xs text-stellar-500">Non transmis</p>
+                  </div>
+                )}
               </div>
-              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
-                <ShieldCheck className="h-5 w-5 text-emerald-300" />
-                <p className="mt-2 text-sm text-stellar-300">Paume</p>
-                <p className="mt-1 text-xs text-stellar-500">{palmPhoto ? 'Transmise en privé' : 'Non transmise'}</p>
+              <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.025]">
+                {palmPhoto ? (
+                  <SanctuairePrivatePhoto kind="palm" alt="Photo de paume privée" />
+                ) : (
+                  <div className="flex aspect-[4/3] flex-col items-center justify-center p-4">
+                    <ShieldCheck className="h-5 w-5 text-emerald-300" />
+                    <p className="mt-2 text-sm text-stellar-300">Paume</p>
+                    <p className="mt-1 text-xs text-stellar-500">Non transmise</p>
+                  </div>
+                )}
               </div>
             </div>
           </SummaryCard>
@@ -228,12 +270,14 @@ export default function ReadingDossierPage() {
           <SummaryCard
             icon={<Sparkles className="h-5 w-5" />}
             title="Contexte facultatif"
-            status={contextCount ? `${contextCount} élément${contextCount > 1 ? 's' : ''}` : 'Aucun'}
+            status={
+              contextCount ? `${contextCount} élément${contextCount > 1 ? 's' : ''}` : 'Aucun'
+            }
           >
             {contextCount ? (
               <p>
-                Vous avez choisi de transmettre {contextCount} élément{contextCount > 1 ? 's' : ''} de
-                contexte pour personnaliser la lecture.
+                Vous avez choisi de transmettre {contextCount} élément{contextCount > 1 ? 's' : ''}{' '}
+                de contexte pour personnaliser la lecture.
               </p>
             ) : (
               <p>Aucun contexte intime supplémentaire n’a été transmis.</p>
@@ -247,9 +291,9 @@ export default function ReadingDossierPage() {
             <div>
               <h2 className="text-sm font-medium text-stellar-100">Principe de contrôle</h2>
               <p className="mt-2 text-sm leading-6 text-stellar-500">
-                Le brouillon est modifiable. Le scellement crée l’instantané utilisé pour cette lecture.
-                Votre profil personnel pourra ensuite évoluer sans réécrire rétroactivement ce que vous
-                aviez transmis.
+                Le brouillon est modifiable. Le scellement crée l’instantané utilisé pour cette
+                lecture. Votre profil personnel pourra ensuite évoluer sans réécrire rétroactivement
+                ce que vous aviez transmis.
               </p>
             </div>
           </div>

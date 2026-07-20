@@ -12,6 +12,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { ExpertGateway } from './expert.gateway';
 import { IdGenerator } from '../../utils/IdGenerator';
 import { ServicesModule } from '../../services/services.module';
+import { UploadsModule } from '../uploads/uploads.module';
 import { ProductionControlService } from './production-control.service';
 import { ProductionQueueInterceptor } from './production-queue.interceptor';
 import { ProductionCancelInterceptor } from './production-cancel.interceptor';
@@ -22,6 +23,7 @@ import { ClientControlService } from './client-control.service';
   imports: [
     ConfigModule,
     ServicesModule,
+    UploadsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

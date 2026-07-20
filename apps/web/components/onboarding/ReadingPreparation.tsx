@@ -309,8 +309,8 @@ export function ReadingPreparation({
             Votre lecture de base peut commencer
           </h1>
           <p className="mt-4 text-sm leading-7 text-stellar-400">
-            Vous avez choisi, relu puis scellé les éléments transmis. Notre équipe vous écrira lorsque
-            votre lecture sera disponible.
+            Vous avez choisi, relu puis scellé les éléments transmis. Notre équipe vous écrira
+            lorsque votre lecture sera disponible.
           </p>
           <button
             type="button"
@@ -364,11 +364,19 @@ export function ReadingPreparation({
                       type="button"
                       onClick={() => setStep(index)}
                       className={`flex min-h-[50px] w-full items-center gap-3 rounded-2xl px-3 text-left ${
-                        active ? 'bg-horizon-400/15 text-stellar-100' : 'text-stellar-400 hover:bg-white/[0.04]'
+                        active
+                          ? 'bg-horizon-400/15 text-stellar-100'
+                          : 'text-stellar-400 hover:bg-white/[0.04]'
                       }`}
                     >
-                      <span className={`grid h-8 w-8 place-items-center rounded-xl ${active ? 'bg-horizon-400 text-abyss-900' : 'bg-white/[0.04]'}`}>
-                        {index < step ? <Check className="h-4 w-4 text-emerald-300" /> : <Icon className="h-4 w-4" />}
+                      <span
+                        className={`grid h-8 w-8 place-items-center rounded-xl ${active ? 'bg-horizon-400 text-abyss-900' : 'bg-white/[0.04]'}`}
+                      >
+                        {index < step ? (
+                          <Check className="h-4 w-4 text-emerald-300" />
+                        ) : (
+                          <Icon className="h-4 w-4" />
+                        )}
                       </span>
                       <span className="text-sm font-medium">{item.label}</span>
                     </button>
@@ -384,16 +392,23 @@ export function ReadingPreparation({
           <main className="flex min-h-[620px] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-700/90 shadow-abyss">
             <div className="border-b border-white/[0.06] px-5 py-5 sm:px-8 sm:py-7">
               <div className="flex justify-between text-xs text-stellar-500">
-                <span>Étape {step + 1} sur {STEPS.length}</span>
+                <span>
+                  Étape {step + 1} sur {STEPS.length}
+                </span>
                 <span>{progress}%</span>
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                <div className="h-full rounded-full bg-horizon-400 transition-all" style={{ width: `${progress}%` }} />
+                <div
+                  className="h-full rounded-full bg-horizon-400 transition-all"
+                  style={{ width: `${progress}%` }}
+                />
               </div>
               <h1 className="mt-5 font-playfair text-2xl italic text-stellar-100 sm:text-3xl">
                 {current.title}
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">{current.description}</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
+                {current.description}
+              </p>
             </div>
 
             <div className="flex-1 px-5 py-6 sm:px-8 sm:py-8">
@@ -406,13 +421,16 @@ export function ReadingPreparation({
                     </h2>
                     <p className="mt-3 text-sm leading-7 text-stellar-400">
                       Seuls la date et le lieu de naissance sont nécessaires. Votre intention, vos
-                      photos et votre contexte restent facultatifs. Vous pourrez tout modifier dans le
-                      récapitulatif avant l’envoi.
+                      photos et votre contexte restent facultatifs. Vous pourrez tout modifier dans
+                      le récapitulatif avant l’envoi.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {['Je choisis', 'Je relis', 'Je scelle'].map((label, index) => (
-                      <div key={label} className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+                      <div
+                        key={label}
+                        className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"
+                      >
                         <span className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-xs font-bold text-horizon-200">
                           {index + 1}
                         </span>
@@ -428,18 +446,33 @@ export function ReadingPreparation({
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="text-sm font-medium text-stellar-200">
                       Date de naissance
-                      <input type="date" value={data.birthDate} onChange={(event) => update('birthDate', event.target.value)} className={inputClass} />
+                      <input
+                        type="date"
+                        value={data.birthDate}
+                        onChange={(event) => update('birthDate', event.target.value)}
+                        className={inputClass}
+                      />
                     </label>
                     <label className="text-sm font-medium text-stellar-200">
                       Heure <span className="font-normal text-stellar-500">(facultative)</span>
-                      <input type="time" value={data.birthTime} onChange={(event) => update('birthTime', event.target.value)} className={inputClass} />
+                      <input
+                        type="time"
+                        value={data.birthTime}
+                        onChange={(event) => update('birthTime', event.target.value)}
+                        className={inputClass}
+                      />
                     </label>
                   </div>
                   <label className="text-sm font-medium text-stellar-200">
                     Lieu de naissance
                     <span className="relative block">
                       <MapPin className="pointer-events-none absolute left-3 top-5 h-5 w-5 text-stellar-500" />
-                      <input value={data.birthPlace} onChange={(event) => update('birthPlace', event.target.value)} placeholder="Ville, pays" className={`${inputClass} pl-11`} />
+                      <input
+                        value={data.birthPlace}
+                        onChange={(event) => update('birthPlace', event.target.value)}
+                        placeholder="Ville, pays"
+                        className={`${inputClass} pl-11`}
+                      />
                     </span>
                   </label>
                 </div>
@@ -448,15 +481,40 @@ export function ReadingPreparation({
               {current.key === 'intention' && (
                 <div className="mx-auto max-w-2xl space-y-5">
                   <label className="block text-sm font-medium text-stellar-200">
-                    Votre question <span className="font-normal text-stellar-500">(facultative)</span>
-                    <textarea value={data.specificQuestion} onChange={(event) => update('specificQuestion', event.target.value)} rows={5} maxLength={2000} placeholder="Écrivez avec vos propres mots." className={`${inputClass} resize-y`} />
+                    Votre question{' '}
+                    <span className="font-normal text-stellar-500">(facultative)</span>
+                    <textarea
+                      value={data.specificQuestion}
+                      onChange={(event) => update('specificQuestion', event.target.value)}
+                      rows={5}
+                      maxLength={2000}
+                      placeholder="Écrivez avec vos propres mots."
+                      className={`${inputClass} resize-y`}
+                    />
                   </label>
                   <label className="block text-sm font-medium text-stellar-200">
                     Ce que vous souhaitez comprendre ou faire évoluer{' '}
                     <span className="font-normal text-stellar-500">(facultatif)</span>
-                    <textarea value={data.objective} onChange={(event) => update('objective', event.target.value)} rows={4} maxLength={2000} placeholder="Votre intention peut rester très simple." className={`${inputClass} resize-y`} />
+                    <textarea
+                      value={data.objective}
+                      onChange={(event) => update('objective', event.target.value)}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Votre intention peut rester très simple."
+                      className={`${inputClass} resize-y`}
+                    />
                   </label>
-                  <button type="button" onClick={() => setData((currentData) => ({ ...currentData, specificQuestion: '', objective: '' }))} className="text-xs text-stellar-500 hover:text-stellar-300">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setData((currentData) => ({
+                        ...currentData,
+                        specificQuestion: '',
+                        objective: '',
+                      }))
+                    }
+                    className="text-xs text-stellar-500 hover:text-stellar-300"
+                  >
                     Ne transmettre aucune intention particulière
                   </button>
                 </div>
@@ -465,8 +523,28 @@ export function ReadingPreparation({
               {current.key === 'photos' && (
                 <div className="mx-auto max-w-3xl space-y-5">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <SmartPhotoUploader label="Visage" description="Photo nette, de face" value={data.facePhoto} onChange={(value) => update('facePhoto', value || '')} />
-                    <SmartPhotoUploader label="Paume" description="Paume ouverte et nette" value={data.palmPhoto} onChange={(value) => update('palmPhoto', value || '')} />
+                    <SmartPhotoUploader
+                      label="Visage"
+                      description="Photo nette, de face"
+                      value={data.facePhoto}
+                      onChange={(value) => update('facePhoto', value || '')}
+                      privatePreviewUrl={
+                        data.facePhoto.startsWith('s3://onboarding/')
+                          ? '/api/bff/users/profile/photos/face'
+                          : undefined
+                      }
+                    />
+                    <SmartPhotoUploader
+                      label="Paume"
+                      description="Paume ouverte et nette"
+                      value={data.palmPhoto}
+                      onChange={(value) => update('palmPhoto', value || '')}
+                      privatePreviewUrl={
+                        data.palmPhoto.startsWith('s3://onboarding/')
+                          ? '/api/bff/users/profile/photos/palm'
+                          : undefined
+                      }
+                    />
                   </div>
                   <p className="text-center text-xs text-stellar-500">
                     Continuez sans photo, avec une seule ou avec les deux.
@@ -477,27 +555,100 @@ export function ReadingPreparation({
               {current.key === 'context' && (
                 <div className="mx-auto max-w-3xl space-y-5">
                   <div className="grid gap-5 md:grid-cols-2">
-                    <label className="text-sm font-medium text-stellar-200">Ce qui vous porte <span className="font-normal text-stellar-500">(facultatif)</span><textarea value={data.highs} onChange={(event) => update('highs', event.target.value)} rows={3} maxLength={2000} className={`${inputClass} resize-y`} /></label>
-                    <label className="text-sm font-medium text-stellar-200">Ce qui vous freine <span className="font-normal text-stellar-500">(facultatif)</span><textarea value={data.lows} onChange={(event) => update('lows', event.target.value)} rows={3} maxLength={2000} className={`${inputClass} resize-y`} /></label>
-                    <label className="text-sm font-medium text-stellar-200">Gênes ou douleurs à mentionner <span className="font-normal text-stellar-500">(facultatif)</span><textarea value={data.ailments} onChange={(event) => update('ailments', event.target.value)} rows={3} maxLength={1500} className={`${inputClass} resize-y`} /></label>
-                    <label className="text-sm font-medium text-stellar-200">Peurs ou blocages identifiés <span className="font-normal text-stellar-500">(facultatif)</span><textarea value={data.fears} onChange={(event) => update('fears', event.target.value)} rows={3} maxLength={2000} className={`${inputClass} resize-y`} /></label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Ce qui vous porte{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.highs}
+                        onChange={(event) => update('highs', event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Ce qui vous freine{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.lows}
+                        onChange={(event) => update('lows', event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Gênes ou douleurs à mentionner{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.ailments}
+                        onChange={(event) => update('ailments', event.target.value)}
+                        rows={3}
+                        maxLength={1500}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-stellar-200">
+                      Peurs ou blocages identifiés{' '}
+                      <span className="font-normal text-stellar-500">(facultatif)</span>
+                      <textarea
+                        value={data.fears}
+                        onChange={(event) => update('fears', event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        className={`${inputClass} resize-y`}
+                      />
+                    </label>
                   </div>
-                  <label className="block text-sm font-medium text-stellar-200">Pratiques ou rituels actuels <span className="font-normal text-stellar-500">(facultatif)</span><textarea value={data.rituals} onChange={(event) => update('rituals', event.target.value)} rows={3} maxLength={1500} className={`${inputClass} resize-y`} /></label>
+                  <label className="block text-sm font-medium text-stellar-200">
+                    Pratiques ou rituels actuels{' '}
+                    <span className="font-normal text-stellar-500">(facultatif)</span>
+                    <textarea
+                      value={data.rituals}
+                      onChange={(event) => update('rituals', event.target.value)}
+                      rows={3}
+                      maxLength={1500}
+                      className={`${inputClass} resize-y`}
+                    />
+                  </label>
                   <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
-                    <p className="text-sm font-medium text-stellar-100">Style de lecture souhaité</p>
+                    <p className="text-sm font-medium text-stellar-100">
+                      Style de lecture souhaité
+                    </p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-3">
                       {[
                         ['DOUX_ET_CLAIR', 'Doux et clair'],
                         ['DIRECT_ET_CONCRET', 'Direct et concret'],
                         ['SYMBOLIQUE_ET_PROFOND', 'Symbolique et profond'],
                       ].map(([value, label]) => (
-                        <label key={value} className={`cursor-pointer rounded-xl border p-3 text-sm ${data.deliveryStyle === value ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100' : 'border-white/[0.08] text-stellar-400'}`}>
-                          <input type="radio" name="deliveryStyle" value={value} checked={data.deliveryStyle === value} onChange={() => update('deliveryStyle', value)} className="sr-only" />
+                        <label
+                          key={value}
+                          className={`cursor-pointer rounded-xl border p-3 text-sm ${data.deliveryStyle === value ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100' : 'border-white/[0.08] text-stellar-400'}`}
+                        >
+                          <input
+                            type="radio"
+                            name="deliveryStyle"
+                            value={value}
+                            checked={data.deliveryStyle === value}
+                            onChange={() => update('deliveryStyle', value)}
+                            className="sr-only"
+                          />
                           {label}
                         </label>
                       ))}
                     </div>
-                    <label className="mt-4 block text-sm text-stellar-300">Rythme : {data.pace}%<input type="range" min={0} max={100} step={5} value={data.pace} onChange={(event) => update('pace', Number(event.target.value))} className="mt-2 w-full accent-amber-300" /></label>
+                    <label className="mt-4 block text-sm text-stellar-300">
+                      Rythme : {data.pace}%
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={data.pace}
+                        onChange={(event) => update('pace', Number(event.target.value))}
+                        className="mt-2 w-full accent-amber-300"
+                      />
+                    </label>
                   </div>
                 </div>
               )}
@@ -505,46 +656,89 @@ export function ReadingPreparation({
               {current.key === 'review' && (
                 <div className="mx-auto max-w-3xl space-y-4">
                   <p className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-stellar-300">
-                    <strong className="text-stellar-100">Rien n’est encore envoyé.</strong> Le bouton final
-                    scellera ces éléments comme base de votre lecture.
+                    <strong className="text-stellar-100">Rien n’est encore envoyé.</strong> Le
+                    bouton final scellera ces éléments comme base de votre lecture.
                   </p>
                   <ReviewSection title="Repères essentiels" onEdit={() => setStep(1)}>
-                    {data.birthDate || 'À compléter'}{data.birthTime ? ` · ${data.birthTime}` : ''}<br />
+                    {data.birthDate || 'À compléter'}
+                    {data.birthTime ? ` · ${data.birthTime}` : ''}
+                    <br />
                     {data.birthPlace || 'Lieu à compléter'}
                   </ReviewSection>
                   <ReviewSection title="Intention" onEdit={() => setStep(2)}>
                     {data.specificQuestion || data.objective ? (
-                      <><p>{data.specificQuestion || 'Aucune question précise'}</p>{data.objective && <p className="mt-2">Objectif : {data.objective}</p>}</>
-                    ) : 'Aucune intention particulière transmise.'}
+                      <>
+                        <p>{data.specificQuestion || 'Aucune question précise'}</p>
+                        {data.objective && <p className="mt-2">Objectif : {data.objective}</p>}
+                      </>
+                    ) : (
+                      'Aucune intention particulière transmise.'
+                    )}
                   </ReviewSection>
                   <ReviewSection title="Photos" onEdit={() => setStep(3)}>
-                    Visage : {data.facePhoto ? 'transmis' : 'non transmis'} · Paume : {data.palmPhoto ? 'transmise' : 'non transmise'}
+                    Visage : {data.facePhoto ? 'transmis' : 'non transmis'} · Paume :{' '}
+                    {data.palmPhoto ? 'transmise' : 'non transmise'}
                   </ReviewSection>
                   <ReviewSection title="Contexte et préférence" onEdit={() => setStep(4)}>
-                    {[data.highs, data.lows, data.ailments, data.fears, data.rituals].filter((value) => value.trim()).length} élément(s) facultatif(s) transmis · rythme {data.pace}%
+                    {
+                      [data.highs, data.lows, data.ailments, data.fears, data.rituals].filter(
+                        (value) => value.trim(),
+                      ).length
+                    }{' '}
+                    élément(s) facultatif(s) transmis · rythme {data.pace}%
                   </ReviewSection>
                   <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300">
-                    <input type="checkbox" checked={data.consent} onChange={(event) => update('consent', event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400" />
-                    J’ai relu ces éléments et je choisis de les transmettre à Lumira pour préparer ma
-                    lecture de base personnalisée.
+                    <input
+                      type="checkbox"
+                      checked={data.consent}
+                      onChange={(event) => update('consent', event.target.checked)}
+                      className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
+                    />
+                    J’ai relu ces éléments et je choisis de les transmettre à Lumira pour préparer
+                    ma lecture de base personnalisée.
                   </label>
                 </div>
               )}
 
-              {error && <p role="alert" className="mx-auto mt-6 max-w-3xl rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p>}
+              {error && (
+                <p
+                  role="alert"
+                  className="mx-auto mt-6 max-w-3xl rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200"
+                >
+                  {error}
+                </p>
+              )}
             </div>
 
             <footer className="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-white/[0.06] bg-abyss-700/95 px-5 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-8">
-              <button type="button" onClick={() => (step === 0 ? onClose() : setStep((currentStep) => currentStep - 1))} className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl px-4 text-sm text-stellar-400 hover:bg-white/[0.05]">
+              <button
+                type="button"
+                onClick={() => (step === 0 ? onClose() : setStep((currentStep) => currentStep - 1))}
+                className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl px-4 text-sm text-stellar-400 hover:bg-white/[0.05]"
+              >
                 <ArrowLeft className="h-4 w-4" /> {step === 0 ? 'Reprendre plus tard' : 'Retour'}
               </button>
               {current.key !== 'review' ? (
-                <button type="button" onClick={next} className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300">
-                  {current.key === 'control' ? 'Commencer mon dossier' : 'Continuer'} <ArrowRight className="h-4 w-4" />
+                <button
+                  type="button"
+                  onClick={next}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+                >
+                  {current.key === 'control' ? 'Commencer mon dossier' : 'Continuer'}{' '}
+                  <ArrowRight className="h-4 w-4" />
                 </button>
               ) : (
-                <button type="button" disabled={isSubmitting || !data.consent} onClick={submit} className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-5 py-3 text-sm font-bold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50">
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
+                <button
+                  type="button"
+                  disabled={isSubmitting || !data.consent}
+                  onClick={submit}
+                  className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-5 py-3 text-sm font-bold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <LockKeyhole className="h-4 w-4" />
+                  )}
                   Sceller et transmettre mon dossier
                 </button>
               )}

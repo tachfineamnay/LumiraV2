@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import sanctuaireApi from '../../../lib/sanctuaireApi';
 import {
   User,
@@ -29,6 +29,7 @@ import {
 import Link from 'next/link';
 import { GlassCard } from '../../../components/ui/GlassCard';
 import { SmartPhotoUploader } from '../../../components/onboarding/SmartPhotoUploader';
+import { SanctuairePrivatePhoto } from '../../../components/private-media/SanctuairePrivatePhoto';
 import { useSanctuaireAuth } from '../../../context/SanctuaireAuthContext';
 import { DELIVERY_STYLES } from '../../../lib/holisticSchema';
 import { uploadOnboardingPhoto } from '../../../lib/onboarding-upload';
@@ -42,7 +43,7 @@ export default function ProfilePage() {
 
   const [isEditingPhotos, setIsEditingPhotos] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [photoRefreshKey, setPhotoRefreshKey] = useState(0);
 
   // Editable state for photos
   const [facePhoto, setFacePhoto] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export default function ProfilePage() {
       }
       await sanctuaireApi.patch('/users/profile', changes);
       await refetchData();
+      setPhotoRefreshKey((value) => value + 1);
       setIsEditingPhotos(false);
       setPhotosChanged(false);
     } catch (error) {
@@ -132,7 +134,8 @@ export default function ProfilePage() {
 
   const profileComplete = profile?.profileCompleted ?? false;
   const deliveryStyle = getDeliveryStyleInfo(profile?.deliveryStyle);
-  const isPrivatePhoto = (url: string | null) => Boolean(url?.startsWith('s3://onboarding/'));
+  const facePreviewUrl = `/api/bff/users/profile/photos/face?v=${photoRefreshKey}`;
+  const palmPreviewUrl = `/api/bff/users/profile/photos/palm?v=${photoRefreshKey}`;
 
   // Get user initials for avatar
   const getInitials = () => {
@@ -495,33 +498,16 @@ export default function ProfilePage() {
                     description="Pour la lecture physiognomonique"
                     value={facePhoto || undefined}
                     onChange={handleFacePhotoChange}
+                    privatePreviewUrl={
+                      facePhoto?.startsWith('s3://onboarding/') ? facePreviewUrl : undefined
+                    }
                   />
-                ) : isPrivatePhoto(facePhoto) ? (
-                  <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-emerald-400/20 flex flex-col items-center justify-center px-4 text-center">
-                    <Shield className="w-10 h-10 text-emerald-400/60 mb-3" />
-                    <span className="text-sm text-stellar-300">
-                      Photo enregistrée de façon privée
-                    </span>
-                  </div>
-                ) : facePhoto ? (
-                  <div
-                    className="aspect-[4/3] rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity relative group"
-                    onClick={() => setLightboxImage(facePhoto)}
-                  >
-                    <img
-                      src={facePhoto}
-                      alt="Photo de visage"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/70 to-transparent opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
-                      <span className="text-xs text-stellar-200">Appuyez pour agrandir</span>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-dashed border-horizon-400/30 flex flex-col items-center justify-center">
-                    <Camera className="w-10 h-10 text-horizon-400/50 mb-3" />
-                    <span className="text-sm text-stellar-500">Aucune photo</span>
-                  </div>
+                  <SanctuairePrivatePhoto
+                    kind="face"
+                    alt="Photo de visage"
+                    refreshKey={photoRefreshKey}
+                  />
                 )}
               </div>
 
@@ -537,60 +523,22 @@ export default function ProfilePage() {
                     description="Pour la lecture palmaire"
                     value={palmPhoto || undefined}
                     onChange={handlePalmPhotoChange}
+                    privatePreviewUrl={
+                      palmPhoto?.startsWith('s3://onboarding/') ? palmPreviewUrl : undefined
+                    }
                   />
-                ) : isPrivatePhoto(palmPhoto) ? (
-                  <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-emerald-400/20 flex flex-col items-center justify-center px-4 text-center">
-                    <Shield className="w-10 h-10 text-emerald-400/60 mb-3" />
-                    <span className="text-sm text-stellar-300">
-                      Photo enregistrée de façon privée
-                    </span>
-                  </div>
-                ) : palmPhoto ? (
-                  <div
-                    className="aspect-[4/3] rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity relative group"
-                    onClick={() => setLightboxImage(palmPhoto)}
-                  >
-                    <img
-                      src={palmPhoto}
-                      alt="Photo de paume"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-abyss-800/70 to-transparent opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
-                      <span className="text-xs text-stellar-200">Appuyez pour agrandir</span>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="aspect-[4/3] rounded-xl bg-abyss-500/30 border border-dashed border-serenity-400/30 flex flex-col items-center justify-center">
-                    <Hand className="w-10 h-10 text-serenity-400/50 mb-3" />
-                    <span className="text-sm text-stellar-500">Aucune photo</span>
-                  </div>
+                  <SanctuairePrivatePhoto
+                    kind="palm"
+                    alt="Photo de paume"
+                    refreshKey={photoRefreshKey}
+                  />
                 )}
               </div>
             </div>
           </GlassCard>
         </motion.div>
       </div>
-
-      {/* Lightbox */}
-      <AnimatePresence>
-        {lightboxImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-            onClick={() => setLightboxImage(null)}
-          >
-            <button
-              className="absolute top-4 right-4 text-white/60 hover:text-white"
-              aria-label="Fermer"
-            >
-              <X className="w-8 h-8" />
-            </button>
-            <img src={lightboxImage} alt="Photo" className="max-w-full max-h-full rounded-lg" />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

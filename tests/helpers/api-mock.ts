@@ -57,7 +57,25 @@ export async function mockSanctuaireAuth(page: Page, options: MockAuthOptions = 
   } = options;
 
   const user = createTestUser(options.user);
-  const profile = createTestProfile(user.id, { profileCompleted });
+  const profile = createTestProfile(user.id, {
+    profileCompleted,
+    ...(profileCompleted === false
+      ? {
+          birthDate: null,
+          birthTime: null,
+          birthPlace: null,
+          specificQuestion: null,
+          objective: null,
+          facePhotoUrl: null,
+          palmPhotoUrl: null,
+          highs: null,
+          lows: null,
+          ailments: null,
+          fears: null,
+          rituals: null,
+        }
+      : {}),
+  });
   const order = hasOrders
     ? createTestOrder({ userId: user.id, email: user.email, status: orderStatus })
     : null;

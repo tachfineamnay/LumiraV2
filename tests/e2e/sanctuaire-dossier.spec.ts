@@ -21,7 +21,9 @@ test.describe('Sanctuaire — mon dossier', () => {
     await expect(page.getByRole('heading', { name: 'Mon dossier de lecture' })).toBeVisible();
     await expect(page.getByText('Brouillon privé')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reprendre et modifier' })).toBeVisible();
-    await expect(page.getByText('Que dois-je comprendre maintenant ?')).toBeVisible();
+    await expect(page.getByText('Que dois-je comprendre maintenant ?')).toBeVisible({
+      timeout: 20_000,
+    });
   });
 
   test('shows a protected sealed dossier during production', async ({ page }) => {

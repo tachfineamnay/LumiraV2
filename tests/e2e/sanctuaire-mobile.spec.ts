@@ -15,12 +15,13 @@ test.describe('Sanctuaire mobile — navigation essentielle', () => {
     await mockFullSanctuaire(page, { profileCompleted: true });
   });
 
-  test('keeps the four primary destinations visible', async ({ page }) => {
+  test('keeps the five primary destinations visible', async ({ page }) => {
     await page.goto('/sanctuaire');
 
     const nav = page.getByRole('navigation', { name: 'Navigation principale' });
     await expect(nav).toBeVisible({ timeout: 20_000 });
     await expect(nav.getByRole('link', { name: 'Accueil' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Dossier' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Lectures' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Synthèse' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Éclairage' })).toBeVisible();
