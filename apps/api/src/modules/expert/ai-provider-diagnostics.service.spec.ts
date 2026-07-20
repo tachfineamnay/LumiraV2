@@ -6,17 +6,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 const mockGenerateContent = jest.fn();
 const mockGetGenerativeModel = jest.fn(() => ({ generateContent: mockGenerateContent }));
+const mockResponsesCreate = jest.fn();
 
 jest.mock('@google/generative-ai', () => ({
   GoogleGenerativeAI: jest.fn(() => ({ getGenerativeModel: mockGetGenerativeModel })),
 }));
 
-const mockChatCreate = jest.fn();
-
 jest.mock('openai', () => ({
   __esModule: true,
   default: jest.fn(() => ({
-    chat: { completions: { create: mockChatCreate } },
+    responses: { create: mockResponsesCreate },
   })),
 }));
 
@@ -26,10 +25,17 @@ describe('AiProviderDiagnosticsService', () => {
   let prisma: { promptVersion: { findFirst: jest.Mock } };
 
   const modelConfigJson = JSON.stringify({
-    heavyModel: 'gemini-2.5-flash',
-    flashModel: 'gemini-2.5-flash',
-    openaiFlashModel: 'gpt-4o-mini',
-    openaiHeavyModel: 'gpt-4o',
+    providerMode: 'openai_only',
+    agents: {
+      SCRIBE: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-5.5',
+        reasoningEffort: 'high',
+        verbosity: 'high',
+        maxOutputTokens: 24000,
+      },
+    },
   });
 
   beforeEach(() => {
@@ -37,9 +43,7 @@ describe('AiProviderDiagnosticsService', () => {
     configGet = jest.fn();
     prisma = {
       promptVersion: {
-        findFirst: jest.fn().mockResolvedValue({
-          value: modelConfigJson,
-        }),
+        findFirst: jest.fn().mockResolvedValue({ value: modelConfigJson }),
       },
     };
 
@@ -49,19 +53,12 @@ describe('AiProviderDiagnosticsService', () => {
     );
     service.clearCacheForTests();
 
-    mockGenerateContent.mockResolvedValue({
-      response: { text: () => 'pong' },
-    });
-    mockChatCreate.mockResolvedValue({
-      choices: [{ message: { content: 'pong' } }],
-    });
+    mockGenerateContent.mockResolvedValue({ response: { text: () => 'pong' } });
+    mockResponsesCreate.mockResolvedValue({ output_text: JSON.stringify({ ok: true }) });
   });
 
   it('reports gemini as not configured when GEMINI_API_KEY is absent', async () => {
-    configGet.mockImplementation((key: string) => {
-      if (key === 'GEMINI_API_KEY') return undefined;
-      return undefined;
-    });
+    configGet.mockReturnValue(undefined);
 
     const status = await service.getCredentialsStatus();
     expect(status.gemini.configured).toBe(false);
@@ -73,38 +70,48 @@ describe('AiProviderDiagnosticsService', () => {
     expect(GoogleGenerativeAI).not.toHaveBeenCalled();
   });
 
-  it('tests gemini with the configured model on success', async () => {
-    configGet.mockImplementation((key: string) => {
-      if (key === 'GEMINI_API_KEY') return 'test-gemini-key';
-      return undefined;
-    });
+  it('tests gemini text and multimodal with the configured model', async () => {
+    configGet.mockImplementation((key: string) =>
+      key === 'GEMINI_API_KEY' ? 'test-gemini-key' : undefined,
+    );
 
     const result = await service.testGeminiConnection({ force: true });
 
     expect(result.success).toBe(true);
     expect(result.model).toBe('gemini-2.5-flash');
     expect(result.text).toBe('ok');
-    expect(mockGetGenerativeModel).toHaveBeenCalledWith({ model: 'gemini-2.5-flash' });
+    expect(result.multimodal).toBe('ok');
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(result)).not.toContain('test-gemini-key');
   });
 
-  it('tests openai with the configured flash model', async () => {
-    configGet.mockImplementation((key: string) => {
-      if (key === 'OPENAI_API_KEY') return 'sk-test-openai-key-1234567890';
-      return undefined;
-    });
+  it('tests the real OpenAI Responses structured text and vision path', async () => {
+    configGet.mockImplementation((key: string) =>
+      key === 'OPENAI_API_KEY' ? 'sk-test-openai-key-1234567890' : undefined,
+    );
 
     const result = await service.testOpenAIConnection({ force: true });
 
     expect(result.success).toBe(true);
-    expect(result.model).toBe('gpt-4o-mini');
-    expect(mockChatCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gpt-4o-mini', max_tokens: 8 }),
+    expect(result.model).toBe('gpt-5.5');
+    expect(result.text).toBe('ok');
+    expect(result.multimodal).toBe('ok');
+    expect(mockResponsesCreate).toHaveBeenCalledTimes(2);
+    expect(mockResponsesCreate.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        model: 'gpt-5.5',
+        reasoning: { effort: 'low' },
+        store: false,
+        text: expect.objectContaining({
+          format: expect.objectContaining({ type: 'json_schema', strict: true }),
+        }),
+      }),
     );
+    expect(JSON.stringify(mockResponsesCreate.mock.calls[1][0].input)).toContain('input_image');
     expect(JSON.stringify(result)).not.toContain('sk-test-openai-key');
   });
 
-  it('does not pretend openai is configured without OPENAI_API_KEY', async () => {
+  it('does not pretend OpenAI is configured without OPENAI_API_KEY', async () => {
     configGet.mockReturnValue(undefined);
 
     const status = await service.getCredentialsStatus();
@@ -115,43 +122,38 @@ describe('AiProviderDiagnosticsService', () => {
     expect(OpenAI).not.toHaveBeenCalled();
   });
 
-  it('maps gemini 401 errors clearly', async () => {
-    configGet.mockImplementation((key: string) =>
-      key === 'GEMINI_API_KEY' ? 'bad-key' : undefined,
-    );
-    mockGenerateContent.mockRejectedValue(new Error('401 Unauthorized API_KEY_INVALID'));
-
-    const result = await service.testGeminiConnection({ force: true });
-    expect(result.success).toBe(false);
-    expect(result.errorCategory).toBe('invalid_key');
-    expect(result.error).toContain('401');
-  });
-
-  it('maps openai 403 errors clearly', async () => {
+  it('fails the provider test when vision fails after a successful text probe', async () => {
     configGet.mockImplementation((key: string) =>
       key === 'OPENAI_API_KEY' ? 'sk-test' : undefined,
     );
-    mockChatCreate.mockRejectedValue(new Error('403 Permission denied forbidden'));
+    mockResponsesCreate
+      .mockResolvedValueOnce({ output_text: JSON.stringify({ ok: true }) })
+      .mockRejectedValueOnce(new Error('403 Permission denied forbidden'));
 
     const result = await service.testOpenAIConnection({ force: true });
+
+    expect(result.success).toBe(false);
+    expect(result.text).toBe('ok');
+    expect(result.multimodal).toBe('error');
     expect(result.errorCategory).toBe('forbidden');
   });
 
-  it('maps 429 rate limit errors', async () => {
+  it('maps OpenAI 429 errors clearly', async () => {
     configGet.mockImplementation((key: string) =>
       key === 'OPENAI_API_KEY' ? 'sk-test' : undefined,
     );
-    mockChatCreate.mockRejectedValue(new Error('429 Too Many Requests rate limit exceeded'));
+    mockResponsesCreate.mockRejectedValue(new Error('429 Too Many Requests rate limit exceeded'));
 
     const result = await service.testOpenAIConnection({ force: true });
     expect(result.errorCategory).toBe('rate_limit');
+    expect(result.multimodal).toBe('not_tested');
   });
 
   it('maps invalid model errors', async () => {
     configGet.mockImplementation((key: string) =>
       key === 'OPENAI_API_KEY' ? 'sk-test' : undefined,
     );
-    mockChatCreate.mockRejectedValue(new Error('404 The model `gpt-unknown` does not exist'));
+    mockResponsesCreate.mockRejectedValue(new Error('404 The model does not exist'));
 
     const result = await service.testOpenAIConnection({ force: true });
     expect(result.errorCategory).toBe('model_not_found');
@@ -165,7 +167,7 @@ describe('AiProviderDiagnosticsService', () => {
     mockGenerateContent.mockImplementation(
       () =>
         new Promise(() => {
-          /* never resolves */
+          // Never resolves.
         }),
     );
 
@@ -174,29 +176,28 @@ describe('AiProviderDiagnosticsService', () => {
   });
 
   it('health snapshot uses cache without calling providers', async () => {
-    configGet.mockImplementation((key: string) => {
-      if (key === 'GEMINI_API_KEY') return 'test-gemini-key';
-      return undefined;
-    });
+    configGet.mockImplementation((key: string) =>
+      key === 'OPENAI_API_KEY' ? 'sk-test' : undefined,
+    );
 
-    await service.testGeminiConnection({ force: true });
-    mockGenerateContent.mockClear();
+    await service.testOpenAIConnection({ force: true });
+    mockResponsesCreate.mockClear();
 
     const health = await service.getAiHealthSnapshotWithModels();
-    expect(health.gemini.text).toBe('ok');
-    expect(health.gemini.configured).toBe(true);
-    expect(mockGenerateContent).not.toHaveBeenCalled();
+    expect(health.openai.text).toBe('ok');
+    expect(health.openai.multimodal).toBe('ok');
+    expect(health.openai.configured).toBe(true);
+    expect(mockResponsesCreate).not.toHaveBeenCalled();
   });
 
-  it('returns not_tested on health before any voluntary test', async () => {
-    configGet.mockImplementation((key: string) => {
-      if (key === 'GEMINI_API_KEY') return 'test-gemini-key';
-      return undefined;
-    });
+  it('returns not_tested before any voluntary test', async () => {
+    configGet.mockImplementation((key: string) =>
+      key === 'OPENAI_API_KEY' ? 'sk-test' : undefined,
+    );
 
     const health = await service.getAiHealthSnapshotWithModels();
-    expect(health.gemini.text).toBe('not_tested');
-    expect(health.gemini.multimodal).toBe('not_tested');
-    expect(health.gemini.model).toBe('gemini-2.5-flash');
+    expect(health.openai.text).toBe('not_tested');
+    expect(health.openai.multimodal).toBe('not_tested');
+    expect(health.openai.model).toBe('gpt-5.5');
   });
 });
