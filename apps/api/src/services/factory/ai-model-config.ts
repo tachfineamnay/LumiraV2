@@ -99,15 +99,29 @@ function normalizeAgent(
     return fallback;
   }
 
-  const model = typeof value.model === 'string' && ALLOWED_MODELS.has(value.model)
-    ? value.model
-    : fallback.model;
-  if (model !== value.model) issues.push(`${agent}: modèle non autorisé, ${fallback.model} restauré`);
+  if (value.provider !== 'openai') {
+    issues.push(`${agent}: provider non autorisé, OpenAI restauré`);
+  }
+
+  const model =
+    typeof value.model === 'string' && ALLOWED_MODELS.has(value.model)
+      ? value.model
+      : fallback.model;
+  if (model !== value.model) {
+    issues.push(`${agent}: modèle non autorisé, ${fallback.model} restauré`);
+  }
 
   const enabled = typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled;
+  if (typeof value.enabled !== 'boolean') {
+    issues.push(`${agent}: état enabled invalide, ${String(fallback.enabled)} restauré`);
+  }
+
   const maxOutputTokens = finiteNumber(value.maxOutputTokens);
   const normalizedMaxTokens =
-    maxOutputTokens !== undefined && Number.isInteger(maxOutputTokens) && maxOutputTokens >= 1 && maxOutputTokens <= 100000
+    maxOutputTokens !== undefined &&
+    Number.isInteger(maxOutputTokens) &&
+    maxOutputTokens >= 1 &&
+    maxOutputTokens <= 100000
       ? maxOutputTokens
       : fallback.maxOutputTokens;
   if (normalizedMaxTokens !== maxOutputTokens) {
@@ -122,24 +136,37 @@ function normalizeAgent(
   };
 
   if (model.startsWith('gpt-5.')) {
-    result.reasoningEffort =
-      typeof value.reasoningEffort === 'string' && REASONING_VALUES.has(value.reasoningEffort)
-        ? (value.reasoningEffort as 'low' | 'medium' | 'high')
-        : fallback.reasoningEffort ?? 'medium';
-    result.verbosity =
-      typeof value.verbosity === 'string' && VERBOSITY_VALUES.has(value.verbosity)
-        ? (value.verbosity as 'low' | 'medium' | 'high')
-        : fallback.verbosity ?? 'medium';
+    const reasoningValid =
+      typeof value.reasoningEffort === 'string' && REASONING_VALUES.has(value.reasoningEffort);
+    const verbosityValid =
+      typeof value.verbosity === 'string' && VERBOSITY_VALUES.has(value.verbosity);
+    result.reasoningEffort = reasoningValid
+      ? (value.reasoningEffort as 'low' | 'medium' | 'high')
+      : fallback.reasoningEffort ?? 'medium';
+    result.verbosity = verbosityValid
+      ? (value.verbosity as 'low' | 'medium' | 'high')
+      : fallback.verbosity ?? 'medium';
+    if (!reasoningValid) {
+      issues.push(`${agent}: reasoningEffort invalide, ${result.reasoningEffort} restauré`);
+    }
+    if (!verbosityValid) {
+      issues.push(`${agent}: verbosity invalide, ${result.verbosity} restauré`);
+    }
     return result;
   }
 
   const temperature = finiteNumber(value.temperature);
   const topP = finiteNumber(value.topP);
-  result.temperature =
-    temperature !== undefined && temperature >= 0 && temperature <= 2
-      ? temperature
-      : fallback.temperature ?? 0.3;
-  result.topP = topP !== undefined && topP >= 0 && topP <= 1 ? topP : fallback.topP ?? 0.9;
+  const temperatureValid = temperature !== undefined && temperature >= 0 && temperature <= 2;
+  const topPValid = topP !== undefined && topP >= 0 && topP <= 1;
+  result.temperature = temperatureValid ? temperature : fallback.temperature ?? 0.3;
+  result.topP = topPValid ? topP : fallback.topP ?? 0.9;
+  if (!temperatureValid) {
+    issues.push(`${agent}: temperature invalide, ${result.temperature} restaurée`);
+  }
+  if (!topPValid) {
+    issues.push(`${agent}: topP invalide, ${result.topP} restauré`);
+  }
   return result;
 }
 
@@ -148,8 +175,8 @@ export function normalizeAiModelConfig(input: unknown): NormalizedAiModelConfig 
   const root = isRecord(input) ? input : {};
   const storedAgents = isRecord(root.agents) ? root.agents : {};
 
-  if (root.providerMode !== undefined && root.providerMode !== 'openai_only') {
-    issues.push('providerMode non autorisé en V1, openai_only restauré');
+  if (root.providerMode !== 'openai_only') {
+    issues.push('providerMode absent ou non autorisé en V1, openai_only restauré');
   }
 
   const agents = Object.fromEntries(
