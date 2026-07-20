@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DEFAULT_AI_MODEL_CONFIG } from '../../services/factory/ai-model-config';
 
 const mockGenerateContent = jest.fn();
 const mockGetGenerativeModel = jest.fn(() => ({ generateContent: mockGenerateContent }));
@@ -24,19 +25,7 @@ describe('AiProviderDiagnosticsService', () => {
   let configGet: jest.Mock;
   let prisma: { promptVersion: { findFirst: jest.Mock } };
 
-  const modelConfigJson = JSON.stringify({
-    providerMode: 'openai_only',
-    agents: {
-      SCRIBE: {
-        enabled: true,
-        provider: 'openai',
-        model: 'gpt-5.5',
-        reasoningEffort: 'high',
-        verbosity: 'high',
-        maxOutputTokens: 24000,
-      },
-    },
-  });
+  const modelConfigJson = JSON.stringify(DEFAULT_AI_MODEL_CONFIG);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -70,7 +59,7 @@ describe('AiProviderDiagnosticsService', () => {
     expect(GoogleGenerativeAI).not.toHaveBeenCalled();
   });
 
-  it('tests gemini text and multimodal with the configured model', async () => {
+  it('tests gemini text and multimodal with the dormant comparison model', async () => {
     configGet.mockImplementation((key: string) =>
       key === 'GEMINI_API_KEY' ? 'test-gemini-key' : undefined,
     );
@@ -93,13 +82,13 @@ describe('AiProviderDiagnosticsService', () => {
     const result = await service.testOpenAIConnection({ force: true });
 
     expect(result.success).toBe(true);
-    expect(result.model).toBe('gpt-5.5');
+    expect(result.model).toBe('gpt-5.5-2026-04-23');
     expect(result.text).toBe('ok');
     expect(result.multimodal).toBe('ok');
     expect(mockResponsesCreate).toHaveBeenCalledTimes(2);
     expect(mockResponsesCreate.mock.calls[0][0]).toEqual(
       expect.objectContaining({
-        model: 'gpt-5.5',
+        model: 'gpt-5.5-2026-04-23',
         reasoning: { effort: 'low' },
         store: false,
         text: expect.objectContaining({
@@ -149,7 +138,7 @@ describe('AiProviderDiagnosticsService', () => {
     expect(result.multimodal).toBe('not_tested');
   });
 
-  it('maps invalid model errors', async () => {
+  it('maps invalid snapshot errors', async () => {
     configGet.mockImplementation((key: string) =>
       key === 'OPENAI_API_KEY' ? 'sk-test' : undefined,
     );
@@ -187,6 +176,7 @@ describe('AiProviderDiagnosticsService', () => {
     expect(health.openai.text).toBe('ok');
     expect(health.openai.multimodal).toBe('ok');
     expect(health.openai.configured).toBe(true);
+    expect(health.openai.model).toBe('gpt-5.5-2026-04-23');
     expect(mockResponsesCreate).not.toHaveBeenCalled();
   });
 
@@ -198,6 +188,6 @@ describe('AiProviderDiagnosticsService', () => {
     const health = await service.getAiHealthSnapshotWithModels();
     expect(health.openai.text).toBe('not_tested');
     expect(health.openai.multimodal).toBe('not_tested');
-    expect(health.openai.model).toBe('gpt-5.5');
+    expect(health.openai.model).toBe('gpt-5.5-2026-04-23');
   });
 });
