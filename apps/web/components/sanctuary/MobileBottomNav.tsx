@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { PRIMARY_NAV, isNavActive } from '@/lib/sanctuaireNav';
 
 /** Five essential routes, kept visible at all times on a phone. */
@@ -10,9 +9,7 @@ export function MobileBottomNav() {
   const pathname = usePathname();
 
   return (
-    <motion.nav
-      initial={{ y: 100 }}
-      animate={{ y: 0 }}
+    <nav
       className="fixed bottom-0 left-0 right-0 z-50 lg:hidden"
       aria-label="Navigation principale"
     >
@@ -39,7 +36,9 @@ export function MobileBottomNav() {
                 <Icon className="relative h-5 w-5" />
               </span>
               <span
-                className={`max-w-full truncate text-[9px] font-medium ${active ? 'text-horizon-300' : 'text-stellar-500'}`}
+                className={`max-w-full truncate text-[9px] font-medium ${
+                  active ? 'text-horizon-300' : 'text-stellar-500'
+                }`}
               >
                 {item.shortLabel || item.label}
               </span>
@@ -47,6 +46,6 @@ export function MobileBottomNav() {
           );
         })}
       </div>
-    </motion.nav>
+    </nav>
   );
 }
