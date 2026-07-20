@@ -3,144 +3,105 @@
 **Date :** 18 juillet 2026  
 **Mise à jour technique :** 20 juillet 2026  
 **Branche :** `codex/sanctuaire-user-agency-sealing`  
-**Périmètre :** accueil, préparation initiale, dossier, navigation, lectures, synthèse, éclairage, profil, photos privées et source IA.
+**Périmètre :** accueil, préparation initiale, dossier, navigation, photos privées, source IA, routage et diagnostics fournisseurs.
 
-## 1. Décision produit
+## Décision produit
 
-Le Sanctuaire ne doit pas être principalement une bibliothèque mystique ni un profil administratif. Sa mission première, avant la première lecture, est de permettre au client de comprendre ce qui est demandé, choisir ce qu'il souhaite transmettre, conserver un brouillon, relire l'ensemble et sceller explicitement la base de sa lecture.
-
-Le modèle mental retenu est :
+Le Sanctuaire devient un espace de transmission maîtrisée. Le client choisit les éléments qu'il souhaite partager, conserve un brouillon, relit chaque section et scelle explicitement la matière de sa lecture.
 
 > **Je choisis → je relis → je scelle → Lumira prépare → je reçois.**
 
-## 2. Architecture livrée
+## Architecture livrée
 
-### Parcours en six étapes
+### Parcours client
 
-1. **Votre choix** — explique le contrôle utilisateur ;
-2. **Repères** — date et lieu requis, heure facultative ;
-3. **Intention** — question et objectif facultatifs ;
-4. **Photos** — visage et paume indépendamment facultatifs ;
-5. **Contexte** — éléments intimes et style de lecture facultatifs ;
-6. **Scellement** — récapitulatif complet, boutons Modifier, confirmation explicite.
+1. Votre choix ;
+2. Repères essentiels ;
+3. Question et intention ;
+4. Photos visage et paume ;
+5. Contexte facultatif ;
+6. Relecture et scellement.
 
-Le CTA final est :
+Le CTA final est : **Sceller et transmettre mon dossier**.
 
-> **Sceller et transmettre mon dossier**
+### Scellement serveur
 
-### Modèle serveur de scellement
+La soumission finale met à jour le profil, enregistre le consentement, clôt l'onboarding et crée transactionnellement un instantané dans :
 
-Lors de la soumission finale :
+```text
+Order.clientInputs.readingIntake
+```
 
-- le profil est mis à jour ;
-- le consentement versionné est enregistré ;
-- l'onboarding passe à `COMPLETED` ;
-- un instantané est enregistré dans `Order.clientInputs.readingIntake` ;
-- l'instantané contient `sealedAt`, `sealedBy`, `consentVersion`, `contentHash` et le profil transmis ;
-- l'opération est transactionnelle ;
-- seule une commande `PAID` peut recevoir un premier scellement ;
-- une seconde tentative ou un début de production provoque un conflit explicite.
+L'instantané contient notamment `sealedAt`, `sealedBy`, `consentVersion`, `contentHash` et le profil transmis. Une seconde tentative ou un scellement après démarrage de la production est refusé.
 
-### Source canonique de génération
+### Source canonique de l'IA
 
-Le pipeline IA utilise désormais en priorité :
+Lorsqu'un instantané scellé valide existe, le pipeline utilise exclusivement :
 
 ```text
 Order.clientInputs.readingIntake.profile
 ```
 
-Lorsqu'un instantané scellé valide existe, le profil courant n'est pas fusionné avec lui. Les anciennes commandes restent compatibles grâce à un fallback explicite vers `UserProfile`, identifié comme `LEGACY_PROFILE` dans les métadonnées de génération.
+Le profil courant n'est pas fusionné silencieusement. Les anciennes commandes conservent un fallback explicite vers `UserProfile`, tracé comme `LEGACY_PROFILE`.
 
 ### Photos privées
 
-Les photos restent stockées dans le bucket privé `uploads` avec des références :
+Les références durables restent de la forme :
 
 ```text
 s3://onboarding/{userId}/...
 ```
 
-Elles sont consultées par des routes serveur protégées :
+Le navigateur ne reçoit jamais cette référence comme source d'image. Les photos sont streamées par des routes protégées avec contrôle du propriétaire, bucket privé, cache privé et protection `nosniff`. Le Desk récupère les fichiers avec son token expert et crée des URL blob temporaires.
 
-- client authentifié : ses propres photos uniquement ;
-- expert ou administrateur : photos du client demandé ;
-- validation stricte du préfixe et du propriétaire ;
-- streaming HTTP privé ;
-- aucune balise d'image alimentée par une référence `s3://` ;
-- aucune URL présignée persistée en base.
+### Routage IA
 
-### Routage IA et diagnostics
+Les appels texte, JSON, conversationnels, multimodaux et narration reçoivent un contexte commun comprenant l'agent, la mission, le niveau produit, le provider, le modèle et la version de prompt. Les changements de prompts ou de règles invalident le cache d'exécution.
 
-La matrice IA est raccordée aux appels texte, JSON, conversationnels et multimodaux. Le contexte d'exécution transmet l'agent, la mission, le niveau produit, le provider, le modèle et la version de prompt. Les changements de configuration invalident le cache d'exécution.
+### Diagnostics et observabilité
 
-Le Desk expose des diagnostics cohérents avec les variables réellement utilisées :
+Le Desk utilise les variables serveur réelles :
 
 ```text
 GEMINI_API_KEY
 OPENAI_API_KEY
 ```
 
-Les exécutions sont enregistrées dans `AiRun` sans stocker les données intimes, les prompts complets ni les images.
+La migration `20260720000000_add_ai_runs` ajoute le registre `AiRun` pour tracer provider, modèle, mission, niveau produit, version de prompt, durée et statut sans stocker les contenus intimes ni les images.
 
-### Destination « Mon dossier »
+## Critères atteints dans le code
 
-La navigation principale inclut un espace permettant de voir :
+- [x] Brouillon serveur et reprise ;
+- [x] distinction requis/facultatif ;
+- [x] récapitulatif modifiable ;
+- [x] scellement explicite et transactionnel ;
+- [x] instantané historique dans la commande ;
+- [x] source IA scellée prioritaire ;
+- [x] photos privées visibles via routes sécurisées ;
+- [x] Matrice IA raccordée au multimodal et aux principaux agents ;
+- [x] diagnostics Gemini/OpenAI cohérents ;
+- [x] conflits avec les derniers workflows de `main` résolus ;
+- [x] workflows Coolify durcis conservés.
 
-- brouillon ou dossier scellé ;
-- repères essentiels ;
-- intention transmise ou non ;
-- photos privées ;
-- nombre d'éléments de contexte facultatif ;
-- état de production ;
-- action de reprise avant scellement.
+## Limite de validation au moment de la fusion
 
-## 3. Critères d'acceptation atteints dans le code
+Les runners GitHub hébergés ne sont pas disponibles en raison de l'état de facturation du compte. Aucun résultat CI n'est donc présenté comme réussi. La fusion repose sur une revue statique des contrats, des dépendances Nest, du schéma Prisma, de la migration, des contrôles de sécurité et de la synchronisation avec `main`.
 
-- [x] Le client comprend que rien n'est envoyé avant confirmation.
-- [x] Les champs facultatifs sont identifiés.
-- [x] Les réponses sont sauvegardées côté serveur.
-- [x] Chaque section peut être revue et modifiée.
-- [x] La soumission finale emploie un vocabulaire de scellement explicite.
-- [x] Un instantané est conservé dans la commande.
-- [x] Une soumission concurrente ou tardive est refusée.
-- [x] Le dossier devient une destination permanente du Sanctuaire.
-- [x] Le mobile conserve les destinations essentielles.
-- [x] Les photos privées disposent de routes sécurisées dans le Sanctuaire et le Desk.
-- [x] La génération IA lit prioritairement l'instantané scellé avec fallback legacy.
-- [x] La matrice IA est appliquée aux principaux agents et au multimodal.
-- [x] Les diagnostics Gemini/OpenAI reflètent les variables serveur réelles.
+L'exécution réelle des tests navigateur, de la recette staging et du parcours complet est reportée au prompt 7.
 
-## 4. Validation et limites de cette fusion
-
-Les runners GitHub hébergés ne sont pas disponibles au moment de la fusion en raison de l'état de facturation du compte. La décision de fusion repose donc sur :
-
-- revue statique des contrats et dépendances ;
-- cohérence du schéma Prisma et de la migration `AiRun` ;
-- présence des suites unitaires et E2E ajoutées dans la branche ;
-- résolution des divergences avec `main` ;
-- conservation des workflows Coolify durcis présents sur `main`.
-
-Aucun résultat de runner GitHub n'est présenté comme réussi. L'exécution réelle de la recette, des tests navigateur et de la validation staging est volontairement reportée au prompt 7.
-
-## 5. Travaux différés
+## Travaux différés
 
 ### Prompt 7 — Codex Terra High
 
-- recette complète client → Desk → génération → validation → PDF/audio → livraison ;
-- exécution réelle des scénarios Playwright et staging ;
-- contrôle responsive et sécurité de bout en bout.
+- recette client → Desk → IA → validation → PDF/audio → livraison ;
+- exécution réelle des tests Playwright et staging ;
+- sécurité et responsive de bout en bout.
 
 ### Prompt 8 — Claude
 
 - finition UX du profil, des lectures, de la synthèse et de l'éclairage ;
-- accessibilité et rédaction finale ;
-- préparation détaillée de release et de rollback.
+- accessibilité, rédaction, release et rollback.
 
-## 6. Point de vigilance au déploiement
+## Déploiement
 
-La migration suivante doit être appliquée avant ou au démarrage de l'API :
-
-```text
-20260720000000_add_ai_runs
-```
-
-Le déploiement doit conserver une seule réplique exécutant le worker de production et les variables serveur nécessaires aux providers, au stockage privé, à Gotenberg et au TTS.
+La migration `20260720000000_add_ai_runs` doit être appliquée au démarrage de l'API. Le worker de production doit rester actif sur une seule réplique. Les variables Gemini/OpenAI, AWS, Gotenberg et TTS restent obligatoires selon les fonctionnalités activées.
