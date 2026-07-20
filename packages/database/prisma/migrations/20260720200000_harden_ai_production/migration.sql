@@ -62,7 +62,7 @@ VALUES (
       "SCRIBE": {
         "enabled": true,
         "provider": "openai",
-        "model": "gpt-5.5",
+        "model": "gpt-5.5-2026-04-23",
         "reasoningEffort": "high",
         "verbosity": "high",
         "maxOutputTokens": 24000
@@ -70,7 +70,7 @@ VALUES (
       "EDITOR": {
         "enabled": true,
         "provider": "openai",
-        "model": "gpt-5.4",
+        "model": "gpt-5.4-2026-03-05",
         "reasoningEffort": "medium",
         "verbosity": "high",
         "maxOutputTokens": 16000
@@ -78,7 +78,7 @@ VALUES (
       "GUIDE": {
         "enabled": true,
         "provider": "openai",
-        "model": "gpt-5.4",
+        "model": "gpt-5.4-2026-03-05",
         "reasoningEffort": "low",
         "verbosity": "medium",
         "maxOutputTokens": 6000
@@ -86,7 +86,7 @@ VALUES (
       "NARRATOR": {
         "enabled": true,
         "provider": "openai",
-        "model": "gpt-4o",
+        "model": "gpt-4o-2024-11-20",
         "temperature": 0.3,
         "topP": 0.9,
         "maxOutputTokens": 12000
@@ -94,7 +94,7 @@ VALUES (
       "CONFIDANT": {
         "enabled": false,
         "provider": "openai",
-        "model": "gpt-4o",
+        "model": "gpt-4o-2024-11-20",
         "temperature": 0.6,
         "topP": 0.9,
         "maxOutputTokens": 1600
@@ -102,7 +102,7 @@ VALUES (
       "ONIRIQUE": {
         "enabled": false,
         "provider": "openai",
-        "model": "gpt-4o",
+        "model": "gpt-4o-2024-11-20",
         "temperature": 0.65,
         "topP": 0.9,
         "maxOutputTokens": 2500
@@ -110,7 +110,7 @@ VALUES (
     }
   }',
   'production-migration',
-  'OpenAI-only V1 production baseline',
+  'OpenAI-only V1 production baseline with pinned snapshots',
   true,
   CURRENT_TIMESTAMP
 );
