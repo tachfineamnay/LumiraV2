@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ExpertRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeAiModelConfig } from '../../services/factory/ai-model-config';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
@@ -20,59 +21,63 @@ export class AiProductionReadinessService {
   ) {}
 
   async getReadiness() {
-    const [admin, activePrompts, activeRules, providerStatus, recentRuns] = await Promise.all([
-      this.prisma.expert.findUnique({
-        where: { email: 'expert@oraclelumira.com' },
-        select: { email: true, role: true, isActive: true },
-      }),
-      this.prisma.promptVersion.findMany({
-        where: { isActive: true },
-        orderBy: [{ key: 'asc' }, { version: 'desc' }],
-        select: {
-          id: true,
-          key: true,
-          version: true,
-          value: true,
-          changedBy: true,
-          comment: true,
-          createdAt: true,
-        },
-      }),
-      this.prisma.aiRoutingRule.findMany({
-        where: { isActive: true },
-        orderBy: [{ productLevel: 'asc' }, { agent: 'asc' }, { mission: 'asc' }],
-        select: {
-          id: true,
-          productLevel: true,
-          agent: true,
-          mission: true,
-          provider: true,
-          model: true,
-          promptVersionId: true,
-        },
-      }),
-      this.diagnostics.getCredentialsStatus(),
-      this.prisma.aiRun.findMany({
-        orderBy: { startedAt: 'desc' },
-        take: 30,
-        select: {
-          id: true,
-          orderId: true,
-          agent: true,
-          mission: true,
-          provider: true,
-          model: true,
-          routingSource: true,
-          status: true,
-          inputTokens: true,
-          outputTokens: true,
-          estimatedCost: true,
-          durationMs: true,
-          errorCode: true,
-          startedAt: true,
-        },
-      }),
-    ]);
+    const [admin, activeAdminCount, activePrompts, activeRules, providerStatus, recentRuns] =
+      await Promise.all([
+        this.prisma.expert.findUnique({
+          where: { email: 'expert@oraclelumira.com' },
+          select: { email: true, role: true, isActive: true },
+        }),
+        this.prisma.expert.count({
+          where: { role: ExpertRole.ADMIN, isActive: true },
+        }),
+        this.prisma.promptVersion.findMany({
+          where: { isActive: true },
+          orderBy: [{ key: 'asc' }, { version: 'desc' }],
+          select: {
+            id: true,
+            key: true,
+            version: true,
+            value: true,
+            changedBy: true,
+            comment: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.aiRoutingRule.findMany({
+          where: { isActive: true },
+          orderBy: [{ productLevel: 'asc' }, { agent: 'asc' }, { mission: 'asc' }],
+          select: {
+            id: true,
+            productLevel: true,
+            agent: true,
+            mission: true,
+            provider: true,
+            model: true,
+            promptVersionId: true,
+          },
+        }),
+        this.diagnostics.getCredentialsStatus(),
+        this.prisma.aiRun.findMany({
+          orderBy: { startedAt: 'desc' },
+          take: 30,
+          select: {
+            id: true,
+            orderId: true,
+            agent: true,
+            mission: true,
+            provider: true,
+            model: true,
+            routingSource: true,
+            status: true,
+            inputTokens: true,
+            outputTokens: true,
+            estimatedCost: true,
+            durationMs: true,
+            errorCode: true,
+            startedAt: true,
+          },
+        }),
+      ]);
 
     const activeByKey = new Map<string, typeof activePrompts>();
     for (const prompt of activePrompts) {
@@ -92,24 +97,21 @@ export class AiProductionReadinessService {
       }
     }
     const normalized = normalizeAiModelConfig(parsedModelConfig);
-
     const guide = (activeByKey.get('GUIDE') ?? [])[0];
     const duplicateKeys = [...activeByKey.entries()]
       .filter(([, rows]) => rows.length > 1)
       .map(([key, rows]) => ({ key, count: rows.length }));
+    const canonicalAdminReady =
+      admin?.role === ExpertRole.ADMIN && admin.isActive && activeAdminCount === 1;
 
     const checks: ReadinessCheck[] = [
       {
         id: 'canonical_admin',
         label: 'Compte administrateur unique',
-        level:
-          admin?.role === 'ADMIN' && admin.isActive
-            ? 'pass'
-            : 'fail',
-        detail:
-          admin?.role === 'ADMIN' && admin.isActive
-            ? 'expert@oraclelumira.com est ADMIN et actif.'
-            : 'expert@oraclelumira.com doit être ADMIN et actif.',
+        level: canonicalAdminReady ? 'pass' : 'fail',
+        detail: canonicalAdminReady
+          ? 'expert@oraclelumira.com est le seul ADMIN actif.'
+          : `Le compte canonique doit être ADMIN et actif, avec un seul ADMIN actif au total. Nombre actuel: ${activeAdminCount}.`,
       },
       {
         id: 'openai_key',
@@ -150,10 +152,7 @@ export class AiProductionReadinessService {
       {
         id: 'model_config',
         label: 'Configuration OpenAI-only',
-        level:
-          !modelConfigParseError && normalized.issues.length === 0
-            ? 'pass'
-            : 'fail',
+        level: !modelConfigParseError && normalized.issues.length === 0 ? 'pass' : 'fail',
         detail: modelConfigParseError
           ? `MODEL_CONFIG illisible: ${modelConfigParseError}`
           : normalized.issues.length > 0
@@ -212,7 +211,14 @@ export class AiProductionReadinessService {
       summary: { failures, warnings, passes: checks.length - failures - warnings },
       checks,
       effectiveConfig: normalized.config,
-      activePromptVersions: activePrompts.map(({ value: _value, ...metadata }) => metadata),
+      activePromptVersions: activePrompts.map((prompt) => ({
+        id: prompt.id,
+        key: prompt.key,
+        version: prompt.version,
+        changedBy: prompt.changedBy,
+        comment: prompt.comment,
+        createdAt: prompt.createdAt,
+      })),
       activeRoutingRules: activeRules,
       recentRuns,
       recentRunSummary: {
