@@ -1,11 +1,14 @@
 name: CI
 
 on:
+  # Direct pushes to main are validated once through deploy.yml.
+  # Keeping main here as well would run the full CI twice on every production push.
   push:
-    branches: [main, develop]
+    branches: [develop]
   pull_request:
     branches: [main, develop]
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,11 +27,12 @@ env:
 
 jobs:
   build:
-    name: build
+    name: Quality, build and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install pnpm
@@ -41,6 +45,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -54,7 +59,7 @@ jobs:
       - name: Audit dependencies (high severity)
         run: corepack pnpm@11.0.0 audit --audit-level=high
 
-      - name: Typecheck
+      - name: Type check
         run: pnpm typecheck
 
       - name: Lint
@@ -67,15 +72,16 @@ jobs:
         run: pnpm build
 
   e2e:
-    name: e2e
+    name: Browser smoke tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build
     permissions:
       contents: read
       actions: write
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install pnpm
@@ -88,6 +94,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
