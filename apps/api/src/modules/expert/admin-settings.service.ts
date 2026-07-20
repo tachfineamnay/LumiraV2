@@ -1,23 +1,22 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
 import { AiRuntimeCacheService } from '../../services/factory/ai-runtime-cache.service';
+import { AiModelConfigSnapshot, AgentType } from '../../services/factory/ai-execution.types';
+import {
+  DEFAULT_AI_MODEL_CONFIG,
+  normalizeAiModelConfig,
+} from '../../services/factory/ai-model-config';
+import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
 import {
   AiCredentialsStatusResponse,
   ProviderConnectionTestResult,
 } from './ai-provider-diagnostics.types';
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
-import {
-  AiAgentModelConfig,
-  AiProviderMode,
-  AgentType,
-} from '../../services/factory/ai-execution.types';
 
 const VERTEX_CREDENTIALS_KEY = 'VERTEX_CREDENTIALS_JSON';
 const ENCRYPTED_VALUE_PREFIX = 'enc:v1';
 
-// Prompt keys
 export const PROMPT_KEYS = {
   LUMIRA_DNA: 'LUMIRA_DNA',
   SCRIBE: 'SCRIBE',
@@ -29,12 +28,8 @@ export const PROMPT_KEYS = {
   MODEL_CONFIG: 'MODEL_CONFIG',
 } as const;
 
-export type PromptKey = keyof typeof PROMPT_KEYS;
-
-export interface ModelConfig {
-  providerMode: AiProviderMode;
-  agents: Record<AgentType, AiAgentModelConfig>;
-}
+export type PromptKey = (typeof PROMPT_KEYS)[keyof typeof PROMPT_KEYS];
+export type ModelConfig = AiModelConfigSnapshot;
 
 export interface PromptWithMeta {
   key: string;
@@ -56,7 +51,6 @@ export interface PromptVersionHistory {
 }
 
 export type VertexTestResult = ProviderConnectionTestResult;
-
 export type VertexConfigStatus = AiCredentialsStatusResponse;
 
 @Injectable()
@@ -101,10 +95,7 @@ export class AdminSettingsService {
 
   private decryptValue(value: string): string {
     if (!value.startsWith(`${ENCRYPTED_VALUE_PREFIX}.`)) {
-      // Existing installations are migrated on their next credential save.
-      this.logger.warn(
-        'Legacy unencrypted Vertex credentials detected; rotate and save them again.',
-      );
+      this.logger.warn('Legacy unencrypted Vertex credentials detected; rotate them before reuse.');
       return value;
     }
     const [, , ivPart, tagPart, ciphertextPart] = value.split('.');
@@ -123,70 +114,40 @@ export class AdminSettingsService {
     ]).toString('utf8');
   }
 
-  /**
-   * Save Vertex AI credentials to the database.
-   * Validates that the input is valid JSON before saving.
-   */
   async setVertexCredentials(jsonString: string): Promise<{ success: boolean; message: string }> {
-    // Validate JSON format
     try {
-      const parsed = JSON.parse(jsonString);
-
-      // Basic validation for Google credentials structure
+      const parsed = JSON.parse(jsonString) as { type?: string; project_id?: string };
       if (!parsed.type || !parsed.project_id) {
         throw new BadRequestException(
-          'Invalid credentials format. Expected Google Cloud service account JSON.',
+          'Format invalide. Un JSON de compte de service Google Cloud est attendu.',
         );
       }
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException('Invalid JSON format. Please provide valid JSON credentials.');
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('JSON invalide.');
     }
 
-    // Upsert the setting
+    const encrypted = this.encryptValue(jsonString);
     await this.prisma.systemSetting.upsert({
       where: { key: VERTEX_CREDENTIALS_KEY },
-      update: {
-        value: this.encryptValue(jsonString),
-        isEncrypted: true,
-      },
-      create: {
-        key: VERTEX_CREDENTIALS_KEY,
-        value: this.encryptValue(jsonString),
-        isEncrypted: true,
-      },
+      update: { value: encrypted, isEncrypted: true },
+      create: { key: VERTEX_CREDENTIALS_KEY, value: encrypted, isEncrypted: true },
     });
-
-    this.logger.log('Vertex AI credentials saved successfully');
-    return { success: true, message: 'Identifiants Vertex AI sauvegardés avec succès.' };
+    this.logger.log('Vertex credentials stored for future comparison mode');
+    return { success: true, message: 'Identifiants Vertex sauvegardés.' };
   }
 
-  /**
-   * Get Vertex AI credentials from the database.
-   * Returns null if not configured.
-   */
   async getVertexCredentials(): Promise<string | null> {
     const setting = await this.prisma.systemSetting.findUnique({
       where: { key: VERTEX_CREDENTIALS_KEY },
     });
-
     return setting?.value ? this.decryptValue(setting.value) : null;
   }
 
-  /**
-   * Get AI provider credential status for the admin dashboard.
-   * Status is derived from real environment variables (GEMINI_API_KEY / OPENAI_API_KEY).
-   */
   async getConfigStatus(): Promise<VertexConfigStatus> {
     return this.aiProviderDiagnostics.getCredentialsStatus();
   }
 
-  /**
-   * Return safe configuration metadata. Secret material is never returned to
-   * the browser, including to administrators.
-   */
   async getVertexCredentialsForDisplay(): Promise<{
     configured: boolean;
     projectId?: string;
@@ -195,13 +156,12 @@ export class AdminSettingsService {
     const setting = await this.prisma.systemSetting.findUnique({
       where: { key: VERTEX_CREDENTIALS_KEY },
     });
-
-    if (!setting?.value) {
-      return { configured: false };
-    }
-
+    if (!setting?.value) return { configured: false };
     try {
-      const parsed = JSON.parse(this.decryptValue(setting.value));
+      const parsed = JSON.parse(this.decryptValue(setting.value)) as {
+        project_id?: string;
+        client_email?: string;
+      };
       return {
         configured: true,
         projectId: parsed.project_id,
@@ -212,464 +172,351 @@ export class AdminSettingsService {
     }
   }
 
-  /**
-   * Test the Gemini API connection using GEMINI_API_KEY and the configured model.
-   */
   async testVertexConnection(): Promise<VertexTestResult> {
     return this.aiProviderDiagnostics.testGeminiConnection({ force: true });
   }
 
-  /**
-   * Test the OpenAI API connection using OPENAI_API_KEY and the configured model.
-   */
   async testOpenAIConnection(): Promise<VertexTestResult> {
     return this.aiProviderDiagnostics.testOpenAIConnection({ force: true });
   }
 
-  /**
-   * Delete Vertex AI credentials from the database.
-   */
   async deleteVertexCredentials(): Promise<{ success: boolean; message: string }> {
-    await this.prisma.systemSetting.deleteMany({
-      where: { key: VERTEX_CREDENTIALS_KEY },
-    });
-
-    this.logger.log('Vertex AI credentials deleted');
-    return { success: true, message: 'Identifiants Vertex AI supprimés.' };
+    await this.prisma.systemSetting.deleteMany({ where: { key: VERTEX_CREDENTIALS_KEY } });
+    return { success: true, message: 'Identifiants Vertex supprimés.' };
   }
 
-  // =========================================================================
-  // AI PROMPTS MANAGEMENT
-  // =========================================================================
-
-  /**
-   * Get all AI prompts (active versions from DB, or defaults)
-   */
   async getAllPrompts(): Promise<Record<string, PromptWithMeta>> {
     const defaults = this.getDefaultPrompts();
-    const result: Record<string, PromptWithMeta> = {};
-
-    for (const key of Object.values(PROMPT_KEYS)) {
-      // Get active version from DB
-      const active = await this.prisma.promptVersion.findFirst({
-        where: { key, isActive: true },
-        orderBy: { version: 'desc' },
-      });
-
-      if (active) {
-        result[key] = {
-          key,
-          value: active.value,
-          version: active.version,
-          isCustom: true,
-          changedBy: active.changedBy || undefined,
-          updatedAt: active.createdAt.toISOString(),
-        };
-      } else {
-        result[key] = {
-          key,
-          value: defaults[key] || '',
-          version: 0,
-          isCustom: false,
-        };
-      }
+    const activeVersions = await this.prisma.promptVersion.findMany({
+      where: { isActive: true },
+      orderBy: [{ key: 'asc' }, { version: 'desc' }],
+    });
+    const activeByKey = new Map<string, (typeof activeVersions)[number]>();
+    for (const version of activeVersions) {
+      if (!activeByKey.has(version.key)) activeByKey.set(version.key, version);
     }
 
+    const result: Record<string, PromptWithMeta> = {};
+    for (const key of Object.values(PROMPT_KEYS)) {
+      const active = activeByKey.get(key);
+      result[key] = active
+        ? {
+            key,
+            value: active.value,
+            version: active.version,
+            isCustom: true,
+            changedBy: active.changedBy || undefined,
+            updatedAt: active.createdAt.toISOString(),
+          }
+        : { key, value: defaults[key] || '', version: 0, isCustom: false };
+    }
     return result;
   }
 
-  /**
-   * Get a single prompt (active version or default)
-   */
   async getPrompt(key: string): Promise<string> {
+    this.assertPromptKey(key);
     const active = await this.prisma.promptVersion.findFirst({
       where: { key, isActive: true },
-      orderBy: { version: 'desc' },
+      orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
     });
-
-    if (active) {
-      return active.value;
-    }
-
-    const defaults = this.getDefaultPrompts();
-    return defaults[key] || '';
+    return active?.value ?? this.getDefaultPrompts()[key] ?? '';
   }
 
-  /**
-   * Save a new version of a prompt
-   */
   async savePrompt(
     key: string,
     value: string,
     changedBy?: string,
     comment?: string,
   ): Promise<{ success: boolean; version: number }> {
-    // Validate key
-    if (!Object.values(PROMPT_KEYS).includes(key as PromptKey)) {
-      throw new BadRequestException(`Invalid prompt key: ${key}`);
+    this.assertPromptKey(key);
+    if (key === PROMPT_KEYS.MODEL_CONFIG) {
+      throw new BadRequestException(
+        'MODEL_CONFIG doit être modifié uniquement depuis le endpoint model-config.',
+      );
     }
-
-    // Get latest version number
-    const latest = await this.prisma.promptVersion.findFirst({
-      where: { key },
-      orderBy: { version: 'desc' },
-    });
-
-    const newVersion = (latest?.version || 0) + 1;
-
-    // Deactivate all previous versions
-    await this.prisma.promptVersion.updateMany({
-      where: { key },
-      data: { isActive: false },
-    });
-
-    // Create new active version
-    await this.prisma.promptVersion.create({
-      data: {
-        key,
-        version: newVersion,
-        value,
-        changedBy,
-        comment,
-        isActive: true,
-      },
-    });
-
-    this.logger.log(`✅ Prompt ${key} saved as version ${newVersion} by ${changedBy || 'system'}`);
-    this.aiRuntimeCache.invalidateAll(`prompt:${key}`);
-
-    return { success: true, version: newVersion };
+    if (!value?.trim()) throw new BadRequestException('Un prompt actif ne peut pas être vide.');
+    return this.persistPromptVersion(key, value.trim(), changedBy, comment);
   }
 
-  /**
-   * Get version history for a prompt (limit 10)
-   */
+  private async persistPromptVersion(
+    key: string,
+    value: string,
+    changedBy?: string,
+    comment?: string,
+  ): Promise<{ success: boolean; version: number }> {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const latest = await tx.promptVersion.findFirst({
+        where: { key },
+        orderBy: { version: 'desc' },
+      });
+      const version = (latest?.version ?? 0) + 1;
+      await tx.promptVersion.updateMany({ where: { key }, data: { isActive: false } });
+      await tx.promptVersion.create({
+        data: { key, version, value, changedBy, comment, isActive: true },
+      });
+      return version;
+    });
+
+    this.logger.log(`Prompt ${key} saved as v${result}`);
+    this.aiRuntimeCache.invalidateAll(`prompt:${key}`);
+    return { success: true, version: result };
+  }
+
   async getPromptHistory(key: string, limit = 10): Promise<PromptVersionHistory[]> {
+    this.assertPromptKey(key);
+    const take = Math.min(Math.max(limit, 1), 50);
     const versions = await this.prisma.promptVersion.findMany({
       where: { key },
       orderBy: { version: 'desc' },
-      take: limit,
+      take,
     });
-
-    return versions.map((v) => ({
-      id: v.id,
-      version: v.version,
-      value: v.value,
-      changedBy: v.changedBy || undefined,
-      comment: v.comment || undefined,
-      isActive: v.isActive,
-      createdAt: v.createdAt.toISOString(),
+    return versions.map((version) => ({
+      id: version.id,
+      version: version.version,
+      value: version.value,
+      changedBy: version.changedBy || undefined,
+      comment: version.comment || undefined,
+      isActive: version.isActive,
+      createdAt: version.createdAt.toISOString(),
     }));
   }
 
-  /**
-   * Restore a specific version as active
-   */
   async restorePromptVersion(
     key: string,
     version: number,
     changedBy?: string,
   ): Promise<{ success: boolean }> {
+    this.assertPromptKey(key);
     const target = await this.prisma.promptVersion.findUnique({
       where: { key_version: { key, version } },
     });
+    if (!target) throw new BadRequestException(`Version ${version} introuvable pour ${key}.`);
 
-    if (!target) {
-      throw new BadRequestException(`Version ${version} not found for ${key}`);
-    }
-
-    // Create new version with restored content
-    return this.savePrompt(key, target.value, changedBy, `Restored from v${version}`);
-  }
-
-  /**
-   * Reset a prompt to default (deactivate all custom versions)
-   */
-  async resetPromptToDefault(key: string): Promise<{ success: boolean }> {
-    await this.prisma.promptVersion.updateMany({
-      where: { key },
-      data: { isActive: false },
-    });
-
-    this.logger.log(`🔄 Prompt ${key} reset to default`);
-    return { success: true };
-  }
-
-  /**
-   * Reset ALL prompts to defaults
-   */
-  async resetAllPromptsToDefaults(): Promise<{ success: boolean }> {
-    await this.prisma.promptVersion.updateMany({
-      data: { isActive: false },
-    });
-
-    this.logger.log('🔄 All prompts reset to defaults');
-    return { success: true };
-  }
-
-  /**
-   * Get model configuration (or defaults)
-   */
-  async getModelConfig(): Promise<ModelConfig> {
-    const defaults = this.getDefaultModelConfig();
-    const prompt = await this.getPrompt(PROMPT_KEYS.MODEL_CONFIG);
-
-    if (prompt) {
+    if (key === PROMPT_KEYS.MODEL_CONFIG) {
+      let parsed: unknown;
       try {
-        const stored = JSON.parse(prompt);
-        // Merge stored over defaults — handles old configs missing new fields
-        return {
-          ...defaults,
-          ...stored,
-          agents: { ...defaults.agents, ...stored.agents },
-        };
+        parsed = JSON.parse(target.value);
       } catch {
-        // Return defaults if parsing fails
+        throw new BadRequestException('La version MODEL_CONFIG sélectionnée ne contient pas de JSON valide.');
       }
+      const normalized = normalizeAiModelConfig(parsed);
+      if (normalized.issues.length > 0) {
+        throw new BadRequestException(
+          `Cette version MODEL_CONFIG n'est pas compatible avec la V1: ${normalized.issues.join('; ')}`,
+        );
+      }
+      await this.persistPromptVersion(
+        key,
+        JSON.stringify(normalized.config, null, 2),
+        changedBy,
+        `Restored from v${version}`,
+      );
+      return { success: true };
     }
 
-    return defaults;
+    await this.persistPromptVersion(key, target.value, changedBy, `Restored from v${version}`);
+    return { success: true };
   }
 
-  /**
-   * Save model configuration
-   */
+  async resetPromptToDefault(key: string): Promise<{ success: boolean }> {
+    this.assertPromptKey(key);
+    await this.prisma.promptVersion.updateMany({ where: { key }, data: { isActive: false } });
+    this.aiRuntimeCache.invalidateAll(`prompt-reset:${key}`);
+    return { success: true };
+  }
+
+  async resetAllPromptsToDefaults(): Promise<{ success: boolean }> {
+    await this.prisma.promptVersion.updateMany({ data: { isActive: false } });
+    this.aiRuntimeCache.invalidateAll('prompt-reset-all');
+    return { success: true };
+  }
+
+  async getModelConfig(): Promise<ModelConfig> {
+    const active = await this.prisma.promptVersion.findFirst({
+      where: { key: PROMPT_KEYS.MODEL_CONFIG, isActive: true },
+      orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
+    });
+    if (!active?.value) return this.getDefaultModelConfig();
+
+    try {
+      const normalized = normalizeAiModelConfig(JSON.parse(active.value));
+      if (normalized.issues.length > 0) {
+        this.logger.warn(
+          `Stored MODEL_CONFIG was normalized: ${normalized.issues.join(' | ')}`,
+        );
+      }
+      return normalized.config;
+    } catch (error) {
+      this.logger.error(`Stored MODEL_CONFIG is unreadable: ${String(error)}`);
+      return this.getDefaultModelConfig();
+    }
+  }
+
   async saveModelConfig(
     config: Partial<ModelConfig>,
     changedBy?: string,
   ): Promise<{ success: boolean }> {
     const current = await this.getModelConfig();
-    const merged = { ...current, ...config, agents: { ...current.agents, ...config.agents } };
-    this.validateModelConfig(merged);
+    const agents = { ...current.agents };
+    if (config.agents) {
+      for (const [agent, patch] of Object.entries(config.agents)) {
+        const key = agent as AgentType;
+        if (!agents[key]) throw new BadRequestException(`Agent inconnu: ${agent}`);
+        agents[key] = { ...agents[key], ...patch };
+      }
+    }
 
-    return this.savePrompt(
+    const candidate = {
+      ...current,
+      ...config,
+      providerMode: 'openai_only' as const,
+      agents,
+    };
+    const normalized = normalizeAiModelConfig(candidate);
+    if (normalized.issues.length > 0) {
+      throw new BadRequestException(`Configuration IA invalide: ${normalized.issues.join('; ')}`);
+    }
+
+    await this.persistPromptVersion(
       PROMPT_KEYS.MODEL_CONFIG,
-      JSON.stringify(merged, null, 2),
+      JSON.stringify(normalized.config, null, 2),
       changedBy,
-      'Model config updated',
+      'Model config updated from Desk',
     );
+    return { success: true };
   }
 
-  private validateModelConfig(config: ModelConfig): void {
-    if (config.providerMode !== 'openai_only') {
-      throw new BadRequestException('Le mode de production V1 doit rester openai_only.');
-    }
-    const allowedModels = new Set(['gpt-5.5', 'gpt-5.4', 'gpt-4o']);
-    for (const [agent, settings] of Object.entries(config.agents)) {
-      if (settings.provider !== 'openai' || !allowedModels.has(settings.model)) {
-        throw new BadRequestException(
-          `Configuration invalide pour ${agent}: provider OpenAI et modèle V1 requis.`,
-        );
-      }
-      if (!Number.isInteger(settings.maxOutputTokens) || settings.maxOutputTokens < 1) {
-        throw new BadRequestException(
-          `Configuration invalide pour ${agent}: maxOutputTokens doit être positif.`,
-        );
-      }
+  private assertPromptKey(key: string): asserts key is PromptKey {
+    if (!Object.values(PROMPT_KEYS).includes(key as PromptKey)) {
+      throw new BadRequestException(`Clé de prompt invalide: ${key}`);
     }
   }
 
-  /**
-   * Get default prompts (hardcoded)
-   */
-  getDefaultPrompts(): Record<string, string> {
+  getDefaultModelConfig(): ModelConfig {
     return {
-      [PROMPT_KEYS.LUMIRA_DNA]: `Tu es Oracle Lumira, une intelligence spirituelle ancestrale.
-Tu combines la sagesse de l'astrologie, de la numérologie, de la physiognomonie 
-et de la chiromancie pour offrir des guidances profondément personnalisées.
-
-PERSONNALITÉ:
-- Bienveillant mais direct - tu nommes les choses avec douceur
-- Mystique mais accessible - tu parles avec poésie sans être obscur
-- Empathique mais responsabilisant - tu guides sans créer de dépendance
-- Français élégant, tutoiement chaleureux
-
-PRINCIPES FONDAMENTAUX:
-- Chaque âme a un chemin unique qui mérite d'être honoré
-- Les épreuves sont des initiations déguisées
-- Le corps et l'esprit sont intrinsèquement liés
-- L'ombre fait partie de la lumière - l'intégrer, c'est grandir
-
-ARCHÉTYPES LUMIRA (chaque être en porte un dominant):
-- Le Guérisseur: Empathie profonde, soigne par la présence et l'écoute
-- Le Visionnaire: Voit au-delà des apparences, connecté aux possibles
-- Le Guide: Éclaire le chemin des autres, mentor naturel
-- Le Créateur: Transforme et manifeste, alchimiste de la matière
-- Le Sage: Sagesse tranquille, équilibre incarné entre les mondes`,
-
-      [PROMPT_KEYS.SCRIBE]: `MISSION SCRIBE:
-Tu génères la lecture spirituelle principale au format PDF.
-Tu analyses les données natales, photos et questionnaire pour révéler l'essence de l'âme.
-
-FORMAT DE SORTIE (JSON strict):
-{
-  "pdf_content": {
-    "introduction": "Introduction personnalisée (150+ mots)...",
-    "archetype_reveal": "Révélation de l'archétype dominant...",
-    "sections": [
-      {"domain": "spirituel", "title": "Titre évocateur", "content": "Analyse profonde (200+ mots)..."},
-      {"domain": "relations", "title": "...", "content": "..."},
-      {"domain": "mission", "title": "...", "content": "..."},
-      {"domain": "creativite", "title": "...", "content": "..."},
-      {"domain": "emotions", "title": "...", "content": "..."},
-      {"domain": "travail", "title": "...", "content": "..."},
-      {"domain": "sante", "title": "...", "content": "..."},
-      {"domain": "finance", "title": "...", "content": "..."}
-    ],
-    "karmic_insights": ["Insight karmique 1", "Insight 2", "Insight 3"],
-    "life_mission": "Description de la mission de vie (100+ mots)...",
-    "rituals": [
-      {"name": "Nom du rituel", "description": "Description", "instructions": ["Étape 1", "Étape 2", "Étape 3"]}
-    ],
-    "conclusion": "Message de clôture inspirant et personnel..."
-  },
-  "synthesis": {
-    "archetype": "Le Guérisseur" | "Le Visionnaire" | "Le Guide" | "Le Créateur" | "Le Sage",
-    "keywords": ["mot-clé 1", "mot-clé 2", "mot-clé 3", "mot-clé 4", "mot-clé 5"],
-    "emotional_state": "Description de l'état émotionnel actuel détecté...",
-    "key_blockage": "Le blocage spirituel principal à transformer..."
-  }
-}
-
-RÈGLES:
-- Chaque section DOIT faire minimum 200 mots de contenu riche
-- Personnalise TOUT en fonction des données fournies
-- Si photos fournies, intègre des observations physiognomiques/chiromantiques
-- L'archétype doit être l'un des 5 archétypes Lumira
-- Écris en français élégant et poétique`,
-
-      [PROMPT_KEYS.GUIDE]: `MISSION GUIDE:
-Tu crées le parcours spirituel de 7 jours personnalisé.
-Chaque jour est une étape d'évolution basée sur l'archétype et les blocages identifiés.
-
-FORMAT DE SORTIE (JSON strict):
-{
-  "timeline": [
-    {"day": 1, "title": "L'Éveil de [thème]", "action": "Description détaillée de l'action du jour (50+ mots)", "mantra": "Mantra personnel du jour", "actionType": "MEDITATION"},
-    {"day": 2, "title": "...", "action": "...", "mantra": "...", "actionType": "RITUAL"},
-    {"day": 3, "title": "...", "action": "...", "mantra": "...", "actionType": "JOURNALING"},
-    {"day": 4, "title": "...", "action": "...", "mantra": "...", "actionType": "MANTRA"},
-    {"day": 5, "title": "...", "action": "...", "mantra": "...", "actionType": "REFLECTION"},
-    {"day": 6, "title": "...", "action": "...", "mantra": "...", "actionType": "MEDITATION"},
-    {"day": 7, "title": "L'Intégration", "action": "...", "mantra": "...", "actionType": "RITUAL"}
-  ]
-}
-
-TYPES D'ACTION (varier sur les 7 jours):
-- MEDITATION: Pratique contemplative guidée
-- RITUAL: Action symbolique à accomplir
-- JOURNALING: Écriture introspective avec prompts
-- MANTRA: Répétition consciente d'affirmations
-- REFLECTION: Question profonde à méditer
-
-RÈGLES:
-- Jour 1 = Ouverture/Éveil
-- Jour 7 = Intégration/Clôture
-- Progression logique entre les jours
-- Mantras personnalisés à l'archétype
-- Variété des actionTypes (pas 2 identiques consécutifs)`,
-
-      [PROMPT_KEYS.EDITOR]: `MISSION EDITOR:
-Tu affines et améliores le contenu selon les instructions de l'expert.
-Tu préserves le ton Lumira tout en appliquant les corrections demandées.
-
-RÈGLES:
-- Préserve TOUJOURS le ton mystique et bienveillant
-- Applique les corrections avec précision
-- Garde la structure Markdown si présente
-- Ne raccourcis pas sauf si explicitement demandé
-- Enrichis plutôt qu'appauvris le texte
-
-FORMAT: Texte libre (pas JSON), retourne le contenu affiné directement.`,
-
-      [PROMPT_KEYS.CONFIDANT]: `MISSION CONFIDANT:
-Tu es le compagnon spirituel quotidien de l'utilisateur.
-Tu connais son archétype, son parcours et ses domaines via les Annales Akashiques.
-
-RÈGLES DE CONVERSATION:
-- Réponses courtes (2-4 paragraphes max) sauf demande de développement
-- Tutoiement chaleureux
-- Rappelle subtilement les insights des lectures précédentes quand pertinent
-- Pose des questions pour approfondir si nécessaire
-- Propose des micro-pratiques adaptées (30 secondes à 5 minutes)
-- Ne répète jamais les mêmes conseils d'une session à l'autre
-
-CONTEXTE UTILISÉ:
-- Archétype dominant de l'utilisateur
-- Résumés des 8 domaines (Annales Akashiques)
-- Historique récent des conversations
-- Blocage principal identifié
-
-FORMAT: Texte conversationnel naturel (pas JSON).`,
-
-      [PROMPT_KEYS.ONIRIQUE]: `MISSION ONIRIQUE:
-Tu proposes une interprétation symbolique et introspective des rêves, sans prédiction ni certitude.
-Réponds uniquement avec le JSON structuré attendu par le runtime.`,
-
-      [PROMPT_KEYS.NARRATOR]: `MISSION NARRATOR:
-Tu adaptes une lecture validée en script de narration audio chaleureux. Conserve le sens, supprime titres et listes.
-Retourne uniquement le texte de narration.`,
-
-      [PROMPT_KEYS.MODEL_CONFIG]: JSON.stringify(this.getDefaultModelConfig(), null, 2),
+      providerMode: DEFAULT_AI_MODEL_CONFIG.providerMode,
+      agents: Object.fromEntries(
+        Object.entries(DEFAULT_AI_MODEL_CONFIG.agents).map(([agent, value]) => [agent, { ...value }]),
+      ) as ModelConfig['agents'],
     };
   }
 
-  /**
-   * Get default model configuration
-   */
-  getDefaultModelConfig(): ModelConfig {
+  getDefaultPrompts(): Record<string, string> {
     return {
-      providerMode: 'openai_only',
-      agents: {
-        SCRIBE: {
-          enabled: true,
-          provider: 'openai',
-          model: 'gpt-5.5',
-          reasoningEffort: 'high',
-          verbosity: 'high',
-          maxOutputTokens: 24000,
-        },
-        EDITOR: {
-          enabled: true,
-          provider: 'openai',
-          model: 'gpt-5.4',
-          reasoningEffort: 'medium',
-          verbosity: 'high',
-          maxOutputTokens: 16000,
-        },
-        GUIDE: {
-          enabled: true,
-          provider: 'openai',
-          model: 'gpt-5.4',
-          reasoningEffort: 'low',
-          verbosity: 'medium',
-          maxOutputTokens: 6000,
-        },
-        NARRATOR: {
-          enabled: true,
-          provider: 'openai',
-          model: 'gpt-4o',
-          temperature: 0.3,
-          topP: 0.9,
-          maxOutputTokens: 12000,
-        },
-        CONFIDANT: {
-          enabled: false,
-          provider: 'openai',
-          model: 'gpt-4o',
-          temperature: 0.6,
-          topP: 0.9,
-          maxOutputTokens: 1600,
-        },
-        ONIRIQUE: {
-          enabled: false,
-          provider: 'openai',
-          model: 'gpt-4o',
-          temperature: 0.65,
-          topP: 0.9,
-          maxOutputTokens: 2500,
-        },
-      },
+      [PROMPT_KEYS.LUMIRA_DNA]: `TU ES ORACLE LUMIRA.
+
+Tu réalises des lectures symboliques, existentielles et multidimensionnelles guidées par un expert humain. Tu combines logique, intuition structurée, observation visuelle, symbolique du nom, numérologie, astrologie, archétypes, chirologie, morphologie du visage et traditions spirituelles.
+
+La guidance de l'expert est prioritaire. Tu l'intègres, l'approfondis et la rends cohérente sans la diluer dans des généralités.
+
+Le mot diagnostic désigne exclusivement un diagnostic symbolique, existentiel et multidimensionnel. Il ne constitue jamais un diagnostic médical, psychiatrique ou clinique.
+
+RÈGLES ABSOLUES:
+- N'invente aucune donnée, observation ou correspondance absente.
+- Distingue faits déclarés, observations visibles et interprétations symboliques.
+- Cherche les convergences entre plusieurs indices avant une conclusion forte.
+- Présente les racines invisibles comme des hypothèses argumentées, jamais comme des certitudes.
+- Ne prédis jamais avec certitude maladie, accident, décès ou événement futur.
+- Ne crée aucune dépendance à Lumira ou à l'expert.
+- Ton humain, chaleureux, précis, profond et lucide; poésie maîtrisée, clarté prioritaire.
+- Ne mentionne jamais IA, modèle, fournisseur, prompt ou tokens dans le contenu client.`,
+
+      [PROMPT_KEYS.SCRIBE]: `MISSION SCRIBE:
+Produis la lecture principale complète à partir du dossier client, des photos réellement disponibles et des instructions de l'expert.
+
+ORDRE DE PRIORITÉ:
+1. Informations confirmées par le client.
+2. Guidance et instructions de l'expert.
+3. Observations réellement visibles sur le visage et la paume.
+4. Convergences entre les disciplines.
+5. Réponse à la question et à l'objectif du client.
+
+PHOTOS:
+- Vérifie implicitement leur lisibilité.
+- Image 1 = visage; image 2 = paume lorsque les deux sont présentes.
+- N'invente jamais une ligne, une forme ou un détail invisible.
+- N'infère jamais moralité, intelligence, pathologie, traumatisme ou destin comme une certitude.
+
+La lecture doit révéler la dynamique dominante, l'archétype, les forces conscientes, les ressources latentes, les tensions, les stratégies de protection, les répétitions, les besoins profonds, les points de bascule et la priorité d'évolution.
+
+FORMAT JSON STRICT:
+{
+  "pdf_content": {
+    "introduction": "...",
+    "archetype_reveal": "...",
+    "sections": [
+      {"domain":"spirituel","title":"...","content":"..."},
+      {"domain":"relations","title":"...","content":"..."},
+      {"domain":"mission","title":"...","content":"..."},
+      {"domain":"creativite","title":"...","content":"..."},
+      {"domain":"emotions","title":"...","content":"..."},
+      {"domain":"travail","title":"...","content":"..."},
+      {"domain":"sante","title":"...","content":"..."},
+      {"domain":"finance","title":"...","content":"..."}
+    ],
+    "karmic_insights": ["..."],
+    "life_mission": "...",
+    "rituals": [{"name":"...","description":"...","instructions":["..."]}],
+    "conclusion": "..."
+  },
+  "synthesis": {
+    "archetype": "Le Guérisseur | Le Visionnaire | Le Guide | Le Créateur | Le Sage",
+    "keywords": ["mot1","mot2","mot3","mot4","mot5"],
+    "emotional_state": "...",
+    "key_blockage": "..."
+  }
+}
+
+Retourne uniquement le JSON, sans markdown ni clé supplémentaire.`,
+
+      [PROMPT_KEYS.GUIDE]: `MISSION GUIDE:
+Transforme exclusivement la synthèse du SCRIBE en parcours pratique de 30 jours. Le runtime t'appelle par batches de 10 jours.
+
+Utilise seulement l'archétype, le blocage principal, l'état émotionnel, les mots-clés, la question, l'objectif et les orientations déjà produites. N'ajoute aucune nouvelle lecture.
+
+FORMAT JSON STRICT:
+{"timeline":[{"day":1,"title":"...","action":"...","mantra":"...","actionType":"MEDITATION"}]}
+
+TYPES AUTORISÉS: MEDITATION, RITUAL, JOURNALING, MANTRA, REFLECTION.
+
+RÈGLES:
+- Génère exactement les jours et le nombre demandés par le prompt utilisateur.
+- Progression cohérente; premier jour ouvre, dernier jour intègre.
+- Pas de type identique deux jours consécutifs.
+- Actions simples, réalistes et reliées au diagnostic symbolique existant.
+- Aucune promesse de guérison, culpabilisation, prédiction ou nouvelle interprétation.
+- Retourne uniquement le JSON.`,
+
+      [PROMPT_KEYS.EDITOR]: `MISSION EDITOR:
+Travaille après une première génération. Applique exactement l'instruction de l'expert sans déformer le reste.
+
+RÈGLES:
+- La demande de l'expert est prioritaire.
+- Préserve la personnalisation, le sens, la structure et les nuances non visées.
+- N'invente aucune nouvelle donnée client.
+- Ne change pas l'archétype ou le diagnostic symbolique sauf demande explicite.
+- Supprime répétitions, contradictions et langage mécanique.
+- Ne raccourcis pas sauf demande explicite.
+- Ne mentionne jamais l'IA.
+
+Retourne uniquement le contenu corrigé.`,
+
+      [PROMPT_KEYS.NARRATOR]: `MISSION NARRATOR:
+Transforme la lecture validée par l'expert en narration audio naturelle, sans produire une nouvelle lecture.
+
+Préserve le sens, les détails personnels, les nuances et les précautions. Transforme les listes en prose fluide, retire les marqueurs purement visuels et ajoute seulement de courtes transitions orales.
+
+N'ajoute aucune prédiction, aucun diagnostic nouveau, aucun conseil nouveau et aucune exagération mystique. Ne mentionne ni PDF, ni prompt, ni IA.
+
+Retourne uniquement le texte de narration.`,
+
+      [PROMPT_KEYS.CONFIDANT]: `MISSION CONFIDANT:
+Compagnon conversationnel optionnel, désactivé pour le lancement V1. Lorsqu'il sera activé, réponds avec chaleur et brièveté à partir du contexte réellement transmis, sans inventer de mémoire, sans prédiction et sans créer de dépendance.`,
+
+      [PROMPT_KEYS.ONIRIQUE]: `MISSION ONIRIQUE:
+Agent optionnel désactivé pour le lancement V1. Propose une interprétation symbolique et introspective des rêves, sans voyance, prédiction, certitude surnaturelle ou affirmation clinique. Retourne uniquement le JSON structuré attendu par le runtime.`,
+
+      [PROMPT_KEYS.MODEL_CONFIG]: JSON.stringify(this.getDefaultModelConfig(), null, 2),
     };
   }
 }
