@@ -19,7 +19,7 @@ const baseSnapshot: AiPromptSnapshot = {
       SCRIBE: {
         enabled: true,
         provider: 'openai',
-        model: 'gpt-5.5',
+        model: 'gpt-5.5-2026-04-23',
         reasoningEffort: 'high',
         verbosity: 'high',
         maxOutputTokens: 24000,
@@ -27,7 +27,7 @@ const baseSnapshot: AiPromptSnapshot = {
       GUIDE: {
         enabled: true,
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: 'gpt-5.4-2026-03-05',
         reasoningEffort: 'low',
         verbosity: 'medium',
         maxOutputTokens: 6000,
@@ -35,7 +35,7 @@ const baseSnapshot: AiPromptSnapshot = {
       EDITOR: {
         enabled: true,
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: 'gpt-5.4-2026-03-05',
         reasoningEffort: 'medium',
         verbosity: 'high',
         maxOutputTokens: 16000,
@@ -43,7 +43,7 @@ const baseSnapshot: AiPromptSnapshot = {
       NARRATOR: {
         enabled: true,
         provider: 'openai',
-        model: 'gpt-4o',
+        model: 'gpt-4o-2024-11-20',
         temperature: 0.3,
         topP: 0.9,
         maxOutputTokens: 12000,
@@ -51,7 +51,7 @@ const baseSnapshot: AiPromptSnapshot = {
       CONFIDANT: {
         enabled: false,
         provider: 'openai',
-        model: 'gpt-4o',
+        model: 'gpt-4o-2024-11-20',
         temperature: 0.6,
         topP: 0.9,
         maxOutputTokens: 1600,
@@ -59,7 +59,7 @@ const baseSnapshot: AiPromptSnapshot = {
       ONIRIQUE: {
         enabled: false,
         provider: 'openai',
-        model: 'gpt-4o',
+        model: 'gpt-4o-2024-11-20',
         temperature: 0.65,
         topP: 0.9,
         maxOutputTokens: 2500,
@@ -98,7 +98,7 @@ describe('AiExecutionResolverService', () => {
 
     expect(aiRouting.resolveRule).not.toHaveBeenCalled();
     expect(resolved.provider).toBe('openai');
-    expect(resolved.model).toBe('gpt-5.5');
+    expect(resolved.model).toBe('gpt-5.5-2026-04-23');
     expect(resolved.reasoningEffort).toBe('high');
     expect(resolved.routingSource).toBe('global:SCRIBE');
   });
@@ -126,7 +126,7 @@ describe('AiExecutionResolverService', () => {
     );
 
     expect(resolved.provider).toBe('openai');
-    expect(resolved.model).toBe('gpt-5.5');
+    expect(resolved.model).toBe('gpt-5.5-2026-04-23');
     expect(resolved.maxTokens).toBe(24000);
   });
 
@@ -136,7 +136,7 @@ describe('AiExecutionResolverService', () => {
       baseSnapshot,
     );
 
-    expect(resolved.model).toBe('gpt-5.4');
+    expect(resolved.model).toBe('gpt-5.4-2026-03-05');
     expect(resolved.routingSource).toBe('global:GUIDE');
     expect(aiRouting.resolveRule).not.toHaveBeenCalled();
   });
@@ -198,13 +198,13 @@ describe('AiExecutionResolverService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('resolves NARRATOR with the audio mission and configured GPT-4o params', async () => {
+  it('resolves NARRATOR with the pinned audio snapshot and configured params', async () => {
     const resolved = await service.resolve(
       buildAiContext('NARRATOR', AiMission.AUDIO_NARRATION),
       baseSnapshot,
     );
 
-    expect(resolved.model).toBe('gpt-4o');
+    expect(resolved.model).toBe('gpt-4o-2024-11-20');
     expect(resolved.temperature).toBe(0.3);
     expect(resolved.maxTokens).toBe(12000);
   });
