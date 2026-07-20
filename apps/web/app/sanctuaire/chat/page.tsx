@@ -25,11 +25,7 @@ type RequestStatus =
   | 'RESOLVED'
   | 'ARCHIVED';
 
-type RequestCategory =
-  | 'READING_CLARIFICATION'
-  | 'PERSONAL_SITUATION'
-  | 'TECHNICAL_HELP'
-  | 'OTHER';
+type RequestCategory = 'READING_CLARIFICATION' | 'PERSONAL_SITUATION' | 'TECHNICAL_HELP' | 'OTHER';
 
 interface GuidanceMessage {
   id: string;
@@ -122,7 +118,9 @@ export default function GuidancePage() {
       setReadings(readingList);
       if (requestList[0]) await loadDetail(requestList[0].id);
     } catch {
-      setError('Vos demandes ne peuvent pas être chargées. Vérifiez votre connexion puis réessayez.');
+      setError(
+        'Vos demandes ne peuvent pas être chargées. Vérifiez votre connexion puis réessayez.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -187,7 +185,7 @@ export default function GuidancePage() {
   const selectedMessages = useMemo(() => selected?.messages || [], [selected]);
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 sm:px-6 sm:py-8">
+    <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 pb-28 sm:px-6 sm:py-8 lg:pb-8">
       <header className="rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
@@ -202,8 +200,8 @@ export default function GuidancePage() {
                 Demander un éclairage
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
-                Votre message arrive dans le Desk Lumira et reste lié à votre dossier. Une personne de
-                l’équipe vous répond ici ; il ne s’agit pas d’une réponse automatique.
+                Votre message arrive dans le Desk Lumira et reste lié à votre dossier. Une personne
+                de l’équipe vous répond ici ; il ne s’agit pas d’une réponse automatique.
               </p>
             </div>
           </div>
@@ -303,7 +301,11 @@ export default function GuidancePage() {
               disabled={subject.trim().length < 3 || content.trim().length < 10 || isCreating}
               className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-horizon-400 px-5 py-2 text-sm font-semibold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isCreating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
               Envoyer au Desk
             </button>
           </div>
@@ -358,7 +360,7 @@ export default function GuidancePage() {
           )}
         </aside>
 
-        <section className="flex min-h-[440px] min-w-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50">
+        <section className="flex min-h-[min(440px,calc(100dvh-14rem))] min-w-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 lg:min-h-[440px]">
           {isDetailLoading ? (
             <div className="grid flex-1 place-items-center">
               <Loader2 className="h-7 w-7 animate-spin text-horizon-300" />
@@ -381,13 +383,17 @@ export default function GuidancePage() {
                       {selected.subject}
                     </h2>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stellar-500">
-                      <span className={`rounded-full px-2 py-1 ${status?.badge}`}>{status?.label}</span>
+                      <span className={`rounded-full px-2 py-1 ${status?.badge}`}>
+                        {status?.label}
+                      </span>
                       {selected.relatedReading?.orderNumber && (
                         <span className="inline-flex items-center gap-1">
                           <BookOpen className="h-3.5 w-3.5" /> {selected.relatedReading.orderNumber}
                         </span>
                       )}
-                      {selected.assignedExpert?.name && <span>Suivi par {selected.assignedExpert.name}</span>}
+                      {selected.assignedExpert?.name && (
+                        <span>Suivi par {selected.assignedExpert.name}</span>
+                      )}
                     </div>
                   </div>
                   {selected.status === 'RESOLVED' && (
@@ -466,7 +472,8 @@ export default function GuidancePage() {
                 )}
                 {selected.status === 'WAITING_EXPERT' && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs text-stellar-500">
-                    <Clock3 className="h-3.5 w-3.5" /> Votre message est en attente de réponse du Desk.
+                    <Clock3 className="h-3.5 w-3.5" /> Votre message est en attente de réponse du
+                    Desk.
                   </p>
                 )}
               </div>
