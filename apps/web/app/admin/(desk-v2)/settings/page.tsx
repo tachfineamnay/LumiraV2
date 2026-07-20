@@ -1,33 +1,39 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Settings,
-  Key,
-  Brain,
-  Bot,
-  Sliders,
-  Save,
-  RotateCcw,
-  Check,
-  X,
   AlertCircle,
-  Loader2,
-  History,
+  Bot,
+  Brain,
+  Check,
   ChevronDown,
   ChevronUp,
-  Sparkles,
-  Zap,
+  CircleDollarSign,
+  History,
+  Key,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Settings,
+  ShieldCheck,
   TestTube,
-  Info,
+  X,
 } from 'lucide-react';
 import expertApi from '@/lib/expertApi';
 import { cn } from '@/lib/utils';
 
-// =============================================================================
-// TYPES
-// =============================================================================
+type AgentKey = 'SCRIBE' | 'EDITOR' | 'GUIDE' | 'NARRATOR' | 'CONFIDANT' | 'ONIRIQUE';
+type TabId = 'readiness' | 'credentials' | 'personality' | 'agents' | 'models';
+type ProbeStatus = 'ok' | 'error' | 'not_tested';
+type CredentialState =
+  | 'not_configured'
+  | 'configured'
+  | 'not_tested'
+  | 'connection_ok'
+  | 'test_failed'
+  | 'quota_billing'
+  | 'model_inaccessible';
 
 interface PromptWithMeta {
   key: string;
@@ -48,40 +54,6 @@ interface PromptHistory {
   createdAt: string;
 }
 
-type AIProvider = 'gemini' | 'openai';
-
-interface AgentProviders {
-  SCRIBE: AIProvider;
-  GUIDE: AIProvider;
-  EDITOR: AIProvider;
-  CONFIDANT: AIProvider;
-  ONIRIQUE: AIProvider;
-  NARRATOR: AIProvider;
-}
-
-interface ModelConfig {
-  providerMode: 'openai_only' | 'comparison';
-  agents: Record<string, AgentModelConfig>;
-  // Legacy fields are retained only to render old persisted payloads safely.
-  heavyModel: string;
-  flashModel: string;
-  heavyTemperature: number;
-  heavyTopP: number;
-  heavyMaxTokens: number;
-  flashTemperature: number;
-  flashTopP: number;
-  flashMaxTokens: number;
-  openaiHeavyModel: string;
-  openaiFlashModel: string;
-  openaiHeavyTemperature: number;
-  openaiHeavyTopP: number;
-  openaiHeavyMaxTokens: number;
-  openaiFlashTemperature: number;
-  openaiFlashTopP: number;
-  openaiFlashMaxTokens: number;
-  agentProviders: AgentProviders;
-}
-
 interface AgentModelConfig {
   enabled: boolean;
   provider: 'openai';
@@ -93,96 +65,148 @@ interface AgentModelConfig {
   maxOutputTokens: number;
 }
 
-type TabId = 'credentials' | 'personality' | 'agents' | 'models' | 'routing';
+interface ModelConfig {
+  providerMode: 'openai_only';
+  agents: Record<AgentKey, AgentModelConfig>;
+}
 
-const AGENT_INFO: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
-  SCRIBE: {
-    label: 'SCRIBE',
-    icon: <Sparkles className="w-4 h-4" />,
-    description: 'Génère la lecture spirituelle principale (PDF)',
-  },
-  GUIDE: {
-    label: 'GUIDE',
-    icon: <Zap className="w-4 h-4" />,
-    description: 'Crée le parcours mensuel de 30 jours, en 3 batches de 10 jours',
-  },
-  EDITOR: {
-    label: 'EDITOR',
-    icon: <Bot className="w-4 h-4" />,
-    description: 'Affine le contenu selon les instructions expert',
-  },
-  CONFIDANT: {
-    label: 'CONFIDANT',
-    icon: <Brain className="w-4 h-4" />,
-    description: 'Compagnon spirituel quotidien (chat)',
-  },
-  ONIRIQUE: {
-    label: 'ONIRIQUE',
-    icon: <Sparkles className="w-4 h-4" />,
-    description: 'Interprète les rêves (introspection symbolique)',
-  },
-  NARRATOR: {
-    label: 'NARRATOR',
-    icon: <Zap className="w-4 h-4" />,
-    description: 'Reformule le texte en script audio (TTS)',
-  },
+interface ProviderStatus {
+  envVar: string;
+  configured: boolean;
+  state: CredentialState;
+  model: string;
+  lastTestedAt?: string;
+  lastError?: string;
+  text: ProbeStatus;
+  multimodal?: ProbeStatus;
+}
+
+interface CredentialsStatus {
+  openai: ProviderStatus;
+  gemini: ProviderStatus;
+}
+
+interface ReadinessCheck {
+  id: string;
+  label: string;
+  level: 'pass' | 'warning' | 'fail';
+  detail: string;
+}
+
+interface AiRunRow {
+  id: string;
+  orderId?: string | null;
+  agent: string;
+  mission: string;
+  provider: string;
+  model: string;
+  routingSource?: string | null;
+  status: 'SUCCESS' | 'ERROR';
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  estimatedCost?: number | null;
+  durationMs?: number | null;
+  errorCode?: string | null;
+  startedAt: string;
+}
+
+interface ReadinessResponse {
+  ready: boolean;
+  verdict: 'GO' | 'CONDITIONAL_GO' | 'NO_GO';
+  generatedAt: string;
+  summary: { failures: number; warnings: number; passes: number };
+  checks: ReadinessCheck[];
+  effectiveConfig: ModelConfig;
+  activePromptVersions: Array<{
+    id: string;
+    key: string;
+    version: number;
+    changedBy?: string | null;
+    comment?: string | null;
+    createdAt: string;
+  }>;
+  activeRoutingRules: Array<{
+    id: string;
+    productLevel: string;
+    agent: string;
+    mission: string;
+    provider: string;
+    model: string;
+  }>;
+  recentRuns: AiRunRow[];
+  recentRunSummary: {
+    count: number;
+    successes: number;
+    errors: number;
+    estimatedCost: number;
+  };
+}
+
+interface ConnectionTestResult {
+  success: boolean;
+  provider: 'openai';
+  model: string;
+  testedAt: string;
+  text: ProbeStatus;
+  multimodal?: ProbeStatus;
+  error?: string;
+}
+
+const AGENTS: Array<{
+  key: AgentKey;
+  label: string;
+  description: string;
+}> = [
+  { key: 'SCRIBE', label: 'SCRIBE', description: 'Lecture principale multimodale et synthèse' },
+  { key: 'EDITOR', label: 'EDITOR', description: 'Corrections guidées par l’expert' },
+  { key: 'GUIDE', label: 'GUIDE', description: 'Parcours de 30 jours en batches de 10 jours' },
+  { key: 'NARRATOR', label: 'NARRATOR', description: 'Adaptation de la lecture validée pour l’audio' },
+  { key: 'CONFIDANT', label: 'CONFIDANT', description: 'Compagnon conversationnel, hors lancement V1' },
+  { key: 'ONIRIQUE', label: 'ONIRIQUE', description: 'Lecture symbolique des rêves, hors lancement V1' },
+];
+
+const MODEL_PRICES: Record<AgentModelConfig['model'], string> = {
+  'gpt-5.5': '5 $ entrée / 30 $ sortie par million',
+  'gpt-5.4': '2,50 $ entrée / 15 $ sortie par million',
+  'gpt-4o': '2,50 $ entrée / 10 $ sortie par million',
 };
 
-// =============================================================================
-// COMPONENTS
-// =============================================================================
-
-function GlassCard({
-  children,
-  className = '',
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`bg-desk-surface shadow-sm border border-desk-border rounded-2xl ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
-        active
-          ? 'bg-amber-500/20 text-amber-600 border border-amber-500/30'
-          : 'text-desk-muted hover:text-desk-text hover:bg-desk-hover'
-      }`}
-    >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
-    </button>
-  );
-}
-
-function StatusBadge({ isCustom, version }: { isCustom: boolean; version: number }) {
-  if (!isCustom) {
-    return (
-      <span className="px-2 py-0.5 rounded-full bg-desk-card text-desk-muted text-xs">
-        Par défaut
-      </span>
-    );
+function errorMessage(error: unknown): string {
+  const value = error as {
+    response?: { status?: number; data?: { message?: string; error?: string } };
+    message?: string;
+  };
+  if (value.response?.status === 403) {
+    return 'Accès refusé. Le compte connecté doit avoir le rôle ADMIN.';
   }
   return (
-    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 text-xs">
-      Personnalisé (v{version})
+    value.response?.data?.message ||
+    value.response?.data?.error ||
+    value.message ||
+    'Erreur inconnue'
+  );
+}
+
+function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section className={cn('rounded-2xl border border-desk-border bg-desk-surface shadow-sm', className)}>
+      {children}
+    </section>
+  );
+}
+
+function StatusPill({ level, children }: { level: 'pass' | 'warning' | 'fail'; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
+        level === 'pass' && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600',
+        level === 'warning' && 'border-amber-500/30 bg-amber-500/10 text-amber-600',
+        level === 'fail' && 'border-red-500/30 bg-red-500/10 text-red-600',
+      )}
+    >
+      {level === 'pass' ? <Check className="h-3.5 w-3.5" /> : level === 'fail' ? <X className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+      {children}
     </span>
   );
 }
@@ -191,1763 +215,794 @@ function PromptEditor({
   promptKey,
   prompt,
   defaultValue,
+  saving,
   onSave,
   onReset,
-  saving,
+  onChanged,
 }: {
   promptKey: string;
   prompt: PromptWithMeta;
   defaultValue: string;
-  onSave: (value: string, comment?: string) => Promise<void>;
-  onReset: () => Promise<void>;
   saving: boolean;
+  onSave: (key: string, value: string, comment?: string) => Promise<void>;
+  onReset: (key: string) => Promise<void>;
+  onChanged: (dirty: boolean) => void;
 }) {
   const [value, setValue] = useState(prompt.value);
-  const [showHistory, setShowHistory] = useState(false);
-  const [history, setHistory] = useState<PromptHistory[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [comment, setComment] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<PromptHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
-  const hasChanges = value !== prompt.value;
-  const isDifferentFromDefault = value !== defaultValue;
+  useEffect(() => {
+    setValue(prompt.value);
+    setComment('');
+  }, [prompt.value, prompt.version]);
+
+  const dirty = value !== prompt.value;
+  useEffect(() => onChanged(dirty), [dirty, onChanged]);
 
   const loadHistory = async () => {
-    if (history.length > 0) {
-      setShowHistory(!showHistory);
+    if (historyOpen) {
+      setHistoryOpen(false);
       return;
     }
-    setLoadingHistory(true);
+    setHistoryLoading(true);
     try {
       const { data } = await expertApi.get(`/expert/settings/prompts/${promptKey}/history`);
       setHistory(data);
-      setShowHistory(true);
-    } catch (err) {
-      console.error('Failed to load history', err);
+      setHistoryOpen(true);
     } finally {
-      setLoadingHistory(false);
+      setHistoryLoading(false);
     }
   };
 
-  const restoreVersion = async (version: number) => {
-    try {
-      await expertApi.post(`/expert/settings/prompts/${promptKey}/restore/${version}`);
-      // Reload history and update value
-      const { data: newHistory } = await expertApi.get(
-        `/expert/settings/prompts/${promptKey}/history`,
-      );
-      setHistory(newHistory);
-      const active = newHistory.find((h: PromptHistory) => h.isActive);
-      if (active) {
-        setValue(active.value);
-      }
-    } catch (err) {
-      console.error('Failed to restore version', err);
-    }
+  const restore = async (version: number) => {
+    await expertApi.post(`/expert/settings/prompts/${promptKey}/restore/${version}`);
+    window.location.reload();
   };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <StatusBadge isCustom={prompt.isCustom} version={prompt.version} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <button
-            onClick={loadHistory}
-            disabled={loadingHistory}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-desk-muted hover:text-desk-text transition-colors"
-          >
-            {loadingHistory ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <History className="w-3 h-3" />
-            )}
-            Historique
-          </button>
+          <StatusPill level={prompt.isCustom ? 'warning' : 'pass'}>
+            {prompt.isCustom ? `Personnalisé v${prompt.version}` : 'Valeur contrôlée par défaut'}
+          </StatusPill>
+          {value !== defaultValue && (
+            <span className="text-xs text-desk-muted">Différent du défaut</span>
+          )}
         </div>
+        <button
+          type="button"
+          onClick={loadHistory}
+          disabled={historyLoading}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"
+        >
+          {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <History className="h-4 w-4" />}
+          Historique
+        </button>
       </div>
 
       <textarea
         value={value}
-        onChange={(e) => setValue(e.target.value)}
-        className="w-full h-40 p-3 bg-desk-input border border-desk-border rounded-lg text-sm text-desk-text placeholder-desk-subtle resize-y focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
-        placeholder="Entrez le prompt..."
+        onChange={(event) => setValue(event.target.value)}
+        rows={14}
+        className="w-full resize-y rounded-xl border border-desk-border bg-desk-input p-4 font-mono text-sm leading-6 text-desk-text outline-none focus:border-amber-500/60"
       />
 
-      <div className="flex items-center justify-between text-xs text-desk-subtle">
-        <span>{value.length} caractères</span>
-        {isDifferentFromDefault && (
-          <span className="text-amber-600">Différent de la valeur par défaut</span>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-desk-muted">
+        <span>{value.length.toLocaleString('fr-FR')} caractères</span>
+        {dirty && <span className="text-amber-600">Modification non enregistrée</span>}
       </div>
 
-      {hasChanges && (
+      {dirty && (
         <input
-          type="text"
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Note de modification (optionnel)..."
-          className="w-full px-3 py-2 bg-desk-input border border-desk-border-subtle rounded-lg text-sm text-desk-text placeholder-desk-subtle focus:outline-none focus:border-amber-500/30"
+          onChange={(event) => setComment(event.target.value)}
+          placeholder="Note de version, recommandée avant production"
+          className="w-full rounded-xl border border-desk-border bg-desk-input px-3 py-2.5 text-sm text-desk-text outline-none focus:border-amber-500/60"
         />
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => onSave(value, comment)}
-          disabled={!hasChanges || saving}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-desk-card disabled:text-desk-subtle text-black font-medium rounded-lg transition-colors text-sm"
+          type="button"
+          onClick={() => onSave(promptKey, value, comment)}
+          disabled={!dirty || saving || !value.trim()}
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Sauvegarder
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Enregistrer une version
         </button>
         {prompt.isCustom && (
           <button
-            onClick={onReset}
+            type="button"
+            onClick={() => onReset(promptKey)}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-desk-border px-4 py-2 text-sm text-desk-text hover:bg-desk-hover"
           >
-            <RotateCcw className="w-4 h-4" />
-            Reset
+            <RotateCcw className="h-4 w-4" />
+            Revenir au défaut
           </button>
         )}
       </div>
 
-      {/* History Panel */}
-      <AnimatePresence>
-        {showHistory && history.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-4 p-4 bg-desk-bg border border-desk-border-subtle rounded-xl space-y-2">
-              <h4 className="text-sm font-medium text-desk-text flex items-center gap-2">
-                <History className="w-4 h-4" />
-                Versions précédentes
-              </h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {history.map((h) => (
-                  <div
-                    key={h.id}
-                    className={`flex items-center justify-between p-2 rounded-lg ${
-                      h.isActive ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-desk-card'
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono text-desk-text">v{h.version}</span>
-                        {h.isActive && (
-                          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-600 text-[10px] rounded">
-                            Actif
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-desk-muted truncate">
-                        {h.comment || 'Sans commentaire'} •{' '}
-                        {new Date(h.createdAt).toLocaleDateString('fr-FR')}
-                      </div>
-                    </div>
-                    {!h.isActive && (
-                      <button
-                        onClick={() => restoreVersion(h.version)}
-                        className="px-2 py-1 text-xs text-amber-600 hover:bg-amber-500/10 rounded transition-colors"
-                      >
-                        Restaurer
-                      </button>
-                    )}
+      {historyOpen && (
+        <div className="space-y-2 rounded-xl border border-desk-border bg-desk-bg p-3">
+          {history.length === 0 ? (
+            <p className="text-sm text-desk-muted">Aucune version enregistrée.</p>
+          ) : (
+            history.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-desk-card p-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-desk-text">v{item.version}</span>
+                    {item.isActive && <StatusPill level="pass">Active</StatusPill>}
                   </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function AgentAccordion({
-  agentKey,
-  prompt,
-  defaultValue,
-  onSave,
-  onReset,
-  saving,
-}: {
-  agentKey: string;
-  prompt: PromptWithMeta;
-  defaultValue: string;
-  onSave: (value: string, comment?: string) => Promise<void>;
-  onReset: () => Promise<void>;
-  saving: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const info = AGENT_INFO[agentKey];
-
-  return (
-    <GlassCard className="overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-desk-hover transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center text-violet-600">
-            {info.icon}
-          </div>
-          <div className="text-left">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-desk-text">{info.label}</span>
-              <StatusBadge isCustom={prompt.isCustom} version={prompt.version} />
-            </div>
-            <p className="text-xs text-desk-muted">{info.description}</p>
-          </div>
-        </div>
-        {expanded ? (
-          <ChevronUp className="w-5 h-5 text-desk-muted" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-desk-muted" />
-        )}
-      </button>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="p-4 pt-0 border-t border-desk-border-subtle">
-              <PromptEditor
-                promptKey={agentKey}
-                prompt={prompt}
-                defaultValue={defaultValue}
-                onSave={onSave}
-                onReset={onReset}
-                saving={saving}
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </GlassCard>
-  );
-}
-
-// =============================================================================
-// TABS CONTENT
-// =============================================================================
-
-type ProviderCredentialState =
-  | 'not_configured'
-  | 'configured'
-  | 'not_tested'
-  | 'connection_ok'
-  | 'test_failed'
-  | 'quota_billing'
-  | 'model_inaccessible';
-
-interface ProviderCredentialStatus {
-  envVar: string;
-  configured: boolean;
-  state: ProviderCredentialState;
-  model: string;
-  lastTestedAt?: string;
-  lastError?: string;
-  text: 'ok' | 'error' | 'not_tested';
-  multimodal?: 'ok' | 'error' | 'not_tested';
-}
-
-interface AiCredentialsStatus {
-  gemini: ProviderCredentialStatus;
-  openai: ProviderCredentialStatus;
-}
-
-interface ConnectionTestResult {
-  success: boolean;
-  provider: 'gemini' | 'openai';
-  model: string;
-  testedAt: string;
-  text: 'ok' | 'error' | 'not_tested';
-  multimodal?: 'ok' | 'error' | 'not_tested';
-  error?: string;
-}
-
-const CREDENTIAL_STATE_LABELS: Record<ProviderCredentialState, string> = {
-  not_configured: 'Non configurée',
-  configured: 'Configurée',
-  not_tested: 'Configurée — non testée',
-  connection_ok: 'Connexion réussie',
-  test_failed: 'Configurée — test en échec',
-  quota_billing: 'Quota ou facturation absente',
-  model_inaccessible: 'Modèle inaccessible',
-};
-
-const CREDENTIAL_STATE_STYLES: Record<
-  ProviderCredentialState,
-  { badge: string; icon: 'ok' | 'warn' | 'error' }
-> = {
-  not_configured: { badge: 'bg-red-500/10 border-red-500/30 text-red-600', icon: 'error' },
-  configured: { badge: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600', icon: 'ok' },
-  not_tested: { badge: 'bg-amber-500/10 border-amber-500/30 text-amber-600', icon: 'warn' },
-  connection_ok: { badge: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600', icon: 'ok' },
-  test_failed: { badge: 'bg-red-500/10 border-red-500/30 text-red-600', icon: 'error' },
-  quota_billing: { badge: 'bg-orange-500/10 border-orange-500/30 text-orange-600', icon: 'warn' },
-  model_inaccessible: { badge: 'bg-red-500/10 border-red-500/30 text-red-600', icon: 'error' },
-};
-
-function ProviderCredentialCard({
-  title,
-  envVar,
-  accent,
-  provider,
-  testing,
-  testResult,
-  onRetest,
-  showMultimodal = false,
-}: {
-  title: string;
-  envVar: string;
-  accent: 'emerald' | 'blue';
-  provider?: ProviderCredentialStatus;
-  testing: boolean;
-  testResult: ConnectionTestResult | null;
-  onRetest: () => void;
-  showMultimodal?: boolean;
-}) {
-  const state = provider?.state ?? 'not_configured';
-  const styles = CREDENTIAL_STATE_STYLES[state];
-  const accentClasses =
-    accent === 'emerald'
-      ? 'from-emerald-500/20 to-teal-600/20 border-emerald-500/30 text-emerald-600'
-      : 'from-blue-500/20 to-indigo-600/20 border-blue-500/30 text-blue-600';
-
-  const lastTestedAt = testResult?.testedAt ?? provider?.lastTestedAt;
-  const testedModel = testResult?.model ?? provider?.model;
-  const displayError = testResult?.error ?? provider?.lastError;
-
-  return (
-    <GlassCard className="p-6">
-      <div className="flex items-start gap-4">
-        <div
-          className={`w-12 h-12 rounded-xl bg-gradient-to-br border flex items-center justify-center ${accentClasses}`}
-        >
-          <Key className="w-6 h-6" />
-        </div>
-        <div className="flex-1">
-          <h3 className="text-lg font-medium text-desk-text">{title}</h3>
-          <p className="text-sm text-desk-muted mt-1">
-            Variable d&apos;environnement attendue :{' '}
-            <code
-              className={`px-1.5 py-0.5 bg-desk-card rounded text-xs ${accentClasses.split(' ').pop()}`}
-            >
-              {envVar}
-            </code>
-          </p>
-
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${styles.badge}`}
-            >
-              {styles.icon === 'ok' ? (
-                <Check className="w-4 h-4" />
-              ) : styles.icon === 'warn' ? (
-                <AlertCircle className="w-4 h-4" />
-              ) : (
-                <X className="w-4 h-4" />
-              )}
-              <span className="text-sm">{CREDENTIAL_STATE_LABELS[state]}</span>
-            </div>
-
-            <button
-              onClick={onRetest}
-              disabled={testing}
-              className="flex items-center gap-2 px-4 py-1.5 bg-desk-card hover:bg-desk-hover text-desk-text rounded-lg transition-colors text-sm"
-            >
-              {testing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <TestTube className="w-4 h-4" />
-              )}
-              {testResult || provider?.lastTestedAt ? 'Retester' : 'Tester la connexion'}
-            </button>
-          </div>
-
-          <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="text-desk-subtle">Modèle testé</dt>
-              <dd className="text-desk-text font-mono text-xs mt-0.5">{testedModel || '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-desk-subtle">Dernier test</dt>
-              <dd className="text-desk-text text-xs mt-0.5">
-                {lastTestedAt
-                  ? new Date(lastTestedAt).toLocaleString('fr-FR')
-                  : 'Aucun test effectué'}
-              </dd>
-            </div>
-            {showMultimodal && (
-              <div>
-                <dt className="text-desk-subtle">Multimodal</dt>
-                <dd className="text-desk-text text-xs mt-0.5">
-                  {testResult?.multimodal === 'ok'
-                    ? 'OK'
-                    : testResult?.multimodal === 'error'
-                      ? 'Échec'
-                      : testResult?.multimodal === 'not_tested' ||
-                          provider?.multimodal === 'not_tested'
-                        ? 'Non testé'
-                        : provider?.multimodal === 'ok'
-                          ? 'OK'
-                          : '—'}
-                </dd>
-              </div>
-            )}
-          </dl>
-
-          {(testResult || displayError) && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`mt-4 p-3 rounded-lg ${
-                testResult?.success
-                  ? accent === 'emerald'
-                    ? 'bg-emerald-500/10 border border-emerald-500/30'
-                    : 'bg-blue-500/10 border border-blue-500/30'
-                  : 'bg-red-500/10 border border-red-500/30'
-              }`}
-            >
-              {testResult?.success ? (
-                <div
-                  className={`flex items-center gap-2 ${accent === 'emerald' ? 'text-emerald-600' : 'text-blue-600'}`}
-                >
-                  <Check className="w-4 h-4" />
-                  <span className="text-sm">
-                    Connexion texte réussie
-                    {showMultimodal && testResult.multimodal === 'ok' && ' · multimodal OK'}
-                    {showMultimodal &&
-                      testResult.multimodal === 'not_tested' &&
-                      testResult.error &&
-                      ` · ${testResult.error}`}
-                  </span>
+                  <p className="truncate text-xs text-desk-muted">
+                    {item.comment || 'Sans note'} · {new Date(item.createdAt).toLocaleString('fr-FR')}
+                  </p>
                 </div>
-              ) : (
-                <div className="flex items-start gap-2 text-red-600">
-                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">{displayError || 'Test en échec'}</span>
-                </div>
-              )}
-            </motion.div>
+                {!item.isActive && (
+                  <button
+                    type="button"
+                    onClick={() => restore(item.version)}
+                    className="rounded-lg px-3 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-500/10"
+                  >
+                    Restaurer
+                  </button>
+                )}
+              </div>
+            ))
           )}
         </div>
-      </div>
-    </GlassCard>
-  );
-}
-
-function CredentialsTab() {
-  const [testingOpenAI, setTestingOpenAI] = useState(false);
-  const [openaiTestResult, setOpenaiTestResult] = useState<ConnectionTestResult | null>(null);
-  const [configStatus, setConfigStatus] = useState<AiCredentialsStatus | null>(null);
-
-  const refreshStatus = useCallback(async () => {
-    const { data } = await expertApi.get('/expert/settings/status');
-    setConfigStatus(data);
-  }, []);
-
-  useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
-
-  const runOpenAITest = async () => {
-    setTestingOpenAI(true);
-    setOpenaiTestResult(null);
-    try {
-      const { data } = await expertApi.post('/expert/settings/openai-test');
-      setOpenaiTestResult(data);
-      await refreshStatus();
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      setOpenaiTestResult({
-        success: false,
-        provider: 'openai',
-        model: configStatus?.openai.model ?? '',
-        testedAt: new Date().toISOString(),
-        text: 'error',
-        error: error.response?.data?.error || 'Erreur de connexion',
-      });
-    } finally {
-      setTestingOpenAI(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <GlassCard className="p-6">
-        <h3 className="text-lg font-medium text-desk-text">Gemini / Vertex</h3>
-        <p className="text-sm text-desk-muted mt-1">
-          Désactivé temporairement en V1. Les identifiants et tests Gemini restent disponibles côté
-          serveur pour une future phase de comparaison.
-        </p>
-      </GlassCard>
-
-      <ProviderCredentialCard
-        title="Clé API OpenAI"
-        envVar="OPENAI_API_KEY"
-        accent="blue"
-        provider={configStatus?.openai}
-        testing={testingOpenAI}
-        testResult={openaiTestResult}
-        onRetest={runOpenAITest}
-      />
-
-      <GlassCard className="p-4">
-        <div className="flex items-start gap-3 text-desk-muted">
-          <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <p className="text-sm">
-            Pour modifier les clés API, mettez à jour les variables d&apos;environnement{' '}
-            <code className="px-1 py-0.5 bg-desk-card rounded text-xs">OPENAI_API_KEY</code> dans
-            votre configuration de déploiement (Coolify, .env, etc.) puis redémarrez le service API.
-            Les tests utilisent le modèle configuré dans l&apos;onglet Modèles.
-          </p>
-        </div>
-      </GlassCard>
+      )}
     </div>
   );
 }
 
-function PersonalityTab({
-  prompts,
-  defaults,
-  onSave,
-  onReset,
-  saving,
-}: {
-  prompts: Record<string, PromptWithMeta>;
-  defaults: Record<string, string>;
-  onSave: (key: string, value: string, comment?: string) => Promise<void>;
-  onReset: (key: string) => Promise<void>;
-  saving: boolean;
-}) {
-  const dnaPrompt = prompts['LUMIRA_DNA'] || {
-    key: 'LUMIRA_DNA',
-    value: defaults['LUMIRA_DNA'] || '',
-    version: 0,
-    isCustom: false,
-  };
-
-  return (
-    <div className="space-y-6">
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center">
-            <Brain className="w-6 h-6 text-amber-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-desk-text">LUMIRA DNA</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              L&apos;ADN de personnalité partagé par tous les agents. Définit le ton, les valeurs et
-              les archétypes Lumira.
-            </p>
-          </div>
-        </div>
-
-        <PromptEditor
-          promptKey="LUMIRA_DNA"
-          prompt={dnaPrompt}
-          defaultValue={defaults['LUMIRA_DNA'] || ''}
-          onSave={(value, comment) => onSave('LUMIRA_DNA', value, comment)}
-          onReset={() => onReset('LUMIRA_DNA')}
-          saving={saving}
-        />
-      </GlassCard>
-    </div>
-  );
-}
-
-function AgentsTab({
-  prompts,
-  defaults,
-  onSave,
-  onReset,
-  saving,
-}: {
-  prompts: Record<string, PromptWithMeta>;
-  defaults: Record<string, string>;
-  onSave: (key: string, value: string, comment?: string) => Promise<void>;
-  onReset: (key: string) => Promise<void>;
-  saving: boolean;
-}) {
-  const agentKeys = ['SCRIBE', 'EDITOR', 'GUIDE', 'NARRATOR', 'CONFIDANT', 'ONIRIQUE'];
-
-  return (
-    <div className="space-y-4">
-      {agentKeys.map((key) => {
-        const prompt = prompts[key] || {
-          key,
-          value: defaults[key] || '',
-          version: 0,
-          isCustom: false,
-        };
-        return (
-          <AgentAccordion
-            key={key}
-            agentKey={key}
-            prompt={prompt}
-            defaultValue={defaults[key] || ''}
-            onSave={(value, comment) => onSave(key, value, comment)}
-            onReset={() => onReset(key)}
-            saving={saving}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function LegacyModelsTab({
-  config,
-  onSave,
-  saving,
-}: {
-  config: ModelConfig;
-  onSave: (config: Partial<ModelConfig>) => Promise<void>;
-  saving: boolean;
-}) {
-  const [localConfig, setLocalConfig] = useState(config);
-  const hasChanges = JSON.stringify(localConfig) !== JSON.stringify(config);
-
-  useEffect(() => {
-    setLocalConfig(config);
-  }, [config]);
-
-  const handleChange = (key: keyof ModelConfig, value: string | number) => {
-    setLocalConfig((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleProviderChange = (agent: keyof AgentProviders, provider: AIProvider) => {
-    setLocalConfig((prev) => ({
-      ...prev,
-      agentProviders: { ...prev.agentProviders, [agent]: provider },
-    }));
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Gemini Heavy Model Config */}
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center">
-            <Sparkles className="w-6 h-6 text-violet-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-desk-text">Gemini Heavy</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              Utilisé par SCRIBE, GUIDE et EDITOR pour les tâches complexes
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Modèle</label>
-            <input
-              type="text"
-              value={localConfig.heavyModel}
-              onChange={(e) => handleChange('heavyModel', e.target.value)}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
-            <input
-              type="number"
-              value={localConfig.heavyMaxTokens}
-              onChange={(e) => handleChange('heavyMaxTokens', parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Temperature ({localConfig.heavyTemperature})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={localConfig.heavyTemperature}
-              onChange={(e) => handleChange('heavyTemperature', parseFloat(e.target.value))}
-              className="w-full accent-amber-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Top P ({localConfig.heavyTopP})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={localConfig.heavyTopP}
-              onChange={(e) => handleChange('heavyTopP', parseFloat(e.target.value))}
-              className="w-full accent-amber-500"
-            />
-          </div>
-        </div>
-      </GlassCard>
-
-      {/* Gemini Flash Model Config */}
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal-600/20 border border-cyan-500/30 flex items-center justify-center">
-            <Zap className="w-6 h-6 text-cyan-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-desk-text">Gemini Flash</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              Utilisé par CONFIDANT pour le chat en temps réel
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Modèle</label>
-            <input
-              type="text"
-              value={localConfig.flashModel}
-              onChange={(e) => handleChange('flashModel', e.target.value)}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
-            <input
-              type="number"
-              value={localConfig.flashMaxTokens}
-              onChange={(e) => handleChange('flashMaxTokens', parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-amber-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Temperature ({localConfig.flashTemperature})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={localConfig.flashTemperature}
-              onChange={(e) => handleChange('flashTemperature', parseFloat(e.target.value))}
-              className="w-full accent-cyan-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Top P ({localConfig.flashTopP})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={localConfig.flashTopP}
-              onChange={(e) => handleChange('flashTopP', parseFloat(e.target.value))}
-              className="w-full accent-cyan-500"
-            />
-          </div>
-        </div>
-      </GlassCard>
-
-      {/* OpenAI Heavy Model Config */}
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border border-blue-500/30 flex items-center justify-center">
-            <Sparkles className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-desk-text">OpenAI Heavy</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              Modèle puissant OpenAI pour les tâches complexes (ex: gpt-4o)
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Modèle</label>
-            <input
-              type="text"
-              value={localConfig.openaiHeavyModel}
-              onChange={(e) => handleChange('openaiHeavyModel', e.target.value)}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-blue-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
-            <input
-              type="number"
-              value={localConfig.openaiHeavyMaxTokens}
-              onChange={(e) => handleChange('openaiHeavyMaxTokens', parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-blue-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Temperature ({localConfig.openaiHeavyTemperature})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={localConfig.openaiHeavyTemperature}
-              onChange={(e) => handleChange('openaiHeavyTemperature', parseFloat(e.target.value))}
-              className="w-full accent-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Top P ({localConfig.openaiHeavyTopP})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={localConfig.openaiHeavyTopP}
-              onChange={(e) => handleChange('openaiHeavyTopP', parseFloat(e.target.value))}
-              className="w-full accent-blue-500"
-            />
-          </div>
-        </div>
-      </GlassCard>
-
-      {/* OpenAI Flash Model Config */}
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 border border-sky-500/30 flex items-center justify-center">
-            <Zap className="w-6 h-6 text-sky-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-desk-text">OpenAI Flash</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              Modèle rapide OpenAI pour le chat et les tâches légères (ex: gpt-4o-mini)
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Modèle</label>
-            <input
-              type="text"
-              value={localConfig.openaiFlashModel}
-              onChange={(e) => handleChange('openaiFlashModel', e.target.value)}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-sky-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">Max Tokens</label>
-            <input
-              type="number"
-              value={localConfig.openaiFlashMaxTokens}
-              onChange={(e) => handleChange('openaiFlashMaxTokens', parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-desk-input border border-desk-border rounded-lg text-desk-text text-sm focus:outline-none focus:border-sky-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Temperature ({localConfig.openaiFlashTemperature})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.1"
-              value={localConfig.openaiFlashTemperature}
-              onChange={(e) => handleChange('openaiFlashTemperature', parseFloat(e.target.value))}
-              className="w-full accent-sky-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-desk-muted mb-2">
-              Top P ({localConfig.openaiFlashTopP})
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={localConfig.openaiFlashTopP}
-              onChange={(e) => handleChange('openaiFlashTopP', parseFloat(e.target.value))}
-              className="w-full accent-sky-500"
-            />
-          </div>
-        </div>
-      </GlassCard>
-
-      {/* Per-Agent Provider Selection */}
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-amber-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-desk-text">Provider par Agent</h3>
-            <p className="text-sm text-desk-muted mt-1">
-              Choisir Gemini ou OpenAI pour chaque agent indépendamment
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {(Object.keys(AGENT_INFO) as Array<keyof typeof AGENT_INFO>).map((agentKey) => {
-            const info = AGENT_INFO[agentKey];
-            const provider =
-              localConfig.agentProviders?.[agentKey as keyof AgentProviders] || 'gemini';
-            return (
-              <div
-                key={agentKey}
-                className="flex items-center justify-between p-3 bg-desk-bg border border-desk-border-subtle rounded-xl"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center text-violet-600">
-                    {info.icon}
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-desk-text">{info.label}</span>
-                    <p className="text-xs text-desk-subtle">{info.description}</p>
-                  </div>
-                </div>
-                <div className="flex items-center bg-desk-card rounded-lg p-0.5 border border-desk-border">
-                  <button
-                    onClick={() => handleProviderChange(agentKey as keyof AgentProviders, 'gemini')}
-                    className={cn(
-                      'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                      provider === 'gemini'
-                        ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-                        : 'text-desk-subtle hover:text-desk-text',
-                    )}
-                  >
-                    Gemini
-                  </button>
-                  <button
-                    onClick={() => handleProviderChange(agentKey as keyof AgentProviders, 'openai')}
-                    className={cn(
-                      'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                      provider === 'openai'
-                        ? 'bg-blue-500/20 text-blue-600 border border-blue-500/30'
-                        : 'text-desk-subtle hover:text-desk-text',
-                    )}
-                  >
-                    OpenAI
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </GlassCard>
-
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={() => onSave(localConfig)}
-          disabled={!hasChanges || saving}
-          className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-desk-card disabled:text-desk-subtle text-black font-medium rounded-lg transition-colors"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Sauvegarder la configuration
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// TABS CONTENT: ROUTING MATRIX
-// =============================================================================
-
-function ModelsTab({
-  config,
-  onSave,
-  saving,
-}: {
-  config: ModelConfig;
-  onSave: (config: Partial<ModelConfig>) => Promise<void>;
-  saving: boolean;
-}) {
-  const [agents, setAgents] = useState(config.agents);
-  const hasChanges = JSON.stringify(agents) !== JSON.stringify(config.agents);
-
-  useEffect(() => setAgents(config.agents), [config]);
-
-  const update = (agent: string, patch: Partial<AgentModelConfig>) => {
-    setAgents((previous) => ({ ...previous, [agent]: { ...previous[agent], ...patch } }));
-  };
-
-  return (
-    <div className="space-y-4">
-      <GlassCard className="p-5 border-blue-500/30">
-        <h3 className="text-lg font-medium text-desk-text">OpenAI-only · V1</h3>
-        <p className="text-sm text-desk-muted mt-1">
-          La configuration est définie par agent. Gemini/Vertex est temporairement inactif.
-        </p>
-      </GlassCard>
-      {Object.entries(agents).map(([agent, item]) => {
-        const isGpt5 = item.model === 'gpt-5.5' || item.model === 'gpt-5.4';
-        return (
-          <GlassCard key={agent} className="p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="font-semibold text-desk-text">{agent}</h3>
-                <p className="text-xs text-desk-muted">{AGENT_INFO[agent]?.description}</p>
-              </div>
-              <span
-                className={cn(
-                  'px-2 py-1 rounded-full text-xs',
-                  item.enabled
-                    ? 'bg-emerald-500/15 text-emerald-600'
-                    : 'bg-desk-card text-desk-muted',
-                )}
-              >
-                {item.enabled ? 'Actif V1' : 'Désactivé V1'}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-              <label className="text-desk-muted">
-                Modèle
-                <select
-                  value={item.model}
-                  onChange={(e) =>
-                    update(agent, { model: e.target.value as AgentModelConfig['model'] })
-                  }
-                  className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
-                >
-                  <option value="gpt-5.5">gpt-5.5 · $5/$30 par M</option>
-                  <option value="gpt-5.4">gpt-5.4 · $2.5/$15 par M</option>
-                  <option value="gpt-4o">gpt-4o · $2.5/$10 par M</option>
-                </select>
-              </label>
-              <label className="text-desk-muted">
-                Tokens de sortie max
-                <input
-                  type="number"
-                  value={item.maxOutputTokens}
-                  onChange={(e) => update(agent, { maxOutputTokens: Number(e.target.value) })}
-                  className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
-                />
-              </label>
-              {isGpt5 ? (
-                <>
-                  <label className="text-desk-muted">
-                    Reasoning effort
-                    <select
-                      value={item.reasoningEffort ?? 'medium'}
-                      onChange={(e) =>
-                        update(agent, {
-                          reasoningEffort: e.target.value as AgentModelConfig['reasoningEffort'],
-                        })
-                      }
-                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
-                    >
-                      <option>low</option>
-                      <option>medium</option>
-                      <option>high</option>
-                    </select>
-                  </label>
-                  <label className="text-desk-muted">
-                    Verbosity
-                    <select
-                      value={item.verbosity ?? 'medium'}
-                      onChange={(e) =>
-                        update(agent, {
-                          verbosity: e.target.value as AgentModelConfig['verbosity'],
-                        })
-                      }
-                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
-                    >
-                      <option>low</option>
-                      <option>medium</option>
-                      <option>high</option>
-                    </select>
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label className="text-desk-muted">
-                    Temperature
-                    <input
-                      type="number"
-                      min="0"
-                      max="2"
-                      step="0.05"
-                      value={item.temperature ?? 0}
-                      onChange={(e) => update(agent, { temperature: Number(e.target.value) })}
-                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
-                    />
-                  </label>
-                  <label className="text-desk-muted">
-                    Top P
-                    <input
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={item.topP ?? 1}
-                      onChange={(e) => update(agent, { topP: Number(e.target.value) })}
-                      className="mt-1 w-full p-2 bg-desk-input border border-desk-border rounded-lg text-desk-text"
-                    />
-                  </label>
-                </>
-              )}
-            </div>
-          </GlassCard>
-        );
-      })}
-      <button
-        onClick={() => onSave({ providerMode: 'openai_only', agents } as Partial<ModelConfig>)}
-        disabled={!hasChanges || saving}
-        className="flex items-center gap-2 px-4 py-2 bg-amber-500 disabled:opacity-50 text-black rounded-lg text-sm font-semibold"
-      >
-        <Save className="w-4 h-4" />
-        Enregistrer la configuration
-      </button>
-    </div>
-  );
-}
-
-type ProductLevel = 'INITIE' | 'MYSTIQUE' | 'PROFOND' | 'INTEGRALE';
-
-interface RoutingRule {
-  id?: string;
-  productLevel: ProductLevel;
-  agent: string;
-  mission: string;
-  provider: string;
-  model: string;
-  temperature: number;
-  maxTokens: number;
-  promptVersionId?: string | null;
-  note?: string | null;
-  isActive: boolean;
-}
-
-const PRODUCT_LABELS: Record<ProductLevel, string> = {
-  INITIE: 'Initié',
-  MYSTIQUE: 'Mystique',
-  PROFOND: 'Profond',
-  INTEGRALE: 'Intégrale',
-};
-
-const AGENTS_LIST = ['SCRIBE', 'GUIDE', 'EDITOR', 'CONFIDANT', 'ONIRIQUE', 'NARRATOR'];
-
-const MODEL_OPTIONS: Record<string, string[]> = {
-  gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-};
-
-const MISSION_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  SCRIBE: [
-    { value: 'DEFAULT', label: 'Défaut (Scribe)' },
-    { value: 'READING_GENERATION', label: 'Génération de lecture PDF' },
-  ],
-  GUIDE: [
-    { value: 'DEFAULT', label: 'Défaut (Guide)' },
-    { value: 'TIMELINE_BATCH', label: 'Batch 30 jours' },
-  ],
-  EDITOR: [
-    { value: 'DEFAULT', label: 'Défaut (Editor)' },
-    { value: 'CONTENT_REFINEMENT', label: 'Affinage expert' },
-  ],
-  CONFIDANT: [
-    { value: 'DEFAULT', label: 'Défaut (Confidant)' },
-    { value: 'CHAT_SESSION', label: 'Session de chat' },
-  ],
-  ONIRIQUE: [
-    { value: 'DEFAULT', label: 'Défaut (Onirique)' },
-    { value: 'DREAM_INTERPRETATION', label: 'Interprétation de rêve' },
-  ],
-  NARRATOR: [
-    { value: 'DEFAULT', label: 'Défaut (Narrator)' },
-    { value: 'AUDIO_NARRATION', label: 'Script audio TTS' },
-  ],
-};
-
-function RoutingTab() {
-  const [activeProduct, setActiveProduct] = useState<ProductLevel>('INITIE');
-  const [rules, setRules] = useState<RoutingRule[]>([]);
+export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<TabId>('readiness');
   const [loading, setLoading] = useState(true);
-  const [savingRuleId, setSavingRuleId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [dirtyPrompt, setDirtyPrompt] = useState(false);
+  const [prompts, setPrompts] = useState<Record<string, PromptWithMeta> | null>(null);
+  const [defaults, setDefaults] = useState<Record<string, string> | null>(null);
+  const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
+  const [credentials, setCredentials] = useState<CredentialsStatus | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+  const [expandedAgent, setExpandedAgent] = useState<AgentKey | null>('SCRIBE');
 
-  // Local state for rules being edited
-  const [editingRules, setEditingRules] = useState<Record<string, Partial<RoutingRule>>>({});
+  const clearFeedback = () => {
+    setActionError(null);
+    setSuccessMessage(null);
+  };
 
-  const fetchRules = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const { data } = await expertApi.get('/settings/ai-routing');
-      setRules(data);
-
-      // Initialize editing states
-      const editState: Record<string, Partial<RoutingRule>> = {};
-      data.forEach((rule: RoutingRule) => {
-        const key = `${rule.productLevel}_${rule.agent}_${rule.mission}`;
-        editState[key] = { ...rule };
-      });
-      setEditingRules(editState);
-    } catch (err) {
-      console.error('Failed to fetch routing rules', err);
+      const [promptsResponse, defaultsResponse, configResponse, statusResponse, readinessResponse] =
+        await Promise.all([
+          expertApi.get('/expert/settings/prompts'),
+          expertApi.get('/expert/settings/prompts/defaults'),
+          expertApi.get('/expert/settings/model-config'),
+          expertApi.get('/expert/settings/status'),
+          expertApi.get('/expert/settings/readiness'),
+        ]);
+      setPrompts(promptsResponse.data);
+      setDefaults(defaultsResponse.data);
+      setModelConfig(configResponse.data);
+      setCredentials(statusResponse.data);
+      setReadiness(readinessResponse.data);
+    } catch (error) {
+      setPrompts(null);
+      setDefaults(null);
+      setModelConfig(null);
+      setCredentials(null);
+      setReadiness(null);
+      setLoadError(errorMessage(error));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchRules();
-  }, [fetchRules]);
+    loadAll();
+  }, [loadAll]);
 
-  const handleFieldChange = (
-    product: ProductLevel,
-    agent: string,
-    mission: string,
-    field: keyof RoutingRule,
-    value: any,
-  ) => {
-    const key = `${product}_${agent}_${mission}`;
-    const current = editingRules[key] || {
-      productLevel: product,
-      agent,
-      mission,
-      provider: 'gemini',
-      model: 'gemini-2.5-flash',
-      temperature: 0.8,
-      maxTokens: 16384,
-      isActive: true,
-    };
-
-    const updated = { ...current, [field]: value };
-
-    // If provider changes, pick a default model for that provider
-    if (field === 'provider') {
-      updated.model = value === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash';
-    }
-
-    setEditingRules((prev) => ({
-      ...prev,
-      [key]: updated,
-    }));
-  };
-
-  const handleSaveRule = async (product: ProductLevel, agent: string, mission: string) => {
-    const key = `${product}_${agent}_${mission}`;
-    const ruleData = editingRules[key];
-    if (!ruleData) return;
-
-    setSavingRuleId(key);
-    try {
-      await expertApi.post('/settings/ai-routing', ruleData);
-      await fetchRules();
-    } catch (err) {
-      console.error('Failed to save routing rule', err);
-    } finally {
-      setSavingRuleId(null);
-    }
-  };
-
-  const handleResetRule = async (product: ProductLevel, agent: string, mission: string) => {
-    const key = `${product}_${agent}_${mission}`;
-    setSavingRuleId(key);
-    try {
-      // Find rule ID to delete
-      const existing = rules.find(
-        (r) => r.productLevel === product && r.agent === agent && r.mission === mission,
-      );
-      if (existing?.id) {
-        await expertApi.delete(`/settings/ai-routing/${existing.id}`);
-      }
-      await fetchRules();
-    } catch (err) {
-      console.error('Failed to reset routing rule', err);
-    } finally {
-      setSavingRuleId(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Product Level Selector Tabs */}
-      <div className="flex border-b border-desk-border-subtle gap-2">
-        {(Object.keys(PRODUCT_LABELS) as ProductLevel[]).map((level) => (
-          <button
-            key={level}
-            onClick={() => setActiveProduct(level)}
-            className={cn(
-              'px-4 py-2 text-sm font-medium transition-all border-b-2 -mb-px',
-              activeProduct === level
-                ? 'border-amber-500 text-amber-600'
-                : 'border-transparent text-desk-muted hover:text-desk-text',
-            )}
-          >
-            {PRODUCT_LABELS[level]}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-4">
-        {AGENTS_LIST.map((agent) => {
-          const agentInfo = AGENT_INFO[agent] || {
-            label: agent,
-            icon: <Bot className="w-4 h-4" />,
-            description: '',
-          };
-
-          const missions = MISSION_OPTIONS[agent] || [{ value: 'DEFAULT', label: 'Défaut' }];
-
-          return (
-            <GlassCard key={agent} className="p-5">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-4 border-b border-desk-border-subtle">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center text-amber-600">
-                    {agentInfo.icon}
-                  </div>
-                  <div>
-                    <h4 className="text-base font-semibold text-desk-text">{agentInfo.label}</h4>
-                    <p className="text-xs text-desk-muted">{agentInfo.description}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Rules per Mission */}
-              <div className="space-y-6">
-                {missions.map((m) => {
-                  const ruleKey = `${activeProduct}_${agent}_${m.value}`;
-                  const isCustom = rules.some(
-                    (r) =>
-                      r.productLevel === activeProduct &&
-                      r.agent === agent &&
-                      r.mission === m.value &&
-                      r.isActive,
-                  );
-
-                  const localData = editingRules[ruleKey] || {
-                    productLevel: activeProduct,
-                    agent,
-                    mission: m.value,
-                    provider: 'gemini',
-                    model: 'gemini-2.5-flash',
-                    temperature: 0.8,
-                    maxTokens: 16384,
-                    isActive: false,
-                  };
-
-                  const isSaving = savingRuleId === ruleKey;
-
-                  return (
-                    <div
-                      key={m.value}
-                      className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end bg-desk-card p-4 rounded-xl border border-desk-border-subtle"
-                    >
-                      {/* Mission Info & Status */}
-                      <div className="lg:col-span-3 space-y-1.5">
-                        <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider">
-                          Mission
-                        </span>
-                        <div className="text-sm font-medium text-desk-text">{m.label}</div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              'w-2.5 h-2.5 rounded-full',
-                              isCustom ? 'bg-emerald-500' : 'bg-desk-muted',
-                            )}
-                          />
-                          <span className="text-xs text-desk-muted">
-                            {isCustom ? 'Règle active' : 'Hérite du défaut global'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Config Fields */}
-                      <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {/* Provider Toggle */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs text-desk-muted font-medium">Provider</label>
-                          <div className="flex bg-desk-surface rounded-lg p-0.5 border border-desk-border">
-                            {['gemini', 'openai'].map((p) => (
-                              <button
-                                key={p}
-                                type="button"
-                                onClick={() =>
-                                  handleFieldChange(activeProduct, agent, m.value, 'provider', p)
-                                }
-                                className={cn(
-                                  'flex-1 text-center py-1 text-xs font-medium rounded-md transition-all capitalize',
-                                  localData.provider === p
-                                    ? p === 'gemini'
-                                      ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-                                      : 'bg-blue-500/20 text-blue-600 border border-blue-500/30'
-                                    : 'text-desk-subtle hover:text-desk-text',
-                                )}
-                              >
-                                {p}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Model Selector */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs text-desk-muted font-medium">Modèle</label>
-                          <select
-                            value={localData.model || ''}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                activeProduct,
-                                agent,
-                                m.value,
-                                'model',
-                                e.target.value,
-                              )
-                            }
-                            className="w-full text-xs bg-desk-surface border border-desk-border rounded-lg p-1.5 text-desk-text focus:border-amber-500 outline-none"
-                          >
-                            {(MODEL_OPTIONS[localData.provider || 'gemini'] || []).map((mod) => (
-                              <option key={mod} value={mod}>
-                                {mod}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Temperature Slider */}
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between text-xs text-desk-muted font-medium">
-                            <span>Température</span>
-                            <span className="font-semibold text-desk-text">
-                              {localData.temperature ?? 0.8}
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={localData.temperature ?? 0.8}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                activeProduct,
-                                agent,
-                                m.value,
-                                'temperature',
-                                parseFloat(e.target.value),
-                              )
-                            }
-                            className="w-full accent-amber-500 bg-desk-surface"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="lg:col-span-2 flex items-center justify-end gap-2">
-                        {isCustom && (
-                          <button
-                            type="button"
-                            onClick={() => handleResetRule(activeProduct, agent, m.value)}
-                            disabled={isSaving}
-                            className="flex items-center justify-center p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 transition-colors border border-red-500/20"
-                            title="Réinitialiser"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleSaveRule(activeProduct, agent, m.value)}
-                          disabled={isSaving}
-                          className={cn(
-                            'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg transition-colors border',
-                            isCustom
-                              ? 'bg-amber-500 hover:bg-amber-600 text-black border-amber-500'
-                              : 'bg-desk-surface hover:bg-desk-hover text-desk-text border-desk-border',
-                          )}
-                        >
-                          {isSaving ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Save className="w-3.5 h-3.5" />
-                          )}
-                          Enregistrer
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </GlassCard>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// MAIN PAGE
-// =============================================================================
-
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('credentials');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [prompts, setPrompts] = useState<Record<string, PromptWithMeta>>({});
-  const [defaults, setDefaults] = useState<Record<string, string>>({});
-  const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    providerMode: 'openai_only',
-    agents: {
-      SCRIBE: {
-        enabled: true,
-        provider: 'openai',
-        model: 'gpt-5.5',
-        reasoningEffort: 'high',
-        verbosity: 'high',
-        maxOutputTokens: 24000,
-      },
-      EDITOR: {
-        enabled: true,
-        provider: 'openai',
-        model: 'gpt-5.4',
-        reasoningEffort: 'medium',
-        verbosity: 'high',
-        maxOutputTokens: 16000,
-      },
-      GUIDE: {
-        enabled: true,
-        provider: 'openai',
-        model: 'gpt-5.4',
-        reasoningEffort: 'low',
-        verbosity: 'medium',
-        maxOutputTokens: 6000,
-      },
-      NARRATOR: {
-        enabled: true,
-        provider: 'openai',
-        model: 'gpt-4o',
-        temperature: 0.3,
-        topP: 0.9,
-        maxOutputTokens: 12000,
-      },
-      CONFIDANT: {
-        enabled: false,
-        provider: 'openai',
-        model: 'gpt-4o',
-        temperature: 0.6,
-        topP: 0.9,
-        maxOutputTokens: 1600,
-      },
-      ONIRIQUE: {
-        enabled: false,
-        provider: 'openai',
-        model: 'gpt-4o',
-        temperature: 0.65,
-        topP: 0.9,
-        maxOutputTokens: 2500,
-      },
-    },
-    heavyModel: 'gemini-2.5-flash',
-    flashModel: 'gemini-2.5-flash',
-    heavyTemperature: 0.8,
-    heavyTopP: 0.95,
-    heavyMaxTokens: 16384,
-    flashTemperature: 0.9,
-    flashTopP: 0.95,
-    flashMaxTokens: 2048,
-    openaiHeavyModel: 'gpt-4o',
-    openaiFlashModel: 'gpt-4o-mini',
-    openaiHeavyTemperature: 0.8,
-    openaiHeavyTopP: 0.95,
-    openaiHeavyMaxTokens: 16384,
-    openaiFlashTemperature: 0.9,
-    openaiFlashTopP: 0.95,
-    openaiFlashMaxTokens: 2048,
-    agentProviders: {
-      SCRIBE: 'gemini',
-      GUIDE: 'gemini',
-      EDITOR: 'gemini',
-      CONFIDANT: 'gemini',
-      ONIRIQUE: 'gemini',
-      NARRATOR: 'gemini',
-    },
-  });
-
-  // Load data on mount
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [promptsRes, defaultsRes, configRes] = await Promise.all([
-          expertApi.get('/expert/settings/prompts'),
-          expertApi.get('/expert/settings/prompts/defaults'),
-          expertApi.get('/expert/settings/model-config'),
-        ]);
-        setPrompts(promptsRes.data);
-        setDefaults(defaultsRes.data);
-        setModelConfig(configRes.data);
-      } catch (err) {
-        console.error('Failed to load settings', err);
-      } finally {
-        setLoading(false);
-      }
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyPrompt) return;
+      event.preventDefault();
+      event.returnValue = '';
     };
-    loadData();
-  }, []);
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [dirtyPrompt]);
 
-  const handleSavePrompt = useCallback(async (key: string, value: string, comment?: string) => {
+  const savePrompt = async (key: string, value: string, comment?: string) => {
+    clearFeedback();
     setSaving(true);
     try {
       await expertApi.put(`/expert/settings/prompts/${key}`, { value, comment });
-      // Reload prompts
-      const { data } = await expertApi.get('/expert/settings/prompts');
-      setPrompts(data);
-    } catch (err) {
-      console.error('Failed to save prompt', err);
+      setSuccessMessage(`${key} enregistré avec une nouvelle version active.`);
+      setDirtyPrompt(false);
+      await loadAll();
+    } catch (error) {
+      setActionError(errorMessage(error));
     } finally {
       setSaving(false);
     }
-  }, []);
+  };
 
-  const handleResetPrompt = useCallback(async (key: string) => {
+  const resetPrompt = async (key: string) => {
+    clearFeedback();
     setSaving(true);
     try {
       await expertApi.post(`/expert/settings/prompts/${key}/reset`);
-      // Reload prompts
-      const { data } = await expertApi.get('/expert/settings/prompts');
-      setPrompts(data);
-    } catch (err) {
-      console.error('Failed to reset prompt', err);
+      setSuccessMessage(`${key} restauré à sa valeur contrôlée par défaut.`);
+      await loadAll();
+    } catch (error) {
+      setActionError(errorMessage(error));
     } finally {
       setSaving(false);
     }
-  }, []);
+  };
 
-  const handleSaveModelConfig = useCallback(async (config: Partial<ModelConfig>) => {
+  const runOpenAiTest = async () => {
+    clearFeedback();
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data } = await expertApi.post('/expert/settings/openai-test');
+      setTestResult(data);
+      if (data.success) setSuccessMessage('Responses API texte et vision validées.');
+      else setActionError(data.error || 'Le test OpenAI a échoué.');
+      await loadAll();
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const saveModels = async () => {
+    if (!modelConfig) return;
+    clearFeedback();
     setSaving(true);
     try {
-      await expertApi.put('/expert/settings/model-config', config);
-      // Reload config
-      const { data } = await expertApi.get('/expert/settings/model-config');
-      setModelConfig(data);
-    } catch (err) {
-      console.error('Failed to save model config', err);
+      await expertApi.put('/expert/settings/model-config', modelConfig);
+      setSuccessMessage('Configuration par agent enregistrée et cache runtime invalidé.');
+      await loadAll();
+    } catch (error) {
+      setActionError(errorMessage(error));
     } finally {
       setSaving(false);
     }
-  }, []);
+  };
+
+  const updateAgent = (agent: AgentKey, patch: Partial<AgentModelConfig>) => {
+    setModelConfig((current) =>
+      current
+        ? {
+            ...current,
+            providerMode: 'openai_only',
+            agents: {
+              ...current.agents,
+              [agent]: { ...current.agents[agent], ...patch, provider: 'openai' },
+            },
+          }
+        : current,
+    );
+  };
+
+  const tabs = useMemo(
+    () => [
+      { id: 'readiness' as const, label: 'Préproduction', icon: ShieldCheck },
+      { id: 'credentials' as const, label: 'Connexion', icon: Key },
+      { id: 'personality' as const, label: 'ADN Lumira', icon: Brain },
+      { id: 'agents' as const, label: 'Prompts', icon: Bot },
+      { id: 'models' as const, label: 'Modèles', icon: Settings },
+    ],
+    [],
+  );
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+      <div className="flex min-h-[520px] items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-amber-600" />
+          <p className="mt-3 text-sm text-desk-muted">Lecture de la configuration réelle…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError || !prompts || !defaults || !modelConfig || !credentials || !readiness) {
+    return (
+      <div className="p-4 sm:p-6">
+        <Card className="mx-auto max-w-2xl border-red-500/30 p-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-6 w-6 shrink-0 text-red-600" />
+            <div>
+              <h1 className="text-lg font-semibold text-desk-text">Configuration IA non vérifiée</h1>
+              <p className="mt-2 text-sm leading-6 text-desk-muted">
+                Le Desk refuse d’afficher des valeurs locales de secours. La configuration réelle doit être lisible avant toute mise en production.
+              </p>
+              <p className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
+                {loadError || 'Réponse de configuration incomplète.'}
+              </p>
+              <button
+                type="button"
+                onClick={loadAll}
+                className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Relire la configuration
+              </button>
+            </div>
+          </div>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="p-3 sm:p-5 space-y-5">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-3"
-      >
-        <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center">
-          <Settings className="w-5 h-5 text-white" />
+    <div className="space-y-5 p-3 sm:p-5">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500">
+            <Settings className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-desk-text">Contrôle IA de production</h1>
+            <p className="text-xs text-desk-muted">Configuration réelle, agents, prompts, coûts et état OpenAI</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-lg font-semibold text-desk-text">Paramètres IA</h1>
-          <p className="text-xs text-desk-muted">Configurer les agents Oracle Lumira</p>
+        <div className="flex items-center gap-2">
+          <StatusPill level={readiness.verdict === 'GO' ? 'pass' : readiness.verdict === 'NO_GO' ? 'fail' : 'warning'}>
+            {readiness.verdict}
+          </StatusPill>
+          <button
+            type="button"
+            onClick={loadAll}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-desk-border px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Actualiser
+          </button>
         </div>
-      </motion.div>
+      </header>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
-        <TabButton
-          active={activeTab === 'credentials'}
-          onClick={() => setActiveTab('credentials')}
-          icon={<Key className="w-4 h-4" />}
-          label="Credentials"
-        />
-        <TabButton
-          active={activeTab === 'personality'}
-          onClick={() => setActiveTab('personality')}
-          icon={<Brain className="w-4 h-4" />}
-          label="Personnalité"
-        />
-        <TabButton
-          active={activeTab === 'agents'}
-          onClick={() => setActiveTab('agents')}
-          icon={<Bot className="w-4 h-4" />}
-          label="Agents"
-        />
-        <TabButton
-          active={activeTab === 'models'}
-          onClick={() => setActiveTab('models')}
-          icon={<Sliders className="w-4 h-4" />}
-          label="Modèles"
-        />
-        {modelConfig.providerMode !== 'openai_only' && (
-          <TabButton
-            active={activeTab === 'routing'}
-            onClick={() => setActiveTab('routing')}
-            icon={<Sliders className="w-4 h-4" />}
-            label="Matrice IA"
-          />
-        )}
-      </div>
-
-      {/* Tab Content */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
+      {(actionError || successMessage) && (
+        <div
+          role="status"
+          className={cn(
+            'flex items-start gap-2 rounded-xl border p-3 text-sm',
+            actionError
+              ? 'border-red-500/30 bg-red-500/10 text-red-600'
+              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600',
+          )}
         >
-          {activeTab === 'credentials' && <CredentialsTab />}
-          {activeTab === 'personality' && (
-            <PersonalityTab
-              prompts={prompts}
-              defaults={defaults}
-              onSave={handleSavePrompt}
-              onReset={handleResetPrompt}
-              saving={saving}
-            />
-          )}
-          {activeTab === 'agents' && (
-            <AgentsTab
-              prompts={prompts}
-              defaults={defaults}
-              onSave={handleSavePrompt}
-              onReset={handleResetPrompt}
-              saving={saving}
-            />
-          )}
-          {activeTab === 'models' && (
-            <ModelsTab config={modelConfig} onSave={handleSaveModelConfig} saving={saving} />
-          )}
-          {activeTab === 'routing' && modelConfig.providerMode !== 'openai_only' && <RoutingTab />}
-        </motion.div>
-      </AnimatePresence>
+          {actionError ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <Check className="mt-0.5 h-4 w-4 shrink-0" />}
+          <span>{actionError || successMessage}</span>
+        </div>
+      )}
+
+      <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Paramètres IA">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium',
+                activeTab === tab.id
+                  ? 'border-amber-500/30 bg-amber-500/15 text-amber-600'
+                  : 'border-transparent text-desk-muted hover:bg-desk-hover hover:text-desk-text',
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {activeTab === 'readiness' && (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Card className="p-4">
+              <p className="text-xs uppercase tracking-wide text-desk-muted">Contrôles validés</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-600">{readiness.summary.passes}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs uppercase tracking-wide text-desk-muted">Avertissements</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-600">{readiness.summary.warnings}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs uppercase tracking-wide text-desk-muted">Blocages</p>
+              <p className="mt-1 text-2xl font-semibold text-red-600">{readiness.summary.failures}</p>
+            </Card>
+          </div>
+
+          <Card className="divide-y divide-desk-border">
+            {readiness.checks.map((check) => (
+              <div key={check.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-desk-text">{check.label}</h2>
+                  <p className="mt-1 text-sm text-desk-muted">{check.detail}</p>
+                </div>
+                <StatusPill level={check.level}>
+                  {check.level === 'pass' ? 'Validé' : check.level === 'warning' ? 'À tester' : 'Bloquant'}
+                </StatusPill>
+              </div>
+            ))}
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="p-5">
+              <div className="flex items-center gap-2">
+                <CircleDollarSign className="h-5 w-5 text-amber-600" />
+                <h2 className="font-semibold text-desk-text">Derniers appels IA</h2>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-desk-card p-3">
+                  <p className="text-xl font-semibold text-desk-text">{readiness.recentRunSummary.count}</p>
+                  <p className="text-xs text-desk-muted">Appels</p>
+                </div>
+                <div className="rounded-xl bg-desk-card p-3">
+                  <p className="text-xl font-semibold text-red-600">{readiness.recentRunSummary.errors}</p>
+                  <p className="text-xs text-desk-muted">Erreurs</p>
+                </div>
+                <div className="rounded-xl bg-desk-card p-3">
+                  <p className="text-xl font-semibold text-amber-600">${readiness.recentRunSummary.estimatedCost.toFixed(4)}</p>
+                  <p className="text-xs text-desk-muted">Coût estimé</p>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-5">
+              <h2 className="font-semibold text-desk-text">Source de vérité</h2>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-desk-muted">Mode</dt>
+                  <dd className="font-mono text-desk-text">{readiness.effectiveConfig.providerMode}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-desk-muted">Règles actives</dt>
+                  <dd className="font-mono text-desk-text">{readiness.activeRoutingRules.length}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-desk-muted">Dernière vérification</dt>
+                  <dd className="text-right text-desk-text">{new Date(readiness.generatedAt).toLocaleString('fr-FR')}</dd>
+                </div>
+              </dl>
+            </Card>
+          </div>
+
+          <Card className="overflow-hidden">
+            <div className="border-b border-desk-border p-4">
+              <h2 className="font-semibold text-desk-text">Historique technique récent</h2>
+              <p className="mt-1 text-sm text-desk-muted">Modèle réellement exécuté, durée, tokens et coût.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-xs">
+                <thead className="bg-desk-card text-desk-muted">
+                  <tr>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Agent</th>
+                    <th className="px-4 py-3">Modèle réel</th>
+                    <th className="px-4 py-3">Source</th>
+                    <th className="px-4 py-3">Tokens</th>
+                    <th className="px-4 py-3">Durée</th>
+                    <th className="px-4 py-3">Coût</th>
+                    <th className="px-4 py-3">État</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-desk-border">
+                  {readiness.recentRuns.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-desk-muted">
+                        Aucun appel enregistré. Une génération de préproduction est encore nécessaire.
+                      </td>
+                    </tr>
+                  ) : (
+                    readiness.recentRuns.map((run) => (
+                      <tr key={run.id} className="text-desk-text">
+                        <td className="whitespace-nowrap px-4 py-3">{new Date(run.startedAt).toLocaleString('fr-FR')}</td>
+                        <td className="px-4 py-3 font-semibold">{run.agent}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-mono">{run.model}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-mono text-desk-muted">{run.routingSource || '—'}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{(run.inputTokens || 0).toLocaleString('fr-FR')} / {(run.outputTokens || 0).toLocaleString('fr-FR')}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{run.durationMs ? `${(run.durationMs / 1000).toFixed(1)} s` : '—'}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{run.estimatedCost != null ? `$${run.estimatedCost.toFixed(4)}` : '—'}</td>
+                        <td className="px-4 py-3">
+                          <StatusPill level={run.status === 'SUCCESS' ? 'pass' : 'fail'}>{run.status}</StatusPill>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'credentials' && (
+        <div className="space-y-4">
+          <Card className="p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600">
+                  <Key className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-desk-text">OpenAI — production active</h2>
+                  <p className="mt-1 text-sm text-desk-muted">Variable : OPENAI_API_KEY · modèle de test : {credentials.openai.model}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <StatusPill level={credentials.openai.configured ? 'pass' : 'fail'}>
+                      {credentials.openai.configured ? 'Clé configurée' : 'Clé absente'}
+                    </StatusPill>
+                    <StatusPill level={credentials.openai.text === 'ok' ? 'pass' : credentials.openai.text === 'error' ? 'fail' : 'warning'}>
+                      Texte {credentials.openai.text}
+                    </StatusPill>
+                    <StatusPill level={credentials.openai.multimodal === 'ok' ? 'pass' : credentials.openai.multimodal === 'error' ? 'fail' : 'warning'}>
+                      Vision {credentials.openai.multimodal || 'not_tested'}
+                    </StatusPill>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={runOpenAiTest}
+                disabled={testing}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
+                Tester Responses + vision
+              </button>
+            </div>
+            {(credentials.openai.lastTestedAt || testResult) && (
+              <p className="mt-4 text-xs text-desk-muted">
+                Dernier test : {new Date(testResult?.testedAt || credentials.openai.lastTestedAt || '').toLocaleString('fr-FR')}
+              </p>
+            )}
+            {(credentials.openai.lastError || testResult?.error) && (
+              <p className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
+                {testResult?.error || credentials.openai.lastError}
+              </p>
+            )}
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="font-semibold text-desk-text">Gemini / Vertex</h2>
+            <p className="mt-2 text-sm leading-6 text-desk-muted">
+              Désactivé dans le runtime V1. Les identifiants peuvent rester stockés pour une comparaison future, mais aucune génération de production ne les utilise.
+            </p>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'personality' && (
+        <Card className="p-5">
+          <div className="mb-5">
+            <h2 className="font-semibold text-desk-text">ADN commun de Lumira</h2>
+            <p className="mt-1 text-sm text-desk-muted">Cadre de ton, de prudence et d’interprétation partagé par les agents actifs.</p>
+          </div>
+          <PromptEditor
+            promptKey="LUMIRA_DNA"
+            prompt={prompts.LUMIRA_DNA}
+            defaultValue={defaults.LUMIRA_DNA || ''}
+            saving={saving}
+            onSave={savePrompt}
+            onReset={resetPrompt}
+            onChanged={setDirtyPrompt}
+          />
+        </Card>
+      )}
+
+      {activeTab === 'agents' && (
+        <div className="space-y-3">
+          {AGENTS.map((agent) => {
+            const open = expandedAgent === agent.key;
+            const model = modelConfig.agents[agent.key];
+            return (
+              <Card key={agent.key}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedAgent(open ? null : agent.key)}
+                  className="flex min-h-16 w-full items-center justify-between gap-3 p-4 text-left"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-desk-text">{agent.label}</span>
+                        <StatusPill level={model.enabled ? 'pass' : 'warning'}>
+                          {model.enabled ? 'Actif V1' : 'Désactivé V1'}
+                        </StatusPill>
+                        <span className="font-mono text-xs text-desk-muted">{model.model}</span>
+                      </div>
+                      <p className="truncate text-sm text-desk-muted">{agent.description}</p>
+                    </div>
+                  </div>
+                  {open ? <ChevronUp className="h-5 w-5 text-desk-muted" /> : <ChevronDown className="h-5 w-5 text-desk-muted" />}
+                </button>
+                {open && (
+                  <div className="border-t border-desk-border p-4">
+                    <PromptEditor
+                      promptKey={agent.key}
+                      prompt={prompts[agent.key]}
+                      defaultValue={defaults[agent.key] || ''}
+                      saving={saving}
+                      onSave={savePrompt}
+                      onReset={resetPrompt}
+                      onChanged={setDirtyPrompt}
+                    />
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === 'models' && (
+        <div className="space-y-4">
+          <Card className="border-blue-500/30 p-5">
+            <h2 className="font-semibold text-desk-text">OpenAI-only · offre unique</h2>
+            <p className="mt-1 text-sm text-desk-muted">
+              Ces valeurs sont la source de vérité. La matrice produit historique est neutralisée et n’est plus exposée.
+            </p>
+          </Card>
+
+          {AGENTS.map((agent) => {
+            const item = modelConfig.agents[agent.key];
+            const isGpt5 = item.model.startsWith('gpt-5.');
+            return (
+              <Card key={agent.key} className="p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-semibold text-desk-text">{agent.label}</h2>
+                      <StatusPill level={item.enabled ? 'pass' : 'warning'}>
+                        {item.enabled ? 'Actif' : 'Désactivé'}
+                      </StatusPill>
+                    </div>
+                    <p className="mt-1 text-sm text-desk-muted">{agent.description}</p>
+                    <p className="mt-1 text-xs text-desk-muted">{MODEL_PRICES[item.model]}</p>
+                  </div>
+                  <label className="inline-flex min-h-10 items-center gap-2 text-sm text-desk-muted">
+                    <input
+                      type="checkbox"
+                      checked={item.enabled}
+                      onChange={(event) => updateAgent(agent.key, { enabled: event.target.checked })}
+                      className="h-4 w-4 accent-amber-500"
+                    />
+                    Agent actif
+                  </label>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-sm text-desk-muted">
+                    Modèle
+                    <select
+                      value={item.model}
+                      onChange={(event) => {
+                        const model = event.target.value as AgentModelConfig['model'];
+                        updateAgent(agent.key, {
+                          model,
+                          ...(model.startsWith('gpt-5.')
+                            ? { reasoningEffort: item.reasoningEffort || 'medium', verbosity: item.verbosity || 'medium' }
+                            : { temperature: item.temperature ?? 0.3, topP: item.topP ?? 0.9 }),
+                        });
+                      }}
+                      className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                    >
+                      <option value="gpt-5.5">gpt-5.5</option>
+                      <option value="gpt-5.4">gpt-5.4</option>
+                      <option value="gpt-4o">gpt-4o</option>
+                    </select>
+                  </label>
+
+                  <label className="text-sm text-desk-muted">
+                    Tokens de sortie max
+                    <input
+                      type="number"
+                      min={1}
+                      max={100000}
+                      value={item.maxOutputTokens}
+                      onChange={(event) => updateAgent(agent.key, { maxOutputTokens: Number(event.target.value) })}
+                      className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                    />
+                  </label>
+
+                  {isGpt5 ? (
+                    <>
+                      <label className="text-sm text-desk-muted">
+                        Raisonnement
+                        <select
+                          value={item.reasoningEffort || 'medium'}
+                          onChange={(event) => updateAgent(agent.key, { reasoningEffort: event.target.value as AgentModelConfig['reasoningEffort'] })}
+                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                        >
+                          <option value="low">low</option>
+                          <option value="medium">medium</option>
+                          <option value="high">high</option>
+                        </select>
+                      </label>
+                      <label className="text-sm text-desk-muted">
+                        Verbosity
+                        <select
+                          value={item.verbosity || 'medium'}
+                          onChange={(event) => updateAgent(agent.key, { verbosity: event.target.value as AgentModelConfig['verbosity'] })}
+                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                        >
+                          <option value="low">low</option>
+                          <option value="medium">medium</option>
+                          <option value="high">high</option>
+                        </select>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label className="text-sm text-desk-muted">
+                        Température
+                        <input
+                          type="number"
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          value={item.temperature ?? 0.3}
+                          onChange={(event) => updateAgent(agent.key, { temperature: Number(event.target.value) })}
+                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                        />
+                      </label>
+                      <label className="text-sm text-desk-muted">
+                        Top P
+                        <input
+                          type="number"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={item.topP ?? 0.9}
+                          onChange={(event) => updateAgent(agent.key, { topP: Number(event.target.value) })}
+                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={saveModels}
+              disabled={saving}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-black disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Enregistrer la configuration effective
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
