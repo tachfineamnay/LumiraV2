@@ -17,6 +17,7 @@ import { VertexOracle } from './factory/VertexOracle';
 import { PdfFactory } from './factory/PdfFactory';
 import { ContextDispatcher } from './factory/ContextDispatcher';
 import { DigitalSoulService } from './factory/DigitalSoulService';
+import { ReadingSourceResolver } from './factory/reading-source.resolver';
 import { AudioGenerationService } from './factory/AudioGenerationService';
 import { AudioScriptService } from './factory/AudioScriptService';
 import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
@@ -28,6 +29,7 @@ import { AiRoutingService } from '../modules/settings/ai-routing.service';
     VertexOracle,
     PdfFactory,
     ContextDispatcher,
+    ReadingSourceResolver,
     DigitalSoulService,
     AudioScriptService,
     AudioGenerationService,
