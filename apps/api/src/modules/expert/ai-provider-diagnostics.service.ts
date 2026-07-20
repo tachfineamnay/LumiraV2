@@ -224,9 +224,7 @@ export class AiProviderDiagnosticsService {
     includeMultimodal: boolean,
   ): ProviderCredentialStatus {
     const text = cache?.text.status ?? 'not_tested';
-    const multimodal = includeMultimodal
-      ? (cache?.multimodal?.status ?? 'not_tested')
-      : undefined;
+    const multimodal = includeMultimodal ? (cache?.multimodal?.status ?? 'not_tested') : undefined;
     const error = cache?.text.error ?? cache?.multimodal?.error;
     const errorCategory = cache?.text.errorCategory ?? cache?.multimodal?.errorCategory;
     return {
@@ -261,8 +259,7 @@ export class AiProviderDiagnosticsService {
     cache: CachedProviderProbes,
   ): ProviderConnectionTestResult {
     const success =
-      cache.text.status === 'ok' &&
-      (!cache.multimodal || cache.multimodal.status === 'ok');
+      cache.text.status === 'ok' && (!cache.multimodal || cache.multimodal.status === 'ok');
     return {
       success,
       provider,
@@ -376,6 +373,12 @@ export class AiProviderDiagnosticsService {
     };
   }
 
+  /** Narrow OpenAI Responses union (Response | Stream) to plain output text. */
+  private openAiOutputText(response: unknown): string {
+    const value = response as { output_text?: unknown };
+    return typeof value.output_text === 'string' ? value.output_text : '';
+  }
+
   private async runOpenAITextProbe(
     apiKey: string,
     model: string,
@@ -397,7 +400,7 @@ export class AiProviderDiagnosticsService {
         timeoutMs,
         'OpenAI Responses text probe',
       );
-      const parsed = JSON.parse(response.output_text || '{}') as { ok?: boolean };
+      const parsed = JSON.parse(this.openAiOutputText(response) || '{}') as { ok?: boolean };
       if (parsed.ok !== true) throw new Error('Réponse structurée OpenAI invalide');
       return { status: 'ok', model, testedAt };
     } catch (error) {
@@ -439,7 +442,7 @@ export class AiProviderDiagnosticsService {
         timeoutMs,
         'OpenAI Responses multimodal probe',
       );
-      const parsed = JSON.parse(response.output_text || '{}') as { ok?: boolean };
+      const parsed = JSON.parse(this.openAiOutputText(response) || '{}') as { ok?: boolean };
       if (parsed.ok !== true) throw new Error('Réponse multimodale OpenAI invalide');
       return { status: 'ok', model, testedAt };
     } catch (error) {
