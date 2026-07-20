@@ -120,10 +120,21 @@ export class AudioGenerationService {
     }
 
     const voice = order.user.profile?.preferredVoice ?? AudioVoice.FEMININE;
-    const narration = this.buildNarration(sealedVersion.content);
-    if (narration.length < 50) {
+    const sourceNarration = this.buildNarration(sealedVersion.content);
+    if (sourceNarration.length < 50) {
       throw new Error('Le contenu scellé est trop court pour produire une narration');
     }
+
+    // NARRATOR adapts only the expert-sealed text. AudioScriptService safely falls
+    // back to the original narration if OpenAI is unavailable or returns a result
+    // that is suspiciously short, so TTS delivery remains resilient.
+    const narration = this.audioScriptService
+      ? await this.audioScriptService.reformulate({
+          text: sourceNarration,
+          type: 'synthesis',
+          orderId: order.id,
+        })
+      : sourceNarration;
 
     this.logger.log(
       `🎙️ Generating sealed reading audio for ${order.orderNumber} ` +
