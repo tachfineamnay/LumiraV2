@@ -47,17 +47,17 @@ export function resolveSanctuaireHomeState({
     if (draft?.status === 'IN_PROGRESS') {
       return {
         kind: 'RESUME',
-        title: 'Votre dossier vous attend',
+        title: 'Votre brouillon est prêt à être repris',
         description:
-          'Relisez, complétez ou retirez les éléments que vous souhaitez transmettre. Rien ne part avant votre scellement final.',
-        actionLabel: 'Reprendre mon dossier',
+          'Votre brouillon privé est sauvegardé automatiquement. Relisez, complétez ou retirez ce que vous souhaitez transmettre ; il ne sera envoyé à la production qu’après votre confirmation finale.',
+        actionLabel: 'Continuer mon dossier',
       };
     }
     return {
       kind: 'PREPARE',
-      title: 'Choisissez la base de votre lecture',
+      title: 'Préparez la base de votre lecture',
       description:
-        'Vous décidez des informations, photos et éléments personnels transmis. Vous pourrez tout relire avant de sceller l’envoi.',
+        'Comptez quelques minutes pour renseigner vos repères et, si vous le souhaitez, votre intention et vos photos. Vous relirez tout avant la transmission.',
       actionLabel: 'Préparer mon dossier',
     };
   }
@@ -70,7 +70,8 @@ export function resolveSanctuaireHomeState({
     return {
       kind: 'READY',
       title: 'Votre lecture est prête',
-      description: 'Retrouvez votre lecture, son audio et son PDF dans votre espace.',
+      description:
+        'Prenez le temps de l’écouter ou de la lire. Votre synthèse reste disponible pour retrouver l’essentiel.',
       order: latestOrder,
     };
   }
@@ -78,17 +79,17 @@ export function resolveSanctuaireHomeState({
   if (latestOrder?.status === 'AWAITING_VALIDATION') {
     return {
       kind: 'EXPERT_REVIEW',
-      title: 'Votre lecture est en vérification',
-      description: 'Notre équipe relit et sécurise le contenu avant sa mise à disposition.',
+      title: 'Votre lecture est relue par l’équipe',
+      description: 'Une dernière vérification humaine est en cours avant sa mise à disposition.',
       order: latestOrder,
     };
   }
 
   return {
     kind: 'PREPARING',
-    title: 'Votre dossier a bien été transmis',
+    title: 'Votre dossier a bien été reçu',
     description:
-      'Les éléments que vous avez choisis sont maintenant utilisés pour préparer votre lecture. Nous vous écrirons dès qu’elle sera prête.',
+      'L’équipe Lumira prépare votre lecture à partir des éléments que vous avez confirmés. Vous n’avez plus rien à faire ; nous vous écrirons dès qu’elle sera prête.',
     order: latestOrder,
   };
 }
