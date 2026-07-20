@@ -10,6 +10,7 @@ import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
 import { AiProductionReadinessService } from './ai-production-readiness.service';
+import { ExpertAdminBootstrapService } from './expert-admin-bootstrap.service';
 import { ExpertAuthGuard } from './guards/expert-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { ExpertGateway } from './expert.gateway';
@@ -50,6 +51,7 @@ import { ClientControlService } from './client-control.service';
     AdminSettingsService,
     AiProviderDiagnosticsService,
     AiProductionReadinessService,
+    ExpertAdminBootstrapService,
     ExpertAuthGuard,
     RolesGuard,
     ExpertGateway,
