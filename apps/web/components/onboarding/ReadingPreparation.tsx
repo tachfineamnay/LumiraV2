@@ -42,18 +42,21 @@ type PreparationData = {
 
 type StepKey = 'control' | 'identity' | 'intention' | 'photos' | 'context' | 'review';
 
-const STEPS: Array<{
+type StepDefinition = {
   key: StepKey;
   label: string;
   title: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
-}> = [
+};
+
+const STEPS: StepDefinition[] = [
   {
     key: 'control',
     label: 'Votre choix',
     title: 'Vous gardez la main',
-    description: 'Rien ne part sans votre relecture et votre confirmation finale.',
+    description:
+      'Votre brouillon privé est sauvegardé automatiquement. Il ne sera transmis à la production qu’après votre confirmation finale.',
     icon: ShieldCheck,
   },
   {
@@ -74,7 +77,7 @@ const STEPS: Array<{
     key: 'photos',
     label: 'Photos',
     title: 'Visage et paume',
-    description: 'Les deux images sont facultatives et conservées dans le stockage privé Lumira.',
+    description: 'Les deux images sont facultatives et conservées dans l’espace privé Lumira.',
     icon: ImageIcon,
   },
   {
@@ -86,12 +89,18 @@ const STEPS: Array<{
   },
   {
     key: 'review',
-    label: 'Scellement',
-    title: 'Relire et sceller',
-    description: 'Modifiez chaque section si nécessaire, puis transmettez votre dossier de base.',
+    label: 'Confirmation',
+    title: 'Relire et confirmer',
+    description: 'Vérifiez chaque section, puis transmettez la version qui servira à votre lecture.',
     icon: LockKeyhole,
   },
 ];
+
+const STYLE_OPTIONS = [
+  ['DOUX_ET_CLAIR', 'Doux et clair'],
+  ['DIRECT_ET_CONCRET', 'Direct et concret'],
+  ['SYMBOLIQUE_ET_PROFOND', 'Symbolique et profond'],
+] as const;
 
 const EMPTY_DATA: PreparationData = {
   birthDate: '',
@@ -110,6 +119,9 @@ const EMPTY_DATA: PreparationData = {
   pace: 50,
   consent: false,
 };
+
+const inputClass =
+  'mt-2 w-full rounded-xl border border-white/10 bg-abyss-600 px-3 py-3 text-stellar-100 placeholder:text-stellar-600 outline-none focus:border-horizon-400 focus-visible:ring-2 focus-visible:ring-horizon-400/30';
 
 const stringValue = (value: unknown) => (typeof value === 'string' ? value : '');
 
@@ -143,9 +155,6 @@ function draftPayload(data: PreparationData) {
   };
 }
 
-const inputClass =
-  'mt-2 w-full rounded-xl border border-white/10 bg-abyss-600 px-3 py-3 text-stellar-100 placeholder:text-stellar-600 outline-none focus:border-horizon-400';
-
 function ReviewSection({
   title,
   onEdit,
@@ -162,7 +171,7 @@ function ReviewSection({
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs text-horizon-200 hover:bg-horizon-400/10"
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 text-xs text-horizon-200 hover:bg-horizon-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
         >
           <Pencil className="h-3.5 w-3.5" /> Modifier
         </button>
@@ -201,7 +210,9 @@ export function ReadingPreparation({
         const draft = normalize(draftResponse?.data?.data);
         setData({ ...EMPTY_DATA, ...profile, ...draft, consent: false });
         const savedStep = Number(draftResponse?.data?.currentStep);
-        if (Number.isFinite(savedStep)) setStep(Math.min(Math.max(savedStep, 0), STEPS.length - 1));
+        if (Number.isFinite(savedStep)) {
+          setStep(Math.min(Math.max(savedStep, 0), STEPS.length - 1));
+        }
       })
       .finally(() => active && setLoaded(true));
     return () => {
@@ -209,9 +220,20 @@ export function ReadingPreparation({
     };
   }, []);
 
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isSubmitting) onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isSubmitting, onClose]);
+
   const serializableDraft = useMemo(() => draftPayload(data), [data]);
   const current = STEPS[step];
   const progress = Math.round(((step + 1) / STEPS.length) * 100);
+  const contextCount = [data.highs, data.lows, data.ailments, data.fears, data.rituals].filter(
+    (value) => value.trim(),
+  ).length;
 
   useEffect(() => {
     if (!loaded || isSubmitting || isComplete) return;
@@ -233,18 +255,22 @@ export function ReadingPreparation({
     setData((currentData) => ({ ...currentData, [key]: value }));
   };
 
+  const goToStep = (index: number) => {
+    setError(null);
+    setStep(Math.min(Math.max(index, 0), STEPS.length - 1));
+  };
+
   const next = () => {
     if (current.key === 'identity' && (!data.birthDate || !data.birthPlace.trim())) {
       setError('Ajoutez votre date et votre lieu de naissance pour continuer.');
       return;
     }
-    setError(null);
-    setStep((currentStep) => Math.min(currentStep + 1, STEPS.length - 1));
+    goToStep(step + 1);
   };
 
   const submit = async () => {
     if (!data.birthDate || !data.birthPlace.trim()) {
-      setStep(1);
+      goToStep(1);
       setError('Ajoutez votre date et votre lieu de naissance avant de transmettre.');
       return;
     }
@@ -289,15 +315,28 @@ export function ReadingPreparation({
 
   if (!loaded) {
     return (
-      <div className="fixed inset-0 z-[100] grid place-items-center bg-abyss-900/95" role="status">
-        <Loader2 className="h-8 w-8 animate-spin text-horizon-300" />
+      <div
+        className="fixed inset-0 z-[100] grid place-items-center bg-abyss-900/95"
+        role="status"
+        aria-label="Chargement du dossier"
+      >
+        <div className="w-full max-w-sm animate-pulse px-6">
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-white/[0.07]" />
+          <div className="mx-auto mt-5 h-6 w-48 rounded-xl bg-white/[0.07]" />
+          <div className="mx-auto mt-3 h-4 w-64 max-w-full rounded-full bg-white/[0.05]" />
+        </div>
       </div>
     );
   }
 
   if (isComplete) {
     return (
-      <div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 backdrop-blur-xl">
+      <div
+        className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 backdrop-blur-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reading-preparation-complete-title"
+      >
         <section className="w-full max-w-xl rounded-3xl border border-emerald-400/20 bg-abyss-700 p-7 text-center shadow-abyss sm:p-10">
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
             <CheckCircle2 className="h-9 w-9" />
@@ -305,17 +344,20 @@ export function ReadingPreparation({
           <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
             Dossier transmis
           </p>
-          <h1 className="mt-3 font-playfair text-3xl italic text-stellar-100">
-            Votre lecture de base peut commencer
+          <h1
+            id="reading-preparation-complete-title"
+            className="mt-3 font-playfair text-3xl italic text-stellar-100"
+          >
+            Votre lecture peut commencer
           </h1>
           <p className="mt-4 text-sm leading-7 text-stellar-400">
-            Vous avez choisi, relu puis scellé les éléments transmis. Notre équipe vous écrira
-            lorsque votre lecture sera disponible.
+            Vous avez choisi, relu puis confirmé les éléments transmis. L’équipe vous écrira lorsque
+            votre lecture sera disponible.
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="mt-8 min-h-[48px] rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+            className="mt-8 min-h-[48px] rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"
           >
             Retour à mon Sanctuaire
           </button>
@@ -325,16 +367,21 @@ export function ReadingPreparation({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-hidden bg-abyss-900/98 backdrop-blur-xl">
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col p-3 sm:p-6">
-        <header className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-abyss-700/90 px-4 py-3">
+    <div
+      className="fixed inset-0 z-[100] overflow-hidden bg-abyss-900/98 backdrop-blur-xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reading-preparation-title"
+    >
+      <div className="mx-auto flex h-[100dvh] min-h-0 w-full max-w-6xl flex-col p-2 sm:p-6">
+        <header className="flex shrink-0 items-center justify-between rounded-2xl border border-white/[0.08] bg-abyss-700/95 px-4 py-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
               Dossier de lecture
             </p>
-            <p className="mt-1 text-xs text-stellar-500">
-              {saveState === 'saving' && 'Sauvegarde en cours…'}
-              {saveState === 'saved' && 'Brouillon sauvegardé'}
+            <p className="mt-1 text-xs text-stellar-500" aria-live="polite">
+              {saveState === 'saving' && 'Sauvegarde du brouillon en cours…'}
+              {saveState === 'saved' && 'Brouillon privé sauvegardé'}
               {saveState === 'error' && 'Sauvegarde à vérifier'}
               {saveState === 'idle' && 'Vous pouvez reprendre plus tard'}
             </p>
@@ -342,14 +389,15 @@ export function ReadingPreparation({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             aria-label="Fermer et reprendre plus tard"
-            className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.08] text-stellar-400 hover:bg-white/[0.05]"
+            className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.08] text-stellar-400 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
         </header>
 
-        <div className="mt-3 grid min-h-0 flex-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="mt-2 grid min-h-0 flex-1 gap-3 lg:mt-3 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="hidden rounded-3xl border border-white/[0.08] bg-abyss-700/80 p-4 lg:block">
             <p className="px-2 text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
               Progression
@@ -362,15 +410,18 @@ export function ReadingPreparation({
                   <li key={item.key}>
                     <button
                       type="button"
-                      onClick={() => setStep(index)}
-                      className={`flex min-h-[50px] w-full items-center gap-3 rounded-2xl px-3 text-left ${
+                      onClick={() => goToStep(index)}
+                      aria-current={active ? 'step' : undefined}
+                      className={`flex min-h-[50px] w-full items-center gap-3 rounded-2xl px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
                         active
                           ? 'bg-horizon-400/15 text-stellar-100'
                           : 'text-stellar-400 hover:bg-white/[0.04]'
                       }`}
                     >
                       <span
-                        className={`grid h-8 w-8 place-items-center rounded-xl ${active ? 'bg-horizon-400 text-abyss-900' : 'bg-white/[0.04]'}`}
+                        className={`grid h-8 w-8 place-items-center rounded-xl ${
+                          active ? 'bg-horizon-400 text-abyss-900' : 'bg-white/[0.04]'
+                        }`}
                       >
                         {index < step ? (
                           <Check className="h-4 w-4 text-emerald-300" />
@@ -385,25 +436,29 @@ export function ReadingPreparation({
               })}
             </ol>
             <p className="mt-5 rounded-2xl border border-horizon-400/15 bg-horizon-400/[0.06] p-4 text-xs leading-5 text-stellar-400">
-              Rien n’est transmis avant l’étape finale.
+              Votre brouillon privé est sauvegardé automatiquement. La production ne commence
+              qu’après votre confirmation finale.
             </p>
           </aside>
 
           <main className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-700/90 shadow-abyss">
-            <div className="border-b border-white/[0.06] px-5 py-5 sm:px-8 sm:py-7">
+            <div className="shrink-0 border-b border-white/[0.06] px-5 py-4 sm:px-8 sm:py-6">
               <div className="flex justify-between text-xs text-stellar-500">
                 <span>
-                  Étape {step + 1} sur {STEPS.length}
+                  Étape {step + 1} sur {STEPS.length} · {current.label}
                 </span>
                 <span>{progress}%</span>
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                 <div
-                  className="h-full rounded-full bg-horizon-400 transition-all"
+                  className="h-full rounded-full bg-horizon-400 transition-[width]"
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <h1 className="mt-5 font-playfair text-2xl italic text-stellar-100 sm:text-3xl">
+              <h1
+                id="reading-preparation-title"
+                className="mt-4 font-playfair text-2xl italic text-stellar-100 sm:mt-5 sm:text-3xl"
+              >
                 {current.title}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
@@ -411,7 +466,7 @@ export function ReadingPreparation({
               </p>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-8">
               {current.key === 'control' && (
                 <div className="mx-auto max-w-2xl space-y-4">
                   <div className="rounded-3xl border border-horizon-400/20 bg-horizon-400/[0.07] p-6">
@@ -421,12 +476,12 @@ export function ReadingPreparation({
                     </h2>
                     <p className="mt-3 text-sm leading-7 text-stellar-400">
                       Seuls la date et le lieu de naissance sont nécessaires. Votre intention, vos
-                      photos et votre contexte restent facultatifs. Vous pourrez tout modifier dans
-                      le récapitulatif avant l’envoi.
+                      photos et votre contexte restent facultatifs. Vous relirez l’ensemble avant de
+                      confirmer la transmission.
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    {['Je choisis', 'Je relis', 'Je scelle'].map((label, index) => (
+                    {['Je choisis', 'Je relis', 'Je confirme'].map((label, index) => (
                       <div
                         key={label}
                         className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"
@@ -451,6 +506,7 @@ export function ReadingPreparation({
                         value={data.birthDate}
                         onChange={(event) => update('birthDate', event.target.value)}
                         className={inputClass}
+                        required
                       />
                     </label>
                     <label className="text-sm font-medium text-stellar-200">
@@ -472,6 +528,7 @@ export function ReadingPreparation({
                         onChange={(event) => update('birthPlace', event.target.value)}
                         placeholder="Ville, pays"
                         className={`${inputClass} pl-11`}
+                        required
                       />
                     </span>
                   </label>
@@ -481,8 +538,7 @@ export function ReadingPreparation({
               {current.key === 'intention' && (
                 <div className="mx-auto max-w-2xl space-y-5">
                   <label className="block text-sm font-medium text-stellar-200">
-                    Votre question{' '}
-                    <span className="font-normal text-stellar-500">(facultative)</span>
+                    Votre question <span className="font-normal text-stellar-500">(facultative)</span>
                     <textarea
                       value={data.specificQuestion}
                       onChange={(event) => update('specificQuestion', event.target.value)}
@@ -513,7 +569,7 @@ export function ReadingPreparation({
                         objective: '',
                       }))
                     }
-                    className="text-xs text-stellar-500 hover:text-stellar-300"
+                    className="min-h-[40px] rounded-xl px-2 text-xs text-stellar-500 hover:bg-white/[0.04] hover:text-stellar-300"
                   >
                     Ne transmettre aucune intention particulière
                   </button>
@@ -555,75 +611,47 @@ export function ReadingPreparation({
               {current.key === 'context' && (
                 <div className="mx-auto max-w-3xl space-y-5">
                   <div className="grid gap-5 md:grid-cols-2">
-                    <label className="text-sm font-medium text-stellar-200">
-                      Ce qui vous porte{' '}
-                      <span className="font-normal text-stellar-500">(facultatif)</span>
-                      <textarea
-                        value={data.highs}
-                        onChange={(event) => update('highs', event.target.value)}
-                        rows={3}
-                        maxLength={2000}
-                        className={`${inputClass} resize-y`}
-                      />
-                    </label>
-                    <label className="text-sm font-medium text-stellar-200">
-                      Ce qui vous freine{' '}
-                      <span className="font-normal text-stellar-500">(facultatif)</span>
-                      <textarea
-                        value={data.lows}
-                        onChange={(event) => update('lows', event.target.value)}
-                        rows={3}
-                        maxLength={2000}
-                        className={`${inputClass} resize-y`}
-                      />
-                    </label>
-                    <label className="text-sm font-medium text-stellar-200">
-                      Gênes ou douleurs à mentionner{' '}
-                      <span className="font-normal text-stellar-500">(facultatif)</span>
-                      <textarea
-                        value={data.ailments}
-                        onChange={(event) => update('ailments', event.target.value)}
-                        rows={3}
-                        maxLength={1500}
-                        className={`${inputClass} resize-y`}
-                      />
-                    </label>
-                    <label className="text-sm font-medium text-stellar-200">
-                      Peurs ou blocages identifiés{' '}
-                      <span className="font-normal text-stellar-500">(facultatif)</span>
-                      <textarea
-                        value={data.fears}
-                        onChange={(event) => update('fears', event.target.value)}
-                        rows={3}
-                        maxLength={2000}
-                        className={`${inputClass} resize-y`}
-                      />
-                    </label>
-                  </div>
-                  <label className="block text-sm font-medium text-stellar-200">
-                    Pratiques ou rituels actuels{' '}
-                    <span className="font-normal text-stellar-500">(facultatif)</span>
-                    <textarea
-                      value={data.rituals}
-                      onChange={(event) => update('rituals', event.target.value)}
-                      rows={3}
-                      maxLength={1500}
-                      className={`${inputClass} resize-y`}
+                    <OptionalTextarea
+                      label="Ce qui vous porte"
+                      value={data.highs}
+                      onChange={(value) => update('highs', value)}
                     />
-                  </label>
+                    <OptionalTextarea
+                      label="Ce qui vous freine"
+                      value={data.lows}
+                      onChange={(value) => update('lows', value)}
+                    />
+                    <OptionalTextarea
+                      label="Gênes ou douleurs à mentionner"
+                      value={data.ailments}
+                      onChange={(value) => update('ailments', value)}
+                      maxLength={1500}
+                    />
+                    <OptionalTextarea
+                      label="Peurs ou blocages identifiés"
+                      value={data.fears}
+                      onChange={(value) => update('fears', value)}
+                    />
+                  </div>
+                  <OptionalTextarea
+                    label="Pratiques ou rituels actuels"
+                    value={data.rituals}
+                    onChange={(value) => update('rituals', value)}
+                    maxLength={1500}
+                  />
                   <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
                     <p className="text-sm font-medium text-stellar-100">
                       Style de lecture souhaité
                     </p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      {[
-                        ['DOUX_ET_CLAIR', 'Doux et clair'],
-                        ['DIRECT_ET_CONCRET', 'Direct et concret'],
-                        ['SYMBOLIQUE_ET_PROFOND', 'Symbolique et profond'],
-                      ].map(([value, label]) => (
+                      {STYLE_OPTIONS.map(([value, label]) => (
                         <label
                           key={value}
-                          className={`cursor-pointer rounded-xl border p-3 text-sm ${data.deliveryStyle === value ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100' : 'border-white/[0.08] text-stellar-400'}`}
+                          className={`cursor-pointer rounded-xl border p-3 text-sm focus-within:ring-2 focus-within:ring-horizon-400 ${
+                            data.deliveryStyle === value
+                              ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
+                              : 'border-white/[0.08] text-stellar-400'
+                          }`}
                         >
                           <input
                             type="radio"
@@ -638,7 +666,7 @@ export function ReadingPreparation({
                       ))}
                     </div>
                     <label className="mt-4 block text-sm text-stellar-300">
-                      Rythme : {data.pace}%
+                      Intensité souhaitée : {paceLabel(data.pace)}
                       <input
                         type="range"
                         min={0}
@@ -646,8 +674,12 @@ export function ReadingPreparation({
                         step={5}
                         value={data.pace}
                         onChange={(event) => update('pace', Number(event.target.value))}
-                        className="mt-2 w-full accent-amber-300"
+                        className="mt-3 w-full accent-amber-300"
                       />
+                      <span className="mt-2 flex justify-between text-xs text-stellar-500">
+                        <span>Très posée</span>
+                        <span>Très approfondie</span>
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -656,16 +688,16 @@ export function ReadingPreparation({
               {current.key === 'review' && (
                 <div className="mx-auto max-w-3xl space-y-4">
                   <p className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-stellar-300">
-                    <strong className="text-stellar-100">Rien n’est encore envoyé.</strong> Le
-                    bouton final scellera ces éléments comme base de votre lecture.
+                    <strong className="text-stellar-100">Votre brouillon est sauvegardé, mais la production n’a pas commencé.</strong>{' '}
+                    Le bouton final confirmera ces éléments comme base de votre lecture.
                   </p>
-                  <ReviewSection title="Repères essentiels" onEdit={() => setStep(1)}>
+                  <ReviewSection title="Repères essentiels" onEdit={() => goToStep(1)}>
                     {data.birthDate || 'À compléter'}
                     {data.birthTime ? ` · ${data.birthTime}` : ''}
                     <br />
                     {data.birthPlace || 'Lieu à compléter'}
                   </ReviewSection>
-                  <ReviewSection title="Intention" onEdit={() => setStep(2)}>
+                  <ReviewSection title="Intention" onEdit={() => goToStep(2)}>
                     {data.specificQuestion || data.objective ? (
                       <>
                         <p>{data.specificQuestion || 'Aucune question précise'}</p>
@@ -675,27 +707,28 @@ export function ReadingPreparation({
                       'Aucune intention particulière transmise.'
                     )}
                   </ReviewSection>
-                  <ReviewSection title="Photos" onEdit={() => setStep(3)}>
+                  <ReviewSection title="Photos" onEdit={() => goToStep(3)}>
                     Visage : {data.facePhoto ? 'transmis' : 'non transmis'} · Paume :{' '}
                     {data.palmPhoto ? 'transmise' : 'non transmise'}
                   </ReviewSection>
-                  <ReviewSection title="Contexte et préférence" onEdit={() => setStep(4)}>
-                    {
-                      [data.highs, data.lows, data.ailments, data.fears, data.rituals].filter(
-                        (value) => value.trim(),
-                      ).length
-                    }{' '}
-                    élément(s) facultatif(s) transmis · rythme {data.pace}%
+                  <ReviewSection title="Contexte et préférence" onEdit={() => goToStep(4)}>
+                    <p>
+                      {contextCount} élément{contextCount > 1 ? 's' : ''} facultatif
+                      {contextCount > 1 ? 's' : ''} transmis
+                    </p>
+                    <p className="mt-2">
+                      Style : {styleLabel(data.deliveryStyle)} · Intensité : {paceLabel(data.pace)}
+                    </p>
                   </ReviewSection>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300 focus-within:ring-2 focus-within:ring-horizon-400">
                     <input
                       type="checkbox"
                       checked={data.consent}
                       onChange={(event) => update('consent', event.target.checked)}
                       className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
                     />
-                    J’ai relu ces éléments et je choisis de les transmettre à Lumira pour préparer
-                    ma lecture de base personnalisée.
+                    J’ai relu ces éléments et je choisis de les transmettre à Lumira pour préparer ma
+                    lecture personnalisée.
                   </label>
                 </div>
               )}
@@ -710,11 +743,12 @@ export function ReadingPreparation({
               )}
             </div>
 
-            <footer className="flex flex-col-reverse gap-3 border-t border-white/[0.06] bg-abyss-700/95 px-5 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <footer className="flex shrink-0 flex-col-reverse gap-3 border-t border-white/[0.06] bg-abyss-700/95 px-5 py-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-4">
               <button
                 type="button"
-                onClick={() => (step === 0 ? onClose() : setStep((currentStep) => currentStep - 1))}
-                className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl px-4 text-sm text-stellar-400 hover:bg-white/[0.05]"
+                onClick={() => (step === 0 ? onClose() : goToStep(step - 1))}
+                disabled={isSubmitting}
+                className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl px-4 text-sm text-stellar-400 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
               >
                 <ArrowLeft className="h-4 w-4" /> {step === 0 ? 'Reprendre plus tard' : 'Retour'}
               </button>
@@ -722,7 +756,7 @@ export function ReadingPreparation({
                 <button
                   type="button"
                   onClick={next}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"
                 >
                   {current.key === 'control' ? 'Commencer mon dossier' : 'Continuer'}{' '}
                   <ArrowRight className="h-4 w-4" />
@@ -731,7 +765,7 @@ export function ReadingPreparation({
                 <button
                   type="button"
                   disabled={isSubmitting || !data.consent}
-                  onClick={submit}
+                  onClick={() => void submit()}
                   className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-5 py-3 text-sm font-bold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSubmitting ? (
@@ -739,7 +773,7 @@ export function ReadingPreparation({
                   ) : (
                     <LockKeyhole className="h-4 w-4" />
                   )}
-                  Sceller et transmettre mon dossier
+                  Confirmer et transmettre mon dossier
                 </button>
               )}
             </footer>
@@ -748,4 +782,39 @@ export function ReadingPreparation({
       </div>
     </div>
   );
+}
+
+function OptionalTextarea({
+  label,
+  value,
+  onChange,
+  maxLength = 2000,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  maxLength?: number;
+}) {
+  return (
+    <label className="block text-sm font-medium text-stellar-200">
+      {label} <span className="font-normal text-stellar-500">(facultatif)</span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={3}
+        maxLength={maxLength}
+        className={`${inputClass} resize-y`}
+      />
+    </label>
+  );
+}
+
+function styleLabel(value: string): string {
+  return STYLE_OPTIONS.find(([option]) => option === value)?.[1] || 'Doux et clair';
+}
+
+function paceLabel(value: number): string {
+  if (value >= 70) return 'approfondie';
+  if (value <= 30) return 'très posée';
+  return 'équilibrée';
 }
