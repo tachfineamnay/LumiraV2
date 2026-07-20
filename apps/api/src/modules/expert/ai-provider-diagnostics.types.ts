@@ -48,6 +48,7 @@ export interface AiHealthSnapshot {
   openai: {
     configured: boolean;
     text: ProviderProbeStatus;
+    multimodal: ProviderProbeStatus;
     model: string;
   };
 }
