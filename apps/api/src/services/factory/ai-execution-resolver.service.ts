@@ -9,6 +9,7 @@ import {
   AiPromptSnapshot,
   ResolvedAiExecution,
 } from './ai-execution.types';
+import { normalizeAiModelConfig } from './ai-model-config';
 
 @Injectable()
 export class AiExecutionResolverService {
@@ -20,7 +21,15 @@ export class AiExecutionResolverService {
   ) {}
 
   async resolve(ctx: AiExecutionContext, snapshot: AiPromptSnapshot): Promise<ResolvedAiExecution> {
-    const config = snapshot.modelConfig.agents[ctx.agent];
+    const normalized = normalizeAiModelConfig(snapshot.modelConfig);
+    if (normalized.issues.length > 0) {
+      this.logger.warn(
+        `Configuration IA normalisée avant exécution: ${normalized.issues.join(' | ')}`,
+      );
+    }
+
+    const modelConfig = normalized.config;
+    const config = modelConfig.agents[ctx.agent];
     if (!config.enabled) {
       throw new BadRequestException(`L'agent ${ctx.agent} est désactivé en V1.`);
     }
@@ -35,12 +44,11 @@ export class AiExecutionResolverService {
     let routingSource = `global:${ctx.agent}`;
     let rulePromptVersionId: string | undefined;
 
-    if (ctx.productLevel) {
+    // En V1 OpenAI-only, la configuration par agent est l'unique source de vérité.
+    // Les anciennes règles restent stockées pour comparaison future mais ne sont jamais lues.
+    if (modelConfig.providerMode !== 'openai_only' && ctx.productLevel) {
       const rule = await this.aiRouting.resolveRule(ctx.productLevel, ctx.agent, ctx.mission);
-      if (
-        rule &&
-        !(snapshot.modelConfig.providerMode === 'openai_only' && rule.provider === 'gemini')
-      ) {
+      if (rule) {
         provider = rule.provider;
         model = rule.model;
         temperature = rule.temperature;
@@ -56,12 +64,20 @@ export class AiExecutionResolverService {
       }
     }
 
-    if (snapshot.modelConfig.providerMode === 'openai_only') {
+    if (modelConfig.providerMode === 'openai_only') {
       provider = 'openai';
+      routingSource = `global:${ctx.agent}`;
     }
 
     const promptVersionId = ctx.promptVersionId ?? rulePromptVersionId;
     const agentPrompt = await this.resolveAgentPrompt(ctx.agent, snapshot, promptVersionId);
+
+    if (!agentPrompt?.trim()) {
+      throw new BadRequestException(`Le prompt actif de l'agent ${ctx.agent} est vide.`);
+    }
+    if (ctx.agent !== 'ONIRIQUE' && !snapshot.lumiraDna?.trim()) {
+      throw new BadRequestException("Le prompt actif LUMIRA_DNA est vide.");
+    }
 
     const systemPrompt =
       ctx.agent === 'ONIRIQUE' ? agentPrompt : `${snapshot.lumiraDna}\n\n---\n\n${agentPrompt}`;
