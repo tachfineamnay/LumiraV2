@@ -34,6 +34,7 @@ export interface ReadingPdfData {
     userName: string;
     archetype: string;
     archetypeDescription?: string;
+    keywords?: string[];
     introduction: string;
     sections: {
         domain: string;
@@ -292,6 +293,27 @@ export class PdfFactory implements OnModuleInit {
 
         // Index helper (1-based)
         Handlebars.registerHelper('inc', (value: number) => value + 1);
+
+        Handlebars.registerHelper('sectionNumber', (index: number, introduction: unknown) => {
+            return index + (typeof introduction === 'string' && introduction.trim() ? 2 : 1);
+        });
+
+        // Turns validated plain text into readable PDF paragraphs without allowing
+        // customer content to introduce arbitrary HTML into the document.
+        Handlebars.registerHelper('richText', (value: unknown) => {
+            if (typeof value !== 'string' || !value.trim()) {
+                return new Handlebars.SafeString('');
+            }
+
+            const paragraphs = value
+                .trim()
+                .split(/\r?\n\s*\r?\n/)
+                .map((paragraph) => Handlebars.Utils.escapeExpression(paragraph.trim()))
+                .filter(Boolean)
+                .map((paragraph) => `<p>${paragraph.replace(/\r?\n/g, '<br>')}</p>`);
+
+            return new Handlebars.SafeString(paragraphs.join(''));
+        });
 
         // Conditional equals helper
         Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a === b);

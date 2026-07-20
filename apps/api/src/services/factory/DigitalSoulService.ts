@@ -322,6 +322,7 @@ export class DigitalSoulService {
       userName: `${user.firstName} ${user.lastName}`,
       archetype: aiResponse.synthesis.archetype,
       archetypeDescription: aiResponse.pdf_content.archetype_reveal,
+      keywords: aiResponse.synthesis.keywords || [],
       introduction: aiResponse.pdf_content.introduction,
       sections: aiResponse.pdf_content.sections.map((s) => ({
         domain: s.domain,
@@ -696,6 +697,7 @@ export class DigitalSoulService {
         userName: `${user.firstName} ${user.lastName}`,
         archetype: aiResponse.synthesis.archetype,
         archetypeDescription: aiResponse.pdf_content.archetype_reveal,
+        keywords: aiResponse.synthesis.keywords || [],
         introduction: aiResponse.pdf_content.introduction,
         sections: aiResponse.pdf_content.sections.map((s) => ({
           domain: s.domain,

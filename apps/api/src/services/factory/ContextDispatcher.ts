@@ -300,6 +300,7 @@ export class ContextDispatcher {
       userName: `${user.firstName} ${user.lastName}`,
       archetype: synthesis.archetype,
       archetypeDescription: existingContent?.pdf_content?.archetype_reveal || '',
+      keywords: synthesis.keywords || [],
       introduction:
         existingContent?.pdf_content?.introduction || this.extractSection(content, 'introduction'),
       sections: existingContent?.pdf_content?.sections || this.extractSections(content),

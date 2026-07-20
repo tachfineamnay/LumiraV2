@@ -1,220 +1,83 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{title}} - Oracle Lumira</title>
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-    
-    <style>
-        /* ============================================
-         * ORACLE LUMIRA - DIGITAL GRIMOIRE
-         * Award-Winning Esoteric PDF Design
-         * ============================================ */
-        
-        @page {
-            size: A4;
-            margin: 2.5cm;
-            @bottom-center {
-                content: counter(page);
-                font-family: 'Inter', sans-serif;
-                font-size: 9pt;
-                color: #64748b;
-            }
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 15mm 16mm 19mm;
+    }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    :root {
+      --ink: #25223a;
+      --ink-soft: #625d76;
+      --paper: #fffcf7;
+      --lavender: #f0eafd;
+      --lavender-deep: #5c4589;
+      --plum: #33264f;
+      --gold: #b78235;
+      --gold-soft: #f4e6ca;
+      --line: #ded6e9;
+    }
 
-        :root {
-            /* Sacred Color Palette */
-            --void-deep: #080C14;
-            --void-subtle: #0F1520;
-            --void-light: #1A1F2E;
-            --stardust: #E2E8F0;
-            --stardust-dim: #94A3B8;
-            --divine-gold: #D4AF37;
-            --divine-gold-light: #F4D878;
-            --divine-gold-dark: #A67C00;
-            --mystic-purple: #7C3AED;
-            --ethereal-blue: #3B82F6;
-        }
+    * { box-sizing: border-box; }
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: 11pt;
-            font-weight: 300;
-            line-height: 1.8;
-            color: var(--stardust);
-            background: var(--void-deep);
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
+    html, body { margin: 0; padding: 0; }
 
-        /* Typography Scale */
-        h1, h2, h3, h4 {
-            font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
-            font-weight: 500;
-            color: var(--divine-gold);
-            letter-spacing: 0.05em;
-        }
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Aptos", "Segoe UI", Arial, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.68;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
 
-        h1 { font-size: 28pt; }
-        h2 { font-size: 16pt; margin-bottom: 1rem; }
-        h3 { font-size: 14pt; }
-        h4 { font-size: 12pt; }
+    h1, h2, h3, h4, p { margin: 0; }
 
-        p {
-            text-align: justify;
-            margin-bottom: 1rem;
-            hyphens: auto;
-        }
+    h1, h2, h3, h4 {
+      color: var(--plum);
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 400;
+    }
 
-        /* Main Content Container */
-        .content {
-            max-width: 100%;
-        }
+    a { color: inherit; text-decoration: none; }
 
-        /* Page Break Utilities */
-        .page-break {
-            page-break-after: always;
-            break-after: page;
-        }
+    .document-shell { position: relative; }
 
-        .avoid-break {
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
+    .running-footer {
+      position: fixed;
+      bottom: -12mm;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      color: var(--ink-soft);
+      font-size: 7.5pt;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
 
-        /* Gold Decorative Elements */
-        .gold-line {
-            width: 60px;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--divine-gold), transparent);
-            margin: 1rem auto;
-        }
+    .running-footer__mark { color: var(--lavender-deep); font-weight: 700; }
 
-        .gold-border {
-            border: 1px solid var(--divine-gold);
-            border-radius: 2px;
-        }
+    .page-break { break-after: page; page-break-after: always; }
+    .avoid-break { break-inside: avoid; page-break-inside: avoid; }
 
-        /* Section Styling */
-        .section {
-            margin-bottom: 2.5rem;
-            page-break-inside: avoid;
-        }
-
-        .section-header {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 1px solid rgba(212, 175, 55, 0.3);
-        }
-
-        .section-header h2 {
-            margin: 0;
-        }
-
-        .section-icon {
-            font-size: 1.5rem;
-            filter: grayscale(0);
-        }
-
-        /* Blockquote / Mantra Styling */
-        blockquote, .mantra {
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-style: italic;
-            font-size: 14pt;
-            text-align: center;
-            color: var(--divine-gold-light);
-            padding: 2rem 1.5rem;
-            margin: 2rem 0;
-            position: relative;
-            background: linear-gradient(180deg, rgba(212, 175, 55, 0.05) 0%, transparent 100%);
-            border-left: none;
-        }
-
-        blockquote::before, .mantra::before {
-            content: '"';
-            font-size: 48pt;
-            color: var(--divine-gold);
-            opacity: 0.3;
-            position: absolute;
-            top: 0;
-            left: 1rem;
-            line-height: 1;
-        }
-
-        /* List Styling */
-        ul, ol {
-            margin-left: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        li {
-            margin-bottom: 0.5rem;
-            padding-left: 0.5rem;
-        }
-
-        li::marker {
-            color: var(--divine-gold);
-        }
-
-        /* Links */
-        a {
-            color: var(--divine-gold);
-            text-decoration: none;
-        }
-
-        /* Images */
-        img {
-            max-width: 100%;
-            height: auto;
-        }
-
-        /* Footer */
-        .footer {
-            text-align: center;
-            margin-top: 3rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid rgba(212, 175, 55, 0.2);
-            font-size: 9pt;
-            color: var(--stardust-dim);
-        }
-
-        .footer .brand {
-            font-family: 'Cinzel', serif;
-            color: var(--divine-gold);
-            letter-spacing: 0.15em;
-            font-size: 10pt;
-        }
-    </style>
+    @media print {
+      .running-footer { display: flex; }
+    }
+  </style>
 </head>
 <body>
-    <main class="content">
-        {{{body}}}
-    </main>
-
-    <footer class="footer">
-        <p class="brand">ORACLE LUMIRA</p>
-        <p>© {{year}} · Tous droits réservés · oraclelumira.com</p>
-    </footer>
-</body>
-</html>
-
-    <footer class="footer">
-        <p>© {{year}} Oracle Lumira - Lecture Spirituelle Personnalisée</p>
-        <p>Ce document est confidentiel et destiné uniquement à {{userName}}</p>
-    </footer>
+  <main class="document-shell">
+    {{{body}}}
+  </main>
+  <div class="running-footer" aria-hidden="true">
+    <span class="running-footer__mark">Lumira</span>
+    <span>Lecture personnelle · {{userName}}</span>
+  </div>
 </body>
 </html>

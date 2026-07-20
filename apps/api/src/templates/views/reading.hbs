@@ -1,832 +1,209 @@
-{{!--
-╔═══════════════════════════════════════════════════════════════╗
-║              ORACLE LUMIRA - DIGITAL GRIMOIRE                 ║
-║         Lecture d'Âme · Spiritual Reading PDF                 ║
-╠═══════════════════════════════════════════════════════════════╣
-║  Data structure:                                              ║
-║  - userName: string                                           ║
-║  - archetype: string                                          ║
-║  - archetypeDescription: string                               ║
-║  - introduction: string                                       ║
-║  - sections: { domain, title, content }[]                     ║
-║  - karmicInsights: string[]                                   ║
-║  - lifeMission: string                                        ║
-║  - rituals: { name, description, instructions[] }[]           ║
-║  - conclusion: string                                         ║
-║  - birthData: { date, time?, place? }                         ║
-║  - generatedAt: string                                        ║
-╚═══════════════════════════════════════════════════════════════╝
---}}
+{{!-- The body is deliberately editorial: navigable chapters, short synthesis blocks,
+      and practical rituals. All free-form prose is passed through richText. --}}
 
-{{!-- ═══════════════════════════════════════════════════════════
-     PAGE 1: THE PORTAL (COVER)
-     ═══════════════════════════════════════════════════════════ --}}
-<div class="cover-page">
-    <!-- Sacred Circle Portal -->
-    <div class="portal-circle">
-        <div class="portal-inner">
-            <div class="portal-glow"></div>
-        </div>
+<section class="cover page-break">
+  <div class="cover__halo cover__halo--one"></div>
+  <div class="cover__halo cover__halo--two"></div>
+  <div class="cover__eyebrow">Lecture d'âme personnelle</div>
+  <div class="cover__rule"><span></span><i>✦</i><span></span></div>
+  <h1>Une lecture<br>pour vous retrouver.</h1>
+  <p class="cover__lead">Un espace pour écouter les motifs qui se répètent, éclairer ce qui demande votre attention et avancer avec plus de présence.</p>
+  <div class="cover__recipient">
+    <span>Préparée pour</span>
+    <strong>{{userName}}</strong>
+  </div>
+  <div class="cover__meta">
+    <span>{{formatDate generatedAt}}</span>
+    <span>Oracle Lumira</span>
+  </div>
+</section>
+
+<section class="orientation page-break">
+  <p class="kicker">Votre repère</p>
+  <h2>Comment parcourir votre lecture</h2>
+  <p class="orientation__intro">Commencez par l'essentiel, puis avancez à votre rythme dans les chapitres qui résonnent le plus aujourd'hui. Revenez-y avec un carnet : les passages qui vous touchent sont souvent les plus utiles à explorer.</p>
+
+  <div class="essence-card avoid-break">
+    <div>
+      <p class="card-label">Votre archétype</p>
+      <h3>{{archetype}}</h3>
+      {{#if archetypeDescription}}<div class="essence-card__description">{{{richText archetypeDescription}}}</div>{{/if}}
     </div>
-    
-    <!-- Brand Title -->
-    <div class="cover-title">
-        <span class="cover-subtitle">✦ Lecture d'Âme ✦</span>
-        <h1 class="brand-name">ORACLE LUMIRA</h1>
-        <div class="title-ornament">
-            <span class="ornament-line"></span>
-            <span class="ornament-diamond">◆</span>
-            <span class="ornament-line"></span>
-        </div>
+    <div class="essence-card__symbol">✦</div>
+  </div>
+
+  {{#if keywords.length}}
+  <div class="keywords avoid-break">
+    <p class="card-label">Mots à garder en tête</p>
+    <div class="keywords__list">
+      {{#each keywords}}<span>{{this}}</span>{{/each}}
     </div>
-    
-    <!-- Recipient -->
-    <div class="cover-recipient">
-        <p class="prepared-for">Préparée avec révérence pour</p>
-        <p class="recipient-name">{{userName}}</p>
-    </div>
-    
-    <!-- Cover Footer -->
-    <div class="cover-footer">
-        <p class="cover-date">{{formatDate generatedAt}}</p>
-        <p class="cover-note">Document confidentiel · Ne pas reproduire</p>
-    </div>
-</div>
+  </div>
+  {{/if}}
 
-<div class="page-break"></div>
+  <div class="toc">
+    <p class="card-label">Dans cette lecture</p>
+    {{#if introduction}}<a href="#message" class="toc__item"><b>01</b><span>Le message d'ouverture</span><i>→</i></a>{{/if}}
+    {{#each sections}}<a href="#chapter-{{@index}}" class="toc__item"><b>{{sectionNumber @index @root.introduction}}</b><span>{{title}}</span><i>→</i></a>{{/each}}
+    {{#if karmicInsights.length}}<a href="#insights" class="toc__item"><b>✦</b><span>Les repères profonds</span><i>→</i></a>{{/if}}
+    {{#if lifeMission}}<a href="#mission" class="toc__item"><b>✦</b><span>Votre cap</span><i>→</i></a>{{/if}}
+    {{#if rituals.length}}<a href="#rituals" class="toc__item"><b>✦</b><span>Vos pratiques</span><i>→</i></a>{{/if}}
+    {{#if conclusion}}<a href="#closing" class="toc__item"><b>✦</b><span>Pour continuer</span><i>→</i></a>{{/if}}
+  </div>
 
-{{!-- ═══════════════════════════════════════════════════════════
-     PAGE 2: THE ESSENCE (ARCHETYPE & SYNTHESIS)
-     ═══════════════════════════════════════════════════════════ --}}
-<div class="essence-page">
-    <!-- Page Header -->
-    <div class="page-header">
-        <span class="header-ornament">❖</span>
-        <span class="header-title">Votre Essence Spirituelle</span>
-        <span class="header-ornament">❖</span>
-    </div>
+  {{#if birthData.date}}
+  <div class="birth-note">
+    <span>Lecture ancrée dans vos informations de naissance</span>
+    <strong>{{birthData.date}}{{#if birthData.time}} · {{birthData.time}}{{/if}}{{#if birthData.place}} · {{birthData.place}}{{/if}}</strong>
+  </div>
+  {{/if}}
+</section>
 
-    <!-- Archetype Card -->
-    <div class="archetype-card">
-        <div class="card-corner corner-tl"></div>
-        <div class="card-corner corner-tr"></div>
-        <div class="card-corner corner-bl"></div>
-        <div class="card-corner corner-br"></div>
-        
-        <div class="card-content">
-            <p class="card-label">Archétype Révélé</p>
-            <h2 class="archetype-name">{{archetype}}</h2>
-            <div class="archetype-divider">
-                <span class="divider-star">✧</span>
-            </div>
-            {{#if archetypeDescription}}
-            <p class="archetype-description">{{archetypeDescription}}</p>
-            {{/if}}
-        </div>
-    </div>
+{{#if introduction}}
+<section id="message" class="chapter page-break">
+  <div class="chapter__header">
+    <span>01</span><div><p class="kicker">Entrer dans la lecture</p><h2>Le message d'ouverture</h2></div>
+  </div>
+  <div class="prose prose--opening">{{{richText introduction}}}</div>
+  <aside class="reading-prompt avoid-break"><span>À noter</span><p>Quelle phrase vous accompagne le plus après cette première lecture ?</p></aside>
+</section>
+{{/if}}
 
-    <!-- Keywords / Soul Tags -->
-    <div class="soul-tags">
-        <p class="tags-label">Signatures de l'Âme</p>
-        <div class="tags-container">
-            <span class="soul-tag">Intuition</span>
-            <span class="soul-tag">Sagesse</span>
-            <span class="soul-tag">Transformation</span>
-        </div>
-    </div>
-
-    <!-- Birth Data -->
-    <div class="birth-constellation">
-        <p class="constellation-label">Coordonnées Cosmiques</p>
-        <div class="constellation-data">
-            <div class="data-item">
-                <span class="data-icon">☉</span>
-                <span class="data-label">Naissance</span>
-                <span class="data-value">{{birthData.date}}</span>
-            </div>
-            {{#if birthData.time}}
-            <div class="data-item">
-                <span class="data-icon">☽</span>
-                <span class="data-label">Heure</span>
-                <span class="data-value">{{birthData.time}}</span>
-            </div>
-            {{/if}}
-            {{#if birthData.place}}
-            <div class="data-item">
-                <span class="data-icon">⊕</span>
-                <span class="data-label">Lieu</span>
-                <span class="data-value">{{birthData.place}}</span>
-            </div>
-            {{/if}}
-        </div>
-    </div>
-</div>
-
-<div class="page-break"></div>
-
-{{!-- ═══════════════════════════════════════════════════════════
-     PAGE 3: INTRODUCTION
-     ═══════════════════════════════════════════════════════════ --}}
-<div class="content-page">
-    <div class="page-header">
-        <span class="header-ornament">❖</span>
-        <span class="header-title">Le Message de l'Oracle</span>
-        <span class="header-ornament">❖</span>
-    </div>
-
-    <section class="section introduction-section">
-        <div class="section-header">
-            <span class="section-icon">✨</span>
-            <h2>Bienvenue, {{userName}}</h2>
-        </div>
-        <div class="section-content">
-            <p class="introduction-text">{{introduction}}</p>
-        </div>
-    </section>
-</div>
-
-<div class="page-break"></div>
-
-{{!-- ═══════════════════════════════════════════════════════════
-     PAGES 4+: THE REVELATION (DOMAIN SECTIONS)
-     ═══════════════════════════════════════════════════════════ --}}
 {{#each sections}}
-<section class="section domain-section avoid-break">
-    <div class="section-header">
-        <span class="section-icon">{{domainIcon domain}}</span>
-        <h2>{{title}}</h2>
-    </div>
-    <div class="domain-label">{{capitalize domain}}</div>
-    <div class="section-content">
-        <p>{{content}}</p>
-    </div>
+<section id="chapter-{{@index}}" class="chapter page-break">
+  <div class="chapter__header">
+    <span>{{sectionNumber @index @root.introduction}}</span>
+    <div><p class="kicker">{{capitalize domain}}</p><h2>{{title}}</h2></div>
+  </div>
+  <div class="prose">{{{richText content}}}</div>
+  <aside class="chapter__anchor avoid-break"><span>Point d'ancrage</span><p>Relisez ce chapitre lentement et choisissez un geste simple qui lui donne une place dans votre semaine.</p></aside>
 </section>
 {{/each}}
 
-<div class="page-break"></div>
-
-{{!-- ═══════════════════════════════════════════════════════════
-     KARMIC INSIGHTS PAGE
-     ═══════════════════════════════════════════════════════════ --}}
-<div class="content-page">
-    <div class="page-header">
-        <span class="header-ornament">❖</span>
-        <span class="header-title">Révélations Profondes</span>
-        <span class="header-ornament">❖</span>
-    </div>
-
-    <section class="section karmic-section">
-        <div class="section-header">
-            <span class="section-icon">🔮</span>
-            <h2>Révélations Karmiques</h2>
-        </div>
-        <div class="section-content">
-            <ul class="karmic-list">
-                {{#each karmicInsights}}
-                <li class="karmic-item">
-                    <span class="karmic-bullet">◈</span>
-                    <span class="karmic-text">{{this}}</span>
-                </li>
-                {{/each}}
-            </ul>
-        </div>
-    </section>
-
-    <section class="section mission-section">
-        <div class="section-header">
-            <span class="section-icon">🌟</span>
-            <h2>Votre Mission de Vie</h2>
-        </div>
-        <div class="section-content">
-            <div class="mission-card">
-                <p class="mission-text">{{lifeMission}}</p>
-            </div>
-        </div>
-    </section>
-</div>
-
-{{!-- ═══════════════════════════════════════════════════════════
-     RITUALS PAGE
-     ═══════════════════════════════════════════════════════════ --}}
-{{#if rituals.length}}
-<div class="page-break"></div>
-
-<div class="content-page">
-    <div class="page-header">
-        <span class="header-ornament">❖</span>
-        <span class="header-title">Pratiques Sacrées</span>
-        <span class="header-ornament">❖</span>
-    </div>
-
-    <section class="section rituals-section">
-        <div class="section-header">
-            <span class="section-icon">🕯️</span>
-            <h2>Rituels Personnalisés</h2>
-        </div>
-        <div class="section-content">
-            {{#each rituals}}
-            <div class="ritual-card avoid-break">
-                <div class="ritual-header">
-                    <span class="ritual-number">{{inc @index}}</span>
-                    <h4 class="ritual-name">{{name}}</h4>
-                </div>
-                <p class="ritual-description">{{description}}</p>
-                {{#if instructions.length}}
-                <ol class="ritual-steps">
-                    {{#each instructions}}
-                    <li>{{this}}</li>
-                    {{/each}}
-                </ol>
-                {{/if}}
-            </div>
-            {{/each}}
-        </div>
-    </section>
-</div>
+{{#if karmicInsights.length}}
+<section id="insights" class="focus-page page-break">
+  <p class="kicker">À contempler</p>
+  <h2>Les repères profonds</h2>
+  <p class="focus-page__intro">Ces points ne sont pas des verdicts. Prenez-les comme des invitations à observer ce qui se joue avec douceur et curiosité.</p>
+  <div class="insight-list">
+    {{#each karmicInsights}}
+    <article class="insight-card avoid-break"><span>{{inc @index}}</span><div>{{{richText this}}}</div></article>
+    {{/each}}
+  </div>
+</section>
 {{/if}}
 
-{{!-- ═══════════════════════════════════════════════════════════
-     FINAL MESSAGE PAGE
-     ═══════════════════════════════════════════════════════════ --}}
-<div class="page-break"></div>
+{{#if lifeMission}}
+<section id="mission" class="focus-page page-break">
+  <p class="kicker">Votre direction</p>
+  <h2>Votre cap</h2>
+  <div class="mission-card">
+    <div class="mission-card__mark">✦</div>
+    <div class="prose">{{{richText lifeMission}}}</div>
+  </div>
+  <aside class="reading-prompt avoid-break"><span>À noter</span><p>Quel choix, même discret, pourrait honorer ce cap dans les sept prochains jours ?</p></aside>
+</section>
+{{/if}}
 
-<div class="content-page closing-page">
-    <div class="page-header">
-        <span class="header-ornament">❖</span>
-        <span class="header-title">Bénédiction Finale</span>
-        <span class="header-ornament">❖</span>
+{{#if rituals.length}}
+<section id="rituals" class="practice-page page-break">
+  <p class="kicker">Mettre en mouvement</p>
+  <h2>Vos pratiques</h2>
+  <p class="practice-page__intro">Choisissez une pratique à la fois. La régularité compte davantage que l'intensité.</p>
+  {{#each rituals}}
+  <article class="ritual-card avoid-break">
+    <div class="ritual-card__number">{{inc @index}}</div>
+    <div class="ritual-card__body">
+      <h3>{{name}}</h3>
+      <div class="ritual-card__description">{{{richText description}}}</div>
+      {{#if instructions.length}}
+      <ol>{{#each instructions}}<li>{{this}}</li>{{/each}}</ol>
+      {{/if}}
     </div>
+  </article>
+  {{/each}}
+</section>
+{{/if}}
 
-    <section class="section conclusion-section">
-        <div class="section-header">
-            <span class="section-icon">💫</span>
-            <h2>Message de Clôture</h2>
-        </div>
-        <div class="section-content">
-            <blockquote class="final-message">
-                {{conclusion}}
-            </blockquote>
-        </div>
-    </section>
+{{#if conclusion}}
+<section id="closing" class="closing">
+  <p class="kicker">Pour continuer</p>
+  <h2>Gardez ce qui vous éclaire</h2>
+  <div class="closing__message">{{{richText conclusion}}}</div>
+  <div class="closing__seal"><span>✦</span><p>Votre lecture est un point de départ.<br>Elle s'approfondit au fil de vos choix.</p></div>
+</section>
+{{/if}}
 
-    <!-- Closing Seal -->
-    <div class="closing-seal">
-        <div class="seal-circle">
-            <span class="seal-symbol">☽ ☉ ☾</span>
-        </div>
-        <p class="seal-text">Que la lumière guide votre chemin</p>
-    </div>
-
-    <!-- Generation Info -->
-    <div class="generation-info">
-        <p>Cette lecture a été canalisée le {{formatDate generatedAt}}</p>
-        <p class="info-note">par Oracle Lumira · Intelligence Spirituelle</p>
-    </div>
-</div>
-
-{{!-- ═══════════════════════════════════════════════════════════
-     TEMPLATE STYLES
-     ═══════════════════════════════════════════════════════════ --}}
 <style>
-    /* =====================================================
-       COVER PAGE STYLES
-       ===================================================== */
-    .cover-page {
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: space-between;
-        padding: 3rem 0;
-        text-align: center;
-        position: relative;
-        overflow: hidden;
-    }
-
-    /* Portal Circle */
-    .portal-circle {
-        width: 180px;
-        height: 180px;
-        border: 2px solid var(--divine-gold);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        margin-top: 2rem;
-    }
-
-    .portal-inner {
-        width: 140px;
-        height: 140px;
-        border: 1px solid rgba(212, 175, 55, 0.4);
-        border-radius: 50%;
-        position: relative;
-    }
-
-    .portal-glow {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 60px;
-        height: 60px;
-        background: radial-gradient(circle, rgba(212, 175, 55, 0.3) 0%, transparent 70%);
-        border-radius: 50%;
-    }
-
-    /* Cover Title */
-    .cover-title {
-        margin: 2rem 0;
-    }
-
-    .cover-subtitle {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 12pt;
-        color: var(--stardust-dim);
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-    }
-
-    .brand-name {
-        font-family: 'Cinzel', serif;
-        font-size: 36pt;
-        font-weight: 600;
-        color: var(--divine-gold);
-        letter-spacing: 0.25em;
-        margin: 1rem 0;
-        text-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
-    }
-
-    .title-ornament {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        margin-top: 1rem;
-    }
-
-    .ornament-line {
-        width: 60px;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, var(--divine-gold));
-    }
-
-    .ornament-line:last-child {
-        background: linear-gradient(90deg, var(--divine-gold), transparent);
-    }
-
-    .ornament-diamond {
-        color: var(--divine-gold);
-        font-size: 10pt;
-    }
-
-    /* Cover Recipient */
-    .cover-recipient {
-        margin: 2rem 0;
-    }
-
-    .prepared-for {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-style: italic;
-        font-size: 11pt;
-        color: var(--stardust-dim);
-        margin-bottom: 0.5rem;
-    }
-
-    .recipient-name {
-        font-family: 'Cinzel', serif;
-        font-size: 22pt;
-        color: var(--stardust);
-        letter-spacing: 0.1em;
-    }
-
-    /* Cover Footer */
-    .cover-footer {
-        margin-top: auto;
-    }
-
-    .cover-date {
-        font-size: 10pt;
-        color: var(--stardust-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.2em;
-    }
-
-    .cover-note {
-        font-size: 8pt;
-        color: rgba(148, 163, 184, 0.6);
-        margin-top: 0.5rem;
-    }
-
-    /* =====================================================
-       ESSENCE PAGE STYLES (Archetype)
-       ===================================================== */
-    .essence-page {
-        padding: 1rem 0;
-    }
-
-    .page-header {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        margin-bottom: 2.5rem;
-        padding-bottom: 1rem;
-    }
-
-    .header-ornament {
-        color: var(--divine-gold);
-        font-size: 10pt;
-    }
-
-    .header-title {
-        font-family: 'Cinzel', serif;
-        font-size: 11pt;
-        color: var(--stardust-dim);
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-    }
-
-    /* Archetype Card */
-    .archetype-card {
-        background: linear-gradient(135deg, var(--void-subtle) 0%, var(--void-light) 100%);
-        border: 1px solid rgba(212, 175, 55, 0.3);
-        padding: 2.5rem 2rem;
-        text-align: center;
-        position: relative;
-        margin: 0 auto 2rem;
-        max-width: 500px;
-    }
-
-    .card-corner {
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border-color: var(--divine-gold);
-        border-style: solid;
-    }
-
-    .corner-tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-    .corner-tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
-    .corner-bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
-    .corner-br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
-
-    .card-label {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 10pt;
-        color: var(--stardust-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.3em;
-        margin-bottom: 0.5rem;
-    }
-
-    .archetype-card .archetype-name {
-        font-family: 'Cinzel', serif;
-        font-size: 26pt;
-        color: var(--divine-gold);
-        margin: 0.5rem 0;
-        letter-spacing: 0.05em;
-    }
-
-    .archetype-divider {
-        margin: 1rem 0;
-    }
-
-    .divider-star {
-        color: var(--divine-gold);
-        font-size: 14pt;
-    }
-
-    .archetype-description {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 12pt;
-        font-style: italic;
-        color: var(--stardust);
-        line-height: 1.8;
-        max-width: 400px;
-        margin: 0 auto;
-    }
-
-    /* Soul Tags */
-    .soul-tags {
-        text-align: center;
-        margin: 2rem 0;
-    }
-
-    .tags-label {
-        font-size: 9pt;
-        color: var(--stardust-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.2em;
-        margin-bottom: 1rem;
-    }
-
-    .tags-container {
-        display: flex;
-        justify-content: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }
-
-    .soul-tag {
-        font-family: 'Inter', sans-serif;
-        font-size: 9pt;
-        font-weight: 400;
-        color: var(--divine-gold);
-        padding: 0.4rem 1rem;
-        border: 1px solid rgba(212, 175, 55, 0.4);
-        background: rgba(212, 175, 55, 0.05);
-        letter-spacing: 0.1em;
-    }
-
-    /* Birth Constellation */
-    .birth-constellation {
-        margin-top: 2.5rem;
-        padding-top: 2rem;
-        border-top: 1px solid rgba(212, 175, 55, 0.2);
-    }
-
-    .constellation-label {
-        font-size: 9pt;
-        color: var(--stardust-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.2em;
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-
-    .constellation-data {
-        display: flex;
-        justify-content: center;
-        gap: 3rem;
-    }
-
-    .data-item {
-        text-align: center;
-    }
-
-    .data-icon {
-        display: block;
-        font-size: 16pt;
-        color: var(--divine-gold);
-        margin-bottom: 0.25rem;
-    }
-
-    .data-label {
-        display: block;
-        font-size: 8pt;
-        color: var(--stardust-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.15em;
-        margin-bottom: 0.25rem;
-    }
-
-    .data-value {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 11pt;
-        color: var(--stardust);
-    }
-
-    /* =====================================================
-       CONTENT PAGE STYLES
-       ===================================================== */
-    .content-page {
-        padding: 1rem 0;
-    }
-
-    /* Section Styles */
-    .section {
-        margin-bottom: 2rem;
-        page-break-inside: avoid;
-    }
-
-    .section-header {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid rgba(212, 175, 55, 0.2);
-    }
-
-    .section-icon {
-        font-size: 1.25rem;
-    }
-
-    .section-header h2 {
-        margin: 0;
-        font-size: 15pt;
-    }
-
-    .domain-label {
-        font-size: 9pt;
-        color: var(--divine-gold);
-        text-transform: uppercase;
-        letter-spacing: 0.15em;
-        margin-bottom: 1rem;
-        opacity: 0.7;
-    }
-
-    .section-content {
-        color: var(--stardust);
-    }
-
-    .section-content p {
-        text-align: justify;
-        line-height: 1.9;
-    }
-
-    /* Introduction */
-    .introduction-text {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 12pt;
-        line-height: 2;
-    }
-
-    /* Karmic List */
-    .karmic-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .karmic-item {
-        display: flex;
-        gap: 1rem;
-        padding: 1rem;
-        margin-bottom: 0.75rem;
-        background: rgba(212, 175, 55, 0.03);
-        border-left: 2px solid var(--divine-gold);
-    }
-
-    .karmic-bullet {
-        color: var(--divine-gold);
-        font-size: 10pt;
-        flex-shrink: 0;
-    }
-
-    .karmic-text {
-        line-height: 1.7;
-    }
-
-    /* Mission Card */
-    .mission-card {
-        background: linear-gradient(135deg, var(--void-subtle) 0%, var(--void-light) 100%);
-        border: 1px solid rgba(212, 175, 55, 0.2);
-        padding: 2rem;
-        text-align: center;
-    }
-
-    .mission-text {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 13pt;
-        font-style: italic;
-        line-height: 2;
-        color: var(--stardust);
-    }
-
-    /* Ritual Cards */
-    .ritual-card {
-        background: var(--void-subtle);
-        border: 1px solid rgba(212, 175, 55, 0.15);
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .ritual-header {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .ritual-number {
-        width: 28px;
-        height: 28px;
-        background: var(--divine-gold);
-        color: var(--void-deep);
-        font-family: 'Cinzel', serif;
-        font-size: 12pt;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-    }
-
-    .ritual-name {
-        font-family: 'Cinzel', serif;
-        font-size: 13pt;
-        color: var(--stardust);
-        margin: 0;
-    }
-
-    .ritual-description {
-        color: var(--stardust-dim);
-        margin-bottom: 1rem;
-        font-style: italic;
-    }
-
-    .ritual-steps {
-        margin-left: 1.5rem;
-        color: var(--stardust);
-    }
-
-    .ritual-steps li {
-        margin-bottom: 0.5rem;
-        line-height: 1.7;
-    }
-
-    /* =====================================================
-       CLOSING PAGE STYLES
-       ===================================================== */
-    .closing-page {
-        text-align: center;
-    }
-
-    .final-message {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 14pt;
-        font-style: italic;
-        color: var(--divine-gold-light);
-        line-height: 2;
-        padding: 2rem;
-        margin: 0;
-        background: linear-gradient(180deg, rgba(212, 175, 55, 0.05) 0%, transparent 100%);
-        border: none;
-        position: relative;
-    }
-
-    .final-message::before {
-        content: '"';
-        font-size: 60pt;
-        color: var(--divine-gold);
-        opacity: 0.2;
-        position: absolute;
-        top: -0.5rem;
-        left: 1rem;
-        line-height: 1;
-    }
-
-    /* Closing Seal */
-    .closing-seal {
-        margin: 3rem 0 2rem;
-    }
-
-    .seal-circle {
-        width: 80px;
-        height: 80px;
-        border: 1px solid var(--divine-gold);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto 1rem;
-    }
-
-    .seal-symbol {
-        font-size: 14pt;
-        color: var(--divine-gold);
-        letter-spacing: 0.2em;
-    }
-
-    .seal-text {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-style: italic;
-        font-size: 12pt;
-        color: var(--stardust-dim);
-    }
-
-    /* Generation Info */
-    .generation-info {
-        margin-top: 3rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid rgba(212, 175, 55, 0.1);
-        font-size: 9pt;
-        color: var(--stardust-dim);
-    }
-
-    .info-note {
-        font-size: 8pt;
-        opacity: 0.7;
-        margin-top: 0.25rem;
-    }
-
-    /* =====================================================
-       PRINT OPTIMIZATIONS
-       ===================================================== */
-    @media print {
-        .cover-page {
-            page-break-after: always;
-        }
-
-        .avoid-break {
-            page-break-inside: avoid;
-        }
-
-        .page-break {
-            page-break-after: always;
-        }
-    }
+  .cover { min-height: 255mm; padding: 23mm 14mm 14mm; position: relative; overflow: hidden; background: var(--plum); color: #fffaf0; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .cover__halo { position: absolute; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; pointer-events: none; }
+  .cover__halo--one { width: 220mm; height: 220mm; top: -90mm; right: -98mm; }
+  .cover__halo--two { width: 145mm; height: 145mm; bottom: -78mm; left: -78mm; }
+  .cover__eyebrow, .kicker, .card-label { color: var(--lavender-deep); font-size: 8pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+  .cover__eyebrow { color: #dfd0ff; position: relative; }
+  .cover__rule { display: flex; align-items: center; gap: 9px; margin: 27mm 0 12mm; color: #e8c984; position: relative; }
+  .cover__rule span { width: 34mm; height: 1px; background: rgba(232,201,132,.65); }
+  .cover h1 { color: #fffaf0; font-size: 38pt; line-height: 1.03; letter-spacing: -.035em; position: relative; }
+  .cover__lead { max-width: 110mm; margin-top: 11mm; color: #eee7fb; font-family: Georgia, serif; font-size: 14pt; line-height: 1.5; position: relative; }
+  .cover__recipient { margin-top: auto; position: relative; }
+  .cover__recipient span { display: block; color: #d9cbea; font-size: 8pt; letter-spacing: .15em; text-transform: uppercase; }
+  .cover__recipient strong { display: block; margin-top: 3mm; font-family: Georgia, serif; font-size: 22pt; font-weight: 400; }
+  .cover__meta { width: 100%; display: flex; justify-content: space-between; margin-top: 24mm; color: #cfc3df; font-size: 8pt; letter-spacing: .08em; }
+
+  .orientation, .focus-page, .practice-page, .closing { padding: 8mm 1mm 0; }
+  .orientation h2, .focus-page h2, .practice-page h2, .closing h2 { margin-top: 3mm; font-size: 28pt; line-height: 1.1; letter-spacing: -.025em; }
+  .orientation__intro, .focus-page__intro, .practice-page__intro { max-width: 142mm; margin-top: 7mm; color: var(--ink-soft); font-family: Georgia, serif; font-size: 13pt; line-height: 1.6; }
+  .essence-card { display: flex; justify-content: space-between; gap: 12mm; margin-top: 12mm; padding: 10mm; background: var(--lavender); border-radius: 4mm; }
+  .essence-card h3 { margin-top: 1.5mm; font-size: 25pt; line-height: 1.15; }
+  .essence-card__description p { margin-top: 4mm; color: var(--ink-soft); font-family: Georgia, serif; font-size: 12pt; }
+  .essence-card__symbol { align-self: flex-start; color: var(--gold); font-size: 26pt; }
+  .keywords { margin-top: 8mm; }
+  .keywords__list { display: flex; flex-wrap: wrap; gap: 2.5mm; margin-top: 3mm; }
+  .keywords__list span { padding: 1.6mm 3.3mm; border: 1px solid var(--line); border-radius: 99px; color: var(--lavender-deep); font-size: 9pt; }
+  .toc { margin-top: 11mm; border-top: 1px solid var(--line); }
+  .toc .card-label { margin-top: 5mm; }
+  .toc__item { display: grid; grid-template-columns: 10mm 1fr 8mm; gap: 3mm; align-items: center; min-height: 10mm; border-bottom: 1px solid var(--line); }
+  .toc__item b { color: var(--gold); font-size: 8pt; letter-spacing: .06em; }
+  .toc__item span { font-family: Georgia, serif; font-size: 12pt; }
+  .toc__item i { color: var(--lavender-deep); font-size: 13pt; font-style: normal; text-align: right; }
+  .birth-note { display: flex; justify-content: space-between; gap: 8mm; margin-top: 9mm; padding-top: 5mm; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 8.5pt; }
+  .birth-note strong { color: var(--ink); font-weight: 600; text-align: right; }
+
+  .chapter { padding: 7mm 1mm 0; }
+  .chapter__header { display: grid; grid-template-columns: 16mm 1fr; gap: 5mm; align-items: start; padding-bottom: 7mm; border-bottom: 1px solid var(--line); }
+  .chapter__header > span { display: grid; width: 12mm; height: 12mm; place-items: center; border-radius: 50%; background: var(--plum); color: #fff; font-size: 8.5pt; font-weight: 700; }
+  .chapter h2 { margin-top: 1.5mm; font-size: 27pt; line-height: 1.1; letter-spacing: -.025em; }
+  .prose { max-width: 151mm; margin-top: 9mm; font-family: Georgia, "Times New Roman", serif; font-size: 12.2pt; line-height: 1.75; }
+  .prose--opening { font-size: 13pt; }
+  .prose p + p { margin-top: 5mm; }
+  .chapter__anchor, .reading-prompt { display: grid; grid-template-columns: 27mm 1fr; gap: 5mm; margin-top: 10mm; padding: 5.5mm 6mm; border-left: 2px solid var(--gold); background: #fff8ed; }
+  .chapter__anchor span, .reading-prompt span { color: var(--gold); font-size: 8pt; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+  .chapter__anchor p, .reading-prompt p { color: var(--ink-soft); font-family: Georgia, serif; font-size: 11pt; line-height: 1.45; }
+
+  .focus-page__intro { margin-bottom: 9mm; }
+  .insight-list { display: grid; gap: 4mm; }
+  .insight-card { display: grid; grid-template-columns: 13mm 1fr; gap: 4mm; padding: 6mm; border: 1px solid var(--line); border-radius: 2mm; }
+  .insight-card > span { color: var(--gold); font-family: Georgia, serif; font-size: 18pt; }
+  .insight-card p { color: var(--ink-soft); font-family: Georgia, serif; font-size: 11.5pt; }
+  .insight-card p + p { margin-top: 3mm; }
+  .mission-card { display: grid; grid-template-columns: 20mm 1fr; gap: 5mm; margin-top: 10mm; padding: 11mm; border-radius: 4mm; background: var(--plum); }
+  .mission-card .prose { margin: 0; color: #fffaf5; }
+  .mission-card__mark { color: #e8c984; font-size: 19pt; }
+
+  .ritual-card { display: grid; grid-template-columns: 15mm 1fr; gap: 5mm; padding: 7mm 0; border-bottom: 1px solid var(--line); }
+  .ritual-card__number { display: grid; place-items: center; width: 10mm; height: 10mm; border-radius: 50%; background: var(--lavender); color: var(--lavender-deep); font-size: 8.5pt; font-weight: 700; }
+  .ritual-card h3 { font-size: 17pt; line-height: 1.2; }
+  .ritual-card__description { margin-top: 3mm; color: var(--ink-soft); font-family: Georgia, serif; font-size: 11.5pt; }
+  .ritual-card__description p + p { margin-top: 3mm; }
+  .ritual-card ol { margin: 4mm 0 0 5mm; padding-left: 5mm; color: var(--ink); }
+  .ritual-card li { margin-top: 2mm; padding-left: 2mm; }
+  .ritual-card li::marker { color: var(--gold); font-weight: 700; }
+
+  .closing { min-height: 225mm; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .closing h2 { max-width: 125mm; }
+  .closing__message { max-width: 135mm; margin-top: 14mm; color: var(--ink-soft); font-family: Georgia, serif; font-size: 15pt; line-height: 1.7; }
+  .closing__message p + p { margin-top: 5mm; }
+  .closing__seal { margin-top: auto; padding-top: 15mm; color: var(--lavender-deep); }
+  .closing__seal span { display: block; color: var(--gold); font-size: 24pt; }
+  .closing__seal p { margin-top: 4mm; font-family: Georgia, serif; font-size: 12pt; line-height: 1.55; }
 </style>
