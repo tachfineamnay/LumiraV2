@@ -115,12 +115,24 @@ VALUES (
   CURRENT_TIMESTAMP
 );
 
--- 5. Replace the obsolete seven-day GUIDE instruction with the actual 30-day batch contract.
+-- 5. Preserve inherited prompt versions as history, but stop using them silently.
+-- The runtime then uses the reviewed V1 defaults from the deployed code until the
+-- founder explicitly saves a new version from the Desk.
 UPDATE "PromptVersion"
 SET "isActive" = false
-WHERE "key" = 'GUIDE'
-  AND "isActive" = true;
+WHERE "key" IN (
+  'LUMIRA_DNA',
+  'SCRIBE',
+  'GUIDE',
+  'EDITOR',
+  'NARRATOR',
+  'CONFIDANT',
+  'ONIRIQUE'
+)
+AND "isActive" = true;
 
+-- GUIDE receives an explicit active version because its 30-day contract is also
+-- inspected by the production readiness screen.
 INSERT INTO "PromptVersion" (
   "id",
   "key",
