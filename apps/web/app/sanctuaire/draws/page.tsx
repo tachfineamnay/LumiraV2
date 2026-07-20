@@ -100,7 +100,7 @@ export default function DrawsPage() {
   const allReadings = useMemo(() => {
     const unique = new Map<string, Reading>();
     [...pending, ...readings].forEach((reading) => unique.set(reading.id, reading));
-    return [...unique.values()].sort((left, right) => {
+    return Array.from(unique.values()).sort((left, right) => {
       const leftDate = left.deliveredAt || left.createdAt;
       const rightDate = right.deliveredAt || right.createdAt;
       return new Date(rightDate).getTime() - new Date(leftDate).getTime();
