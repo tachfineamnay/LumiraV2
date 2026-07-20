@@ -4,7 +4,24 @@ import { AiProductionReadinessService } from './ai-production-readiness.service'
 
 const modelConfig = DEFAULT_AI_MODEL_CONFIG;
 
-const successfulRuns = [
+type RunFixture = {
+  id: string;
+  orderId: string;
+  agent: string;
+  mission: string;
+  provider: string;
+  model: string;
+  routingSource: string;
+  status: 'SUCCESS' | 'ERROR';
+  inputTokens: number | null;
+  outputTokens: number | null;
+  estimatedCost: number | null;
+  durationMs: number;
+  errorCode: string | null;
+  startedAt: Date;
+};
+
+const successfulRuns: RunFixture[] = [
   {
     id: 'run-scribe',
     orderId: 'order-1',
@@ -76,7 +93,7 @@ describe('AiProductionReadinessService', () => {
     activeRules?: unknown[];
     text?: 'ok' | 'error' | 'not_tested';
     multimodal?: 'ok' | 'error' | 'not_tested';
-    runs?: unknown[];
+    runs?: RunFixture[];
     completedOrder?: typeof completedOrder | null;
   }) {
     const activePrompts = [
@@ -170,7 +187,8 @@ describe('AiProductionReadinessService', () => {
   });
 
   it('returns NO_GO when a tracked agent has an error and no success', async () => {
-    const runs = successfulRuns.filter((run) => run.agent !== 'GUIDE').concat([
+    const runs: RunFixture[] = [
+      ...successfulRuns.filter((run) => run.agent !== 'GUIDE'),
       {
         ...successfulRuns[1],
         id: 'run-guide-error',
@@ -180,7 +198,7 @@ describe('AiProductionReadinessService', () => {
         estimatedCost: null,
         errorCode: 'GUIDE structured output invalid',
       },
-    ]);
+    ];
     const result = await createService({ runs }).getReadiness();
     expect(result.verdict).toBe('NO_GO');
     expect(result.checks.find((check) => check.id === 'run_guide')?.level).toBe('fail');
