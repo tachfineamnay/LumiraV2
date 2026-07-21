@@ -8,10 +8,10 @@ export const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   const navLinks = [
-    { name: 'Niveaux', href: '#niveaux' },
-    { name: 'Manifesto', href: '#comment-ca-marche' },
+    { name: "L'Offre", href: '#niveaux' },
+    { name: 'Comment ça marche', href: '#comment-ca-marche' },
     { name: 'Témoignages', href: '#temoignages' },
-    { name: 'Connexion', href: '/sanctuaire' },
+    { name: 'Connexion', href: '/sanctuaire/login' },
   ];
 
   const legalLinks = [
@@ -71,22 +71,6 @@ export const Footer = () => {
                   className="text-white/60 hover:text-white transition-colors text-sm font-medium tracking-wide"
                 >
                   contact@oraclelumira.com
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="text-white/60 hover:text-white transition-colors text-sm font-medium tracking-wide"
-                >
-                  Instagram
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="text-white/60 hover:text-white transition-colors text-sm font-medium tracking-wide"
-                >
-                  Twitter / X
                 </a>
               </li>
             </ul>

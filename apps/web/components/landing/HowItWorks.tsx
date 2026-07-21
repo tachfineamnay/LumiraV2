@@ -60,8 +60,9 @@ export function HowItWorks() {
                 Vous choisissez votre accès
               </h3>
               <p className="text-white/55 text-lg font-light leading-relaxed max-w-md">
-                Une seule offre, conçue pour tout inclure. Entrez votre date, heure et lieu de
-                naissance — c'est tout ce dont l'Oracle a besoin pour commencer à vous lire.
+                Une seule offre, conçue pour tout inclure. Votre email suffit pour commander — vous
+                transmettez ensuite votre date, heure et lieu de naissance dans votre sanctuaire
+                privé.
               </p>
               <p className="text-white/25 text-sm mt-4 italic">
                 Pas de quiz sans fin. Pas de formulaire interminable.

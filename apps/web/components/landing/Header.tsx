@@ -16,8 +16,8 @@ export function Header() {
   }, []);
 
   const navItems = [
-    { name: 'Niveaux', href: '#niveaux' },
-    { name: 'Manifesto', href: '#comment-ca-marche' },
+    { name: "L'Offre", href: '#niveaux' },
+    { name: 'Comment ça marche', href: '#comment-ca-marche' },
     { name: 'Témoignages', href: '#temoignages' },
   ];
 
@@ -57,7 +57,7 @@ export function Header() {
         {/* CTAs Droite - Sophisticated */}
         <div className="flex items-center gap-3 md:gap-8 relative z-50">
           <Link
-            href="/sanctuaire"
+            href="/sanctuaire/login"
             className="hidden sm:block text-sm font-medium text-white/90 hover:text-cosmic-gold transition-colors"
           >
             Connexion
@@ -114,7 +114,7 @@ export function Header() {
                 className="mt-8 flex flex-col gap-4 text-center"
               >
                 <Link
-                  href="/sanctuaire"
+                  href="/sanctuaire/login"
                   onClick={() => setMobileOpen(false)}
                   className="text-white/60 text-sm uppercase tracking-widest"
                 >

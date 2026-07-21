@@ -7,7 +7,6 @@ import { Lock, Loader2 } from 'lucide-react';
 
 interface StripePaymentProps {
   amount: number;
-  email: string;
   onPaymentSuccess: (paymentIntentId: string) => void;
   onPaymentError: (error: string) => void;
   disabled?: boolean;
@@ -15,7 +14,6 @@ interface StripePaymentProps {
 
 export function StripePayment({
   amount,
-  email,
   onPaymentSuccess,
   onPaymentError,
   disabled,
@@ -31,10 +29,9 @@ export function StripePayment({
     setIsProcessing(true);
 
     try {
+      // No PII in the return URL: /payment-success only needs payment_intent,
+      // which Stripe appends automatically on redirect.
       const returnUrl = new URL(`${window.location.origin}/payment-success`);
-      if (email) {
-        returnUrl.searchParams.set('email', email);
-      }
 
       console.log('[StripePayment] Confirming payment...');
       const { error, paymentIntent } = await stripe.confirmPayment({
@@ -79,29 +76,6 @@ export function StripePayment({
       transition={{ duration: 0.5, delay: 0.4 }}
       className="space-y-6"
     >
-      {/* Express Checkout placeholder - Apple Pay/Google Pay */}
-      <div className="text-center">
-        <p className="text-stellar-500 text-xs uppercase tracking-widest mb-4">Paiement Express</p>
-        <div className="flex gap-3 justify-center">
-          <div className="px-6 py-3 bg-black rounded-lg border border-white/10 text-white text-sm font-medium flex items-center gap-2 opacity-50 cursor-not-allowed">
-            <span>Apple Pay</span>
-          </div>
-          <div className="px-6 py-3 bg-white rounded-lg text-black text-sm font-medium flex items-center gap-2 opacity-50 cursor-not-allowed">
-            <span>Google Pay</span>
-          </div>
-        </div>
-        <p className="text-stellar-600 text-xs mt-2">Bientôt disponible</p>
-      </div>
-
-      {/* Divider */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-        <span className="text-stellar-500 text-xs uppercase tracking-widest">
-          ou payer par carte
-        </span>
-        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-      </div>
-
       {/* Stripe Payment Element */}
       <div className="bg-abyss-600/60 backdrop-blur-sm border border-white/10 rounded-xl p-4">
         <PaymentElement

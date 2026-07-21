@@ -8,6 +8,8 @@ import {
   buildSanctuairePostCheckoutUrl,
   completeCheckoutSession,
 } from '../../lib/completeCheckoutSession';
+import { SUBSCRIPTION } from '../../lib/products';
+import { trackPurchase } from '../../lib/pixel';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
@@ -41,6 +43,7 @@ function PaymentSuccessContent() {
 
       try {
         await completeCheckoutSession(paymentIntentId);
+        trackPurchase(SUBSCRIPTION.price, paymentIntentId);
         setStatus('confirmed');
         setTimeout(() => {
           // Hard nav ensures Set-Cookie from confirm is included on Sanctuaire load

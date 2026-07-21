@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
 
 export function KanbanBoard() {
-  const { orders, isLoading, fetchOrders, moveOrder, updateOrder, addOrder } = useOrders();
+  const { orders, isLoading, fetchOrders, moveOrder, updateOrder } = useOrders();
   const { expert } = useExpertAuth();
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
@@ -44,10 +44,10 @@ export function KanbanBoard() {
 
   const { orderViewers } = useSocket({
     onNewOrder: (order) => {
-      addOrder(order);
-      toast.success(`Nouvelle commande: ${order.orderNumber}`, {
-        description: `${order.user.firstName} - Niveau ${order.level}`,
-      });
+      // The socket payload is intentionally minimal (no client identity);
+      // reload the board to get the full order.
+      toast.success(`Nouvelle commande: ${order.orderNumber}`);
+      fetchOrders();
     },
     onStatusChange: (data) => {
       if (data.newStatus === 'AWAITING_VALIDATION') {

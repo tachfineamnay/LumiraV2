@@ -16,6 +16,7 @@ import {
   buildSanctuairePostCheckoutUrl,
   completeCheckoutSession,
 } from '../../lib/completeCheckoutSession';
+import { trackInitiateCheckout, trackPurchase } from '../../lib/pixel';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
@@ -57,6 +58,7 @@ function CheckoutContent() {
       }
     };
     fetchConnectedUser();
+    trackInitiateCheckout(SUBSCRIPTION.price);
   }, []);
 
   const handleFormValid = (data: CheckoutFormData) => {
@@ -108,6 +110,7 @@ function CheckoutContent() {
 
     try {
       await completeCheckoutSession(paymentIntentId);
+      trackPurchase(SUBSCRIPTION.price, paymentIntentId);
       window.location.href = buildSanctuairePostCheckoutUrl();
     } catch (err) {
       console.error('[Checkout] Post-payment session failed:', err);
@@ -325,8 +328,7 @@ function CheckoutContent() {
                     }}
                   >
                     <StripePayment
-                      amount={2900}
-                      email={formData?.email || ''}
+                      amount={SUBSCRIPTION.price * 100}
                       onPaymentSuccess={handlePaymentSuccess}
                       onPaymentError={handlePaymentError}
                     />

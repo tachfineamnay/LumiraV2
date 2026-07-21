@@ -613,6 +613,12 @@ export function ReadingPreparation({
     };
   }, []);
 
+  const isPhotoBusy =
+    photoStates.face === 'preparing' ||
+    photoStates.face === 'uploading' ||
+    photoStates.palm === 'preparing' ||
+    photoStates.palm === 'uploading';
+
   const waitForPhotoUploads = useCallback(async () => {
     const pending = Array.from(pendingPhotoUploadsRef.current);
     if (!pending.length) return true;
@@ -938,11 +944,6 @@ export function ReadingPreparation({
     );
   }
 
-  const isPhotoBusy =
-    photoStates.face === 'preparing' ||
-    photoStates.face === 'uploading' ||
-    photoStates.palm === 'preparing' ||
-    photoStates.palm === 'uploading';
   const saveLabel = getSaveLabel(saveState, updatedAt);
 
   return (
