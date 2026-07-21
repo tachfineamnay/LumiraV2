@@ -6,12 +6,13 @@ import { META_PIXEL_ID } from '../../lib/pixel';
 /**
  * Loads the Meta Pixel and fires PageView. Renders nothing when
  * NEXT_PUBLIC_META_PIXEL_ID is not configured.
+ * lazyOnload keeps the pixel off the critical path for LCP/TBT.
  */
 export function MetaPixel() {
   if (!META_PIXEL_ID) return null;
 
   return (
-    <Script id="meta-pixel" strategy="afterInteractive">
+    <Script id="meta-pixel" strategy="lazyOnload">
       {`!function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};

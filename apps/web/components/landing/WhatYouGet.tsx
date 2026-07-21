@@ -1,6 +1,3 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import { BookOpen, Headphones, Palette, MessageCircle, Moon, Compass } from 'lucide-react';
 
 const DELIVERABLES = [
@@ -80,18 +77,11 @@ const DELIVERABLES = [
 
 export function WhatYouGet() {
   return (
-    <section className="py-16 md:py-32 relative overflow-hidden">
-      {/* Soft ambiance */}
+    <section className="py-16 md:py-32 relative overflow-hidden content-visibility-auto">
       <div className="absolute right-0 top-1/4 w-[700px] h-[700px] bg-amber-900/8 rounded-full blur-[180px] pointer-events-none" />
 
       <div className="max-w-[1400px] mx-auto px-6 md:px-12">
-        {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mb-20"
-        >
+        <div className="mb-20">
           <span className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-bold block mb-4">
             Ce que vous recevez exactement
           </span>
@@ -107,34 +97,26 @@ export function WhatYouGet() {
               vers qui vous pouvez devenir.
             </p>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Deliverables Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {DELIVERABLES.map((item, i) => {
+          {DELIVERABLES.map((item) => {
             const Icon = item.icon;
             return (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-                className={`relative rounded-[1.5rem] md:rounded-[2rem] border ${item.border} bg-gradient-to-br ${item.color} p-6 md:p-10 group hover:scale-[1.02] transition-transform duration-500 cursor-default`}
+              <div
+                key={item.title}
+                className={`relative rounded-[1.5rem] md:rounded-[2rem] border ${item.border} bg-gradient-to-br ${item.color} p-6 md:p-10 group hover:scale-[1.02] transition-transform duration-500`}
               >
-                {/* Large badge */}
                 <div className="absolute top-8 right-8 text-4xl select-none opacity-40 group-hover:opacity-70 transition-opacity duration-500">
                   {item.badge}
                 </div>
 
-                {/* Icon */}
                 <div
                   className={`w-12 h-12 rounded-xl border ${item.border} flex items-center justify-center mb-6`}
                 >
-                  <Icon className={`w-5 h-5 ${item.iconColor}`} />
+                  <Icon className={`w-5 h-5 ${item.iconColor}`} aria-hidden />
                 </div>
 
-                {/* Content */}
                 <h3 className="font-playfair italic text-2xl text-white mb-1">{item.title}</h3>
                 <p
                   className={`text-[11px] uppercase tracking-widest ${item.iconColor} opacity-70 mb-5`}
@@ -145,7 +127,6 @@ export function WhatYouGet() {
                   {item.description}
                 </p>
 
-                {/* Highlight badge */}
                 <div
                   className={`mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full border ${item.border} bg-white/[0.02]`}
                 >
@@ -155,19 +136,12 @@ export function WhatYouGet() {
                     {item.highlight}
                   </span>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </div>
 
-        {/* Value Summary */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.3 }}
-          className="mt-10 md:mt-16 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 bg-white/[0.02] flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
-        >
+        <div className="mt-10 md:mt-16 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 bg-white/[0.02] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
             <p className="text-white/60 text-sm uppercase tracking-widest font-bold mb-2">
               Valeur totale estimée
@@ -184,10 +158,10 @@ export function WhatYouGet() {
           <div className="text-right">
             <p className="text-white/40 text-sm font-light max-w-sm leading-relaxed">
               Nous aurions pu vendre chaque livrable séparément. Nous avons choisi de tout inclure —
-              parce que vous méritez l'expérience complète.
+              parce que vous méritez l&apos;expérience complète.
             </p>
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

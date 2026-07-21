@@ -17,10 +17,17 @@ import {
   completeCheckoutSession,
 } from '../../lib/completeCheckoutSession';
 import { trackInitiateCheckout, trackPurchase } from '../../lib/pixel';
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+let stripePromise: Promise<Stripe | null> | null = null;
+function getStripe() {
+  if (!stripePromise) {
+    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    stripePromise = key ? loadStripe(key) : Promise.resolve(null);
+  }
+  return stripePromise;
+}
 
 // Type for connected user from Sanctuaire
 interface ConnectedUser {
@@ -313,7 +320,7 @@ function CheckoutContent() {
                   </div>
 
                   <Elements
-                    stripe={stripePromise}
+                    stripe={getStripe()}
                     options={{
                       clientSecret,
                       appearance: {

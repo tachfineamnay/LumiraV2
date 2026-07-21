@@ -7,11 +7,6 @@
     --foreground-rgb: 248, 250, 252;
     --background-start-rgb: 4, 6, 16;
     --background-end-rgb: 12, 18, 37;
-    /* Network-independent fallbacks: local deployments must build and boot
-       without reaching Google Fonts. */
-    --font-inter:
-      ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-playfair: Georgia, 'Times New Roman', serif;
     /* Sanctuaire shell chrome — consumed by layout, chat, FAB */
     --sanctuaire-header-h: 3.75rem;
     --sanctuaire-bottom-nav-h: calc(4.25rem + env(safe-area-inset-bottom, 0px));
@@ -186,6 +181,37 @@
 }
 
 @layer utilities {
+  /* Skip paint work for below-fold landing sections until near viewport */
+  .content-visibility-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
+  }
+
+  .animate-hero-enter {
+    animation: hero-enter 0.7s ease-out both;
+  }
+
+  @keyframes hero-enter {
+    from {
+      opacity: 0.92;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-hero-enter,
+    .motion-safe\:animate-mandala-rotate,
+    .motion-safe\:animate-twinkle,
+    .motion-safe\:animate-bounce,
+    .motion-safe\:animate-pulse {
+      animation: none !important;
+    }
+  }
+
   /* === WIZARD COSMIC BACKGROUND === */
   .wizard-cosmic-gradient {
     background:
