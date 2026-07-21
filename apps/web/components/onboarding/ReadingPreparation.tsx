@@ -357,7 +357,10 @@ export function ReadingPreparation({
   const pendingPhotoUploadsRef = useRef<Set<Promise<string>>>(new Set());
 
   const formValues = watch();
-  formValuesRef.current = formValues;
+  // Update ref only if form values actually changed to avoid stale snapshots
+  if (JSON.stringify(formValuesRef.current) !== JSON.stringify(formValues)) {
+    formValuesRef.current = formValues;
+  }
   stepRef.current = step;
 
   const current = STEPS[step];
@@ -558,7 +561,10 @@ export function ReadingPreparation({
       failedSignatureRef.current = '';
       formValuesRef.current = initialData;
       stepRef.current = initialStep;
-      reset(initialData);
+
+      // Reset form with proper flag to ensure react-hook-form triggers re-render
+      reset(initialData, { keepDefaultValues: false });
+
       setStep(initialStep);
       setPhotoStates({ face: 'idle', palm: 'idle' });
       setDraftLoadKey((value) => value + 1);
@@ -597,7 +603,11 @@ export function ReadingPreparation({
 
   useEffect(() => {
     if (loadState !== 'ready' || isSubmitting || isComplete || saveState === 'conflict') return;
-    const snapshot = makeSnapshot(step, formValues);
+
+    // Use the latest ref values to ensure we capture button clicks immediately
+    const currentValues = { ...formValuesRef.current };
+    const snapshot = makeSnapshot(stepRef.current, currentValues);
+
     if (
       snapshot.signature === lastSavedSignatureRef.current ||
       snapshot.signature === latestQueuedSignatureRef.current ||
@@ -1038,7 +1048,7 @@ export function ReadingPreparation({
   return (
     <div
       ref={dialogRef}
-      className="fixed inset-0 z-[100] overflow-hidden bg-abyss-900/98 backdrop-blur-xl lg:grid lg:place-items-center lg:p-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-abyss-900/98 backdrop-blur-xl p-0 lg:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reading-preparation-title"
@@ -1205,12 +1215,19 @@ export function ReadingPreparation({
                       register={register}
                       errors={errors}
                       values={formValues}
-                      onDeliveryStyleChange={(value) =>
-                        setValue('deliveryStyle', value, { shouldDirty: true, shouldTouch: true })
-                      }
-                      onLifeAreasChange={(next) =>
-                        setValue('lifeAreas', next, { shouldDirty: true })
-                      }
+                      onDeliveryStyleChange={(value) => {
+                        setValue('deliveryStyle', value, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: false,
+                        });
+                        // Force update the ref to ensure autosave triggers
+                        formValuesRef.current = { ...formValuesRef.current, deliveryStyle: value };
+                      }}
+                      onLifeAreasChange={(next) => {
+                        setValue('lifeAreas', next, { shouldDirty: true });
+                        formValuesRef.current = { ...formValuesRef.current, lifeAreas: next };
+                      }}
                     />
                   )}
 
@@ -1584,7 +1601,11 @@ function ContextStep({
                 role="radio"
                 aria-checked={selected}
                 aria-label={label}
-                onClick={() => onDeliveryStyleChange(value)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDeliveryStyleChange(value);
+                }}
                 className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
                   selected
                     ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
