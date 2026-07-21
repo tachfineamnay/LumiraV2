@@ -59,15 +59,17 @@ COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 
 # Scripts de maintenance (seed prod, etc.) - copie depuis pruner car turbo prune n'inclut pas /scripts
 COPY --from=pruner /app/scripts ./scripts
+RUN chmod +x ./scripts/api-entrypoint.sh
 
 # Install global prisma for runtime migrations (version aligned with @packages/database)
 RUN npm install -g prisma@5.22.0
 
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+# Give migrate deploy + Nest bootstrap room before Coolify/Docker probes.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
   CMD curl -fsS http://127.0.0.1:3001/api/health || exit 1
 
-# Baselines are an explicit one-time operation for legacy databases. Automatically
-# resolving the init migration here would corrupt a brand-new installation.
-CMD ["/bin/sh", "-c", "prisma migrate deploy --schema=packages/database/prisma/schema.prisma && exec node apps/api/dist/main.js"]
+# Recover known P3009 failed migrations (transactionally rolled back + fixed in git),
+# apply pending migrations, then start the API. Baselines remain manual.
+CMD ["/bin/sh", "./scripts/api-entrypoint.sh"]
