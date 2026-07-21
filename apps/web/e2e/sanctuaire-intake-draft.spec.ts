@@ -327,6 +327,31 @@ test.describe('Brouillon du dossier de lecture', () => {
       .toBe(true);
   });
 
+  test('persiste le ton et l’étape immédiatement au clic Continuer', async ({ page }) => {
+    const calls = await installSanctuaireMocks(page);
+    await openIntake(page);
+    await advanceToHeading(page, 'Votre contexte personnel');
+
+    await page.getByRole('radio', { name: /Direct et concret/i }).click();
+    await expect(page.getByRole('radio', { name: /Direct et concret/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
+
+    await page.getByRole('button', { name: /^Continuer$/i }).click();
+    await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
+
+    await expect
+      .poll(() =>
+        calls.onboardingPatches.some((body) => {
+          const data = body.data as IntakeData | undefined;
+          return body.currentStep === 3 && data?.deliveryStyle === 'DIRECT_ET_CONCRET';
+        }),
+      )
+      .toBe(true);
+  });
+
   test('une erreur de chargement ne transforme jamais le dossier en brouillon vide', async ({
     page,
   }) => {

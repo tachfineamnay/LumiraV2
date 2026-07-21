@@ -156,6 +156,10 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function hasText(value: unknown): boolean {
+  return stringValue(value).trim().length > 0;
+}
+
 function normalizeLifeAreas(value: unknown): LifeAreas {
   const parsed = lifeAreasSchema.safeParse(value);
   return parsed.success ? (parsed.data as LifeAreas) : {};
@@ -221,30 +225,37 @@ function normalize(value: unknown): Partial<ReadingPreparationData> {
 }
 
 function persistedData(data: ReadingPreparationData): PersistedDraftData {
+  const facePhoto = stringValue(data.facePhoto);
+  const palmPhoto = stringValue(data.palmPhoto);
   return {
     schemaVersion: 2,
-    usageName: data.usageName,
-    birthDate: data.birthDate,
-    birthTime: data.birthTime,
-    birthPlace: data.birthPlace,
-    specificQuestion: data.specificQuestion,
-    objective: data.objective,
-    openReading: data.openReading,
-    facePhoto: data.facePhoto.startsWith('s3://onboarding/') ? data.facePhoto : '',
-    palmPhoto: data.palmPhoto.startsWith('s3://onboarding/') ? data.palmPhoto : '',
-    highs: data.highs,
-    lows: data.lows,
-    lifeEvents: data.lifeEvents,
+    usageName: stringValue(data.usageName),
+    birthDate: stringValue(data.birthDate),
+    birthTime: stringValue(data.birthTime),
+    birthPlace: stringValue(data.birthPlace),
+    specificQuestion: stringValue(data.specificQuestion),
+    objective: stringValue(data.objective),
+    openReading: data.openReading === true,
+    facePhoto: facePhoto.startsWith('s3://onboarding/') ? facePhoto : '',
+    palmPhoto: palmPhoto.startsWith('s3://onboarding/') ? palmPhoto : '',
+    highs: stringValue(data.highs),
+    lows: stringValue(data.lows),
+    lifeEvents: stringValue(data.lifeEvents),
     lifeAreas: normalizeLifeAreas(data.lifeAreas),
     strongSide: data.strongSide,
     weakSide: data.weakSide,
     strongZone: data.strongZone,
     weakZone: data.weakZone,
-    ailments: data.ailments,
-    fears: data.fears,
-    rituals: data.rituals,
-    deliveryStyle: data.deliveryStyle,
-    pace: data.pace,
+    ailments: stringValue(data.ailments),
+    fears: stringValue(data.fears),
+    rituals: stringValue(data.rituals),
+    deliveryStyle: DELIVERY_STYLES.includes(data.deliveryStyle as (typeof DELIVERY_STYLES)[number])
+      ? data.deliveryStyle
+      : 'DOUX_ET_CLAIR',
+    pace:
+      typeof data.pace === 'number' && Number.isFinite(data.pace)
+        ? Math.min(100, Math.max(0, Math.round(data.pace)))
+        : 50,
   };
 }
 
@@ -618,23 +629,31 @@ export function ReadingPreparation({
 
   useEffect(() => {
     if (loadState !== 'ready') return;
-    const frame = window.requestAnimationFrame(() => titleRef.current?.focus());
+    const frame = window.requestAnimationFrame(() =>
+      titleRef.current?.focus({ preventScroll: true }),
+    );
+    const scroller = dialogRef.current?.querySelector<HTMLElement>('.custom-scrollbar');
+    scroller?.scrollTo({ top: 0 });
     return () => window.cancelAnimationFrame(frame);
   }, [loadState, step]);
 
   useEffect(() => {
     if (!isComplete) return;
-    const frame = window.requestAnimationFrame(() => titleRef.current?.focus());
+    const frame = window.requestAnimationFrame(() =>
+      titleRef.current?.focus({ preventScroll: true }),
+    );
     return () => window.cancelAnimationFrame(frame);
   }, [isComplete]);
 
   useEffect(() => {
     const updateViewportHeight = () => {
-      setMobileViewportHeight(
-        window.innerWidth < 1024
-          ? Math.round(window.visualViewport?.height ?? window.innerHeight)
-          : null,
-      );
+      if (window.innerWidth >= 1024) {
+        setMobileViewportHeight(null);
+        return;
+      }
+      const nextHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      // Never collapse the dialog to an unusable height (keyboard/visualViewport glitches).
+      setMobileViewportHeight(nextHeight >= 240 ? nextHeight : null);
     };
     updateViewportHeight();
     window.addEventListener('resize', updateViewportHeight);
@@ -744,13 +763,17 @@ export function ReadingPreparation({
         });
         if (!identityValid) {
           setStep(0);
+          stepRef.current = 0;
+          void queueDraftSave(makeSnapshot(0, formValuesRef.current));
           return;
         }
       }
       setActionError(null);
       setStep(target);
+      stepRef.current = target;
+      await queueDraftSave(makeSnapshot(target, formValuesRef.current));
     },
-    [current.key, isPhotoBusy, step, trigger],
+    [current.key, isPhotoBusy, queueDraftSave, step, trigger],
   );
 
   const next = useCallback(async () => {
@@ -771,9 +794,23 @@ export function ReadingPreparation({
       setActionError('Réessayez l’envoi de la photo en erreur ou retirez-la pour continuer.');
       return;
     }
+    const target = Math.min(stepRef.current + 1, STEPS.length - 1);
     setActionError(null);
-    setStep((currentStep) => Math.min(currentStep + 1, STEPS.length - 1));
-  }, [current.key, isPhotoBusy, photoStates.face, photoStates.palm, trigger]);
+    setStep(target);
+    stepRef.current = target;
+    await queueDraftSave(makeSnapshot(target, formValuesRef.current));
+  }, [current.key, isPhotoBusy, photoStates.face, photoStates.palm, queueDraftSave, trigger]);
+
+  const goBack = useCallback(() => {
+    if (step === 0) {
+      void handleClose();
+      return;
+    }
+    const target = step - 1;
+    setStep(target);
+    stepRef.current = target;
+    void queueDraftSave(makeSnapshot(target, formValuesRef.current));
+  }, [handleClose, queueDraftSave, step]);
 
   const focusIssue = useCallback(
     (field: FieldPath<ReadingPreparationData>, message: string) => {
@@ -843,35 +880,35 @@ export function ReadingPreparation({
 
       const values = getValues();
       const [facePhotoUrl, palmPhotoUrl] = await Promise.all([
-        uploadOnboardingPhoto(values.facePhoto, 'FACE', orderIdRef.current),
-        uploadOnboardingPhoto(values.palmPhoto, 'PALM', orderIdRef.current),
+        uploadOnboardingPhoto(stringValue(values.facePhoto), 'FACE', orderIdRef.current),
+        uploadOnboardingPhoto(stringValue(values.palmPhoto), 'PALM', orderIdRef.current),
       ]);
       await sanctuaireApi.patch(
         '/users/profile',
         {
           ...(orderIdRef.current && { orderId: orderIdRef.current }),
-          usageName: values.usageName.trim() || null,
+          usageName: stringValue(values.usageName).trim() || null,
           birthDate: values.birthDate,
-          birthTime: values.birthTime || null,
-          birthPlace: values.birthPlace.trim(),
-          specificQuestion: values.specificQuestion.trim() || null,
-          objective: values.objective.trim() || null,
+          birthTime: stringValue(values.birthTime) || null,
+          birthPlace: stringValue(values.birthPlace).trim(),
+          specificQuestion: stringValue(values.specificQuestion).trim() || null,
+          objective: stringValue(values.objective).trim() || null,
           openReading: values.openReading,
           facePhotoUrl,
           palmPhotoUrl,
-          highs: values.highs.trim() || null,
-          lows: values.lows.trim() || null,
-          lifeEvents: values.lifeEvents.trim() || null,
+          highs: stringValue(values.highs).trim() || null,
+          lows: stringValue(values.lows).trim() || null,
+          lifeEvents: stringValue(values.lifeEvents).trim() || null,
           lifeAreas: Object.keys(normalizeLifeAreas(values.lifeAreas)).length
             ? normalizeLifeAreas(values.lifeAreas)
             : null,
-          strongSide: values.strongSide?.trim() || null,
-          weakSide: values.weakSide?.trim() || null,
-          strongZone: values.strongZone?.trim() || null,
-          weakZone: values.weakZone?.trim() || null,
-          ailments: values.ailments.trim() || null,
-          fears: values.fears.trim() || null,
-          rituals: values.rituals.trim() || null,
+          strongSide: stringValue(values.strongSide).trim() || null,
+          weakSide: stringValue(values.weakSide).trim() || null,
+          strongZone: stringValue(values.strongZone).trim() || null,
+          weakZone: stringValue(values.weakZone).trim() || null,
+          ailments: stringValue(values.ailments).trim() || null,
+          fears: stringValue(values.fears).trim() || null,
+          rituals: stringValue(values.rituals).trim() || null,
           deliveryStyle: values.deliveryStyle,
           pace: values.pace,
           profileCompleted: true,
@@ -913,11 +950,13 @@ export function ReadingPreparation({
 
   const completionByStep = useMemo(
     () => [
-      Boolean(formValues.birthDate && formValues.birthPlace.trim()),
+      Boolean(formValues.birthDate && stringValue(formValues.birthPlace).trim()),
       Boolean(
-        formValues.specificQuestion.trim() || formValues.objective.trim() || formValues.openReading,
+        hasText(formValues.specificQuestion) ||
+        hasText(formValues.objective) ||
+        formValues.openReading,
       ),
-      contextEntries.some(([, value]) => value.trim()) || lifeAreaCount > 0,
+      contextEntries.some(([, value]) => hasText(value)) || lifeAreaCount > 0,
       Boolean(formValues.facePhoto || formValues.palmPhoto),
       formValues.consent,
     ],
@@ -1166,6 +1205,9 @@ export function ReadingPreparation({
                       register={register}
                       errors={errors}
                       values={formValues}
+                      onDeliveryStyleChange={(value) =>
+                        setValue('deliveryStyle', value, { shouldDirty: true, shouldTouch: true })
+                      }
                       onLifeAreasChange={(next) =>
                         setValue('lifeAreas', next, { shouldDirty: true })
                       }
@@ -1245,7 +1287,7 @@ export function ReadingPreparation({
               <div className="mx-auto flex max-w-3xl items-center gap-2 sm:gap-3">
                 <button
                   type="button"
-                  onClick={() => (step === 0 ? void handleClose() : setStep((value) => value - 1))}
+                  onClick={goBack}
                   disabled={isSubmitting || isClosing}
                   aria-label={
                     step === 0
@@ -1411,7 +1453,7 @@ function IntentionStep({
         helper="Racontez la situation comme à une personne de confiance : depuis quand, ce qui s’est passé, ce que vous ressentez. Plus vous êtes précis, plus la lecture le sera."
         placeholder="En ce moment, je me demande… Cela a commencé quand… Ce qui me pèse le plus, c’est…"
         maxLength={2000}
-        valueLength={values.specificQuestion.length}
+        valueLength={stringValue(values.specificQuestion).length}
         error={errors.specificQuestion?.message}
         registration={register('specificQuestion')}
       />
@@ -1420,7 +1462,7 @@ function IntentionStep({
         helper="Imaginez votre lecture reçue : qu’est-ce qui aurait changé pour vous ? Une décision plus claire, un poids déposé, une direction retrouvée…"
         placeholder="J’aimerais repartir avec plus de clarté sur… et me sentir capable de…"
         maxLength={2000}
-        valueLength={values.objective.length}
+        valueLength={stringValue(values.objective).length}
         error={errors.objective?.message}
         registration={register('objective')}
       />
@@ -1455,11 +1497,13 @@ function ContextStep({
   register,
   errors,
   values,
+  onDeliveryStyleChange,
   onLifeAreasChange,
 }: {
   register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
   errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
   values: ReadingPreparationData;
+  onDeliveryStyleChange: (value: ReadingPreparationData['deliveryStyle']) => void;
   onLifeAreasChange: (next: LifeAreas) => void;
 }) {
   return (
@@ -1471,7 +1515,7 @@ function ContextStep({
           helper="Une personne, un projet, une qualité, un élan : qu’est-ce qui vous porte au réveil, même les jours difficiles ?"
           placeholder="Je peux compter sur… Ce qui me redonne de l’énergie, c’est…"
           maxLength={2000}
-          valueLength={values.highs.length}
+          valueLength={stringValue(values.highs).length}
           error={errors.highs?.message}
           registration={register('highs')}
         />
@@ -1480,7 +1524,7 @@ function ContextStep({
           helper="Le schéma qui revient malgré vous — dans vos relations, votre travail, votre corps. C’est souvent la clé de la lecture."
           placeholder="Depuis des années, je retombe dans… À chaque fois que…, il se passe…"
           maxLength={2000}
-          valueLength={values.lows.length}
+          valueLength={stringValue(values.lows).length}
           error={errors.lows?.message}
           registration={register('lows')}
         />
@@ -1489,7 +1533,7 @@ function ContextStep({
           helper="Une peur, une limite ou un sujet sensible — quelques mots suffisent, sans obligation de tout détailler."
           placeholder="Je préfère qu’on aborde délicatement…"
           maxLength={2000}
-          valueLength={values.fears.length}
+          valueLength={stringValue(values.fears).length}
           error={errors.fears?.message}
           registration={register('fears')}
         />
@@ -1498,7 +1542,7 @@ function ContextStep({
           helper="Méditation, écriture, prière, marche, tarot… ce que vous faites déjà nous aide à proposer des rituels qui vous ressemblent."
           placeholder="J’ai l’habitude de… J’ai déjà essayé…"
           maxLength={1500}
-          valueLength={values.rituals.length}
+          valueLength={stringValue(values.rituals).length}
           error={errors.rituals?.message}
           registration={register('rituals')}
         />
@@ -1508,7 +1552,7 @@ function ContextStep({
         helper="Une année approximative et quelques mots : une rencontre, une perte, un éveil, une rupture, un déménagement… Ces dates de passage éclairent vos cycles de vie."
         placeholder="Vers 2018, j’ai vécu… et depuis, quelque chose a changé dans…"
         maxLength={2000}
-        valueLength={values.lifeEvents.length}
+        valueLength={stringValue(values.lifeEvents).length}
         error={errors.lifeEvents?.message}
         registration={register('lifeEvents')}
       />
@@ -1517,7 +1561,7 @@ function ContextStep({
         helper="Tensions, fatigue, zones sensibles : ce que votre corps exprime en ce moment, si vous deviez le traduire. Lumira ne pose aucun diagnostic médical."
         placeholder="Mon corps me parle surtout par… (dos, sommeil, ventre, énergie…)"
         maxLength={1500}
-        valueLength={values.ailments.length}
+        valueLength={stringValue(values.ailments).length}
         error={errors.ailments?.message}
         registration={register('ailments')}
       />
@@ -1526,26 +1570,32 @@ function ContextStep({
         <h2 className="text-sm font-medium text-stellar-100">
           Comment souhaitez-vous recevoir la lecture ?
         </h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {STYLE_OPTIONS.map(([value, label, helper]) => (
-            <label
-              key={value}
-              className={`cursor-pointer rounded-xl border p-3 focus-within:ring-2 focus-within:ring-horizon-400 ${
-                values.deliveryStyle === value
-                  ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
-                  : 'border-white/[0.08] text-stellar-400'
-              }`}
-            >
-              <input
-                type="radio"
-                value={value}
-                className="sr-only"
-                {...register('deliveryStyle')}
-              />
-              <span className="block text-sm font-medium">{label}</span>
-              <span className="mt-1 block text-xs leading-5 text-stellar-500">{helper}</span>
-            </label>
-          ))}
+        <div
+          className="mt-3 grid gap-2 sm:grid-cols-3"
+          role="radiogroup"
+          aria-label="Ton de la rédaction"
+        >
+          {STYLE_OPTIONS.map(([value, label, helper]) => {
+            const selected = values.deliveryStyle === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={label}
+                onClick={() => onDeliveryStyleChange(value)}
+                className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
+                  selected
+                    ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
+                    : 'border-white/[0.08] text-stellar-400 hover:bg-white/[0.04]'
+                }`}
+              >
+                <span className="block text-sm font-medium">{label}</span>
+                <span className="mt-1 block text-xs leading-5 text-stellar-500">{helper}</span>
+              </button>
+            );
+          })}
         </div>
         <label className="mt-5 block text-sm text-stellar-300">
           Niveau de détail souhaité :{' '}
@@ -1656,16 +1706,16 @@ function LifeWeatherSection({
 
 function EnrichmentMeter({ data }: { data: ReadingPreparationData }) {
   const signals = [
-    Boolean(data.birthTime),
-    Boolean(data.usageName.trim()),
-    Boolean(data.specificQuestion.trim() || data.objective.trim()),
-    Boolean(data.highs.trim()),
-    Boolean(data.lows.trim()),
-    Boolean(data.lifeEvents.trim()),
+    hasText(data.birthTime),
+    hasText(data.usageName),
+    hasText(data.specificQuestion) || hasText(data.objective),
+    hasText(data.highs),
+    hasText(data.lows),
+    hasText(data.lifeEvents),
     LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key])),
-    Boolean(data.fears.trim()),
-    Boolean(data.rituals.trim()),
-    Boolean(data.ailments.trim()),
+    hasText(data.fears),
+    hasText(data.rituals),
+    hasText(data.ailments),
     Boolean(data.facePhoto),
     Boolean(data.palmPhoto),
   ];
@@ -1712,7 +1762,7 @@ function ReviewStep({
   consentError?: string;
   onEdit: (index: number) => void;
 }) {
-  const transmittedContext = contextEntries.filter(([, value]) => value.trim());
+  const transmittedContext = contextEntries.filter(([, value]) => hasText(value));
   const weatherEntries = LIFE_AREA_KEYS.filter((key) => Boolean(data.lifeAreas?.[key])).map(
     (key) => {
       const entry = data.lifeAreas![key]!;
@@ -1734,8 +1784,8 @@ function ReviewStep({
         <ReviewValue label="Date" value={formatBirthDate(data.birthDate)} />
         <ReviewValue label="Heure" value={data.birthTime || 'Non transmise'} />
         <ReviewValue label="Lieu" value={data.birthPlace || 'À compléter'} />
-        {data.usageName.trim() && (
-          <ReviewValue label="Prénom d’usage" value={data.usageName.trim()} />
+        {hasText(data.usageName) && (
+          <ReviewValue label="Prénom d’usage" value={stringValue(data.usageName).trim()} />
         )}
       </ReviewSection>
       <ReviewSection title="Ce qui vous amène" onEdit={() => onEdit(1)}>
