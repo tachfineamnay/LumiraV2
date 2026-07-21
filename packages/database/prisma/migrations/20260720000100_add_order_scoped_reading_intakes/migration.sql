@@ -75,7 +75,10 @@ SELECT
   COALESCE(NULLIF(o."clientInputs"->'readingIntake'->>'version', ''), 'legacy-client-inputs-v1'),
   4,
   jsonb_strip_nulls(
-    (o."clientInputs"->'readingIntake'->'profile' - 'facePhotoUrl' - 'palmPhotoUrl')
+    (
+      (o."clientInputs"->'readingIntake'->'profile')
+      - ARRAY['facePhotoUrl', 'palmPhotoUrl']::text[]
+    )
     || jsonb_build_object(
       'facePhoto', o."clientInputs"->'readingIntake'->'profile'->'facePhotoUrl',
       'palmPhoto', o."clientInputs"->'readingIntake'->'profile'->'palmPhotoUrl'
@@ -138,7 +141,7 @@ WITH safe_drafts AS (
     )
     AND NOT EXISTS (
       SELECT 1
-      FROM jsonb_each(p."data" - 'consent') entry
+      FROM jsonb_each(p."data" - 'consent'::text) entry
       WHERE
         (entry.key = 'pace' AND jsonb_typeof(entry.value) <> 'number')
         OR
