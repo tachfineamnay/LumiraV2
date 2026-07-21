@@ -23,10 +23,61 @@ export class OnboardingConsentDto {
   version?: string;
 }
 
+export const LIFE_AREA_STATES = ['FLUIDE', 'TENDU', 'EN_QUESTION'] as const;
+export type LifeAreaState = (typeof LIFE_AREA_STATES)[number];
+
+export class LifeAreaEntryDto {
+  @IsIn([...LIFE_AREA_STATES])
+  state: LifeAreaState;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  note?: string;
+}
+
+/** Per-domain "life weather" declared by the client during the intake. */
+export class LifeAreasDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreaEntryDto)
+  relations?: LifeAreaEntryDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreaEntryDto)
+  travail?: LifeAreaEntryDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreaEntryDto)
+  corps?: LifeAreaEntryDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreaEntryDto)
+  creativite?: LifeAreaEntryDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreaEntryDto)
+  interieur?: LifeAreaEntryDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreaEntryDto)
+  direction?: LifeAreaEntryDto;
+}
+
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   orderId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  usageName?: string;
 
   @IsOptional()
   @IsDateString()
@@ -72,6 +123,16 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(2000)
   lows?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  lifeEvents?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreasDto)
+  lifeAreas?: LifeAreasDto;
 
   @IsOptional()
   @IsString()
@@ -147,6 +208,11 @@ export class OnboardingDraftDataDto {
   @IsIn([2])
   schemaVersion?: number;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  usageName?: string | null;
+
   @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
   @IsDateString()
   birthDate?: string | null;
@@ -202,6 +268,16 @@ export class OnboardingDraftDataDto {
   @IsString()
   @MaxLength(2000)
   lows?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  lifeEvents?: string | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LifeAreasDto)
+  lifeAreas?: LifeAreasDto | null;
 
   @IsOptional()
   @IsString()

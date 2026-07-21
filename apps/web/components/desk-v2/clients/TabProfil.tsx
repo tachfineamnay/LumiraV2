@@ -102,6 +102,53 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+const LIFE_AREA_DISPLAY: Record<string, string> = {
+  relations: 'Relations & famille',
+  travail: 'Travail & argent',
+  corps: 'Corps & énergie',
+  creativite: 'Créativité & élans',
+  interieur: 'Vie intérieure',
+  direction: 'Direction de vie',
+};
+
+const LIFE_AREA_STATE_DISPLAY: Record<string, { label: string; className: string }> = {
+  FLUIDE: {
+    label: 'Fluide',
+    className: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30',
+  },
+  TENDU: { label: 'Tendu', className: 'bg-red-500/10 text-red-700 border-red-500/30' },
+  EN_QUESTION: {
+    label: 'En question',
+    className: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
+  },
+};
+
+export function LifeAreaRow({
+  areaKey,
+  entry,
+}: {
+  areaKey: string;
+  entry: { state: string; note?: string };
+}) {
+  const state = LIFE_AREA_STATE_DISPLAY[entry.state] ?? {
+    label: entry.state,
+    className: 'bg-desk-hover text-desk-muted border-desk-border',
+  };
+  return (
+    <div className="text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-desk-muted">{LIFE_AREA_DISPLAY[areaKey] ?? areaKey}</span>
+        <span
+          className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium ${state.className}`}
+        >
+          {state.label}
+        </span>
+      </div>
+      {entry.note && <p className="mt-0.5 text-xs italic text-desk-subtle">« {entry.note} »</p>}
+    </div>
+  );
+}
+
 export function TabProfil({ client, onRefresh }: TabProfilProps) {
   const { profile, stats, crmNotes } = client;
 
@@ -120,10 +167,12 @@ export function TabProfil({ client, onRefresh }: TabProfilProps) {
 
   const hasNatalData = profile?.birthDate || profile?.birthTime || profile?.birthPlace;
   const hasPhotos = profile?.facePhotoUrl || profile?.palmPhotoUrl;
-  const hasProblems = profile?.healthConcerns || profile?.fears;
+  const hasProblems = profile?.ailments || profile?.fears;
   const hasDesires = profile?.objective || profile?.specificQuestion;
   const hasPersonality =
     profile?.strongSide || profile?.weakSide || profile?.highs || profile?.lows;
+  const lifeAreaEntries = Object.entries(profile?.lifeAreas ?? {});
+  const hasLifeContext = lifeAreaEntries.length > 0 || profile?.lifeEvents;
 
   return (
     <>
@@ -176,9 +225,40 @@ export function TabProfil({ client, onRefresh }: TabProfilProps) {
                   label="Lieu de naissance"
                   value={profile?.birthPlace}
                 />
+                <InfoRow
+                  icon={<User className="w-3.5 h-3.5" />}
+                  label="Prénom d'usage"
+                  value={profile?.usageName}
+                />
               </div>
             ) : (
               <EmptyState message="Les astres attendent d'être révélés..." />
+            )}
+          </CollapsibleSection>
+
+          {/* Météo de vie & période marquante */}
+          <CollapsibleSection
+            title="Météo de vie"
+            icon={<Sparkles className="w-4 h-4 text-sky-600" />}
+          >
+            {hasLifeContext ? (
+              <div className="space-y-3">
+                {lifeAreaEntries.length > 0 && (
+                  <div className="space-y-2">
+                    {lifeAreaEntries.map(([key, entry]) => (
+                      <LifeAreaRow key={key} areaKey={key} entry={entry} />
+                    ))}
+                  </div>
+                )}
+                {profile?.lifeEvents && (
+                  <div className="p-3 bg-purple-500/5 border border-purple-500/10 rounded-lg">
+                    <p className="text-xs text-purple-600/70 font-medium mb-1">Période marquante</p>
+                    <p className="text-sm text-desk-text">{profile.lifeEvents}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <EmptyState message="Aucune météo de vie déclarée..." />
             )}
           </CollapsibleSection>
 
@@ -266,12 +346,12 @@ export function TabProfil({ client, onRefresh }: TabProfilProps) {
                     <p className="text-sm text-desk-text">{profile.fears}</p>
                   </div>
                 )}
-                {profile?.healthConcerns && (
+                {profile?.ailments && (
                   <div className="p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
                     <p className="text-xs text-orange-600/70 font-medium mb-1">
-                      Préoccupations santé
+                      Contexte corporel déclaré
                     </p>
-                    <p className="text-sm text-desk-text">{profile.healthConcerns}</p>
+                    <p className="text-sm text-desk-text">{profile.ailments}</p>
                   </div>
                 )}
               </div>

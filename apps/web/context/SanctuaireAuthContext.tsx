@@ -18,6 +18,7 @@ interface SanctuaireUser {
 }
 
 interface UserProfile {
+  usageName?: string | null;
   birthDate: string | null;
   birthTime: string | null;
   birthPlace: string | null;
@@ -28,6 +29,8 @@ interface UserProfile {
   palmPhotoUrl: string | null;
   highs: string | null;
   lows: string | null;
+  lifeEvents?: string | null;
+  lifeAreas?: Record<string, { state: string; note?: string }> | null;
   strongSide: string | null;
   weakSide: string | null;
   strongZone: string | null;

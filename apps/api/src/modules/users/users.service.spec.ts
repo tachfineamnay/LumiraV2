@@ -37,7 +37,11 @@ describe('UsersService', () => {
 
   beforeEach(async () => {
     prisma = {
-      $transaction: jest.fn(),
+      $transaction: jest.fn((callback: unknown) =>
+        typeof callback === 'function'
+          ? callback(prisma)
+          : Promise.all(callback as Promise<unknown>[]),
+      ),
       user: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -377,10 +381,17 @@ describe('UsersService', () => {
 
       const result = await service.saveOnboardingProgress('user-1', {
         currentStep: 2,
-        data: { birthDate: '1990-01-01', consent: true },
+        data: { birthDate: '1990-01-01' },
       });
 
-      expect(result).toEqual(completed);
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: 'COMPLETED',
+          currentStep: 4,
+          data: {},
+          canEdit: false,
+        }),
+      );
       expect(prisma.onboardingProgress.upsert).not.toHaveBeenCalled();
     });
 
@@ -400,7 +411,14 @@ describe('UsersService', () => {
         data: { birthPlace: 'Lyon' },
       });
 
-      expect(result).toEqual(completed);
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: 'COMPLETED',
+          currentStep: 4,
+          data: {},
+          canEdit: false,
+        }),
+      );
       expect(prisma.onboardingProgress.upsert).not.toHaveBeenCalled();
     });
   });

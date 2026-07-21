@@ -198,6 +198,8 @@ model UserProfile {
   id               String    @id @default(cuid())
   userId           String    @unique
   user             User      @relation(fields: [userId], references: [id])
+  /// Prénom d'usage ou surnom utilisé pour la symbolique du nom.
+  usageName        String?
   birthDate        String?
   birthTime        String?
   birthPlace       String?
@@ -207,6 +209,10 @@ model UserProfile {
   palmPhotoUrl     String?
   highs            String?   @db.Text
   lows             String?   @db.Text
+  /// Période ou événement de vie marquant déclaré par le client.
+  lifeEvents       String?   @db.Text
+  /// Météo de vie par domaine: { relations?: { state, note? }, travail?, corps?, creativite?, interieur?, direction? }
+  lifeAreas        Json?
   strongSide       String?
   weakSide         String?
   strongZone       String?

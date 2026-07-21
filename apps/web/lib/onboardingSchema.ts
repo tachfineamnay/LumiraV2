@@ -6,6 +6,50 @@ export const DELIVERY_STYLES = [
   'SYMBOLIQUE_ET_PROFOND',
 ] as const;
 
+export const LIFE_AREA_KEYS = [
+  'relations',
+  'travail',
+  'corps',
+  'creativite',
+  'interieur',
+  'direction',
+] as const;
+export type LifeAreaKey = (typeof LIFE_AREA_KEYS)[number];
+
+export const LIFE_AREA_STATES = ['FLUIDE', 'TENDU', 'EN_QUESTION'] as const;
+export type LifeAreaState = (typeof LIFE_AREA_STATES)[number];
+
+export const LIFE_AREA_LABELS: Record<LifeAreaKey, string> = {
+  relations: 'Relations & famille',
+  travail: 'Travail & argent',
+  corps: 'Corps & énergie',
+  creativite: 'Créativité & élans',
+  interieur: 'Vie intérieure',
+  direction: 'Direction de vie',
+};
+
+export const LIFE_AREA_STATE_LABELS: Record<LifeAreaState, string> = {
+  FLUIDE: 'Fluide',
+  TENDU: 'Tendu',
+  EN_QUESTION: 'En question',
+};
+
+const lifeAreaEntrySchema = z.object({
+  state: z.enum(LIFE_AREA_STATES),
+  note: z.string().max(300, 'Cette note ne peut pas dépasser 300 caractères.').optional(),
+});
+export type LifeAreaEntry = z.infer<typeof lifeAreaEntrySchema>;
+
+export const lifeAreasSchema = z.object({
+  relations: lifeAreaEntrySchema.optional(),
+  travail: lifeAreaEntrySchema.optional(),
+  corps: lifeAreaEntrySchema.optional(),
+  creativite: lifeAreaEntrySchema.optional(),
+  interieur: lifeAreaEntrySchema.optional(),
+  direction: lifeAreaEntrySchema.optional(),
+});
+export type LifeAreas = Partial<Record<LifeAreaKey, LifeAreaEntry>>;
+
 const optionalText = (maximum: number, message: string) => z.string().max(maximum, message);
 
 function parseCalendarDate(value: string): number | null {
@@ -27,6 +71,7 @@ function parseCalendarDate(value: string): number | null {
 }
 
 export const readingPreparationSchema = z.object({
+  usageName: optionalText(120, "Ce prénom d'usage ne peut pas dépasser 120 caractères."),
   birthDate: z
     .string()
     .min(1, 'Indiquez votre date de naissance.')
@@ -48,6 +93,8 @@ export const readingPreparationSchema = z.object({
   palmPhoto: z.string(),
   highs: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.'),
   lows: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.'),
+  lifeEvents: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.'),
+  lifeAreas: lifeAreasSchema.optional(),
   strongSide: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.').optional(),
   weakSide: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.').optional(),
   strongZone: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.').optional(),

@@ -12,6 +12,7 @@ const baseUser = {
 const legacyProfile: PrismaUserProfile = {
   id: 'profile-1',
   userId: 'user-1',
+  usageName: null,
   birthDate: '1988-01-01',
   birthTime: '08:00',
   birthPlace: 'Paris, France',
@@ -21,6 +22,8 @@ const legacyProfile: PrismaUserProfile = {
   palmPhotoUrl: 's3://onboarding/user-1/palm.jpg',
   highs: 'Legacy highs',
   lows: 'Legacy lows',
+  lifeEvents: null,
+  lifeAreas: null,
   strongSide: 'Legacy strong',
   weakSide: 'Legacy weak',
   strongZone: 'Legacy strong zone',
@@ -38,6 +41,7 @@ const legacyProfile: PrismaUserProfile = {
 };
 
 const sealedProfile = {
+  usageName: 'Mimi',
   birthDate: '1990-06-15',
   birthTime: '14:30',
   birthPlace: 'Lyon, France',
@@ -47,6 +51,11 @@ const sealedProfile = {
   palmPhotoUrl: 's3://onboarding/user-1/sealed-palm.jpg',
   highs: 'Sealed highs',
   lows: 'Sealed lows',
+  lifeEvents: 'Sealed life events',
+  lifeAreas: {
+    relations: { state: 'TENDU', note: 'Sealed note' },
+    travail: { state: 'FLUIDE' },
+  },
   strongSide: 'Sealed strong',
   weakSide: 'Sealed weak',
   strongZone: 'Sealed strong zone',
@@ -245,6 +254,7 @@ describe('ReadingSourceResolver', () => {
       firstName: 'Marie',
       lastName: 'Dubois',
       email: 'marie@example.test',
+      usageName: 'Mimi',
       birthDate: '1990-06-15',
       birthTime: '14:30',
       birthPlace: 'Lyon, France',
@@ -252,6 +262,11 @@ describe('ReadingSourceResolver', () => {
       objective: 'Sealed objective',
       highs: 'Sealed highs',
       lows: 'Sealed lows',
+      lifeEvents: 'Sealed life events',
+      lifeAreas: {
+        relations: { state: 'TENDU', note: 'Sealed note' },
+        travail: { state: 'FLUIDE' },
+      },
       strongSide: 'Sealed strong',
       weakSide: 'Sealed weak',
       strongZone: 'Sealed strong zone',

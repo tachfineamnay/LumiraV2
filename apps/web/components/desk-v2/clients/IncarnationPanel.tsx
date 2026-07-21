@@ -19,6 +19,7 @@ import {
   ZoomIn,
 } from 'lucide-react';
 import { ClientFullData } from './types';
+import { LifeAreaRow } from './TabProfil';
 import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 
 interface IncarnationPanelProps {
@@ -119,10 +120,12 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
 
   const hasNatalData = profile?.birthDate || profile?.birthTime || profile?.birthPlace;
   const hasPhotos = profile?.facePhotoUrl || profile?.palmPhotoUrl;
-  const hasProblems = profile?.healthConcerns || profile?.fears;
+  const hasProblems = profile?.ailments || profile?.fears;
   const hasDesires = profile?.objective || profile?.specificQuestion;
   const hasPersonality =
     profile?.strongSide || profile?.weakSide || profile?.highs || profile?.lows;
+  const lifeAreaEntries = Object.entries(profile?.lifeAreas ?? {});
+  const hasLifeContext = lifeAreaEntries.length > 0 || profile?.lifeEvents;
 
   return (
     <>
@@ -162,9 +165,40 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
                 label="Lieu de naissance"
                 value={profile?.birthPlace}
               />
+              <InfoRow
+                icon={<User className="w-3.5 h-3.5" />}
+                label="Prénom d'usage"
+                value={profile?.usageName}
+              />
             </div>
           ) : (
             <EmptyState message="Les astres attendent d'être révélés..." />
+          )}
+        </CollapsibleSection>
+
+        {/* Life weather & marking period */}
+        <CollapsibleSection
+          title="Météo de vie"
+          icon={<Sparkles className="w-4 h-4 text-sky-600" />}
+        >
+          {hasLifeContext ? (
+            <div className="space-y-3">
+              {lifeAreaEntries.length > 0 && (
+                <div className="space-y-2">
+                  {lifeAreaEntries.map(([key, entry]) => (
+                    <LifeAreaRow key={key} areaKey={key} entry={entry} />
+                  ))}
+                </div>
+              )}
+              {profile?.lifeEvents && (
+                <div className="p-3 bg-purple-500/5 border border-purple-500/10 rounded-lg">
+                  <p className="text-xs text-purple-600/70 font-medium mb-1">Période marquante</p>
+                  <p className="text-sm text-desk-text">{profile.lifeEvents}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <EmptyState message="Aucune météo de vie déclarée..." />
           )}
         </CollapsibleSection>
 
@@ -237,12 +271,12 @@ export function IncarnationPanel({ client }: IncarnationPanelProps) {
                   <p className="text-sm text-desk-text">{profile.fears}</p>
                 </div>
               )}
-              {profile?.healthConcerns && (
+              {profile?.ailments && (
                 <div className="p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
                   <p className="text-xs text-orange-600/70 font-medium mb-1">
-                    Préoccupations santé
+                    Contexte corporel déclaré
                   </p>
-                  <p className="text-sm text-desk-text">{profile.healthConcerns}</p>
+                  <p className="text-sm text-desk-text">{profile.ailments}</p>
                 </div>
               )}
             </div>

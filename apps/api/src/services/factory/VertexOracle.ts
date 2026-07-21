@@ -13,7 +13,11 @@ import {
   AiPromptSnapshot,
   ResolvedAiExecution,
 } from './ai-execution.types';
-import { DEFAULT_AI_MODEL_CONFIG, estimateOpenAiCost, normalizeAiModelConfig } from './ai-model-config';
+import {
+  DEFAULT_AI_MODEL_CONFIG,
+  estimateOpenAiCost,
+  normalizeAiModelConfig,
+} from './ai-model-config';
 import { AiRunService } from './ai-run.service';
 import { AiRuntimeCacheService } from './ai-runtime-cache.service';
 
@@ -22,6 +26,7 @@ export interface UserProfile {
   firstName: string;
   lastName: string;
   email: string;
+  usageName?: string;
   birthDate: string;
   birthTime?: string;
   birthPlace?: string;
@@ -31,6 +36,8 @@ export interface UserProfile {
   palmPhotoUrl?: string;
   highs?: string;
   lows?: string;
+  lifeEvents?: string;
+  lifeAreas?: Record<string, { state: string; note?: string }>;
   strongSide?: string;
   weakSide?: string;
   strongZone?: string;
@@ -149,7 +156,13 @@ type JsonSchema = Record<string, unknown>;
 type ImagePayload = { mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string };
 type TrackedResult = { text: string; inputTokens?: number; outputTokens?: number };
 
-const ARCHETYPES = ['Le Guérisseur', 'Le Visionnaire', 'Le Guide', 'Le Créateur', 'Le Sage'] as const;
+const ARCHETYPES = [
+  'Le Guérisseur',
+  'Le Visionnaire',
+  'Le Guide',
+  'Le Créateur',
+  'Le Sage',
+] as const;
 const DOMAINS = [
   'spirituel',
   'relations',
@@ -407,7 +420,9 @@ export class VertexOracle implements OnModuleInit {
         }
       }
     } catch (error) {
-      this.logger.error(`Configuration IA en base indisponible, défaut V1 utilisé: ${String(error)}`);
+      this.logger.error(
+        `Configuration IA en base indisponible, défaut V1 utilisé: ${String(error)}`,
+      );
     } finally {
       this.promptsLoaded = true;
     }
@@ -473,9 +488,7 @@ export class VertexOracle implements OnModuleInit {
     schema?: JsonSchema,
   ): Record<string, unknown> {
     return {
-      ...(resolved.model.startsWith('gpt-5.')
-        ? { verbosity: resolved.verbosity ?? 'medium' }
-        : {}),
+      ...(resolved.model.startsWith('gpt-5.') ? { verbosity: resolved.verbosity ?? 'medium' } : {}),
       ...(schemaName && schema
         ? {
             format: {
@@ -497,7 +510,9 @@ export class VertexOracle implements OnModuleInit {
       usage?: { input_tokens?: unknown; output_tokens?: unknown };
     };
     if (value.status === 'incomplete') {
-      throw new Error(`Réponse OpenAI incomplète: ${value.incomplete_details?.reason || 'cause inconnue'}`);
+      throw new Error(
+        `Réponse OpenAI incomplète: ${value.incomplete_details?.reason || 'cause inconnue'}`,
+      );
     }
     const text = typeof value.output_text === 'string' ? value.output_text.trim() : '';
     if (!text) throw new Error('Réponse OpenAI vide.');
@@ -593,12 +608,13 @@ export class VertexOracle implements OnModuleInit {
   }
 
   private isRetryableProviderError(error: Error): boolean {
-    const status = (error as Error & { status?: number; statusCode?: number }).status
-      ?? (error as Error & { statusCode?: number }).statusCode;
+    const status =
+      (error as Error & { status?: number; statusCode?: number }).status ??
+      (error as Error & { statusCode?: number }).statusCode;
     return (
-      status === 429
-      || (typeof status === 'number' && status >= 500)
-      || /network|socket|econn|etimedout|fetch failed|timeout|aborted/i.test(error.message)
+      status === 429 ||
+      (typeof status === 'number' && status >= 500) ||
+      /network|socket|econn|etimedout|fetch failed|timeout|aborted/i.test(error.message)
     );
   }
 
@@ -625,21 +641,22 @@ export class VertexOracle implements OnModuleInit {
     const client = this.requireOpenAI();
     this.logger.log(`[${ctx.agent}] ${resolved.routingSource} → openai/${resolved.model}`);
 
-    const input = images.length > 0
-      ? [
-          {
-            role: 'user',
-            content: [
-              { type: 'input_text', text: userContent },
-              ...images.map((image) => ({
-                type: 'input_image',
-                image_url: `data:${image.mimeType};base64,${image.base64}`,
-                detail: 'high',
-              })),
-            ],
-          },
-        ]
-      : userContent;
+    const input =
+      images.length > 0
+        ? [
+            {
+              role: 'user',
+              content: [
+                { type: 'input_text', text: userContent },
+                ...images.map((image) => ({
+                  type: 'input_image',
+                  image_url: `data:${image.mimeType};base64,${image.base64}`,
+                  detail: 'high',
+                })),
+              ],
+            },
+          ]
+        : userContent;
 
     const text = await this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) => {
       const response = await client.responses.create(
@@ -952,12 +969,22 @@ ${text}`,
       `Offre: ${order.productName}`,
       `Date de naissance: ${profile.birthDate}`,
     ];
+    if (profile.usageName) {
+      parts.push(`Prénom d'usage ou surnom (pour la symbolique du nom): ${profile.usageName}`);
+    }
     if (profile.birthTime) parts.push(`Heure de naissance: ${profile.birthTime}`);
     if (profile.birthPlace) parts.push(`Lieu de naissance: ${profile.birthPlace}`);
     if (profile.specificQuestion) parts.push(`Question: ${profile.specificQuestion}`);
     if (profile.objective) parts.push(`Objectif: ${profile.objective}`);
     if (profile.highs) parts.push(`Ce qui porte la personne: ${profile.highs}`);
     if (profile.lows) parts.push(`Ce qui la freine: ${profile.lows}`);
+    if (profile.lifeEvents) {
+      parts.push(`Période ou événement de vie marquant déclaré: ${profile.lifeEvents}`);
+    }
+    const lifeAreaLines = this.formatLifeAreas(profile.lifeAreas);
+    if (lifeAreaLines.length > 0) {
+      parts.push('=== MÉTÉO DE VIE DÉCLARÉE PAR DOMAINE ===', ...lifeAreaLines);
+    }
     if (profile.strongSide) parts.push(`Éléments de force déclarés: ${profile.strongSide}`);
     if (profile.weakSide) parts.push(`Vulnérabilités déclarées: ${profile.weakSide}`);
     if (profile.strongZone) parts.push(`Zone corporelle forte déclarée: ${profile.strongZone}`);
@@ -986,9 +1013,37 @@ ${text}`,
     }
     parts.push(
       '=== CONSIGNE DE SORTIE ===',
-      'Produis une lecture complète, personnelle, cohérente et argumentée. N’invente aucun détail absent ou invisible. Respecte exactement le schéma de sortie.',
+      'Produis une lecture complète, personnelle, cohérente et argumentée. N’invente aucun détail absent ou invisible. Ancre chaque section dans la météo de vie et les éléments déclarés lorsque disponibles. Respecte exactement le schéma de sortie.',
     );
     return parts.join('\n');
+  }
+
+  /** One line per declared life area: "Relations & famille: tendu — note". */
+  private formatLifeAreas(
+    lifeAreas: Record<string, { state: string; note?: string }> | undefined,
+  ): string[] {
+    if (!lifeAreas) return [];
+    const areaLabels: Record<string, string> = {
+      relations: 'Relations & famille',
+      travail: 'Travail & argent',
+      corps: 'Corps & énergie',
+      creativite: 'Créativité & élans',
+      interieur: 'Vie intérieure',
+      direction: 'Direction de vie',
+    };
+    const stateLabels: Record<string, string> = {
+      FLUIDE: 'fluide',
+      TENDU: 'tendu',
+      EN_QUESTION: 'en question',
+    };
+    const lines: string[] = [];
+    for (const [key, entry] of Object.entries(lifeAreas)) {
+      if (!entry?.state) continue;
+      const label = areaLabels[key] ?? key;
+      const state = stateLabels[entry.state] ?? entry.state.toLowerCase();
+      lines.push(entry.note ? `${label}: ${state} — ${entry.note}` : `${label}: ${state}`);
+    }
+    return lines;
   }
 
   private buildGuidePrompt(
@@ -1101,9 +1156,7 @@ ${text}`,
     };
   }
 
-  private normalizeImageMimeType(
-    contentType?: string,
-  ): 'image/jpeg' | 'image/png' | 'image/webp' {
+  private normalizeImageMimeType(contentType?: string): 'image/jpeg' | 'image/png' | 'image/webp' {
     const normalized = contentType?.split(';')[0].trim().toLowerCase();
     if (normalized === 'image/png' || normalized === 'image/webp' || normalized === 'image/jpeg') {
       return normalized;

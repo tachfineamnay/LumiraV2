@@ -15,8 +15,11 @@ const CONSENT_VERSION = '2026-07-18-user-agency-v1';
 const INTAKE_SCHEMA_VERSION = '2026-07-20-order-intake-v1';
 const ACTIVE_READING_STATUSES = ['PAID', 'PROCESSING', 'AWAITING_VALIDATION'] as const;
 
+type IntakeLifeAreas = Record<string, { state: string; note?: string }>;
+
 type IntakeProfile = {
   openReading?: boolean;
+  usageName: string | null;
   birthDate: string;
   birthTime: string | null;
   birthPlace: string;
@@ -26,6 +29,8 @@ type IntakeProfile = {
   palmPhotoUrl: string | null;
   highs: string | null;
   lows: string | null;
+  lifeEvents: string | null;
+  lifeAreas: IntakeLifeAreas | null;
   strongSide: string | null;
   weakSide: string | null;
   strongZone: string | null;
@@ -483,6 +488,7 @@ export class ReadingIntakeService {
 
   private profileFromDraft(draft: OnboardingDraftDataDto): IntakeProfile {
     return {
+      usageName: this.clean(draft.usageName),
       birthDate: this.clean(draft.birthDate) || '',
       birthTime: this.clean(draft.birthTime),
       birthPlace: this.clean(draft.birthPlace) || '',
@@ -492,6 +498,8 @@ export class ReadingIntakeService {
       palmPhotoUrl: this.clean(draft.palmPhoto) || this.clean(draft.palmPhotoUrl),
       highs: this.clean(draft.highs),
       lows: this.clean(draft.lows),
+      lifeEvents: this.clean(draft.lifeEvents),
+      lifeAreas: this.cleanLifeAreas(draft.lifeAreas),
       strongSide: this.clean(draft.strongSide),
       weakSide: this.clean(draft.weakSide),
       strongZone: this.clean(draft.strongZone),
@@ -506,6 +514,7 @@ export class ReadingIntakeService {
 
   private profileFromLegacyDto(dto: UpdateProfileDto): IntakeProfile {
     return {
+      usageName: this.clean(dto.usageName),
       birthDate: this.clean(dto.birthDate) || '',
       birthTime: this.clean(dto.birthTime),
       birthPlace: this.clean(dto.birthPlace) || '',
@@ -515,6 +524,8 @@ export class ReadingIntakeService {
       palmPhotoUrl: this.clean(dto.palmPhotoUrl),
       highs: this.clean(dto.highs),
       lows: this.clean(dto.lows),
+      lifeEvents: this.clean(dto.lifeEvents),
+      lifeAreas: this.cleanLifeAreas(dto.lifeAreas),
       strongSide: this.clean(dto.strongSide),
       weakSide: this.clean(dto.weakSide),
       strongZone: this.clean(dto.strongZone),
@@ -605,19 +616,23 @@ export class ReadingIntakeService {
     profile: IntakeProfile,
     submittedAt: Date,
   ) {
+    // Json columns reject plain null: use an explicit JsonNull sentinel.
+    // openReading is intake metadata without a UserProfile column.
+    const { lifeAreas, openReading, ...scalarFields } = profile;
+    void openReading;
+    const payload = {
+      ...scalarFields,
+      lifeAreas: lifeAreas ? (this.toJson(lifeAreas) as Prisma.InputJsonValue) : Prisma.JsonNull,
+      profileCompleted: true,
+      submittedAt,
+    };
     return tx.userProfile.upsert({
       where: { userId },
       create: {
         userId,
-        ...profile,
-        profileCompleted: true,
-        submittedAt,
+        ...payload,
       },
-      update: {
-        ...profile,
-        profileCompleted: true,
-        submittedAt,
-      },
+      update: payload,
     });
   }
 
@@ -649,6 +664,7 @@ export class ReadingIntakeService {
   private draftFromProfile(profile: IntakeProfile): OnboardingDraftDataDto {
     return {
       schemaVersion: 2,
+      usageName: profile.usageName,
       birthDate: profile.birthDate,
       birthTime: profile.birthTime,
       birthPlace: profile.birthPlace,
@@ -658,6 +674,8 @@ export class ReadingIntakeService {
       palmPhoto: profile.palmPhotoUrl,
       highs: profile.highs,
       lows: profile.lows,
+      lifeEvents: profile.lifeEvents,
+      lifeAreas: profile.lifeAreas as OnboardingDraftDataDto['lifeAreas'],
       strongSide: profile.strongSide,
       weakSide: profile.weakSide,
       strongZone: profile.strongZone,
@@ -673,6 +691,20 @@ export class ReadingIntakeService {
   private clean(value: string | null | undefined): string | null {
     const cleaned = value?.trim();
     return cleaned ? cleaned : null;
+  }
+
+  /** Keeps only valid life-area entries and drops empty notes. */
+  private cleanLifeAreas(value: object | null | undefined): IntakeLifeAreas | null {
+    if (!value || typeof value !== 'object') return null;
+    const cleaned: IntakeLifeAreas = {};
+    for (const [key, entry] of Object.entries(
+      value as Record<string, { state?: string; note?: string } | undefined>,
+    )) {
+      if (!entry || typeof entry !== 'object' || typeof entry.state !== 'string') continue;
+      const note = this.clean(entry.note);
+      cleaned[key] = note ? { state: entry.state, note } : { state: entry.state };
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : null;
   }
 
   private toJson(value: object): Prisma.InputJsonValue {

@@ -138,6 +138,7 @@ export class UsersController {
       phone: data.user.phone,
       profile: data.profile
         ? {
+            usageName: data.profile.usageName,
             birthDate: data.profile.birthDate,
             birthTime: data.profile.birthTime,
             birthPlace: data.profile.birthPlace,
@@ -147,6 +148,8 @@ export class UsersController {
             palmPhotoUrl: data.profile.palmPhotoUrl,
             highs: data.profile.highs,
             lows: data.profile.lows,
+            lifeEvents: data.profile.lifeEvents,
+            lifeAreas: data.profile.lifeAreas,
             strongSide: data.profile.strongSide,
             weakSide: data.profile.weakSide,
             strongZone: data.profile.strongZone,

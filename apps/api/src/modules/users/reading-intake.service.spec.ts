@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-photo.service';
 import { ReadingIntakeService } from './reading-intake.service';
 
 const validDto = {
@@ -38,12 +39,28 @@ describe('ReadingIntakeService', () => {
       },
       consentRecord: { upsert: jest.fn().mockResolvedValue({}) },
       onboardingProgress: { upsert: jest.fn().mockResolvedValue({}) },
+      readingIntake: { create: jest.fn().mockResolvedValue({}) },
     };
     prisma = {
       $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
       order: { findFirst: jest.fn() },
     };
-    service = new ReadingIntakeService(prisma as PrismaService);
+    const privatePhotos = {
+      validateOnboardingPhoto: jest.fn(async (storageRef: string, userId: string) => {
+        if (!storageRef.startsWith(`s3://onboarding/${userId}/`)) {
+          throw new BadRequestException('Référence de photo invalide');
+        }
+        return {
+          storageRef,
+          key: storageRef.replace('s3://', ''),
+          contentType: 'image/jpeg',
+          size: 3,
+          etag: 'etag',
+          versionId: null,
+        };
+      }),
+    } as unknown as PrivateOnboardingPhotoService;
+    service = new ReadingIntakeService(prisma as PrismaService, privatePhotos);
   });
 
   it('atomically snapshots the client-selected intake into the paid order', async () => {
@@ -61,7 +78,7 @@ describe('ReadingIntakeService', () => {
     );
     expect(tx.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'order-1', status: 'PAID' },
+        where: expect.objectContaining({ id: 'order-1', status: 'PAID' }),
         data: {
           clientInputs: expect.objectContaining({
             readingIntake: expect.objectContaining({
@@ -119,15 +136,18 @@ describe('ReadingIntakeService', () => {
   });
 
   it('blocks profile edits while an active sealed reading exists', async () => {
-    prisma.order.findFirst.mockResolvedValue({
-      clientInputs: { readingIntake: { sealedAt: '2026-07-18T12:00:00.000Z' } },
-    });
+    prisma.order.findMany = jest.fn().mockResolvedValue([
+      {
+        clientInputs: { readingIntake: { sealedAt: '2026-07-18T12:00:00.000Z' } },
+        readingIntake: null,
+      },
+    ]);
 
     await expect(service.assertProfileEditable('user-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('allows profile edits when there is no active sealed reading', async () => {
-    prisma.order.findFirst.mockResolvedValue(null);
+    prisma.order.findMany = jest.fn().mockResolvedValue([]);
 
     await expect(service.assertProfileEditable('user-1')).resolves.toBeUndefined();
   });

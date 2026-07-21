@@ -4,8 +4,11 @@ import { UserProfile as VertexUserProfile } from './VertexOracle';
 
 export type ReadingSourceKind = 'SEALED_INTAKE' | 'LEGACY_PROFILE';
 
+export type ReadingLifeAreas = Record<string, { state: string; note?: string }>;
+
 /** Normalized reading fields shared by sealed intake and legacy profile. */
 export interface ReadingSourceProfile {
+  usageName: string | null;
   birthDate: string;
   birthTime: string | null;
   birthPlace: string;
@@ -15,6 +18,8 @@ export interface ReadingSourceProfile {
   palmPhotoUrl: string | null;
   highs: string | null;
   lows: string | null;
+  lifeEvents: string | null;
+  lifeAreas: ReadingLifeAreas | null;
   strongSide: string | null;
   weakSide: string | null;
   strongZone: string | null;
@@ -47,6 +52,7 @@ export interface OrderForReadingSource {
 }
 
 const PROFILE_FIELDS = [
+  'usageName',
   'birthDate',
   'birthTime',
   'birthPlace',
@@ -56,6 +62,8 @@ const PROFILE_FIELDS = [
   'palmPhotoUrl',
   'highs',
   'lows',
+  'lifeEvents',
+  'lifeAreas',
   'strongSide',
   'weakSide',
   'strongZone',
@@ -148,6 +156,7 @@ export class ReadingSourceResolver {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
+      usageName: profile.usageName ?? undefined,
       birthDate: profile.birthDate,
       birthTime: profile.birthTime ?? undefined,
       birthPlace: profile.birthPlace ?? undefined,
@@ -157,6 +166,8 @@ export class ReadingSourceResolver {
       palmPhotoUrl: profile.palmPhotoUrl ?? undefined,
       highs: profile.highs ?? undefined,
       lows: profile.lows ?? undefined,
+      lifeEvents: profile.lifeEvents ?? undefined,
+      lifeAreas: profile.lifeAreas ?? undefined,
       strongSide: profile.strongSide ?? undefined,
       weakSide: profile.weakSide ?? undefined,
       strongZone: profile.strongZone ?? undefined,
@@ -179,6 +190,7 @@ export class ReadingSourceResolver {
 
   private normalizeSealedProfile(raw: Record<string, unknown>): ReadingSourceProfile {
     return {
+      usageName: this.nullableString(raw.usageName),
       birthDate: this.nonEmptyString(raw.birthDate) ?? '',
       birthTime: this.nullableString(raw.birthTime),
       birthPlace: this.nonEmptyString(raw.birthPlace) ?? '',
@@ -188,6 +200,8 @@ export class ReadingSourceResolver {
       palmPhotoUrl: this.nullableString(raw.palmPhotoUrl),
       highs: this.nullableString(raw.highs),
       lows: this.nullableString(raw.lows),
+      lifeEvents: this.nullableString(raw.lifeEvents),
+      lifeAreas: this.nullableLifeAreas(raw.lifeAreas),
       strongSide: this.nullableString(raw.strongSide),
       weakSide: this.nullableString(raw.weakSide),
       strongZone: this.nullableString(raw.strongZone),
@@ -202,6 +216,7 @@ export class ReadingSourceResolver {
 
   private fromLegacyProfile(profile: PrismaUserProfile | null): ReadingSourceProfile {
     return {
+      usageName: profile?.usageName ?? null,
       birthDate: profile?.birthDate ?? '',
       birthTime: profile?.birthTime ?? null,
       birthPlace: profile?.birthPlace ?? '',
@@ -211,6 +226,8 @@ export class ReadingSourceResolver {
       palmPhotoUrl: profile?.palmPhotoUrl ?? null,
       highs: profile?.highs ?? null,
       lows: profile?.lows ?? null,
+      lifeEvents: profile?.lifeEvents ?? null,
+      lifeAreas: this.nullableLifeAreas(profile?.lifeAreas),
       strongSide: profile?.strongSide ?? null,
       weakSide: profile?.weakSide ?? null,
       strongZone: profile?.strongZone ?? null,
@@ -240,6 +257,20 @@ export class ReadingSourceResolver {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  /** Accepts only well-formed { key: { state, note? } } life-area records. */
+  private nullableLifeAreas(value: unknown): ReadingLifeAreas | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const areas: ReadingLifeAreas = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const state = this.nonEmptyString((entry as Record<string, unknown>).state);
+      if (!state) continue;
+      const note = this.nullableString((entry as Record<string, unknown>).note);
+      areas[key] = note ? { state, note } : { state };
+    }
+    return Object.keys(areas).length > 0 ? areas : null;
   }
 }
 

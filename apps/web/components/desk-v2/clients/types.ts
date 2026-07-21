@@ -3,6 +3,7 @@ import { OrderStatus } from '../types';
 
 export interface ClientProfile {
   id: string;
+  usageName?: string | null;
   birthDate?: string | null;
   birthTime?: string | null;
   birthPlace?: string | null;
@@ -12,13 +13,18 @@ export interface ClientProfile {
   palmPhotoUrl?: string | null;
   highs?: string | null;
   lows?: string | null;
+  lifeEvents?: string | null;
+  lifeAreas?: Record<string, { state: string; note?: string }> | null;
   strongSide?: string | null;
   weakSide?: string | null;
   strongZone?: string | null;
   weakZone?: string | null;
-  healthConcerns?: string | null;
+  /** Bodily context declared by the client (Prisma column: ailments). */
+  ailments?: string | null;
   fears?: string | null;
   rituals?: string | null;
+  deliveryStyle?: string | null;
+  pace?: number | null;
   isComplete: boolean;
 }
 
@@ -66,7 +72,7 @@ export interface Insight {
   createdAt: string;
 }
 
-export type InsightCategory = 
+export type InsightCategory =
   | 'SPIRITUEL'
   | 'RELATIONS'
   | 'MISSION'
@@ -181,7 +187,10 @@ export interface ClientFullData {
 }
 
 // Insight category configuration
-export const INSIGHT_CATEGORIES: Record<InsightCategory, { label: string; icon: string; color: string }> = {
+export const INSIGHT_CATEGORIES: Record<
+  InsightCategory,
+  { label: string; icon: string; color: string }
+> = {
   SPIRITUEL: { label: 'Spirituel', icon: '🔮', color: 'purple' },
   RELATIONS: { label: 'Relations', icon: '💕', color: 'pink' },
   MISSION: { label: 'Mission de Vie', icon: '🎯', color: 'amber' },

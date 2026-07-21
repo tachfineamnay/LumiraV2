@@ -281,6 +281,46 @@ describe('VertexOracle OpenAI-only runtime', () => {
     );
   });
 
+  it('injects usage name, marking period and life weather into the SCRIBE prompt', () => {
+    const prompt = (
+      service as unknown as {
+        buildScribePrompt: (profile: UserProfile, order: OrderContext) => string;
+      }
+    ).buildScribePrompt(
+      {
+        ...userProfile,
+        usageName: 'Jeannot',
+        lifeEvents: 'Vers 2018, une rupture qui a tout changé.',
+        lifeAreas: {
+          relations: { state: 'TENDU', note: 'séparation en cours' },
+          travail: { state: 'EN_QUESTION' },
+          corps: { state: 'FLUIDE' },
+        },
+      },
+      orderContext,
+    );
+
+    expect(prompt).toContain("Prénom d'usage ou surnom (pour la symbolique du nom): Jeannot");
+    expect(prompt).toContain(
+      'Période ou événement de vie marquant déclaré: Vers 2018, une rupture qui a tout changé.',
+    );
+    expect(prompt).toContain('=== MÉTÉO DE VIE DÉCLARÉE PAR DOMAINE ===');
+    expect(prompt).toContain('Relations & famille: tendu — séparation en cours');
+    expect(prompt).toContain('Travail & argent: en question');
+    expect(prompt).toContain('Corps & énergie: fluide');
+  });
+
+  it('omits life weather section when no life areas are declared', () => {
+    const prompt = (
+      service as unknown as {
+        buildScribePrompt: (profile: UserProfile, order: OrderContext) => string;
+      }
+    ).buildScribePrompt(userProfile, orderContext);
+
+    expect(prompt).not.toContain('MÉTÉO DE VIE');
+    expect(prompt).not.toContain("Prénom d'usage");
+  });
+
   it('records a tracked error for an empty provider response', async () => {
     responsesCreate.mockResolvedValue({ status: 'completed', output_text: '' });
 

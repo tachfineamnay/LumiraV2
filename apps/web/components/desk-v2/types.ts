@@ -18,8 +18,11 @@ export interface OrderFile {
   filename: string;
 }
 
+export type LifeAreas = Record<string, { state: string; note?: string }>;
+
 export interface UserProfile {
   id: string;
+  usageName?: string;
   birthDate?: string;
   birthTime?: string;
   birthPlace?: string;
@@ -29,6 +32,8 @@ export interface UserProfile {
   palmPhotoUrl?: string;
   highs?: string;
   lows?: string;
+  lifeEvents?: string;
+  lifeAreas?: LifeAreas;
   fears?: string;
   rituals?: string;
   ailments?: string;

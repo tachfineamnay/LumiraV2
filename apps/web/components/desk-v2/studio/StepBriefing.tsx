@@ -3,7 +3,18 @@
 import { useState } from 'react';
 import { Order } from '../types';
 import { resolveDeskReadingSource } from '@/lib/desk-reading-source';
-import { ArrowLeft, Sparkles, Clock, User, Calendar, MessageSquare, Target } from 'lucide-react';
+import {
+  ArrowLeft,
+  Sparkles,
+  Clock,
+  User,
+  Calendar,
+  MessageSquare,
+  Target,
+  CloudSun,
+  History,
+  SlidersHorizontal,
+} from 'lucide-react';
 
 interface StepBriefingProps {
   order: Order;
@@ -48,6 +59,33 @@ const FOCUS_DOMAINS = [
   'Développement personnel',
   'Créativité',
 ];
+
+const LIFE_AREA_DISPLAY: Record<string, string> = {
+  relations: 'Relations & famille',
+  travail: 'Travail & argent',
+  corps: 'Corps & énergie',
+  creativite: 'Créativité & élans',
+  interieur: 'Vie intérieure',
+  direction: 'Direction de vie',
+};
+
+const LIFE_AREA_STATE_DISPLAY: Record<string, { label: string; className: string }> = {
+  FLUIDE: {
+    label: 'Fluide',
+    className: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30',
+  },
+  TENDU: { label: 'Tendu', className: 'bg-red-500/10 text-red-700 border-red-500/30' },
+  EN_QUESTION: {
+    label: 'En question',
+    className: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
+  },
+};
+
+const DELIVERY_STYLE_DISPLAY: Record<string, string> = {
+  DOUX_ET_CLAIR: 'Doux et clair',
+  DIRECT_ET_CONCRET: 'Direct et concret',
+  SYMBOLIQUE_ET_PROFOND: 'Symbolique et profond',
+};
 
 export function StepBriefing({ order, isGenerating, onLaunch, onBack }: StepBriefingProps) {
   const [expertPrompt, setExpertPrompt] = useState(order.expertPrompt || '');
@@ -142,6 +180,9 @@ export function StepBriefing({ order, isGenerating, onLaunch, onBack }: StepBrie
                     <p className="font-semibold text-desk-text">
                       {user.firstName} {user.lastName}
                     </p>
+                    {profile?.usageName && (
+                      <p className="text-xs text-amber-600">Appelé(e) « {profile.usageName} »</p>
+                    )}
                     <p className="text-xs text-desk-subtle">{order.orderNumber}</p>
                   </div>
                 </div>
@@ -215,6 +256,76 @@ export function StepBriefing({ order, isGenerating, onLaunch, onBack }: StepBrie
                 <div className="bg-desk-card border border-desk-border rounded-xl p-4">
                   <span className="text-xs font-semibold text-red-500">✦ Peurs & Blocages</span>
                   <p className="text-sm text-desk-muted mt-1 line-clamp-3">{profile.fears}</p>
+                </div>
+              )}
+
+              {/* Life weather declared by the client */}
+              {profile?.lifeAreas && Object.keys(profile.lifeAreas).length > 0 && (
+                <div className="bg-desk-card border border-desk-border rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CloudSun className="w-4 h-4 text-sky-600" />
+                    <span className="text-xs font-semibold text-sky-600 uppercase tracking-wider">
+                      Météo de vie
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {Object.entries(profile.lifeAreas).map(([key, entry]) => {
+                      const state = LIFE_AREA_STATE_DISPLAY[entry.state] ?? {
+                        label: entry.state,
+                        className: 'bg-desk-hover text-desk-muted border-desk-border',
+                      };
+                      return (
+                        <div key={key} className="text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-desk-muted">{LIFE_AREA_DISPLAY[key] ?? key}</span>
+                            <span
+                              className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium ${state.className}`}
+                            >
+                              {state.label}
+                            </span>
+                          </div>
+                          {entry.note && (
+                            <p className="mt-0.5 text-xs italic text-desk-subtle">
+                              « {entry.note} »
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Marking life period */}
+              {profile?.lifeEvents && (
+                <div className="bg-desk-card border border-desk-border rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <History className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-semibold text-purple-600 uppercase tracking-wider">
+                      Période marquante
+                    </span>
+                  </div>
+                  <p className="text-sm text-desk-muted leading-relaxed line-clamp-4">
+                    {profile.lifeEvents}
+                  </p>
+                </div>
+              )}
+
+              {/* Requested tone */}
+              {(profile?.deliveryStyle || typeof profile?.pace === 'number') && (
+                <div className="bg-desk-card border border-desk-border rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <SlidersHorizontal className="w-4 h-4 text-desk-muted" />
+                    <span className="text-xs font-semibold text-desk-muted uppercase tracking-wider">
+                      Restitution souhaitée
+                    </span>
+                  </div>
+                  <p className="text-sm text-desk-muted">
+                    {profile?.deliveryStyle
+                      ? (DELIVERY_STYLE_DISPLAY[profile.deliveryStyle] ?? profile.deliveryStyle)
+                      : 'Style non précisé'}
+                    {typeof profile?.pace === 'number' && ` · Détail ${profile.pace}/100`}
+                  </p>
                 </div>
               )}
             </div>

@@ -27,8 +27,16 @@ import sanctuaireApi from '../../lib/sanctuaireApi';
 import { uploadOnboardingPhoto } from '../../lib/onboarding-upload';
 import {
   DELIVERY_STYLES,
+  LIFE_AREA_KEYS,
+  LIFE_AREA_LABELS,
+  LIFE_AREA_STATES,
+  LIFE_AREA_STATE_LABELS,
+  lifeAreasSchema,
   readingPreparationSchema,
   readingPreparationSubmissionSchema,
+  type LifeAreaKey,
+  type LifeAreas,
+  type LifeAreaState,
   type ReadingPreparationData,
 } from '../../lib/onboardingSchema';
 
@@ -112,6 +120,7 @@ const STYLE_OPTIONS = [
 ] as const;
 
 const EMPTY_DATA: ReadingPreparationData = {
+  usageName: '',
   birthDate: '',
   birthTime: '',
   birthPlace: '',
@@ -122,6 +131,8 @@ const EMPTY_DATA: ReadingPreparationData = {
   palmPhoto: '',
   highs: '',
   lows: '',
+  lifeEvents: '',
+  lifeAreas: {},
   ailments: '',
   fears: '',
   rituals: '',
@@ -145,12 +156,18 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function normalizeLifeAreas(value: unknown): LifeAreas {
+  const parsed = lifeAreasSchema.safeParse(value);
+  return parsed.success ? (parsed.data as LifeAreas) : {};
+}
+
 function normalize(value: unknown): Partial<ReadingPreparationData> {
   if (!value || typeof value !== 'object') return {};
   const source = value as Record<string, unknown>;
   const normalized: Partial<ReadingPreparationData> = {};
   const has = (key: string) => Object.prototype.hasOwnProperty.call(source, key);
 
+  if (has('usageName')) normalized.usageName = stringValue(source.usageName);
   if (has('birthDate')) {
     const rawBirthDate = stringValue(source.birthDate);
     normalized.birthDate = rawBirthDate.includes('T') ? rawBirthDate.slice(0, 10) : rawBirthDate;
@@ -185,6 +202,8 @@ function normalize(value: unknown): Partial<ReadingPreparationData> {
   if (has('weakSide')) normalized.weakSide = stringValue(source.weakSide);
   if (has('strongZone')) normalized.strongZone = stringValue(source.strongZone);
   if (has('weakZone')) normalized.weakZone = stringValue(source.weakZone);
+  if (has('lifeEvents')) normalized.lifeEvents = stringValue(source.lifeEvents);
+  if (has('lifeAreas')) normalized.lifeAreas = normalizeLifeAreas(source.lifeAreas);
   if (has('ailments')) normalized.ailments = stringValue(source.ailments);
   if (has('fears')) normalized.fears = stringValue(source.fears);
   if (has('rituals')) normalized.rituals = stringValue(source.rituals);
@@ -204,6 +223,7 @@ function normalize(value: unknown): Partial<ReadingPreparationData> {
 function persistedData(data: ReadingPreparationData): PersistedDraftData {
   return {
     schemaVersion: 2,
+    usageName: data.usageName,
     birthDate: data.birthDate,
     birthTime: data.birthTime,
     birthPlace: data.birthPlace,
@@ -214,6 +234,8 @@ function persistedData(data: ReadingPreparationData): PersistedDraftData {
     palmPhoto: data.palmPhoto.startsWith('s3://onboarding/') ? data.palmPhoto : '',
     highs: data.highs,
     lows: data.lows,
+    lifeEvents: data.lifeEvents,
+    lifeAreas: normalizeLifeAreas(data.lifeAreas),
     strongSide: data.strongSide,
     weakSide: data.weakSide,
     strongZone: data.strongZone,
@@ -337,11 +359,23 @@ export function ReadingPreparation({
     () => [
       ['Ce qui vous soutient', formValues.highs],
       ['Ce qui vous pèse ou se répète', formValues.lows],
+      ['Une période qui a compté', formValues.lifeEvents],
       ['Contexte corporel partagé', formValues.ailments],
       ['À aborder avec douceur', formValues.fears],
       ['Pratiques qui comptent pour vous', formValues.rituals],
     ],
-    [formValues.ailments, formValues.fears, formValues.highs, formValues.lows, formValues.rituals],
+    [
+      formValues.ailments,
+      formValues.fears,
+      formValues.highs,
+      formValues.lifeEvents,
+      formValues.lows,
+      formValues.rituals,
+    ],
+  );
+  const lifeAreaCount = useMemo(
+    () => LIFE_AREA_KEYS.filter((key) => Boolean(formValues.lifeAreas?.[key])).length,
+    [formValues.lifeAreas],
   );
 
   const queueDraftSave = useCallback(
@@ -745,13 +779,24 @@ export function ReadingPreparation({
     (field: FieldPath<ReadingPreparationData>, message: string) => {
       setError(field, { type: 'manual', message });
       const targetStep =
-        field === 'birthDate' || field === 'birthTime' || field === 'birthPlace'
+        field === 'birthDate' ||
+        field === 'birthTime' ||
+        field === 'birthPlace' ||
+        field === 'usageName'
           ? 0
           : field === 'specificQuestion' || field === 'objective'
             ? 1
-            : ['highs', 'lows', 'ailments', 'fears', 'rituals', 'deliveryStyle', 'pace'].includes(
-                  field,
-                )
+            : [
+                  'highs',
+                  'lows',
+                  'lifeEvents',
+                  'lifeAreas',
+                  'ailments',
+                  'fears',
+                  'rituals',
+                  'deliveryStyle',
+                  'pace',
+                ].includes(field)
               ? 2
               : field === 'facePhoto' || field === 'palmPhoto'
                 ? 3
@@ -805,6 +850,7 @@ export function ReadingPreparation({
         '/users/profile',
         {
           ...(orderIdRef.current && { orderId: orderIdRef.current }),
+          usageName: values.usageName.trim() || null,
           birthDate: values.birthDate,
           birthTime: values.birthTime || null,
           birthPlace: values.birthPlace.trim(),
@@ -815,6 +861,10 @@ export function ReadingPreparation({
           palmPhotoUrl,
           highs: values.highs.trim() || null,
           lows: values.lows.trim() || null,
+          lifeEvents: values.lifeEvents.trim() || null,
+          lifeAreas: Object.keys(normalizeLifeAreas(values.lifeAreas)).length
+            ? normalizeLifeAreas(values.lifeAreas)
+            : null,
           strongSide: values.strongSide?.trim() || null,
           weakSide: values.weakSide?.trim() || null,
           strongZone: values.strongZone?.trim() || null,
@@ -867,11 +917,11 @@ export function ReadingPreparation({
       Boolean(
         formValues.specificQuestion.trim() || formValues.objective.trim() || formValues.openReading,
       ),
-      contextEntries.some(([, value]) => value.trim()),
+      contextEntries.some(([, value]) => value.trim()) || lifeAreaCount > 0,
       Boolean(formValues.facePhoto || formValues.palmPhoto),
       formValues.consent,
     ],
-    [contextEntries, formValues],
+    [contextEntries, formValues, lifeAreaCount],
   );
 
   if (loadState === 'loading') {
@@ -1092,6 +1142,10 @@ export function ReadingPreparation({
                   </div>
                 )}
 
+                {current.key !== 'identity' && current.key !== 'review' && (
+                  <EnrichmentMeter data={formValues} />
+                )}
+
                 <div className="mt-6">
                   {current.key === 'identity' && (
                     <IdentityStep
@@ -1108,7 +1162,14 @@ export function ReadingPreparation({
                   )}
 
                   {current.key === 'context' && (
-                    <ContextStep register={register} errors={errors} values={formValues} />
+                    <ContextStep
+                      register={register}
+                      errors={errors}
+                      values={formValues}
+                      onLifeAreasChange={(next) =>
+                        setValue('lifeAreas', next, { shouldDirty: true })
+                      }
+                    />
                   )}
 
                   {current.key === 'photos' && (
@@ -1310,6 +1371,25 @@ function IdentityStep({
         </span>
         <FieldError id="birthPlace-error" message={errors.birthPlace?.message} />
       </label>
+      <label className="block text-sm font-medium text-stellar-200">
+        Le prénom par lequel on vous appelle vraiment{' '}
+        <span className="font-normal text-stellar-500">(facultatif)</span>
+        <input
+          type="text"
+          maxLength={120}
+          placeholder="Un surnom, un diminutif, un prénom choisi…"
+          enterKeyHint="next"
+          aria-invalid={Boolean(errors.usageName)}
+          aria-describedby={errors.usageName ? 'usageName-error' : 'usageName-help'}
+          className={inputClass(Boolean(errors.usageName))}
+          {...register('usageName')}
+        />
+        <span id="usageName-help" className="mt-2 block text-xs leading-5 text-stellar-500">
+          S’il diffère de votre état civil, il éclaire la symbolique de votre nom telle que vous la
+          vivez au quotidien.
+        </span>
+        <FieldError id="usageName-error" message={errors.usageName?.message} />
+      </label>
       <TrustNote />
     </div>
   );
@@ -1328,8 +1408,8 @@ function IntentionStep({
     <div className="space-y-5">
       <TextareaField
         label="Si cette lecture pouvait éclairer une seule question, laquelle serait-ce ?"
-        helper="Une situation, une décision, une relation ou un schéma qui se répète : écrivez avec vos propres mots."
-        placeholder="En ce moment, je me demande…"
+        helper="Racontez la situation comme à une personne de confiance : depuis quand, ce qui s’est passé, ce que vous ressentez. Plus vous êtes précis, plus la lecture le sera."
+        placeholder="En ce moment, je me demande… Cela a commencé quand… Ce qui me pèse le plus, c’est…"
         maxLength={2000}
         valueLength={values.specificQuestion.length}
         error={errors.specificQuestion?.message}
@@ -1337,8 +1417,8 @@ function IntentionStep({
       />
       <TextareaField
         label="À la fin, qu’aimeriez-vous comprendre, décider ou voir autrement ?"
-        helper="Décrire ce qui rendrait cette lecture utile aide l’expert à garder le bon cap."
-        placeholder="J’aimerais repartir avec plus de clarté sur…"
+        helper="Imaginez votre lecture reçue : qu’est-ce qui aurait changé pour vous ? Une décision plus claire, un poids déposé, une direction retrouvée…"
+        placeholder="J’aimerais repartir avec plus de clarté sur… et me sentir capable de…"
         maxLength={2000}
         valueLength={values.objective.length}
         error={errors.objective?.message}
@@ -1375,17 +1455,21 @@ function ContextStep({
   register,
   errors,
   values,
+  onLifeAreasChange,
 }: {
   register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
   errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
   values: ReadingPreparationData;
+  onLifeAreasChange: (next: LifeAreas) => void;
 }) {
   return (
     <div className="space-y-5">
+      <LifeWeatherSection value={values.lifeAreas || {}} onChange={onLifeAreasChange} />
       <div className="grid gap-5 md:grid-cols-2">
         <TextareaField
           label="Ce qui vous soutient actuellement"
-          helper="Personnes, projets, qualités ou élans sur lesquels vous pouvez compter."
+          helper="Une personne, un projet, une qualité, un élan : qu’est-ce qui vous porte au réveil, même les jours difficiles ?"
+          placeholder="Je peux compter sur… Ce qui me redonne de l’énergie, c’est…"
           maxLength={2000}
           valueLength={values.highs.length}
           error={errors.highs?.message}
@@ -1393,7 +1477,8 @@ function ContextStep({
         />
         <TextareaField
           label="Ce qui vous pèse ou se répète"
-          helper="Une difficulté, une tension ou une situation qui demande votre attention."
+          helper="Le schéma qui revient malgré vous — dans vos relations, votre travail, votre corps. C’est souvent la clé de la lecture."
+          placeholder="Depuis des années, je retombe dans… À chaque fois que…, il se passe…"
           maxLength={2000}
           valueLength={values.lows.length}
           error={errors.lows?.message}
@@ -1401,7 +1486,8 @@ function ContextStep({
         />
         <TextareaField
           label="Ce que vous préférez que nous abordions avec douceur"
-          helper="Une peur, une limite ou un sujet sensible — sans obligation de tout détailler."
+          helper="Une peur, une limite ou un sujet sensible — quelques mots suffisent, sans obligation de tout détailler."
+          placeholder="Je préfère qu’on aborde délicatement…"
           maxLength={2000}
           valueLength={values.fears.length}
           error={errors.fears?.message}
@@ -1409,7 +1495,8 @@ function ContextStep({
         />
         <TextareaField
           label="Pratiques qui comptent pour vous"
-          helper="Rituel, méditation, écriture, prière ou toute pratique personnelle."
+          helper="Méditation, écriture, prière, marche, tarot… ce que vous faites déjà nous aide à proposer des rituels qui vous ressemblent."
+          placeholder="J’ai l’habitude de… J’ai déjà essayé…"
           maxLength={1500}
           valueLength={values.rituals.length}
           error={errors.rituals?.message}
@@ -1417,8 +1504,18 @@ function ContextStep({
         />
       </div>
       <TextareaField
+        label="Une période ou un événement qui vous a marqué"
+        helper="Une année approximative et quelques mots : une rencontre, une perte, un éveil, une rupture, un déménagement… Ces dates de passage éclairent vos cycles de vie."
+        placeholder="Vers 2018, j’ai vécu… et depuis, quelque chose a changé dans…"
+        maxLength={2000}
+        valueLength={values.lifeEvents.length}
+        error={errors.lifeEvents?.message}
+        registration={register('lifeEvents')}
+      />
+      <TextareaField
         label="Contexte corporel que vous souhaitez partager"
-        helper="Facultatif. Mentionnez seulement ce qui vous paraît utile ; Lumira ne pose aucun diagnostic médical."
+        helper="Tensions, fatigue, zones sensibles : ce que votre corps exprime en ce moment, si vous deviez le traduire. Lumira ne pose aucun diagnostic médical."
+        placeholder="Mon corps me parle surtout par… (dos, sommeil, ventre, énergie…)"
         maxLength={1500}
         valueLength={values.ailments.length}
         error={errors.ailments?.message}
@@ -1472,6 +1569,136 @@ function ContextStep({
   );
 }
 
+function LifeWeatherSection({
+  value,
+  onChange,
+}: {
+  value: LifeAreas;
+  onChange: (next: LifeAreas) => void;
+}) {
+  const setAreaState = (key: LifeAreaKey, state: LifeAreaState) => {
+    const next: LifeAreas = { ...value };
+    if (next[key]?.state === state) {
+      delete next[key];
+    } else {
+      next[key] = { state, note: next[key]?.note };
+    }
+    onChange(next);
+  };
+
+  const setAreaNote = (key: LifeAreaKey, note: string) => {
+    const entry = value[key];
+    if (!entry) return;
+    onChange({ ...value, [key]: { ...entry, note } });
+  };
+
+  return (
+    <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+      <h2 className="text-sm font-medium text-stellar-100">
+        Votre météo de vie, domaine par domaine
+      </h2>
+      <p className="mt-1 text-xs leading-5 text-stellar-500">
+        Vingt secondes suffisent : indiquez comment chaque domaine se porte en ce moment. Chaque
+        repère donné ancre votre lecture dans votre réalité, pas dans des généralités.
+      </p>
+      <div className="mt-4 space-y-4">
+        {LIFE_AREA_KEYS.map((key) => {
+          const entry = value[key];
+          return (
+            <div key={key} className="rounded-xl border border-white/[0.06] bg-abyss-600/40 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium text-stellar-200">
+                  {LIFE_AREA_LABELS[key]}
+                </span>
+                <div className="flex gap-1.5" role="group" aria-label={LIFE_AREA_LABELS[key]}>
+                  {LIFE_AREA_STATES.map((state) => {
+                    const active = entry?.state === state;
+                    return (
+                      <button
+                        key={state}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setAreaState(key, state)}
+                        className={`min-h-[36px] rounded-lg border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
+                          active
+                            ? state === 'FLUIDE'
+                              ? 'border-emerald-400/50 bg-emerald-400/15 text-emerald-200'
+                              : state === 'TENDU'
+                                ? 'border-rose-400/50 bg-rose-400/15 text-rose-200'
+                                : 'border-amber-300/50 bg-amber-300/15 text-amber-100'
+                            : 'border-white/[0.09] text-stellar-400 hover:bg-white/[0.05]'
+                        }`}
+                      >
+                        {LIFE_AREA_STATE_LABELS[state]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {entry && entry.state !== 'FLUIDE' && (
+                <input
+                  type="text"
+                  maxLength={300}
+                  value={entry.note || ''}
+                  onChange={(event) => setAreaNote(key, event.target.value)}
+                  placeholder="Un mot sur ce qui se passe là… (facultatif)"
+                  aria-label={`Précision sur ${LIFE_AREA_LABELS[key]}`}
+                  className={`${inputClass(false)} mt-2 py-2 text-sm`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function EnrichmentMeter({ data }: { data: ReadingPreparationData }) {
+  const signals = [
+    Boolean(data.birthTime),
+    Boolean(data.usageName.trim()),
+    Boolean(data.specificQuestion.trim() || data.objective.trim()),
+    Boolean(data.highs.trim()),
+    Boolean(data.lows.trim()),
+    Boolean(data.lifeEvents.trim()),
+    LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key])),
+    Boolean(data.fears.trim()),
+    Boolean(data.rituals.trim()),
+    Boolean(data.ailments.trim()),
+    Boolean(data.facePhoto),
+    Boolean(data.palmPhoto),
+  ];
+  const filled = signals.filter(Boolean).length;
+  const percent = Math.round((filled / signals.length) * 100);
+  const message =
+    percent >= 75
+      ? 'Dossier riche : votre lecture pourra être profondément personnelle.'
+      : percent >= 40
+        ? 'Beau dossier. Chaque détail supplémentaire affine encore la lecture.'
+        : 'Tout est facultatif, mais chaque élément partagé rend votre lecture plus juste.';
+
+  return (
+    <div className="mt-5 rounded-xl border border-horizon-400/15 bg-horizon-400/[0.05] p-3">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="font-semibold uppercase tracking-[0.12em] text-horizon-300">
+          Richesse du dossier
+        </span>
+        <span className="tabular-nums text-stellar-400">
+          {filled}/{signals.length} repères
+        </span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-horizon-400 to-amber-300 transition-[width] motion-reduce:transition-none"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs leading-5 text-stellar-400">{message}</p>
+    </div>
+  );
+}
+
 function ReviewStep({
   data,
   contextEntries,
@@ -1486,6 +1713,15 @@ function ReviewStep({
   onEdit: (index: number) => void;
 }) {
   const transmittedContext = contextEntries.filter(([, value]) => value.trim());
+  const weatherEntries = LIFE_AREA_KEYS.filter((key) => Boolean(data.lifeAreas?.[key])).map(
+    (key) => {
+      const entry = data.lifeAreas![key]!;
+      const note = entry.note?.trim();
+      return `${LIFE_AREA_LABELS[key]} : ${LIFE_AREA_STATE_LABELS[entry.state]}${
+        note ? ` — ${note}` : ''
+      }`;
+    },
+  );
   return (
     <div className="space-y-4">
       <p className="rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-stellar-300">
@@ -1498,6 +1734,9 @@ function ReviewStep({
         <ReviewValue label="Date" value={formatBirthDate(data.birthDate)} />
         <ReviewValue label="Heure" value={data.birthTime || 'Non transmise'} />
         <ReviewValue label="Lieu" value={data.birthPlace || 'À compléter'} />
+        {data.usageName.trim() && (
+          <ReviewValue label="Prénom d’usage" value={data.usageName.trim()} />
+        )}
       </ReviewSection>
       <ReviewSection title="Ce qui vous amène" onEdit={() => onEdit(1)}>
         {data.openReading && (
@@ -1513,13 +1752,14 @@ function ReviewStep({
         />
       </ReviewSection>
       <ReviewSection title="Votre contexte" onEdit={() => onEdit(2)}>
-        {transmittedContext.length ? (
-          transmittedContext.map(([label, value]) => (
-            <ReviewValue key={label} label={label} value={value} />
-          ))
-        ) : (
-          <p>Aucun contexte personnel supplémentaire transmis.</p>
+        {weatherEntries.length > 0 && (
+          <ReviewValue label="Météo de vie" value={weatherEntries.join('\n')} />
         )}
+        {transmittedContext.length
+          ? transmittedContext.map(([label, value]) => (
+              <ReviewValue key={label} label={label} value={value} />
+            ))
+          : weatherEntries.length === 0 && <p>Aucun contexte personnel supplémentaire transmis.</p>}
         <ReviewValue label="Style" value={styleLabel(data.deliveryStyle)} />
         <ReviewValue label="Niveau de détail" value={paceLabel(data.pace)} />
       </ReviewSection>

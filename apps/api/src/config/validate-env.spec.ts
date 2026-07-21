@@ -16,6 +16,7 @@ const validProductionConfig = {
   SMTP_PASS: 'secure-password',
   MAIL_FROM: 'noreply@oraclelumira.com',
   GEMINI_API_KEY: 'gemini-validvalue',
+  OPENAI_API_KEY: 'sk-openai-validvalue',
   GOTENBERG_URL: 'http://gotenberg.internal:3000',
   AWS_ACCESS_KEY_ID: 'AKIAVALIDVALUE',
   AWS_SECRET_ACCESS_KEY: 'aws-secret-value',

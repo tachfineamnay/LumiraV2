@@ -5,6 +5,7 @@ import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { AudioGenerationService } from '../../services/factory/AudioGenerationService';
 import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-photo.service';
+import { S3Service } from '../uploads/s3.service';
 
 describe('ExpertController private photos', () => {
   const photoService = {
@@ -16,6 +17,7 @@ describe('ExpertController private photos', () => {
     {} as AdminSettingsService,
     {} as AudioGenerationService,
     photoService,
+    {} as S3Service,
   );
 
   beforeEach(() => jest.clearAllMocks());

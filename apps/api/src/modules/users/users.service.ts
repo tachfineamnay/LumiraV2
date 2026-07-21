@@ -305,6 +305,7 @@ export class UsersService {
       where: { userId },
       create: {
         userId,
+        usageName: data.usageName || null,
         birthDate: data.birthDate || null,
         birthTime: data.birthTime || null,
         birthPlace: data.birthPlace || null,
@@ -314,6 +315,10 @@ export class UsersService {
         palmPhotoUrl: data.palmPhotoUrl || null,
         highs: data.highs || null,
         lows: data.lows || null,
+        lifeEvents: data.lifeEvents || null,
+        lifeAreas: data.lifeAreas
+          ? (JSON.parse(JSON.stringify(data.lifeAreas)) as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
         strongSide: data.strongSide || null,
         weakSide: data.weakSide || null,
         strongZone: data.strongZone || null,
@@ -327,6 +332,7 @@ export class UsersService {
         submittedAt: data.profileCompleted ? new Date() : null,
       },
       update: {
+        ...(data.usageName !== undefined && { usageName: data.usageName }),
         ...(data.birthDate !== undefined && { birthDate: data.birthDate }),
         ...(data.birthTime !== undefined && { birthTime: data.birthTime }),
         ...(data.birthPlace !== undefined && { birthPlace: data.birthPlace }),
@@ -336,6 +342,12 @@ export class UsersService {
         ...(data.palmPhotoUrl !== undefined && { palmPhotoUrl: data.palmPhotoUrl }),
         ...(data.highs !== undefined && { highs: data.highs }),
         ...(data.lows !== undefined && { lows: data.lows }),
+        ...(data.lifeEvents !== undefined && { lifeEvents: data.lifeEvents }),
+        ...(data.lifeAreas !== undefined && {
+          lifeAreas: data.lifeAreas
+            ? (JSON.parse(JSON.stringify(data.lifeAreas)) as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+        }),
         ...(data.strongSide !== undefined && { strongSide: data.strongSide }),
         ...(data.weakSide !== undefined && { weakSide: data.weakSide }),
         ...(data.strongZone !== undefined && { strongZone: data.strongZone }),

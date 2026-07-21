@@ -16,9 +16,10 @@ export type DeskReadingSource = {
   profile: UserProfile | undefined;
 };
 
-type IntakeProfileField = Exclude<keyof UserProfile, 'id'>;
+type IntakeProfileField = Exclude<keyof UserProfile, 'id' | 'lifeAreas'>;
 
 const SNAPSHOT_FIELDS: IntakeProfileField[] = [
+  'usageName',
   'birthDate',
   'birthTime',
   'birthPlace',
@@ -28,6 +29,7 @@ const SNAPSHOT_FIELDS: IntakeProfileField[] = [
   'palmPhotoUrl',
   'highs',
   'lows',
+  'lifeEvents',
   'fears',
   'rituals',
   'ailments',
@@ -49,6 +51,19 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function snapshotLifeAreas(value: unknown): UserProfile['lifeAreas'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const areas: NonNullable<UserProfile['lifeAreas']> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const state = nonEmptyString((entry as Record<string, unknown>).state);
+    if (!state) continue;
+    const note = nonEmptyString((entry as Record<string, unknown>).note);
+    areas[key] = note ? { state, note } : { state };
+  }
+  return Object.keys(areas).length > 0 ? areas : undefined;
+}
+
 function snapshotProfile(value: unknown, fallbackId: string): UserProfile | undefined {
   const snapshot = asRecord(value);
   if (Object.keys(snapshot).length === 0) return undefined;
@@ -67,6 +82,7 @@ function snapshotProfile(value: unknown, fallbackId: string): UserProfile | unde
       profile[field] = nonEmptyString(fieldValue);
     }
   }
+  profile.lifeAreas = snapshotLifeAreas(snapshot.lifeAreas);
   return profile;
 }
 

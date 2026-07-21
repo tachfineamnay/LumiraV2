@@ -51,6 +51,36 @@ function paceLabel(value: number): string {
   return 'Lecture équilibrée';
 }
 
+const LIFE_AREA_DISPLAY: Record<string, string> = {
+  relations: 'Relations & famille',
+  travail: 'Travail & argent',
+  corps: 'Corps & énergie',
+  creativite: 'Créativité & élans',
+  interieur: 'Vie intérieure',
+  direction: 'Direction de vie',
+};
+
+const LIFE_AREA_STATE_DISPLAY: Record<string, string> = {
+  FLUIDE: 'Fluide',
+  TENDU: 'Tendu',
+  EN_QUESTION: 'En question',
+};
+
+function formatLifeAreas(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  const lines: string[] = [];
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const state = text((entry as Record<string, unknown>).state);
+    if (!state) continue;
+    const note = text((entry as Record<string, unknown>).note);
+    const label = LIFE_AREA_DISPLAY[key] ?? key;
+    const stateLabel = LIFE_AREA_STATE_DISPLAY[state] ?? state;
+    lines.push(note ? `${label} : ${stateLabel} — ${note}` : `${label} : ${stateLabel}`);
+  }
+  return lines.join('\n');
+}
+
 function SummaryCard({
   icon,
   title,
@@ -159,7 +189,17 @@ export default function ReadingDossierPage() {
     : (profile?.pace ?? draft.pace);
   const pace = typeof rawPace === 'number' ? rawPace : 50;
 
+  const usageName = pickField(intakeIsAuthoritative, profile?.usageName, text(draft.usageName));
+  const lifeAreasRaw = intakeIsAuthoritative
+    ? (draft.lifeAreas ?? profile?.lifeAreas)
+    : (profile?.lifeAreas ?? draft.lifeAreas);
+  const lifeAreasSummary = formatLifeAreas(lifeAreasRaw);
+
   const contextFields = [
+    {
+      label: 'Météo de vie',
+      value: lifeAreasSummary,
+    },
     {
       label: 'Ce qui vous porte',
       value: pickField(intakeIsAuthoritative, profile?.highs, text(draft.highs)),
@@ -167,6 +207,10 @@ export default function ReadingDossierPage() {
     {
       label: 'Ce qui vous freine',
       value: pickField(intakeIsAuthoritative, profile?.lows, text(draft.lows)),
+    },
+    {
+      label: 'Une période qui a compté',
+      value: pickField(intakeIsAuthoritative, profile?.lifeEvents, text(draft.lifeEvents)),
     },
     {
       label: 'Contexte corporel déclaré',
@@ -306,6 +350,12 @@ export default function ReadingDossierPage() {
                 <MapPin className="h-4 w-4 text-stellar-600" />
                 {birthPlace || 'Lieu non renseigné'}
               </p>
+              {usageName && (
+                <p className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-stellar-600" />
+                  Appelé(e) {usageName}
+                </p>
+              )}
             </div>
           </SummaryCard>
 

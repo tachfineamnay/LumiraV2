@@ -1811,7 +1811,7 @@ MESSAGE DE L'EXPERT:`;
           insightsTotal
         : 0;
 
-    // Profile completeness (key profile fields)
+    // Profile completeness, restricted to fields the active intake form can fill.
     const profileKeyFields = [
       'birthDate',
       'birthTime',
@@ -1822,10 +1822,11 @@ MESSAGE DE L'EXPERT:`;
       'palmPhotoUrl',
       'highs',
       'lows',
+      'lifeEvents',
+      'lifeAreas',
       'fears',
       'rituals',
-      'strongSide',
-      'weakSide',
+      'ailments',
     ] as const;
     const profileFilledCount = client.profile
       ? profileKeyFields.filter(
