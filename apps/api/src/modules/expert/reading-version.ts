@@ -42,8 +42,61 @@ function asStringArray(value: unknown): string[] {
     : [];
 }
 
+function decodeHtmlEntities(value: string): string {
+  const named: Record<string, string> = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    nbsp: ' ',
+    quot: '"',
+  };
+
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+    const normalized = entity.toLowerCase();
+    if (normalized.startsWith('#x')) {
+      const codePoint = Number.parseInt(normalized.slice(2), 16);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+    if (normalized.startsWith('#')) {
+      const codePoint = Number.parseInt(normalized.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+    return named[normalized] ?? match;
+  });
+}
+
 /**
- * Converts the Studio's text into the document body rendered in the PDF.  This
+ * Tiptap sends HTML to the API. Convert its safe document subset into plain,
+ * structured lines before the canonical reading is sealed. Without this step,
+ * literal <h1>/<p> tags were escaped and printed inside the customer PDF.
+ */
+function studioHtmlToText(content: string): string {
+  if (!/<\/?(?:h[1-6]|p|div|li|ul|ol|br|blockquote)\b/i.test(content)) {
+    return content;
+  }
+
+  const normalized = content
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*h[1-6][^>]*>/gi, '\n# ')
+    .replace(/<\s*\/\s*h[1-6]\s*>/gi, '\n\n')
+    .replace(/<\s*li[^>]*>/gi, '\n- ')
+    .replace(/<\s*\/\s*li\s*>/gi, '\n')
+    .replace(/<\s*\/?\s*(?:p|div|blockquote|ul|ol)[^>]*>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\r/g, '');
+
+  return decodeHtmlEntities(normalized)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line, index, lines) => line || (index > 0 && lines[index - 1]))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Converts the Studio's text into the document body rendered in the PDF. This
  * deliberately does not reuse the generated draft body: after an expert edit,
  * the Studio input is the sole source of customer-facing prose.
  */
@@ -52,7 +105,8 @@ export function splitStudioContent(content: string): {
   sections: CanonicalPdfSection[];
   conclusion: string;
 } {
-  const lines = content
+  const normalizedContent = studioHtmlToText(content);
+  const lines = normalizedContent
     .trim()
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -101,7 +155,7 @@ export function splitStudioContent(content: string): {
     sections.push({
       domain: 'Guidance',
       title: 'Votre lecture',
-      content: content.trim(),
+      content: normalizedContent.trim(),
     });
   }
 
@@ -134,7 +188,7 @@ export function buildStudioReadingVersion(
       key_blockage: asString(synthesis.key_blockage),
     },
     timeline: Array.isArray(source.timeline) ? source.timeline : [],
-    lecture: finalContent.trim(),
+    lecture: studioHtmlToText(finalContent).trim(),
   };
 }
 
