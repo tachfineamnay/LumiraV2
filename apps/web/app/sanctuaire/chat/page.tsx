@@ -118,9 +118,7 @@ export default function GuidancePage() {
       setRequests(requestList);
       setReadings(readingList);
     } catch {
-      setError(
-        'Vos demandes ne peuvent pas être chargées. Vérifiez votre connexion puis réessayez.',
-      );
+      setError('Vos demandes ne peuvent pas être chargées. Vérifiez votre connexion puis réessayez.');
     } finally {
       setIsLoading(false);
     }
@@ -187,20 +185,20 @@ export default function GuidancePage() {
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 pb-28 sm:px-6 sm:py-8 lg:pb-8">
-      <header className="rounded-[1.75rem] border border-paper-line bg-paper p-5 text-paper-ink shadow-paper sm:p-6">
+      <header className="rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-horizon-400/20 text-horizon-600">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-horizon-400/15 text-horizon-300">
               <MessageCircle className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-600">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
                 Sanctuaire Lumira
               </p>
-              <h1 className="mt-1 font-playfair text-2xl italic text-paper-ink">
+              <h1 className="mt-1 font-playfair text-2xl italic text-stellar-100">
                 Demander un éclairage
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-paper-subtle">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
                 Votre demande est transmise à l’équipe Lumira et reste liée à votre dossier. Il ne
                 s’agit pas d’une réponse automatique.
               </p>
@@ -226,29 +224,29 @@ export default function GuidancePage() {
       )}
 
       {showComposer && (
-        <section className="mt-4 rounded-[1.75rem] border border-horizon-500/30 bg-paper p-4 text-paper-ink shadow-paper sm:p-6">
+        <section className="mt-4 rounded-3xl border border-horizon-400/25 bg-abyss-600/70 p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-playfair text-xl italic text-paper-ink">Nouvelle demande</h2>
-              <p className="mt-1 text-xs text-paper-subtle">Décrivez un seul sujet clairement.</p>
+              <h2 className="font-playfair text-xl italic text-stellar-100">Nouvelle demande</h2>
+              <p className="mt-1 text-xs text-stellar-500">Décrivez un seul sujet clairement.</p>
             </div>
             <button
               type="button"
               onClick={() => setShowComposer(false)}
               aria-label="Fermer le formulaire"
-              className="grid h-10 w-10 place-items-center rounded-xl text-paper-subtle hover:bg-paper-muted"
+              className="grid h-10 w-10 place-items-center rounded-xl text-stellar-400 hover:bg-white/[0.05]"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <label className="text-sm text-paper-soft">
+            <label className="text-sm text-stellar-300">
               Type de demande
               <select
                 value={category}
                 onChange={(event) => setCategory(event.target.value as RequestCategory)}
-                className="mt-2 w-full rounded-xl border border-paper-line bg-paper-elevated px-3 py-3 text-paper-ink outline-none focus:border-horizon-400/60"
+                className="mt-2 w-full rounded-xl border border-white/[0.1] bg-abyss-700 px-3 py-3 text-stellar-100 outline-none focus:border-horizon-400/50"
               >
                 {CATEGORY_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -257,12 +255,12 @@ export default function GuidancePage() {
                 ))}
               </select>
             </label>
-            <label className="text-sm text-paper-soft">
+            <label className="text-sm text-stellar-300">
               Lecture concernée, facultatif
               <select
                 value={relatedOrderId}
                 onChange={(event) => setRelatedOrderId(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-paper-line bg-paper-elevated px-3 py-3 text-paper-ink outline-none focus:border-horizon-400/60"
+                className="mt-2 w-full rounded-xl border border-white/[0.1] bg-abyss-700 px-3 py-3 text-stellar-100 outline-none focus:border-horizon-400/50"
               >
                 <option value="">Aucune lecture précise</option>
                 {readings.map((reading) => (
@@ -274,17 +272,17 @@ export default function GuidancePage() {
             </label>
           </div>
 
-          <label className="mt-4 block text-sm text-paper-soft">
+          <label className="mt-4 block text-sm text-stellar-300">
             Sujet
             <input
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
               maxLength={120}
               placeholder="Ex. Comprendre le passage sur ma mission"
-              className="mt-2 w-full rounded-xl border border-paper-line bg-paper-elevated px-3 py-3 text-paper-ink placeholder:text-paper-subtle outline-none focus:border-horizon-400/60"
+              className="mt-2 w-full rounded-xl border border-white/[0.1] bg-abyss-700 px-3 py-3 text-stellar-100 placeholder:text-stellar-600 outline-none focus:border-horizon-400/50"
             />
           </label>
-          <label className="mt-4 block text-sm text-paper-soft">
+          <label className="mt-4 block text-sm text-stellar-300">
             Votre message
             <textarea
               value={content}
@@ -292,7 +290,7 @@ export default function GuidancePage() {
               rows={5}
               maxLength={5000}
               placeholder="Expliquez ce que vous souhaitez clarifier et le contexte utile."
-              className="mt-2 w-full resize-y rounded-xl border border-paper-line bg-paper-elevated px-3 py-3 text-paper-ink placeholder:text-paper-subtle outline-none focus:border-horizon-400/60"
+              className="mt-2 w-full resize-y rounded-xl border border-white/[0.1] bg-abyss-700 px-3 py-3 text-stellar-100 placeholder:text-stellar-600 outline-none focus:border-horizon-400/50"
             />
           </label>
           <div className="mt-4 flex justify-end">
@@ -315,29 +313,29 @@ export default function GuidancePage() {
 
       <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.55fr)]">
         <aside
-          className={`overflow-hidden rounded-[1.75rem] border border-paper-line bg-paper text-paper-ink shadow-paper-soft ${
+          className={`overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 ${
             selected ? 'hidden lg:block' : 'block'
           }`}
         >
-          <div className="border-b border-paper-line px-4 py-3">
-            <h2 className="text-sm font-semibold text-paper-ink">Mes demandes</h2>
+          <div className="border-b border-white/[0.06] px-4 py-3">
+            <h2 className="text-sm font-semibold text-stellar-200">Mes demandes</h2>
           </div>
           {isLoading ? (
             <RequestListSkeleton />
           ) : requests.length === 0 ? (
             <div className="p-8 text-center">
-              <MessageCircle className="mx-auto h-7 w-7 text-paper-subtle" />
-              <p className="mt-3 text-sm text-paper-subtle">Aucune demande pour le moment.</p>
+              <MessageCircle className="mx-auto h-7 w-7 text-stellar-600" />
+              <p className="mt-3 text-sm text-stellar-500">Aucune demande pour le moment.</p>
               <button
                 type="button"
                 onClick={() => setShowComposer(true)}
-                className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-paper-ink/15 px-4 text-sm text-paper-soft hover:bg-paper-muted"
+                className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/[0.1] px-4 text-sm text-stellar-200 hover:bg-white/[0.05]"
               >
                 <Plus className="h-4 w-4" /> Créer ma première demande
               </button>
             </div>
           ) : (
-            <div className="max-h-[calc(100dvh-17rem)] divide-y divide-paper-line overflow-y-auto lg:max-h-none">
+            <div className="max-h-[calc(100dvh-17rem)] divide-y divide-white/[0.06] overflow-y-auto lg:max-h-none">
               {requests.map((item) => {
                 const itemStatus = statusPresentation(item.status);
                 const active = selected?.id === item.id;
@@ -347,15 +345,15 @@ export default function GuidancePage() {
                     type="button"
                     onClick={() => void loadDetail(item.id)}
                     className={`flex min-h-[72px] w-full items-center gap-3 px-4 py-4 text-left transition-colors ${
-                      active ? 'bg-horizon-400/15' : 'hover:bg-paper-muted'
+                      active ? 'bg-horizon-400/10' : 'hover:bg-white/[0.04]'
                     }`}
                   >
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${itemStatus.dot}`} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-paper-ink">
+                      <span className="block truncate text-sm font-medium text-stellar-200">
                         {item.subject}
                       </span>
-                      <span className="mt-1 block text-xs text-paper-subtle">
+                      <span className="mt-1 block text-xs text-stellar-500">
                         {itemStatus.label} · {formatDate(item.lastMessageAt)}
                       </span>
                     </span>
@@ -364,7 +362,7 @@ export default function GuidancePage() {
                         {item.unreadCount}
                       </span>
                     )}
-                    <ChevronRight className="h-4 w-4 shrink-0 text-paper-subtle" />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-stellar-600" />
                   </button>
                 );
               })}
@@ -373,7 +371,7 @@ export default function GuidancePage() {
         </aside>
 
         <section
-          className={`min-h-[min(500px,calc(100dvh-10rem))] min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-paper-line bg-paper text-paper-ink shadow-paper-soft lg:flex lg:min-h-[500px] ${
+          className={`min-h-[min(500px,calc(100dvh-10rem))] min-w-0 flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-600/50 lg:flex lg:min-h-[500px] ${
             selected ? 'flex' : 'hidden'
           }`}
         >
@@ -384,30 +382,30 @@ export default function GuidancePage() {
           ) : !selected ? (
             <div className="grid flex-1 place-items-center p-8 text-center">
               <div>
-                <MessageCircle className="mx-auto h-8 w-8 text-paper-subtle" />
-                <p className="mt-4 text-sm text-paper-subtle">
+                <MessageCircle className="mx-auto h-8 w-8 text-stellar-600" />
+                <p className="mt-4 text-sm text-stellar-500">
                   Sélectionnez une demande ou créez-en une nouvelle.
                 </p>
               </div>
             </div>
           ) : (
             <>
-              <div className="border-b border-paper-line px-4 py-4 sm:px-6">
+              <div className="border-b border-white/[0.06] px-4 py-4 sm:px-6">
                 <div className="flex items-start gap-3">
                   <button
                     type="button"
                     onClick={() => setSelected(null)}
                     aria-label="Retour à mes demandes"
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-paper-line text-paper-subtle hover:bg-paper-muted lg:hidden"
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] text-stellar-400 hover:bg-white/[0.05] lg:hidden"
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>
                   <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="break-words font-playfair text-xl italic text-paper-ink">
+                      <h2 className="break-words font-playfair text-xl italic text-stellar-100">
                         {selected.subject}
                       </h2>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-paper-subtle">
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stellar-500">
                         <span className={`rounded-full px-2 py-1 ${status?.badge}`}>
                           {status?.label}
                         </span>
@@ -443,8 +441,8 @@ export default function GuidancePage() {
                         <div
                           className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[76%] ${
                             clientMessage
-                              ? 'rounded-br-sm bg-horizon-400/25 text-paper-ink'
-                              : 'rounded-bl-sm bg-serenity-200/25 text-paper-soft'
+                              ? 'rounded-br-sm bg-horizon-400/15 text-stellar-100'
+                              : 'rounded-bl-sm bg-white/[0.06] text-stellar-300'
                           }`}
                         >
                           {!clientMessage && (
@@ -453,7 +451,7 @@ export default function GuidancePage() {
                             </p>
                           )}
                           <p className="whitespace-pre-wrap">{message.content}</p>
-                          <time className="mt-2 block text-right text-[10px] text-paper-subtle">
+                          <time className="mt-2 block text-right text-[10px] text-stellar-600">
                             {formatDateTime(message.createdAt)}
                           </time>
                         </div>
@@ -463,13 +461,13 @@ export default function GuidancePage() {
                 </div>
               </div>
 
-              <div className="border-t border-paper-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
+              <div className="border-t border-white/[0.06] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
                 {selected.status === 'ARCHIVED' ? (
-                  <p className="rounded-xl bg-paper-muted p-3 text-center text-xs text-paper-subtle">
+                  <p className="rounded-xl bg-white/[0.04] p-3 text-center text-xs text-stellar-500">
                     Cette demande est archivée.
                   </p>
                 ) : (
-                  <div className="flex items-end gap-2 rounded-2xl border border-paper-line bg-paper-elevated p-2 focus-within:border-horizon-400/60">
+                  <div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-abyss-700 p-2 focus-within:border-horizon-400/50">
                     <label className="sr-only" htmlFor="guidance-reply">
                       Ajouter un message
                     </label>
@@ -484,7 +482,7 @@ export default function GuidancePage() {
                           ? 'Ajouter un message pour rouvrir la demande…'
                           : 'Ajouter une précision ou répondre…'
                       }
-                      className="min-h-[48px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-paper-ink placeholder:text-paper-subtle outline-none"
+                      className="min-h-[48px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-stellar-100 placeholder:text-stellar-600 outline-none"
                     />
                     <button
                       type="button"
@@ -502,7 +500,7 @@ export default function GuidancePage() {
                   </div>
                 )}
                 {selected.status === 'WAITING_EXPERT' && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-paper-subtle">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-stellar-500">
                     <Clock3 className="h-3.5 w-3.5" /> Votre message est en attente de réponse de
                     l’équipe.
                   </p>
@@ -518,7 +516,7 @@ export default function GuidancePage() {
 
 function RequestListSkeleton() {
   return (
-    <div className="animate-pulse divide-y divide-paper-line">
+    <div className="animate-pulse divide-y divide-white/[0.06]">
       {[0, 1, 2].map((item) => (
         <div key={item} className="flex min-h-[72px] items-center gap-3 px-4 py-4">
           <div className="h-2.5 w-2.5 rounded-full bg-white/[0.08]" />
@@ -562,7 +560,7 @@ function statusPresentation(status: RequestStatus) {
     ARCHIVED: {
       label: 'Archivée',
       dot: 'bg-stellar-600',
-      badge: 'bg-paper-muted text-paper-subtle',
+      badge: 'bg-white/[0.06] text-stellar-400',
     },
   };
   return map[status];

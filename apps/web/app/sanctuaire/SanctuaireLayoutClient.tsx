@@ -42,10 +42,10 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <SanctuaireGuard>
-      <div className="sanctuaire-shell starfield min-h-dvh text-stellar-100 selection:bg-horizon-400/20">
+      <div className="starfield min-h-dvh bg-abyss-700 text-stellar-100 selection:bg-horizon-400/20">
         <SanctuaireSidebar />
         <div className="min-h-dvh lg:ml-64">
-          <header className="sticky top-0 z-40 flex min-h-[64px] items-center justify-between border-b border-white/[0.06] bg-abyss-800/80 px-3 py-3 backdrop-blur-xl sm:px-5">
+          <header className="sticky top-0 z-40 flex min-h-[64px] items-center justify-between border-b border-white/[0.05] bg-abyss-700/90 px-3 py-3 backdrop-blur-xl sm:px-5">
             <Link
               href="/sanctuaire"
               aria-label="Accueil du Sanctuaire Lumira"

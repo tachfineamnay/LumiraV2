@@ -123,18 +123,18 @@ export function ReadingPdfViewer({
 
   return (
     <div
-      className={`flex min-h-[70vh] flex-col overflow-hidden rounded-[1.75rem] border border-paper-line bg-paper text-paper-ink shadow-paper ${className}`}
+      className={`flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-900 ${className}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-paper-line bg-paper-elevated/95 px-4 py-3 sm:px-6">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-abyss-800/90 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-horizon-400/20 text-horizon-600">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-horizon-400/20 text-horizon-300">
             <FileText className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h1 className="truncate font-playfair text-xl italic text-paper-ink sm:text-2xl">
+            <h1 className="truncate font-playfair text-xl italic text-stellar-100 sm:text-2xl">
               {title}
             </h1>
-            <p className="text-xs text-paper-subtle">
+            <p className="text-xs text-stellar-500">
               {numPages > 0 ? `${numPages} page${numPages > 1 ? 's' : ''}` : 'Document PDF'}
             </p>
           </div>
@@ -145,19 +145,19 @@ export function ReadingPdfViewer({
             type="button"
             onClick={handleZoomOut}
             disabled={scale <= 0.7}
-            className="grid h-10 w-10 place-items-center rounded-lg text-paper-soft hover:bg-paper-muted disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
             aria-label="Zoom arrière"
           >
             <ZoomOut className="h-4 w-4" />
           </button>
-          <span className="min-w-[3rem] text-center text-xs tabular-nums text-paper-subtle">
+          <span className="min-w-[3rem] text-center text-xs tabular-nums text-stellar-500">
             {Math.round(scale * 100)}%
           </span>
           <button
             type="button"
             onClick={handleZoomIn}
             disabled={scale >= 2.2}
-            className="grid h-10 w-10 place-items-center rounded-lg text-paper-soft hover:bg-paper-muted disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
             aria-label="Zoom avant"
           >
             <ZoomIn className="h-4 w-4" />
@@ -166,7 +166,7 @@ export function ReadingPdfViewer({
             type="button"
             onClick={handleDownload}
             disabled={!blobUrl}
-            className="ml-1 grid h-10 w-10 place-items-center rounded-lg text-paper-soft hover:bg-paper-muted disabled:opacity-40"
+            className="ml-1 grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
             aria-label="Télécharger"
           >
             <Download className="h-4 w-4" />
@@ -175,7 +175,7 @@ export function ReadingPdfViewer({
             type="button"
             onClick={handleOpenExternal}
             disabled={!blobUrl}
-            className="grid h-10 w-10 place-items-center rounded-lg text-paper-soft hover:bg-paper-muted disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
             aria-label="Ouvrir dans un nouvel onglet"
           >
             <ExternalLink className="h-4 w-4" />
@@ -183,12 +183,12 @@ export function ReadingPdfViewer({
         </div>
       </div>
 
-      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto bg-paper-muted/60">
+      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto bg-abyss-950">
         {isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-paper/80">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-abyss-900/80">
             <div className="px-4 text-center">
-              <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-horizon-500" />
-              <p className="text-sm text-paper-subtle">Chargement de votre lecture...</p>
+              <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-horizon-400" />
+              <p className="text-sm text-stellar-400">Chargement de votre lecture...</p>
             </div>
           </div>
         )}
@@ -196,13 +196,13 @@ export function ReadingPdfViewer({
         {error && !isLoading && (
           <div className="flex min-h-[50vh] items-center justify-center px-4">
             <div className="max-w-sm text-center">
-              <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-500" />
-              <p className="mb-1 font-medium text-paper-ink">Impossible d&apos;afficher le PDF</p>
-              <p className="mb-4 text-sm text-paper-subtle">{error}</p>
+              <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-400" />
+              <p className="mb-1 font-medium text-white">Impossible d&apos;afficher le PDF</p>
+              <p className="mb-4 text-sm text-stellar-400">{error}</p>
               <button
                 type="button"
                 onClick={() => setReloadKey((k) => k + 1)}
-                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-2.5 text-sm font-medium text-abyss-900 hover:bg-horizon-300"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-horizon-400/20 px-4 py-2.5 text-sm font-medium text-horizon-300 hover:bg-horizon-400/30"
               >
                 <RefreshCw className="h-4 w-4" />
                 Réessayer
@@ -234,7 +234,7 @@ export function ReadingPdfViewer({
                   width={pageWidth * scale}
                   renderTextLayer
                   renderAnnotationLayer
-                  className="overflow-hidden rounded-sm bg-white shadow-paper"
+                  className="overflow-hidden rounded-sm bg-white shadow-2xl"
                 />
               ))}
             </Document>
