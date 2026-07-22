@@ -36,9 +36,6 @@ describe('PdfFactory reading template', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedAxios.isAxiosError.mockImplementation(
-      (error: unknown): error is never => Boolean((error as { isAxiosError?: boolean })?.isAxiosError),
-    );
   });
 
   it('builds a navigable, actionable reading from validated content', async () => {
