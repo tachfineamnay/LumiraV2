@@ -20,6 +20,7 @@ import { UploadsModule } from '../uploads/uploads.module';
 import { ProductionControlService } from './production-control.service';
 import { ProductionQueueInterceptor } from './production-queue.interceptor';
 import { ProductionCancelInterceptor } from './production-cancel.interceptor';
+import { DeliveryRecoveryInterceptor } from './delivery-recovery.interceptor';
 import { ProductionPaidRecoveryService } from './production-paid-recovery.service';
 import { ClientControlService } from './client-control.service';
 
@@ -66,6 +67,10 @@ import { ClientControlService } from './client-control.service';
     {
       provide: APP_INTERCEPTOR,
       useClass: ProductionCancelInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: DeliveryRecoveryInterceptor,
     },
   ],
   exports: [
