@@ -37,10 +37,7 @@ type WorkflowPresentation = {
   icon: ReactNode;
 };
 
-const WORKFLOW_PRESENTATIONS: Record<
-  OrderControlCenter['workflowState'],
-  WorkflowPresentation
-> = {
+const WORKFLOW_PRESENTATIONS: Record<OrderControlCenter['workflowState'], WorkflowPresentation> = {
   WAITING_CLIENT: {
     title: 'Éléments client incomplets',
     description: 'La production attend la validation des éléments essentiels.',
@@ -59,7 +56,8 @@ const WORKFLOW_PRESENTATIONS: Record<
   },
   IN_PRODUCTION: {
     title: 'Production serveur en cours',
-    description: 'Vous pouvez quitter cette commande : le traitement continue.',
+    description:
+      'Estimation 2 à 5 minutes. Vous pouvez quitter : le traitement continue côté serveur.',
     border: 'border-blue-500/30',
     background: 'bg-blue-500/5',
     iconBg: 'bg-blue-500/15 text-blue-600',
@@ -180,7 +178,9 @@ export function OrderControlStrip({ orderId }: { orderId: string }) {
   return (
     <section className={`flex-shrink-0 border-b ${presentation.border} ${presentation.background}`}>
       <div className="flex min-h-[56px] flex-wrap items-center gap-3 px-3 py-2 sm:px-4">
-        <div className={`flex h-8 w-8 items-center justify-center rounded-full ${presentation.iconBg}`}>
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-full ${presentation.iconBg}`}
+        >
           {presentation.icon}
         </div>
 

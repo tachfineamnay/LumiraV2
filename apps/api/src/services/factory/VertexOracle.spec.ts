@@ -332,4 +332,40 @@ describe('VertexOracle OpenAI-only runtime', () => {
       expect.objectContaining({ agent: 'SCRIBE', status: 'ERROR' }),
     );
   });
+
+  it('treats local timeout and abort as non-retryable', () => {
+    expect(service.isRetryableProviderError(new Error('[SCRIBE] timeout après 300000ms'))).toBe(
+      false,
+    );
+    expect(service.isRetryableProviderError(new Error('The operation was aborted'))).toBe(false);
+    expect(
+      service.isRetryableProviderError(Object.assign(new Error('rate limited'), { status: 429 })),
+    ).toBe(true);
+  });
+
+  it('does not retry after a local timeout (single provider attempt)', async () => {
+    let attempts = 0;
+    await expect(
+      (
+        service as unknown as {
+          executeWithRetry: <T>(
+            agent: string,
+            operation: (signal: AbortSignal) => Promise<T>,
+            timeoutMs: number,
+          ) => Promise<T>;
+        }
+      ).executeWithRetry(
+        'SCRIBE',
+        async (signal) => {
+          attempts += 1;
+          await new Promise<never>((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+          });
+          return 'never' as never;
+        },
+        20,
+      ),
+    ).rejects.toThrow(/timeout après 20ms/);
+    expect(attempts).toBe(1);
+  });
 });

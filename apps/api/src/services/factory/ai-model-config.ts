@@ -87,9 +87,7 @@ const REASONING_VALUES = new Set(['low', 'medium', 'high']);
 const VERBOSITY_VALUES = new Set(['low', 'medium', 'high']);
 const ALLOWED_PROVIDERS = new Set<AiProvider>(['openai', 'vertex', 'gemini']);
 const ALLOWED_MODES = new Set<AiProviderMode>(['openai_only', 'per_agent']);
-const OPENAI_MODELS = new Set<string>(OPENAI_V1_MODELS);
-const VERTEX_MODELS = new Set<string>(VERTEX_V1_MODELS);
-const GEMINI_MODELS = new Set<string>(GEMINI_V1_MODELS);
+// Seed catalogs kept for UI fallback only — not used as hard allowlists.
 
 const DEFAULT_GOOGLE_KNOBS: Record<
   AgentType,
@@ -128,9 +126,10 @@ function finiteNumber(value: unknown): number | undefined {
 }
 
 function isAllowedModel(provider: AiProvider, model: string): boolean {
-  if (provider === 'openai') return OPENAI_MODELS.has(model);
-  if (provider === 'vertex') return VERTEX_MODELS.has(model);
-  return GEMINI_MODELS.has(model);
+  // Soft validation: Desk is source of truth. Any non-empty model id is accepted.
+  // Seed lists remain available as UI fallbacks when live catalogs fail.
+  void provider;
+  return typeof model === 'string' && model.trim().length > 0;
 }
 
 function normalizeAgent(
@@ -162,16 +161,11 @@ function normalizeAgent(
     }
   }
 
-  const requestedModel = typeof value.model === 'string' ? value.model : undefined;
-  const model =
-    requestedModel && isAllowedModel(provider, requestedModel)
-      ? requestedModel
-      : provider === 'openai'
-        ? fallback.model
-        : modelsForProvider(provider)[0];
-
-  if (model !== requestedModel) {
-    issues.push(`${agent}: snapshot non autorisé pour ${provider}, ${model} restauré`);
+  const requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
+  let model = requestedModel;
+  if (!isAllowedModel(provider, model)) {
+    model = provider === 'openai' ? fallback.model : modelsForProvider(provider)[0];
+    issues.push(`${agent}: modèle absent ou invalide, ${model} restauré`);
   }
 
   const enabled = typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled;

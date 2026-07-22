@@ -21,6 +21,7 @@ interface StepBriefingProps {
   isGenerating: boolean;
   onLaunch: (expertPrompt: string, expertInstructions?: string) => void;
   onBack: () => void;
+  onGoToBoard?: () => void;
 }
 
 const QUICK_TAGS = [
@@ -87,7 +88,13 @@ const DELIVERY_STYLE_DISPLAY: Record<string, string> = {
   SYMBOLIQUE_ET_PROFOND: 'Symbolique et profond',
 };
 
-export function StepBriefing({ order, isGenerating, onLaunch, onBack }: StepBriefingProps) {
+export function StepBriefing({
+  order,
+  isGenerating,
+  onLaunch,
+  onBack,
+  onGoToBoard,
+}: StepBriefingProps) {
   const [expertPrompt, setExpertPrompt] = useState(order.expertPrompt || '');
   const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const { user } = order;
@@ -115,44 +122,38 @@ export function StepBriefing({ order, isGenerating, onLaunch, onBack }: StepBrie
     onLaunch(expertPrompt, instructions);
   };
 
-  const canLaunch = expertPrompt.trim().length >= 10;
-
-  // Generation animation
-  if (isGenerating) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <div className="relative w-28 h-28 mx-auto mb-8">
-            <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 animate-ping" />
-            <div className="absolute inset-2 rounded-full border-4 border-amber-500/30 animate-ping [animation-delay:200ms]" />
-            <div
-              className="absolute inset-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 
-                            flex items-center justify-center shadow-xl shadow-amber-500/30"
-            >
-              <Sparkles className="w-10 h-10 text-white animate-pulse" />
-            </div>
-          </div>
-          <h3 className="text-2xl font-bold text-desk-text mb-3">
-            L&apos;Oracle crée la lecture...
-          </h3>
-          <p className="text-desk-muted mb-2">Analyse du profil de {user.firstName} en cours</p>
-          <p className="text-xs text-desk-subtle">
-            <Clock className="w-3 h-3 inline mr-1" />
-            Estimation : 1 à 3 minutes
-          </p>
-          {expertPrompt && (
-            <div className="mt-6 bg-desk-card border border-desk-border rounded-xl p-4 text-left">
-              <p className="text-xs text-amber-600 font-medium mb-1">Vos instructions</p>
-              <p className="text-sm text-desk-muted line-clamp-3">{expertPrompt}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const canLaunch = expertPrompt.trim().length >= 10 && !isGenerating;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {isGenerating && (
+        <div className="flex-shrink-0 border-b border-blue-500/30 bg-blue-500/5 px-4 py-3">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-desk-text">
+                Production en cours pour {user.firstName}
+              </p>
+              <p className="mt-0.5 text-xs text-desk-muted">
+                <Clock className="mr-1 inline h-3 w-3" />
+                Estimation : 2 à 5 minutes — vous pouvez quitter, le job continue côté serveur.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => onGoToBoard?.()}
+                className="inline-flex min-h-10 items-center rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950"
+              >
+                Retour au board
+              </button>
+              <span className="inline-flex min-h-10 items-center rounded-lg border border-desk-border px-3 py-2 text-sm text-desk-muted">
+                Rester sur la commande
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto p-3 sm:p-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">

@@ -78,30 +78,69 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const [showDeleteOrder, setShowDeleteOrder] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
 
-  // Socket for real-time updates
+  const fetchOrder = useCallback(async () => {
+    try {
+      const { data } = await expertApi.get(`/expert/orders/${orderId}`);
+      setOrder(data);
+
+      if (data.generatedContent) {
+        setEditorContent(oracleResponseToHtml(data.generatedContent));
+      }
+
+      setError(null);
+      return data;
+    } catch (err) {
+      setError('Erreur de chargement de la commande');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderId]);
+
+  const fetchOrderRef = useRef(fetchOrder);
+  useEffect(() => {
+    fetchOrderRef.current = fetchOrder;
+  }, [fetchOrder]);
+
+  // Socket — completion is the primary signal (works even after leaving the spinner)
   const { focusOrder, blurOrder } = useSocket({
     onGenerationComplete: (data) => {
-      if (data.orderId === orderId) {
-        if (data.success) {
-          toast.success('Génération terminée !');
-          fetchOrder().then(() => setStep('revision'));
-        } else {
-          toast.error('Échec de la génération', { description: data.error });
-        }
-        setIsGenerating(false);
-        setIsRegenerating(false);
+      if (data.orderId !== orderId) return;
+      if (data.success) {
+        toast.success(`Lecture prête — ${data.orderNumber}`, {
+          description: 'Ouvrir l’étape Révision',
+          action: {
+            label: 'Révision',
+            onClick: () => {
+              void fetchOrderRef.current().then(() => setStep('revision'));
+            },
+          },
+        });
+        void fetchOrderRef.current().then(() => setStep('revision'));
+      } else {
+        toast.error(`Échec génération — ${data.orderNumber}`, {
+          description: data.error || 'Relancez depuis le bandeau Production',
+          action: {
+            label: 'Production',
+            onClick: () => router.push('/admin/production'),
+          },
+        });
+        void fetchOrderRef.current();
       }
+      setIsGenerating(false);
+      setIsRegenerating(false);
     },
   });
 
-  // Polling for generation status (fallback for WebSocket)
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Soft poll while PROCESSING (fallback if socket misses the event)
+  const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollErrorCountRef = useRef(0);
+  const isProductionActive = order?.status === 'PROCESSING' || isGenerating || isRegenerating;
 
   useEffect(() => {
-    if (!isGenerating && !isRegenerating) {
+    if (!isProductionActive) {
       if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
+        clearTimeout(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
       pollErrorCountRef.current = 0;
@@ -136,7 +175,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             data.status === 'COMPLETED' ||
             data.status === 'AWAITING_VALIDATION'
           ) {
-            toast.success('Génération terminée !', {
+            toast.success(`Lecture prête — ${data.orderNumber || order?.orderNumber || ''}`, {
               description: 'La lecture est prête pour révision',
             });
             setIsGenerating(false);
@@ -144,15 +183,24 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             setStep('revision');
             return;
           }
+
+          if (data.status === 'FAILED') {
+            setIsGenerating(false);
+            setIsRegenerating(false);
+            toast.error('Production en échec', {
+              description: 'Consultez le bandeau Production pour relancer.',
+            });
+            return;
+          }
         }
 
         pollIntervalRef.current = setTimeout(poll, getPollingInterval());
       } catch (err: unknown) {
         pollErrorCountRef.current++;
-        const error = err as { response?: { status?: number } };
+        const pollError = err as { response?: { status?: number } };
         console.warn(
           `Polling error (attempt ${pollErrorCountRef.current}):`,
-          error?.response?.status || err,
+          pollError?.response?.status || err,
         );
 
         if (pollErrorCountRef.current >= 5) {
@@ -177,29 +225,8 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         pollIntervalRef.current = null;
       }
     };
-  }, [isGenerating, isRegenerating, orderId, order?.generatedContent, order?.status]);
+  }, [isProductionActive, orderId, order?.generatedContent, order?.status, order?.orderNumber]);
 
-  // Fetch order data
-  const fetchOrder = useCallback(async () => {
-    try {
-      const { data } = await expertApi.get(`/expert/orders/${orderId}`);
-      setOrder(data);
-
-      if (data.generatedContent) {
-        setEditorContent(oracleResponseToHtml(data.generatedContent));
-      }
-
-      setError(null);
-      return data;
-    } catch (err) {
-      setError('Erreur de chargement de la commande');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [orderId]);
-
-  // Load versions
   const loadVersions = useCallback(async () => {
     try {
       const { data } = await expertApi.get(`/expert/orders/${orderId}/versions`);
@@ -209,15 +236,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     }
   }, [orderId]);
 
-  // Initial load — set step based on order status
+  // Resume without loss: PROCESSING stays on briefing; bandeau shows production; leave never aborts
   useEffect(() => {
     fetchOrder().then((data) => {
       if (data) {
-        const initialStep = computeInitialStep(data);
-        setStep(initialStep);
-        if (data.status === 'PROCESSING') {
-          setIsGenerating(true);
-        }
+        setStep(computeInitialStep(data));
       }
     });
     loadVersions();
@@ -235,25 +258,35 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         expertPrompt,
         expertInstructions,
       });
-      toast.success('Génération terminée !');
       await fetchOrder();
-      setStep('revision');
       setIsGenerating(false);
+      toast.success('Lecture lancée — vous pouvez quitter', {
+        description: 'Le traitement continue côté serveur (environ 2 à 5 minutes).',
+        action: {
+          label: 'Retour au board',
+          onClick: () => router.push('/admin/board'),
+        },
+        duration: 8000,
+      });
     } catch (err: unknown) {
-      const error = err as {
+      const launchError = err as {
         code?: string;
         message?: string;
         response?: { data?: { message?: string } };
       };
-      // If timeout or network error, generation may still be running
-      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        toast.info('Génération en cours...', {
-          description: "L'Oracle travaille, veuillez patienter.",
+      if (launchError?.code === 'ECONNABORTED' || launchError?.message?.includes('timeout')) {
+        await fetchOrder();
+        setIsGenerating(false);
+        toast.info('Lecture probablement en file', {
+          description: 'Vous pouvez retourner au board ; le job continue côté serveur.',
+          action: {
+            label: 'Retour au board',
+            onClick: () => router.push('/admin/board'),
+          },
         });
-        // Keep isGenerating true → polling will pick up
       } else {
         toast.error('Erreur lors du lancement', {
-          description: error?.response?.data?.message || error?.message,
+          description: launchError?.response?.data?.message || launchError?.message,
         });
         setIsGenerating(false);
       }
@@ -264,8 +297,17 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     setIsRegenerating(true);
     try {
       await expertApi.post(`/expert/orders/${orderId}/regenerate`);
-      toast.info('Régénération lancée...');
+      await fetchOrder();
+      setIsRegenerating(false);
       setStep('briefing');
+      toast.success('Régénération lancée — vous pouvez quitter', {
+        description: 'Le traitement continue côté serveur.',
+        action: {
+          label: 'Retour au board',
+          onClick: () => router.push('/admin/board'),
+        },
+        duration: 8000,
+      });
     } catch {
       toast.error('Erreur lors de la régénération');
       setIsRegenerating(false);
@@ -447,9 +489,10 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         {step === 'briefing' && (
           <StepBriefing
             order={order}
-            isGenerating={isGenerating || isRegenerating}
+            isGenerating={isGenerating || isRegenerating || order.status === 'PROCESSING'}
             onLaunch={handleLaunch}
             onBack={() => setStep('dossier')}
+            onGoToBoard={() => router.push('/admin/board')}
           />
         )}
 

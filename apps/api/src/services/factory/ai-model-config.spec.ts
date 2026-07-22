@@ -15,7 +15,7 @@ describe('ai-model-config', () => {
     expect(Object.values(normalized.config.agents).every((agent) => agent.enabled)).toBe(true);
   });
 
-  it('accepts per_agent mode with vertex and gemini pinned models', () => {
+  it('accepts per_agent mode with vertex and gemini models', () => {
     const normalized = normalizeAiModelConfig({
       providerMode: 'per_agent',
       agents: {
@@ -47,14 +47,34 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.EDITOR.model).toBe('gemini-2.5-flash');
   });
 
-  it('restores safe pinned defaults for unknown mode and unknown models', () => {
+  it('accepts Desk-chosen model ids outside the seed catalog', () => {
+    const normalized = normalizeAiModelConfig({
+      providerMode: 'openai_only',
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-4o-mini-2024-07-18',
+          temperature: 0.5,
+          topP: 0.9,
+          maxOutputTokens: 8000,
+        },
+      },
+    });
+
+    expect(normalized.issues).toEqual([]);
+    expect(normalized.config.agents.SCRIBE.model).toBe('gpt-4o-mini-2024-07-18');
+  });
+
+  it('restores safe defaults for unknown mode and empty models', () => {
     const normalized = normalizeAiModelConfig({
       providerMode: 'comparison',
       agents: {
         SCRIBE: {
           enabled: true,
           provider: 'gemini',
-          model: 'unknown-model',
+          model: '   ',
           maxOutputTokens: -1,
         },
       },
@@ -65,24 +85,10 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.SCRIBE.provider).toBe('openai');
     expect(normalized.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
     expect(normalized.config.agents.SCRIBE.maxOutputTokens).toBe(24000);
-    expect(normalized.config.agents.GUIDE.model).toBe('gpt-5.4-2026-03-05');
-    expect(normalized.config.agents.ONIRIQUE.enabled).toBe(true);
   });
 
-  it('rejects aliases and invalid configuration in strict validation mode', () => {
+  it('rejects invalid configuration in strict validation mode', () => {
     expect(() => validateAiModelConfig({ providerMode: 'comparison' })).toThrow();
-    expect(() =>
-      validateAiModelConfig({
-        ...DEFAULT_AI_MODEL_CONFIG,
-        agents: {
-          ...DEFAULT_AI_MODEL_CONFIG.agents,
-          SCRIBE: {
-            ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
-            model: 'gpt-5.5',
-          },
-        },
-      }),
-    ).toThrow();
   });
 
   it('estimates alias and pinned snapshot costs consistently', () => {

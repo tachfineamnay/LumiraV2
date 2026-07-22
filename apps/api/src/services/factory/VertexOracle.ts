@@ -593,7 +593,10 @@ export class VertexOracle implements OnModuleInit {
             ? error
             : new Error(String(error));
         this.logger.error(`[${agent}] ${lastError.message}`);
-        if (attempt >= maxAttempts || !this.isRetryableProviderError(lastError)) break;
+        // Local timeout/abort must not retry — OpenAI may already have billed the first call.
+        if (timedOut || attempt >= maxAttempts || !this.isRetryableProviderError(lastError)) {
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
       } finally {
         clearTimeout(timer);
@@ -603,14 +606,18 @@ export class VertexOracle implements OnModuleInit {
     throw lastError ?? new Error(`[${agent}] appel IA échoué`);
   }
 
-  private isRetryableProviderError(error: Error): boolean {
+  /** Exported for unit tests — local timeouts are intentionally non-retryable. */
+  isRetryableProviderError(error: Error): boolean {
+    if (/timeout après|aborted/i.test(error.message)) {
+      return false;
+    }
     const status =
       (error as Error & { status?: number; statusCode?: number }).status ??
       (error as Error & { statusCode?: number }).statusCode;
     return (
       status === 429 ||
       (typeof status === 'number' && status >= 500) ||
-      /network|socket|econn|etimedout|fetch failed|timeout|aborted/i.test(error.message)
+      /network|socket|econn|etimedout|fetch failed/i.test(error.message)
     );
   }
 
@@ -725,7 +732,7 @@ export class VertexOracle implements OnModuleInit {
       this.buildScribePrompt(userProfile, orderContext),
       'lumira_core_reading',
       SCRIBE_SCHEMA,
-      180_000,
+      300_000,
       images,
     );
     this.validateCoreReading(result);

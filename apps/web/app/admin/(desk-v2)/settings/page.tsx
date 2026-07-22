@@ -65,6 +65,27 @@ interface ModelConfig {
   agents: Record<AgentKey, AgentModelConfig>;
 }
 
+interface CatalogModel {
+  id: string;
+  label: string;
+  ownedBy?: string;
+  createdAt?: number;
+}
+
+interface ProviderCatalog {
+  configured: boolean;
+  models: CatalogModel[];
+  error?: string;
+  source: 'live' | 'seed' | 'unavailable';
+}
+
+interface AvailableModelsResponse {
+  fetchedAt: string;
+  openai: ProviderCatalog;
+  gemini: ProviderCatalog;
+  vertex: ProviderCatalog;
+}
+
 interface ProviderStatus {
   envVar: string;
   configured: boolean;
@@ -168,27 +189,15 @@ const AGENTS: Array<{ key: AgentKey; label: string; description: string }> = [
   },
 ];
 
-const OPENAI_MODEL_OPTIONS: Array<{ id: string; label: string; price: string }> = [
-  {
-    id: 'gpt-5.5-2026-04-23',
-    label: 'GPT-5.5 · snapshot 23/04/2026',
-    price: '5 $ entrée / 30 $ sortie par million',
-  },
-  {
-    id: 'gpt-5.4-2026-03-05',
-    label: 'GPT-5.4 · snapshot 05/03/2026',
-    price: '2,50 $ entrée / 15 $ sortie par million',
-  },
-  {
-    id: 'gpt-4o-2024-11-20',
-    label: 'GPT-4o · snapshot 20/11/2024',
-    price: '2,50 $ entrée / 10 $ sortie par million',
-  },
+const SEED_OPENAI_MODELS: CatalogModel[] = [
+  { id: 'gpt-5.5-2026-04-23', label: 'GPT-5.5 · snapshot 23/04/2026' },
+  { id: 'gpt-5.4-2026-03-05', label: 'GPT-5.4 · snapshot 05/03/2026' },
+  { id: 'gpt-4o-2024-11-20', label: 'GPT-4o · snapshot 20/11/2024' },
 ];
 
-const GOOGLE_MODEL_OPTIONS: Array<{ id: string; label: string; price: string }> = [
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', price: 'Vertex / Gemini API' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', price: 'Vertex / Gemini API' },
+const SEED_GOOGLE_MODELS: CatalogModel[] = [
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 ];
 
 const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
@@ -197,12 +206,8 @@ const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
   { id: 'gemini', label: 'Gemini API' },
 ];
 
-function modelsForProvider(provider: ProviderId) {
-  return provider === 'openai' ? OPENAI_MODEL_OPTIONS : GOOGLE_MODEL_OPTIONS;
-}
-
-function defaultModelForProvider(provider: ProviderId): string {
-  return modelsForProvider(provider)[0].id;
+function seedModelsForProvider(provider: ProviderId): CatalogModel[] {
+  return provider === 'openai' ? SEED_OPENAI_MODELS : SEED_GOOGLE_MODELS;
 }
 
 function messageFromError(error: unknown): string {
@@ -430,6 +435,43 @@ export default function SettingsPage() {
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [testingProvider, setTestingProvider] = useState<ProviderId | null>(null);
+  const [availableModels, setAvailableModels] = useState<AvailableModelsResponse | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
+  const loadCatalog = useCallback(async (force = false) => {
+    setCatalogLoading(true);
+    try {
+      const { data } = force
+        ? await expertApi.post('/expert/settings/available-models/refresh')
+        : await expertApi.get('/expert/settings/available-models');
+      setAvailableModels(data);
+    } catch (error) {
+      console.warn('Model catalog unavailable, using seeds', error);
+      setAvailableModels(null);
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, []);
+
+  const modelsForProvider = useCallback(
+    (provider: ProviderId): CatalogModel[] => {
+      const catalog =
+        provider === 'openai'
+          ? availableModels?.openai
+          : provider === 'vertex'
+            ? availableModels?.vertex
+            : availableModels?.gemini;
+      const live = catalog?.models?.length ? catalog.models : seedModelsForProvider(provider);
+      return live;
+    },
+    [availableModels],
+  );
+
+  const defaultModelForProvider = useCallback(
+    (provider: ProviderId): string =>
+      modelsForProvider(provider)[0]?.id || seedModelsForProvider(provider)[0].id,
+    [modelsForProvider],
+  );
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -449,6 +491,7 @@ export default function SettingsPage() {
       setSavedModelConfig(modelResponse.data);
       setCredentials(statusResponse.data);
       setReadiness(readinessResponse.data);
+      void loadCatalog(false);
     } catch (error) {
       setPrompts(null);
       setDefaults(null);
@@ -460,7 +503,7 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadCatalog]);
 
   useEffect(() => {
     void loadAll();
@@ -1055,6 +1098,38 @@ export default function SettingsPage() {
       {activeTab === 'models' && modelConfig && (
         <div className="space-y-4">
           <Card className="border-blue-500/30 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-desk-text">Catalogues modèles live</h2>
+                <p className="mt-1 text-sm text-desk-muted">
+                  Listes fournies par OpenAI, Vertex et Gemini (cache 1 h). Les seeds ne servent
+                  qu’en secours si l’API catalogue échoue.
+                </p>
+                {availableModels && (
+                  <p className="mt-2 text-xs text-desk-subtle">
+                    Dernière synchro : {new Date(availableModels.fetchedAt).toLocaleString('fr-FR')}{' '}
+                    · OpenAI {availableModels.openai.source} · Vertex{' '}
+                    {availableModels.vertex.source} · Gemini {availableModels.gemini.source}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadCatalog(true)}
+                disabled={catalogLoading}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-desk-border px-3 py-2 text-sm text-desk-muted hover:bg-desk-hover disabled:opacity-50"
+              >
+                {catalogLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Actualiser les listes
+              </button>
+            </div>
+          </Card>
+
+          <Card className="border-blue-500/30 p-5">
             <h2 className="font-semibold text-desk-text">Mode de routage</h2>
             <p className="mt-1 text-sm text-desk-muted">
               `openai_only` force OpenAI. `per_agent` laisse chaque agent choisir OpenAI, Vertex ou
@@ -1077,10 +1152,23 @@ export default function SettingsPage() {
             const item = modelConfig.agents[agent.key];
             const providerLocked = modelConfig.providerMode === 'openai_only';
             const effectiveProvider = providerLocked ? 'openai' : item.provider;
-            const modelOptions = modelsForProvider(effectiveProvider);
+            const catalogOptions = modelsForProvider(effectiveProvider);
+            const modelOptions =
+              catalogOptions.some((option) => option.id === item.model) || !item.model
+                ? catalogOptions
+                : [{ id: item.model, label: `${item.model} (enregistré)` }, ...catalogOptions];
             const isGpt5 = effectiveProvider === 'openai' && item.model.startsWith('gpt-5.');
             const useTempKnobs = !isGpt5;
-            const price = modelOptions.find((option) => option.id === item.model)?.price;
+            const price =
+              availableModels?.[
+                effectiveProvider === 'openai'
+                  ? 'openai'
+                  : effectiveProvider === 'vertex'
+                    ? 'vertex'
+                    : 'gemini'
+              ]?.source === 'live'
+                ? 'Catalogue live'
+                : 'Liste de secours';
             return (
               <Card key={agent.key} className="p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

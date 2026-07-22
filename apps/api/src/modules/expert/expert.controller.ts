@@ -19,6 +19,7 @@ import { Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService, ModelConfig } from './admin-settings.service';
+import { AiModelCatalogService } from './ai-model-catalog.service';
 import { AudioGenerationService } from '../../services/factory/AudioGenerationService';
 import {
   OnboardingPhotoKind,
@@ -49,6 +50,7 @@ export class ExpertController {
   constructor(
     private readonly expertService: ExpertService,
     private readonly adminSettingsService: AdminSettingsService,
+    private readonly aiModelCatalogService: AiModelCatalogService,
     private readonly audioGenerationService: AudioGenerationService,
     private readonly privateOnboardingPhotoService: PrivateOnboardingPhotoService,
     private readonly s3Service: S3Service,
@@ -569,6 +571,20 @@ export class ExpertController {
     @Body('changedBy') changedBy?: string,
   ) {
     return this.adminSettingsService.saveModelConfig(config, changedBy);
+  }
+
+  @Get('settings/available-models')
+  @Roles('ADMIN')
+  async getAvailableModels(@Query('refresh') refresh?: string) {
+    const force = refresh === '1' || refresh === 'true';
+    return this.aiModelCatalogService.getAvailableModels({ force });
+  }
+
+  @Post('settings/available-models/refresh')
+  @Roles('ADMIN')
+  async refreshAvailableModels() {
+    this.aiModelCatalogService.clearCache();
+    return this.aiModelCatalogService.getAvailableModels({ force: true });
   }
 
   private parsePhotoKind(kind: string): OnboardingPhotoKind {

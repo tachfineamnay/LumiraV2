@@ -23,6 +23,7 @@
     "@google-cloud/text-to-speech": "^6.4.0",
     "@google-cloud/vertexai": "^1.9.2",
     "@google/generative-ai": "^0.24.1",
+    "google-auth-library": "^10.6.1",
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/common": "^10.4.22",
     "@nestjs/config": "^3.1.1",

@@ -15,6 +15,7 @@ describe('ExpertController private photos', () => {
   const controller = new ExpertController(
     {} as ExpertService,
     {} as AdminSettingsService,
+    {} as import('./ai-model-catalog.service').AiModelCatalogService,
     {} as AudioGenerationService,
     photoService,
     {} as S3Service,

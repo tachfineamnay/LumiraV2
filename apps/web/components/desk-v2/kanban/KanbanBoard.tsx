@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DndContext,
   DragOverlay,
@@ -24,6 +25,7 @@ import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
 
 export function KanbanBoard() {
+  const router = useRouter();
   const { orders, isLoading, fetchOrders, moveOrder, updateOrder } = useOrders();
   const { expert } = useExpertAuth();
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
@@ -59,10 +61,20 @@ export function KanbanBoard() {
     },
     onGenerationComplete: (data) => {
       if (data.success) {
-        toast.success(`Génération terminée: ${data.orderNumber}`);
+        toast.success(`Lecture prête — ${data.orderNumber}`, {
+          description: 'Ouvrir la révision',
+          action: {
+            label: 'Révision',
+            onClick: () => router.push(`/admin/studio/${data.orderId}`),
+          },
+        });
       } else {
-        toast.error(`Échec génération: ${data.orderNumber}`, {
+        toast.error(`Échec génération — ${data.orderNumber}`, {
           description: data.error,
+          action: {
+            label: 'Production',
+            onClick: () => router.push('/admin/production'),
+          },
         });
       }
       fetchOrders();
