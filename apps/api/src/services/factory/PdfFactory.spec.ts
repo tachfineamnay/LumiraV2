@@ -79,7 +79,9 @@ describe('PdfFactory reading template', () => {
   });
 
   it('accepts only a real PDF payload from Gotenberg', async () => {
-    mockedAxios.post.mockResolvedValueOnce({ data: Buffer.from('%PDF-1.7\ncontent') });
+    mockedAxios.post.mockResolvedValueOnce({
+      data: Buffer.from('%PDF-1.7\ncontent'),
+    } as never);
     const service = new PdfFactory({
       get: jest.fn((key: string, fallback: unknown) => fallback),
     } as unknown as ConfigService);
@@ -95,7 +97,9 @@ describe('PdfFactory reading template', () => {
   });
 
   it('rejects an HTML error page returned with a successful HTTP status', async () => {
-    mockedAxios.post.mockResolvedValueOnce({ data: Buffer.from('<html>gateway error</html>') });
+    mockedAxios.post.mockResolvedValueOnce({
+      data: Buffer.from('<html>gateway error</html>'),
+    } as never);
     const service = new PdfFactory({
       get: jest.fn((key: string, fallback: unknown) =>
         key === 'GOTENBERG_MAX_ATTEMPTS' ? 1 : fallback,
