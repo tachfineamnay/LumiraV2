@@ -10,7 +10,7 @@ export function SanctuaireSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="glass-sidebar fixed left-0 top-0 z-40 hidden h-dvh w-64 flex-col lg:flex">
+    <aside className="glass-sidebar fixed left-0 top-0 z-40 hidden h-dvh w-64 flex-col border-r border-white/[0.06] lg:flex">
       <div className="border-b border-white/[0.05] p-6">
         <Link
           href="/sanctuaire"

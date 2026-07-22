@@ -10,6 +10,8 @@ interface MysticAudioPlayerProps {
   compact?: boolean;
   loadingText?: string;
   className?: string;
+  /** `paper` adapts chrome for Sanctuaire dual-mode stages. */
+  variant?: 'shell' | 'paper';
 }
 
 const SPEEDS = [0.8, 1, 1.25, 1.5] as const;
@@ -30,7 +32,9 @@ export function MysticAudioPlayer({
   compact = false,
   loadingText = 'Audio indisponible pour le moment.',
   className,
+  variant = 'shell',
 }: MysticAudioPlayerProps) {
+  const isPaper = variant === 'paper';
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastPersistedSecond = useRef(-1);
   const volumeRef = useRef(1);
@@ -151,8 +155,11 @@ export function MysticAudioPlayer({
     return (
       <div
         className={cn(
-          'flex items-center gap-3 rounded-xl border border-white/[0.06] bg-abyss-800/50 text-stellar-500',
-          compact ? 'p-2.5 text-[11px]' : 'p-4 text-sm',
+          'flex items-center gap-3 rounded-xl border text-sm',
+          isPaper
+            ? 'border-paper-line bg-paper-muted text-paper-subtle'
+            : 'border-white/[0.06] bg-abyss-800/50 text-stellar-500',
+          compact ? 'p-2.5 text-[11px]' : 'p-4',
           className,
         )}
       >
@@ -166,7 +173,10 @@ export function MysticAudioPlayer({
     <div
       id="audio"
       className={cn(
-        'rounded-xl border border-white/[0.07] bg-abyss-800/60',
+        'rounded-xl border',
+        isPaper
+          ? 'border-paper-line bg-paper-elevated shadow-paper-soft'
+          : 'border-white/[0.07] bg-abyss-800/60',
         compact ? 'p-2.5' : 'p-4',
         className,
       )}
@@ -206,7 +216,11 @@ export function MysticAudioPlayer({
                   key={index}
                   className={cn(
                     'flex-1 rounded-full',
-                    (index / waveform.length) * 100 < progress ? 'bg-horizon-400' : 'bg-white/10',
+                    (index / waveform.length) * 100 < progress
+                      ? 'bg-horizon-400'
+                      : isPaper
+                        ? 'bg-paper-ink/10'
+                        : 'bg-white/10',
                   )}
                   style={{ height: `${height}%` }}
                 />
@@ -217,7 +231,8 @@ export function MysticAudioPlayer({
 
         <span
           className={cn(
-            'shrink-0 tabular-nums text-stellar-400',
+            'shrink-0 tabular-nums',
+            isPaper ? 'text-paper-subtle' : 'text-stellar-400',
             compact ? 'text-[10px]' : 'text-xs',
           )}
         >
@@ -226,8 +241,18 @@ export function MysticAudioPlayer({
       </div>
 
       {!compact && (
-        <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-3">
-          <label className="flex items-center gap-2 text-xs text-stellar-400">
+        <div
+          className={cn(
+            'mt-4 flex flex-wrap items-center gap-4 border-t pt-3',
+            isPaper ? 'border-paper-line' : 'border-white/[0.05]',
+          )}
+        >
+          <label
+            className={cn(
+              'flex items-center gap-2 text-xs',
+              isPaper ? 'text-paper-subtle' : 'text-stellar-400',
+            )}
+          >
             <Volume2 className="h-4 w-4" aria-hidden />
             <span className="sr-only">Volume</span>
             <input
@@ -241,12 +266,22 @@ export function MysticAudioPlayer({
               className="w-24 accent-horizon-400"
             />
           </label>
-          <label className="flex items-center gap-2 text-xs text-stellar-400">
+          <label
+            className={cn(
+              'flex items-center gap-2 text-xs',
+              isPaper ? 'text-paper-subtle' : 'text-stellar-400',
+            )}
+          >
             Vitesse
             <select
               value={speed}
               onChange={(event) => setSpeed(Number(event.target.value) as (typeof SPEEDS)[number])}
-              className="rounded-lg border border-white/10 bg-abyss-700 px-2 py-1 text-stellar-200"
+              className={cn(
+                'rounded-lg border px-2 py-1',
+                isPaper
+                  ? 'border-paper-line bg-paper-muted text-paper-ink'
+                  : 'border-white/10 bg-abyss-700 text-stellar-200',
+              )}
             >
               {SPEEDS.map((value) => (
                 <option key={value} value={value}>
@@ -255,14 +290,20 @@ export function MysticAudioPlayer({
               ))}
             </select>
           </label>
-          <span className="text-xs text-stellar-600">
+          <span className={cn('text-xs', isPaper ? 'text-paper-subtle' : 'text-stellar-600')}>
             La reprise est mémorisée sur cet appareil.
           </span>
         </div>
       )}
 
       {error && (
-        <p role="alert" className="mt-3 flex items-center gap-2 text-xs text-rose-300">
+        <p
+          role="alert"
+          className={cn(
+            'mt-3 flex items-center gap-2 text-xs',
+            isPaper ? 'text-rose-700' : 'text-rose-300',
+          )}
+        >
           <AlertCircle className="h-4 w-4" /> {error}
         </p>
       )}

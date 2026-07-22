@@ -113,6 +113,19 @@ module.exports = {
           danger: '#ef4444',
           info: '#3b82f6',
         },
+
+        // Sanctuaire dual-mode — warm paper stages inside cosmic shell
+        paper: {
+          DEFAULT: '#F7F3EB',
+          elevated: '#FFFCF7',
+          muted: '#EFE8DC',
+          ink: '#0C1225',
+          soft: '#18223D',
+          subtle: '#64748B',
+          line: '#E8D9C4',
+          accent: '#D4943C',
+          calm: '#2D8AA0',
+        },
       },
       fontFamily: {
         playfair: ['var(--font-playfair)', 'Georgia', 'Times New Roman', 'serif'],
@@ -134,6 +147,9 @@ module.exports = {
         'serenity-glow': '0 0 40px rgba(20, 82, 102, 0.4)',
         abyss: '0 20px 40px rgba(4, 6, 16, 0.6)',
         stellar: '0 8px 32px rgba(4, 6, 16, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03)',
+        paper: '0 18px 48px rgba(4, 6, 16, 0.32), 0 2px 10px rgba(4, 6, 16, 0.14)',
+        'paper-soft': '0 8px 24px rgba(4, 6, 16, 0.16)',
+        dock: '0 -8px 32px rgba(4, 6, 16, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04)',
       },
       animation: {
         'mandala-rotate': 'mandala-rotate 60s linear infinite',
