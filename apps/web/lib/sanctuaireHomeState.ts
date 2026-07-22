@@ -35,8 +35,8 @@ export type SanctuaireHomeState =
 
 /**
  * One source of truth for the client-facing reading lifecycle. Before the
- * profile is sealed, wording must reinforce agency: the client chooses,
- * reviews and explicitly transmits the information used for the base reading.
+ * profile is sealed, wording reinforces agency: the client chooses, reviews
+ * and explicitly transmits the information used for the reading.
  */
 export function resolveSanctuaireHomeState({
   profile,
@@ -66,7 +66,7 @@ export function resolveSanctuaireHomeState({
         kind: 'RESUME',
         title: 'Votre brouillon est prêt à être repris',
         description:
-          'Votre brouillon privé reste disponible, même si vous revenez demain ou plus tard. Relisez, complétez ou retirez ce que vous souhaitez transmettre avant de le sceller.',
+          'Vos informations restent privées et modifiables. Relisez, complétez ou retirez ce que vous souhaitez avant de sceller votre dossier.',
         actionLabel: 'Reprendre mon dossier',
       };
     }
@@ -74,7 +74,7 @@ export function resolveSanctuaireHomeState({
       kind: 'PREPARE',
       title: 'Préparez la base de votre lecture',
       description:
-        'Quelques minutes suffisent pour partager vos repères et ce qui compte pour vous. Tout reste privé, modifiable et reprenable jusqu’à votre scellement final.',
+        'Quelques minutes suffisent. Vous choisissez ce que vous transmettez, puis vous relisez chaque élément avant le scellement final.',
       actionLabel: 'Préparer mon dossier',
     };
   }
@@ -84,7 +84,7 @@ export function resolveSanctuaireHomeState({
       kind: 'READY',
       title: 'Votre lecture est prête',
       description:
-        'Prenez le temps de l’écouter ou de la lire. Votre synthèse reste disponible pour retrouver l’essentiel.',
+        'Commencez par l’écouter ou la lire à votre rythme. Votre synthèse vous permet ensuite de retrouver rapidement les repères essentiels.',
       order: latestOrder,
     };
   }
@@ -93,7 +93,8 @@ export function resolveSanctuaireHomeState({
     return {
       kind: 'EXPERT_REVIEW',
       title: 'Votre lecture est relue par l’équipe',
-      description: 'Une dernière vérification humaine est en cours avant sa mise à disposition.',
+      description:
+        'La préparation est terminée. Une dernière vérification humaine est en cours avant la mise à disposition du PDF et de l’audio.',
       order: latestOrder,
     };
   }
@@ -102,7 +103,7 @@ export function resolveSanctuaireHomeState({
     kind: 'PREPARING',
     title: 'Votre dossier a bien été reçu',
     description:
-      'L’équipe Lumira prépare votre lecture à partir des éléments que vous avez confirmés. Vous n’avez plus rien à faire ; nous vous écrirons dès qu’elle sera prête.',
+      'Vous n’avez plus rien à faire. Le délai habituel est de 24 à 48 heures et nous vous écrirons dès que votre lecture aura été relue et validée.',
     order: latestOrder,
   };
 }
