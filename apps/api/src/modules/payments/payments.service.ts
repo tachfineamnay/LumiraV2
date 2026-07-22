@@ -15,18 +15,24 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuthService } from '../auth/auth.service';
 import { IdGenerator } from '../../utils/IdGenerator';
 import { CheckoutIntentDto } from './dto/checkout-intent.dto';
+import {
+  EARLY_CHECKOUT_ALIASES,
+  getEarlyAccessExpiresAt,
+  LUMIRA_EARLY_OFFER,
+} from '@packages/shared';
 
 export { CheckoutIntentDto };
 
 /** Server-side product catalog — never trust client amounts */
-const CHECKOUT_CATALOG: Record<string, { amountCents: number; name: string }> = {
-  '1': { amountCents: 2900, name: 'Cercle des Initiés' },
-  '2': { amountCents: 2900, name: 'Cercle des Initiés' },
-  '3': { amountCents: 2900, name: 'Cercle des Initiés' },
-  '4': { amountCents: 2900, name: 'Cercle des Initiés' },
-  initie: { amountCents: 2900, name: 'Cercle des Initiés' },
-  subscription: { amountCents: 2900, name: 'Cercle des Initiés' },
-};
+const CHECKOUT_CATALOG: Record<string, { amountCents: number; name: string }> = Object.fromEntries(
+  EARLY_CHECKOUT_ALIASES.map((alias) => [
+    alias,
+    {
+      amountCents: LUMIRA_EARLY_OFFER.amountCents,
+      name: LUMIRA_EARLY_OFFER.publicName,
+    },
+  ]),
+);
 
 export interface UpsellAddon {
   type: string;
@@ -488,9 +494,8 @@ export class PaymentsService {
   }
 
   /**
-   * checkout.session.completed
-   * Grants access for one-time 29€ payment. Sets subscription record with far-future
-   * currentPeriodEnd so access never expires, then fires batch 1 generation.
+   * checkout.session.completed (legacy path)
+   * Grants early access for the fixed V1 window (3 months), then fires batch 1.
    */
   private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     const userId = session.client_reference_id;
@@ -500,7 +505,7 @@ export class PaymentsService {
     }
 
     const now = new Date();
-    const farFuture = new Date('2099-12-31');
+    const accessEndsAt = getEarlyAccessExpiresAt(now);
 
     await this.prisma.subscription.upsert({
       where: { userId },
@@ -511,7 +516,7 @@ export class PaymentsService {
         stripePriceId: this.configService.get<string>('STRIPE_PRICE_29') ?? '',
         status: 'ACTIVE',
         currentPeriodStart: now,
-        currentPeriodEnd: farFuture,
+        currentPeriodEnd: accessEndsAt,
         cancelAtPeriodEnd: false,
       },
       update: {
@@ -519,7 +524,7 @@ export class PaymentsService {
         stripeCustomerId: (session.customer as string) ?? '',
         status: 'ACTIVE',
         currentPeriodStart: now,
-        currentPeriodEnd: farFuture,
+        currentPeriodEnd: accessEndsAt,
         cancelAtPeriodEnd: false,
       },
     });
@@ -689,10 +694,10 @@ export class PaymentsService {
         );
       }
 
-      // V2: Activate subscription (one-time 29€ access) + trigger generation
+      // Early V1: activate fixed-term Sanctuaire access (3 months) + timeline generation
       if (productLevel) {
         const now = new Date();
-        const farFuture = new Date('2099-12-31');
+        const accessEndsAt = getEarlyAccessExpiresAt(now);
 
         await this.prisma.subscription.upsert({
           where: { userId: order.userId },
@@ -704,14 +709,14 @@ export class PaymentsService {
             stripePriceId: this.configService.get<string>('STRIPE_PRICE_29') ?? '',
             status: 'ACTIVE',
             currentPeriodStart: now,
-            currentPeriodEnd: farFuture,
+            currentPeriodEnd: accessEndsAt,
             cancelAtPeriodEnd: false,
           },
           update: {
             stripeSubscriptionId: paymentIntent.id,
             status: 'ACTIVE',
             currentPeriodStart: now,
-            currentPeriodEnd: farFuture,
+            currentPeriodEnd: accessEndsAt,
             cancelAtPeriodEnd: false,
           },
         });

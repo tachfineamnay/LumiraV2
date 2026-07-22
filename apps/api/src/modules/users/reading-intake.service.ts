@@ -89,12 +89,15 @@ export class ReadingIntakeService {
    */
   async seal(userId: string, dto: UpdateProfileDto): Promise<SealResult> {
     const activeOrderGuard = await this.prisma.order.findFirst({
+      // Terminal orders (failed retry, delivered reading) without an intake
+      // must not shadow the still-sealable PAID order.
       where: {
         userId,
         intakeRequired: true,
-        status: {
-          in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'],
-        },
+        OR: [
+          { status: { in: [...ACTIVE_READING_STATUSES] } },
+          { status: { in: ['COMPLETED', 'FAILED'] }, readingIntake: { isNot: null } },
+        ],
       },
       select: { id: true },
       orderBy: { createdAt: 'desc' },
@@ -187,9 +190,10 @@ export class ReadingIntakeService {
         where: {
           userId,
           intakeRequired: true,
-          status: {
-            in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'],
-          },
+          OR: [
+            { status: { in: [...ACTIVE_READING_STATUSES] } },
+            { status: { in: ['COMPLETED', 'FAILED'] }, readingIntake: { isNot: null } },
+          ],
         },
         select: { id: true },
         orderBy: { createdAt: 'desc' },
@@ -303,19 +307,21 @@ export class ReadingIntakeService {
       }
 
       const profile = await this.upsertProfile(tx, userId, profilePayload, sealedAt);
+      // Keep the sealed content in the compatibility projection so the client
+      // dossier and Desk views can still display what was transmitted.
       await tx.onboardingProgress.upsert({
         where: { userId },
         create: {
           userId,
           currentStep: 4,
           status: 'COMPLETED',
-          data: {} as Prisma.InputJsonValue,
+          data: normalizedDraft,
           completedAt: sealedAt,
         },
         update: {
           currentStep: 4,
           status: 'COMPLETED',
-          data: {} as Prisma.InputJsonValue,
+          data: normalizedDraft,
           completedAt: sealedAt,
         },
       });
@@ -400,19 +406,20 @@ export class ReadingIntakeService {
       }
 
       const profile = await this.upsertProfile(tx, userId, profilePayload, sealedAt);
+      const sealedDraft = this.toJson(this.draftFromProfile(profilePayload));
       await tx.onboardingProgress.upsert({
         where: { userId },
         create: {
           userId,
           currentStep: 4,
           status: 'COMPLETED',
-          data: {} as Prisma.InputJsonValue,
+          data: sealedDraft,
           completedAt: sealedAt,
         },
         update: {
           currentStep: 4,
           status: 'COMPLETED',
-          data: {} as Prisma.InputJsonValue,
+          data: sealedDraft,
           completedAt: sealedAt,
         },
       });
@@ -488,6 +495,7 @@ export class ReadingIntakeService {
 
   private profileFromDraft(draft: OnboardingDraftDataDto): IntakeProfile {
     return {
+      openReading: draft.openReading === true,
       usageName: this.clean(draft.usageName),
       birthDate: this.clean(draft.birthDate) || '',
       birthTime: this.clean(draft.birthTime),
@@ -664,6 +672,7 @@ export class ReadingIntakeService {
   private draftFromProfile(profile: IntakeProfile): OnboardingDraftDataDto {
     return {
       schemaVersion: 2,
+      openReading: profile.openReading === true,
       usageName: profile.usageName,
       birthDate: profile.birthDate,
       birthTime: profile.birthTime,

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { isEarlyAccessActive } from '@packages/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseGuidanceRequest } from '../guidance-requests/guidance-request.types';
 import { readCurrentProduction, readExpertReview } from './production-control.types';
@@ -182,7 +183,9 @@ export class ClientControlService {
 
     const timeline = this.buildTimeline(client, conversations);
     const paidStatuses = ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'];
-    const lifetimeAccess = client.orders.some((order) => paidStatuses.includes(order.status));
+    const activeAccess = client.orders.some(
+      (order) => paidStatuses.includes(order.status) && isEarlyAccessActive(order.paidAt),
+    );
     const openReadings = readings.filter(
       (reading) => !['DELIVERED', 'REFUNDED'].includes(reading.state),
     );
@@ -199,7 +202,7 @@ export class ClientControlService {
         email: client.email,
         phone: client.phone,
         status: client.status,
-        access: lifetimeAccess ? 'LIFETIME' : 'NONE',
+        access: activeAccess ? 'EARLY_3M' : 'NONE',
         createdAt: client.createdAt,
       },
       readiness: {
@@ -224,7 +227,8 @@ export class ClientControlService {
           (total, request) => total + request.unreadByExpert,
           0,
         ),
-        unreadNotifications: client.notifications.filter((notification) => !notification.read).length,
+        unreadNotifications: client.notifications.filter((notification) => !notification.read)
+          .length,
       },
       readings,
       conversations,

@@ -23,7 +23,7 @@ const playfair = Playfair_Display({
 const SITE_URL = 'https://oraclelumira.com';
 const SITE_TITLE = 'Oracle Lumira | Votre lecture d’âme personnalisée';
 const SITE_DESCRIPTION =
-  'Lecture personnalisée par un expert : PDF, audio, mandala et guidance 30 jours. Livrée sous 24h dans votre sanctuaire privé. 29€, satisfait ou remboursé 14 jours.';
+  'Lecture personnalisée révisée par un expert : dossier sécurisé, PDF et audio privés, accès Sanctuaire 3 mois (early). Livraison sous 24 à 48h après scellement. 17€, paiement unique.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

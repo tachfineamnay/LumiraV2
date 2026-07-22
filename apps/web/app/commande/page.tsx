@@ -90,7 +90,7 @@ function CheckoutContent() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone || undefined,
-        productLevel: '4',
+        productLevel: 'lumira_early_v1',
       });
 
       const secret = response.data?.clientSecret;
@@ -201,7 +201,7 @@ function CheckoutContent() {
 
                   <div className="mt-6 pt-4 border-t border-white/[0.06]">
                     <p className="text-[11px] text-white/30 text-center">
-                      Paiement unique · Accès à vie · Satisfait ou remboursé 14 jours
+                      Paiement unique · {SUBSCRIPTION.accessLabel} · Satisfait ou remboursé 14 jours
                     </p>
                   </div>
                 </div>

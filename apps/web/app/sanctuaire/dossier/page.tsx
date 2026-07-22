@@ -141,15 +141,22 @@ export default function ReadingDossierPage() {
           !latestOrder?.id ||
           onboardingProgress.orderId === latestOrder.id),
       );
-  const draft = intakeMatchesLatestOrder ? progressData : {};
+  // The draft always belongs to this client: showing it is never wrong, while
+  // an empty dossier after filling the form destroys trust.
+  const draft = progressData;
   const orderScopedSealed = Boolean(
     latestOrder?.intakeStatus === 'SEALED' ||
     latestOrder?.intakeSealedAt ||
     (intakeMatchesLatestOrder && onboardingProgress?.status === 'COMPLETED'),
   );
-  const sealed = latestOrder?.intakeRequired
-    ? orderScopedSealed
-    : orderScopedSealed || profile?.profileCompleted === true;
+  // The server-side canEdit flag is authoritative: a DRAFT intake on a PAID
+  // order is always editable, whatever the local heuristics conclude.
+  const sealed =
+    onboardingProgress?.canEdit === true
+      ? false
+      : latestOrder?.intakeRequired
+        ? orderScopedSealed
+        : orderScopedSealed || profile?.profileCompleted === true;
   const intakeIsAuthoritative = Boolean(
     intakeMatchesLatestOrder && (!sealed || onboardingProgress?.status === 'COMPLETED'),
   );

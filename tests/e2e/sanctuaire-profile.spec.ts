@@ -15,7 +15,7 @@ test.describe('Sanctuaire — profil', () => {
     await expect(page.getByRole('heading', { name: /marie dubois/i })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByText('Accès à vie', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Accès early · 3 mois', { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/abonné|premium|abonnement/i)).toHaveCount(0);
   });
 

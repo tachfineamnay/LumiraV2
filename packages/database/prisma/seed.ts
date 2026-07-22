@@ -3,13 +3,15 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
-const CANONICAL_ADMIN_EMAIL = process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase()
-  || 'expert@oraclelumira.com';
+const CANONICAL_ADMIN_EMAIL =
+  process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase() || 'expert@oraclelumira.com';
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
-    throw new Error(`${name} is required. Refusing to seed a production credential with a default password.`);
+    throw new Error(
+      `${name} is required. Refusing to seed a production credential with a default password.`,
+    );
   }
   return value;
 }
@@ -51,13 +53,14 @@ async function seedProducts(): Promise<void> {
     {
       id: 'initie',
       level: ProductLevel.INITIE,
-      name: 'Accès Lumira',
-      description: 'Offre unique de lancement',
-      amountCents: 900,
+      name: 'Cercle des Initiés',
+      description: 'Offre early — accès Sanctuaire 3 mois',
+      amountCents: 1700,
       features: [
-        'Lecture personnalisée validée par un expert',
-        'Audio et PDF privés',
-        'Accès au Sanctuaire',
+        'Dossier client sécurisé',
+        'Lecture personnalisée révisée par un expert',
+        'PDF et audio privés',
+        'Accès Sanctuaire 3 mois (early)',
       ],
       isActive: true,
     },

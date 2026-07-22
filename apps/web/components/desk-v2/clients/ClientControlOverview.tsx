@@ -74,7 +74,7 @@ interface ClientControlData {
     firstName: string;
     lastName: string;
     email: string;
-    access: 'LIFETIME' | 'NONE';
+    access: 'EARLY_3M' | 'NONE';
   };
   readiness: {
     profileCompleted: boolean;
@@ -126,11 +126,13 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
   }, [refresh]);
 
   const actionableReadings = useMemo(
-    () => data?.readings.filter((reading) => !['DELIVERED', 'REFUNDED'].includes(reading.state)) || [],
+    () =>
+      data?.readings.filter((reading) => !['DELIVERED', 'REFUNDED'].includes(reading.state)) || [],
     [data],
   );
   const guidanceRequests = useMemo(
-    () => data?.conversations.filter((conversation) => conversation.type === 'EXPERT_REQUEST') || [],
+    () =>
+      data?.conversations.filter((conversation) => conversation.type === 'EXPERT_REQUEST') || [],
     [data],
   );
   const aiConversations = useMemo(
@@ -151,7 +153,10 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
     return (
       <section className="flex items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-600">
         <span>{error || 'Vue client indisponible'}</span>
-        <button onClick={() => void refresh()} className="inline-flex items-center gap-2 font-medium">
+        <button
+          onClick={() => void refresh()}
+          className="inline-flex items-center gap-2 font-medium"
+        >
           <RefreshCw className="h-4 w-4" /> Réessayer
         </button>
       </section>
@@ -170,18 +175,26 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           label="Accès"
-          value={data.client.access === 'LIFETIME' ? 'À vie' : 'Aucun'}
+          value={data.client.access === 'EARLY_3M' ? 'Early 3 mois' : 'Aucun'}
           icon={<InfinityIcon className="h-5 w-5" />}
-          positive={data.client.access === 'LIFETIME'}
+          positive={data.client.access === 'EARLY_3M'}
         />
-        <MetricCard label="Lectures" value={data.summary.totalReadings} icon={<BookOpen className="h-5 w-5" />} />
+        <MetricCard
+          label="Lectures"
+          value={data.summary.totalReadings}
+          icon={<BookOpen className="h-5 w-5" />}
+        />
         <MetricCard
           label="Livrées"
           value={data.summary.deliveredReadings}
           icon={<CheckCircle2 className="h-5 w-5" />}
           positive={data.summary.deliveredReadings > 0}
         />
-        <MetricCard label="À traiter" value={data.summary.openReadings} icon={<Clock3 className="h-5 w-5" />} />
+        <MetricCard
+          label="À traiter"
+          value={data.summary.openReadings}
+          icon={<Clock3 className="h-5 w-5" />}
+        />
         <MetricCard
           label="Demandes Desk"
           value={openGuidance}
@@ -237,7 +250,10 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
             title="Demandes d’éclairage"
             description="Conversations humaines adressées au Desk, séparées du chat IA."
             action={
-              <Link href="/admin/messages" className="text-xs font-semibold text-amber-600 hover:underline">
+              <Link
+                href="/admin/messages"
+                className="text-xs font-semibold text-amber-600 hover:underline"
+              >
                 Ouvrir l’inbox
               </Link>
             }
@@ -257,7 +273,9 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
         <div className="space-y-4">
           <div className="rounded-xl border border-desk-border bg-desk-surface p-4">
             <h2 className="font-semibold text-desk-text">Dossier essentiel</h2>
-            <p className="mt-1 text-xs text-desk-muted">Conditions nécessaires avant la production.</p>
+            <p className="mt-1 text-xs text-desk-muted">
+              Conditions nécessaires avant la production.
+            </p>
             <div className="mt-4 space-y-2">
               <ReadinessRow label="Profil validé" done={data.readiness.profileCompleted} />
               <ReadinessRow label="Date et lieu de naissance" done={data.readiness.birthData} />
@@ -287,7 +305,10 @@ export function ClientControlOverview({ clientId }: { clientId: string }) {
             )}
           </Panel>
 
-          <Panel title="Conversations IA" description="Historique du confident IA, distinct des réponses humaines.">
+          <Panel
+            title="Conversations IA"
+            description="Historique du confident IA, distinct des réponses humaines."
+          >
             {aiConversations.length === 0 ? (
               <p className="p-4 text-sm text-desk-muted">Aucune conversation IA enregistrée.</p>
             ) : (
@@ -336,7 +357,15 @@ function Panel({
   );
 }
 
-function EmptyState({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+function EmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
     <div className="flex min-h-32 flex-col items-center justify-center p-5 text-center">
       {icon}
@@ -378,10 +407,18 @@ function MetricCard({
   );
 }
 
-function ReadingRow({ reading, compact = false }: { reading: ClientReadingSummary; compact?: boolean }) {
+function ReadingRow({
+  reading,
+  compact = false,
+}: {
+  reading: ClientReadingSummary;
+  compact?: boolean;
+}) {
   const state = readingStatePresentation(reading.state);
   return (
-    <div className={`grid gap-3 px-4 py-3 ${compact ? 'lg:grid-cols-[1fr_auto]' : 'lg:grid-cols-[1fr_auto_auto]'}`}>
+    <div
+      className={`grid gap-3 px-4 py-3 ${compact ? 'lg:grid-cols-[1fr_auto]' : 'lg:grid-cols-[1fr_auto_auto]'}`}
+    >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="truncate text-sm font-semibold text-desk-text">{reading.title}</p>
@@ -442,7 +479,10 @@ function ConversationRow({ conversation }: { conversation: ClientConversationSum
         </p>
       </div>
       {isGuidance && (
-        <Link href="/admin/messages" className="text-xs font-semibold text-amber-600 hover:underline">
+        <Link
+          href="/admin/messages"
+          className="text-xs font-semibold text-amber-600 hover:underline"
+        >
           Inbox
         </Link>
       )}
@@ -454,7 +494,11 @@ function ReadinessRow({ label, done }: { label: string; done: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-desk-card px-3 py-2 text-sm">
       <span className="text-desk-muted">{label}</span>
-      {done ? <Check className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-amber-600" />}
+      {done ? (
+        <Check className="h-4 w-4 text-emerald-600" />
+      ) : (
+        <Circle className="h-4 w-4 text-amber-600" />
+      )}
     </div>
   );
 }
@@ -493,7 +537,10 @@ function AssetBadge({ label, status }: { label: string; status?: string }) {
 function readingStatePresentation(state: ClientReadingSummary['state']) {
   const states: Record<ClientReadingSummary['state'], { label: string; className: string }> = {
     WAITING_CLIENT: { label: 'Éléments client', className: 'bg-amber-500/10 text-amber-600' },
-    READY_FOR_PRODUCTION: { label: 'Prête à produire', className: 'bg-emerald-500/10 text-emerald-600' },
+    READY_FOR_PRODUCTION: {
+      label: 'Prête à produire',
+      className: 'bg-emerald-500/10 text-emerald-600',
+    },
     IN_PRODUCTION: { label: 'En production', className: 'bg-blue-500/10 text-blue-600' },
     AWAITING_REVIEW: { label: 'À valider', className: 'bg-purple-500/10 text-purple-600' },
     ASSETS_PENDING: { label: 'Assets à compléter', className: 'bg-amber-500/10 text-amber-600' },
@@ -505,9 +552,11 @@ function readingStatePresentation(state: ClientReadingSummary['state']) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(
-    new Date(value),
-  );
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value));
 }
 
 function formatDateTime(value: string) {

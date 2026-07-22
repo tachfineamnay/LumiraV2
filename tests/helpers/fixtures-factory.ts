@@ -135,7 +135,7 @@ export function createTestOrder(overrides: Partial<TestOrder> = {}): TestOrder {
     firstName: 'Marie',
     lastName: 'Dubois',
     status: 'COMPLETED',
-    amount: 2900, // cents
+    amount: 1700, // cents — LUMIRA_EARLY_OFFER
     level: 1,
     deliveredAt: now.toISOString(),
     createdAt: now.toISOString(),

@@ -9,9 +9,10 @@ import { Order, Prisma } from '@prisma/client';
 import { CreateOrderDto, UpdateOrderDto } from './dto/order.dto';
 import { IdGenerator } from '../../utils/IdGenerator';
 import { NotificationsService } from '../notifications/notifications.service';
+import { LUMIRA_EARLY_OFFER } from '@packages/shared';
 
 /** Server catalog for guest/authenticated order creation — never trust client totals */
-const ORDER_AMOUNT_CENTS = 2900;
+const ORDER_AMOUNT_CENTS = LUMIRA_EARLY_OFFER.amountCents;
 
 /**
  * Expert/desk may move workflow statuses, but PAID is webhook-only.

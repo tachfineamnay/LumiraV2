@@ -1,57 +1,91 @@
+import { LUMIRA_EARLY_OFFER } from '@packages/shared';
+
 // =============================================================================
-// V2 — Single product (29€ one-time payment)
+// V1 — Early-adopter offer (source: LUMIRA_EARLY_OFFER)
 // =============================================================================
 
 export interface FeatureGroup {
-    title: string;
-    items: { label: string; detail: string }[];
+  title: string;
+  items: { label: string; detail: string }[];
 }
 
 export interface SubscriptionProduct {
-    name: string;
-    price: number;         // euros (paiement unique)
-    description: string;
-    features: string[];
-    featureGroups: FeatureGroup[];
-    ctaLabel: string;
-    guaranteeText: string;
+  code: string;
+  name: string;
+  price: number; // euros (paiement unique)
+  amountCents: number;
+  accessDurationMonths: number;
+  description: string;
+  features: string[];
+  featureGroups: FeatureGroup[];
+  ctaLabel: string;
+  guaranteeText: string;
+  deliveryLabel: string;
+  accessLabel: string;
 }
 
 /**
- * The one and only subscription offer.
+ * The one and only public offer — mirrors server catalog.
  */
 export const SUBSCRIPTION: SubscriptionProduct = {
-    name: 'Cercle des Initiés',
-    price: 29,
-    description: 'Accès complet à l\'univers Oracle Lumira',
-    features: [
-        'Lecture PDF personnalisée par un expert',
-        'Chat illimité avec Lumira',
-        'Journal des Rêves & interprétation',
-        'Guidance spirituelle 30 jours',
-        'Mandala HD personnalisé',
-        'Rituels sacrés & méditations',
-    ],
-    featureGroups: [
+  code: LUMIRA_EARLY_OFFER.code,
+  name: LUMIRA_EARLY_OFFER.publicName,
+  price: LUMIRA_EARLY_OFFER.priceEuros,
+  amountCents: LUMIRA_EARLY_OFFER.amountCents,
+  accessDurationMonths: LUMIRA_EARLY_OFFER.accessDurationMonths,
+  description: `Lecture personnalisée et accès Sanctuaire ${LUMIRA_EARLY_OFFER.accessDurationMonths} mois (early)`,
+  features: [
+    'Dossier client sécurisé',
+    'Lecture personnalisée',
+    'Révision par un expert humain',
+    'PDF privé',
+    'Narration audio privée',
+    `Accès au Sanctuaire pendant ${LUMIRA_EARLY_OFFER.accessDurationMonths} mois`,
+  ],
+  featureGroups: [
+    {
+      title: 'Votre lecture personnalisée',
+      items: [
         {
-            title: 'Votre Lecture Personnalisée',
-            items: [
-                { label: 'Analyse complète en PDF', detail: '8 domaines de vie analysés par notre IA, puis révisés par un expert humain.' },
-                { label: 'Narration audio immersive', detail: 'Écoutez votre lecture en voix méditative, générée pour chaque insight.' },
-                { label: 'Mandala HD unique', detail: 'Une œuvre visuelle sacrée créée à partir de votre empreinte vibratoire.' },
-            ],
+          label: 'Dossier client sécurisé',
+          detail:
+            'Vos informations et médias restent privés, liés à votre compte, et ne sont jamais exposés par identifiant seul.',
         },
         {
-            title: 'Votre Guidance au Quotidien',
-            items: [
-                { label: 'Chat illimité avec Lumira', detail: 'Posez vos questions à l\'Oracle à tout moment — elle se souvient de votre parcours.' },
-                { label: 'Parcours spirituel 30 jours', detail: 'Un chemin personnalisé avec rituels, méditations et exercices quotidiens.' },
-                { label: 'Journal des Rêves', detail: 'Notez vos rêves et recevez une interprétation symbolique instantanée.' },
-            ],
+          label: 'Lecture personnalisée',
+          detail:
+            'Une lecture interprétative construite à partir de votre dossier, puis préparée pour validation humaine.',
         },
-    ],
-    ctaLabel: 'Commencer mon voyage — 29€',
-    guaranteeText: 'Satisfait ou remboursé sous 14 jours',
+        {
+          label: 'Révision par un expert',
+          detail:
+            'Un expert humain relit et valide le contenu avant livraison — aucune promesse médicale ou prédictive.',
+        },
+      ],
+    },
+    {
+      title: 'Vos livrables privés',
+      items: [
+        {
+          label: 'PDF privé',
+          detail: 'Votre lecture écrite, accessible uniquement dans votre espace sécurisé.',
+        },
+        {
+          label: 'Narration audio privée',
+          detail: 'Une version audio de votre lecture, réservée à votre Sanctuaire.',
+        },
+        {
+          label: `Accès Sanctuaire ${LUMIRA_EARLY_OFFER.accessDurationMonths} mois`,
+          detail:
+            'Offre early : paiement unique, accès au Sanctuaire pendant 3 mois — sans abonnement mensuel ni renouvellement automatique.',
+        },
+      ],
+    },
+  ],
+  ctaLabel: `Commencer mon voyage — ${LUMIRA_EARLY_OFFER.priceEuros}€`,
+  guaranteeText: 'Satisfait ou remboursé sous 14 jours',
+  deliveryLabel: `Livraison sous ${LUMIRA_EARLY_OFFER.deliveryWindowHours.min} à ${LUMIRA_EARLY_OFFER.deliveryWindowHours.max}h après scellement du dossier`,
+  accessLabel: `Accès ${LUMIRA_EARLY_OFFER.accessDurationMonths} mois · Offre early`,
 };
 
 // =============================================================================
@@ -60,35 +94,35 @@ export const SUBSCRIPTION: SubscriptionProduct = {
 
 /** @deprecated Use SUBSCRIPTION instead */
 export interface Product {
-    id: 'initie';
-    name: string;
-    description: string;
-    price: number;
-    features: string[];
-    duration: string;
-    access: string[];
-    badge?: string;
-    popular?: boolean;
-    ctaLabel: string;
+  id: 'initie';
+  name: string;
+  description: string;
+  price: number;
+  features: string[];
+  duration: string;
+  access: string[];
+  badge?: string;
+  popular?: boolean;
+  ctaLabel: string;
 }
 
 /** @deprecated Use SUBSCRIPTION instead */
 export const PRODUCTS: Product[] = [
-    {
-        id: 'initie',
-        name: SUBSCRIPTION.name,
-        description: SUBSCRIPTION.description,
-        price: SUBSCRIPTION.price,
-        features: SUBSCRIPTION.features,
-        duration: 'Accès à vie',
-        access: ['pdf', 'audio', 'mandala', 'rituels', 'chat', 'dreams'],
-        badge: '✨ TOUT INCLUS',
-        popular: true,
-        ctaLabel: SUBSCRIPTION.ctaLabel,
-    },
+  {
+    id: 'initie',
+    name: SUBSCRIPTION.name,
+    description: SUBSCRIPTION.description,
+    price: SUBSCRIPTION.price,
+    features: SUBSCRIPTION.features,
+    duration: SUBSCRIPTION.accessLabel,
+    access: ['pdf', 'audio', 'sanctuaire'],
+    badge: 'Early · 3 mois',
+    popular: true,
+    ctaLabel: SUBSCRIPTION.ctaLabel,
+  },
 ];
 
 /** @deprecated Use SUBSCRIPTION instead */
 export function getProductById(): Product {
-    return PRODUCTS[0];
+  return PRODUCTS[0];
 }

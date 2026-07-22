@@ -1,19 +1,21 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma, User, Expert, UserProfile, ReadingIntake, OrderStatus } from '@prisma/client';
-import { aggregateCapabilities, getHighestLevel, EntitlementsResponse } from '@packages/shared';
+import {
+  aggregateCapabilities,
+  getEarlyAccessExpiresAt,
+  getHighestLevel,
+  isEarlyAccessActive,
+  LUMIRA_EARLY_OFFER,
+  EntitlementsResponse,
+} from '@packages/shared';
 import { UpdateOnboardingProgressDto, UpdateProfileDto } from './dto/update-profile.dto';
 
 const ONBOARDING_CONSENT_PURPOSE = 'PERSONALIZED_SPIRITUAL_EXPERIENCE';
 const ONBOARDING_CONSENT_VERSION = '2026-07-18-user-agency-v1';
 const READING_INTAKE_SCHEMA_VERSION = '2026-07-20-order-intake-v1';
-const PAID_READING_STATUSES: OrderStatus[] = [
-  'PAID',
-  'PROCESSING',
-  'AWAITING_VALIDATION',
-  'COMPLETED',
-  'FAILED',
-];
+const ACTIVE_READING_STATUSES: OrderStatus[] = ['PAID', 'PROCESSING', 'AWAITING_VALIDATION'];
+const TERMINAL_READING_STATUSES: OrderStatus[] = ['COMPLETED', 'FAILED'];
 const MAX_ONBOARDING_DRAFT_BYTES = 32 * 1024;
 
 @Injectable()
@@ -36,27 +38,37 @@ export class UsersService {
   }
 
   /**
-   * Sanctuaire access is permanent after a paid order. Subscription records are
-   * retained only as legacy billing metadata and must never authorize access.
+   * Sanctuaire access for early buyers lasts accessDurationMonths after paidAt.
+   * Subscription records are legacy billing metadata and must never authorize access.
    */
   async getEntitlements(userId: string): Promise<EntitlementsResponse> {
-    const orderCount = await this.prisma.order.count({
+    const paidOrders = await this.prisma.order.findMany({
       where: {
         userId,
         status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] },
+        paidAt: { not: null },
       },
+      select: { paidAt: true },
+      orderBy: { paidAt: 'desc' },
     });
 
-    const hasPaidOrder = orderCount > 0;
-    const levels = hasPaidOrder ? [4] : [];
+    const orderCount = paidOrders.length;
+    const activePaidAt = paidOrders.find((order) => isEarlyAccessActive(order.paidAt))?.paidAt;
+    const hasActiveAccess = Boolean(activePaidAt);
+    const levels = hasActiveAccess ? [4] : [];
     const capabilities = aggregateCapabilities(levels);
     const highestLevel = getHighestLevel(levels);
+    const accessExpiresAt = activePaidAt
+      ? getEarlyAccessExpiresAt(activePaidAt).toISOString()
+      : null;
 
     return {
       capabilities,
-      products: hasPaidOrder ? ['lifetime-access'] : [],
+      products: hasActiveAccess ? [`early-access-${LUMIRA_EARLY_OFFER.accessDurationMonths}m`] : [],
       highestLevel,
       orderCount,
+      accessExpiresAt,
+      accessDurationMonths: hasActiveAccess ? LUMIRA_EARLY_OFFER.accessDurationMonths : 0,
     };
   }
 
@@ -103,7 +115,7 @@ export class UsersService {
   }
 
   /**
-   * Find a user by email only if they have at least one paid/valid order.
+   * Find a user by email only if they have an active early-access window.
    * Used for Sanctuaire passwordless authentication.
    * PENDING orders never grant access (prevents pay-what-you-want / amount-0 bypass).
    */
@@ -121,16 +133,20 @@ export class UsersService {
       return null;
     }
 
-    // Check if user has at least one paid/valid order.
-    // FAILED orders are included — paid orders where generation failed, user should still have access.
-    const paidOrder = await this.prisma.order.findFirst({
+    // FAILED orders are included — paid orders where generation failed still count
+    // while the early window is open.
+    const paidOrders = await this.prisma.order.findMany({
       where: {
         userId: user.id,
         status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] },
+        paidAt: { not: null },
       },
+      select: { paidAt: true },
+      orderBy: { paidAt: 'desc' },
+      take: 20,
     });
 
-    if (!paidOrder) {
+    if (!paidOrders.some((order) => isEarlyAccessActive(order.paidAt))) {
       return null;
     }
 
@@ -631,15 +647,34 @@ export class UsersService {
       }
       if (order.readingIntake) return this.mapOrderScopedProgress(order);
 
-      const profile = await tx.userProfile.findUnique({ where: { userId } });
-      const data = this.profileToDraftData(profile);
+      const [profile, legacyProgress] = await Promise.all([
+        tx.userProfile.findUnique({ where: { userId } }),
+        tx.onboardingProgress.findUnique({ where: { userId } }),
+      ]);
+      // A client may start filling the form before the payment webhook lands
+      // (legacy scope). Their freshest input takes precedence over the profile.
+      const legacyDraft =
+        legacyProgress?.status === 'IN_PROGRESS' &&
+        legacyProgress.data &&
+        typeof legacyProgress.data === 'object' &&
+        !Array.isArray(legacyProgress.data)
+          ? (legacyProgress.data as Record<string, unknown>)
+          : null;
+      const data = {
+        ...(this.profileToDraftData(profile) as Record<string, unknown>),
+        ...(legacyDraft ?? {}),
+      } as Prisma.InputJsonValue;
+      const currentStep =
+        legacyDraft && legacyDraft.schemaVersion === 2
+          ? Math.min(Math.max(legacyProgress?.currentStep ?? 0, 0), 4)
+          : 0;
       const intake = await tx.readingIntake.create({
         data: {
           orderId,
           userId,
           status: 'DRAFT',
           schemaVersion: READING_INTAKE_SCHEMA_VERSION,
-          currentStep: 0,
+          currentStep,
           data,
           revision: 0,
         },
@@ -647,9 +682,9 @@ export class UsersService {
 
       await tx.onboardingProgress.upsert({
         where: { userId },
-        create: { userId, currentStep: 0, status: 'IN_PROGRESS', data },
+        create: { userId, currentStep, status: 'IN_PROGRESS', data },
         update: {
-          currentStep: 0,
+          currentStep,
           status: 'IN_PROGRESS',
           data,
           completedAt: null,
@@ -685,12 +720,21 @@ export class UsersService {
     } as Prisma.InputJsonValue;
   }
 
+  /**
+   * The order that anchors the current intake scope. A terminal order (FAILED
+   * payment retry, delivered reading) without any intake must never shadow an
+   * older, still editable PAID order — otherwise the client sees a locked,
+   * empty dossier.
+   */
   private findRequiredIntakeOrder(userId: string, client: Pick<Prisma.TransactionClient, 'order'>) {
     return client.order.findFirst({
       where: {
         userId,
         intakeRequired: true,
-        status: { in: [...PAID_READING_STATUSES] },
+        OR: [
+          { status: { in: [...ACTIVE_READING_STATUSES] } },
+          { status: { in: [...TERMINAL_READING_STATUSES] }, readingIntake: { isNot: null } },
+        ],
       },
       orderBy: { createdAt: 'desc' },
       select: {

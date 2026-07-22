@@ -29,7 +29,7 @@ function buildClient(overrides: Record<string, unknown> = {}) {
       {
         id: 'order-1',
         orderNumber: 'LUM-2026-0001',
-        amount: 2900,
+        amount: 1700,
         currency: 'eur',
         status: 'COMPLETED',
         paidAt: new Date('2026-07-02T12:00:00.000Z'),
@@ -145,7 +145,7 @@ describe('ClientControlService', () => {
 
     const result = await service.getClientControlCenter('user-1');
 
-    expect(result.client.access).toBe('LIFETIME');
+    expect(result.client.access).toBe('EARLY_3M');
     expect(result.summary).toMatchObject({
       totalReadings: 1,
       deliveredReadings: 1,
@@ -224,7 +224,7 @@ describe('ClientControlService', () => {
 
     const result = await service.getClientControlCenter('user-1');
 
-    expect(result.client.access).toBe('LIFETIME');
+    expect(result.client.access).toBe('EARLY_3M');
     expect(result.readings[0].state).toBe('INCIDENT');
     expect(result.summary.incidents).toBe(1);
   });

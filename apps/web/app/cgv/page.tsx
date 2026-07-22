@@ -16,15 +16,15 @@ export default function CgvPage() {
         {
           title: "1. Objet de l'offre",
           paragraphs: [
-            "Oracle Lumira propose le « Cercle des Initiés » : une lecture personnalisée (PDF, narration audio, mandala) accompagnée d'un accès au Sanctuaire incluant le chat Lumira, le journal des rêves et un parcours de guidance de 30 jours.",
-            "Le prix affiché au moment de la commande est de 29 € TTC, en paiement unique. Il ne s'agit pas d'un abonnement : aucun prélèvement récurrent n'est effectué.",
+            'Oracle Lumira propose le « Cercle des Initiés » (offre early) : une lecture personnalisée (dossier sécurisé, PDF privé, narration audio) révisée par un expert humain, avec un accès au Sanctuaire pendant 3 mois.',
+            "Le prix affiché au moment de la commande est de 17 € TTC, en paiement unique. Il ne s'agit pas d'un abonnement : aucun prélèvement récurrent n'est effectué. L'accès Sanctuaire early dure 3 mois à compter du paiement.",
           ],
         },
         {
           title: '2. Commande et accès',
           paragraphs: [
             'Après confirmation du paiement par Stripe, votre accès au Sanctuaire est ouvert immédiatement. Vous complétez ensuite votre dossier (informations de naissance, questionnaire, photos facultatives) pour permettre la production de votre lecture.',
-            'Votre lecture est livrée dans votre Sanctuaire après validation par un expert, en principe sous 24 heures après finalisation de votre dossier.',
+            'Votre lecture est livrée dans votre Sanctuaire après validation par un expert, en principe sous 24 à 48 heures après scellement de votre dossier.',
           ],
         },
         {

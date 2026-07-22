@@ -76,9 +76,9 @@ export function LandingHero() {
             </div>
             <div className="w-px h-6 md:h-8 bg-white/10" />
             <div className="flex flex-col items-center">
-              <span className="text-white font-playfair text-lg md:text-xl italic">29€</span>
+              <span className="text-white font-playfair text-lg md:text-xl italic">17€</span>
               <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">
-                accès à vie
+                early · 3 mois
               </span>
             </div>
           </div>

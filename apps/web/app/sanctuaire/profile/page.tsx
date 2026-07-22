@@ -179,7 +179,7 @@ export default function ProfilePage() {
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md">
                   <span className="text-sm">👑</span>
                   <span className="text-xs font-bold uppercase tracking-widest text-amber-400">
-                    Accès à vie
+                    Accès early · 3 mois
                   </span>
                 </div>
                 <span

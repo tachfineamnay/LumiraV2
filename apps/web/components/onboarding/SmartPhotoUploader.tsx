@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import imageCompression from 'browser-image-compression';
 import Image from 'next/image';
-import { Camera, Check, ImagePlus, Loader2, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { Camera, Check, ImagePlus, Loader2, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
 
 export type PhotoUploadState = 'idle' | 'preparing' | 'uploading' | 'saved' | 'error';
 
@@ -24,6 +24,18 @@ interface SmartPhotoUploaderProps {
 }
 
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+
+/**
+ * On phones and tablets the native `capture` file input opens the camera app,
+ * which is the best UX. On desktop that attribute is ignored (plain file
+ * dialog), so we open a getUserMedia webcam view instead.
+ */
+function prefersNativeCameraInput(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  const isMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const isIpadOs = navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.userAgent);
+  return isMobileUa || isIpadOs || !navigator.mediaDevices?.getUserMedia;
+}
 
 function readAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -74,6 +86,11 @@ export const SmartPhotoUploader = ({
   const [uploadState, setUploadState] = useState<PhotoUploadState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [privatePreviewFailed, setPrivatePreviewFailed] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isCameraStarting, setIsCameraStarting] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   useEffect(() => {
     uploadStateCallbackRef.current = onUploadStateChange;
@@ -154,6 +171,76 @@ export const SmartPhotoUploader = ({
     setUploadState('idle');
     onChange(null);
   }, [onChange]);
+
+  const stopWebcam = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }, []);
+
+  const closeWebcam = useCallback(() => {
+    stopWebcam();
+    setIsCameraOpen(false);
+    setCameraError(null);
+  }, [stopWebcam]);
+
+  useEffect(() => stopWebcam, [stopWebcam]);
+
+  const openCamera = useCallback(async () => {
+    if (prefersNativeCameraInput()) {
+      cameraInputRef.current?.click();
+      return;
+    }
+    setCameraError(null);
+    setIsCameraOpen(true);
+    setIsCameraStarting(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: captureFacingMode,
+          width: { ideal: 1600 },
+          height: { ideal: 1200 },
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => undefined);
+      }
+    } catch (cameraOpenError) {
+      stopWebcam();
+      const isDenied =
+        cameraOpenError instanceof DOMException &&
+        (cameraOpenError.name === 'NotAllowedError' ||
+          cameraOpenError.name === 'PermissionDeniedError');
+      setCameraError(
+        isDenied
+          ? 'L’accès à la caméra a été refusé. Autorisez la caméra dans votre navigateur ou choisissez un fichier.'
+          : 'La caméra n’est pas disponible sur cet appareil. Vous pouvez choisir une photo existante.',
+      );
+    } finally {
+      setIsCameraStarting(false);
+    }
+  }, [captureFacingMode, stopWebcam]);
+
+  const captureFromWebcam = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', 0.92),
+    );
+    closeWebcam();
+    if (!blob) {
+      setError("La photo n'a pas pu être capturée. Réessayez ou choisissez un fichier.");
+      return;
+    }
+    await processFile(new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+  }, [closeWebcam, processFile]);
 
   const retry = useCallback(() => {
     if (retryPreview) void persistPreview(retryPreview);
@@ -263,22 +350,30 @@ export const SmartPhotoUploader = ({
             )}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isBusy}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-3 py-2 text-xs font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/[0.1] px-2 py-2 text-xs font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
             >
-              <ImagePlus className="h-4 w-4" /> Remplacer
+              <ImagePlus className="h-4 w-4 shrink-0" /> Remplacer
+            </button>
+            <button
+              type="button"
+              onClick={() => void openCamera()}
+              disabled={isBusy}
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-horizon-400/25 px-2 py-2 text-xs font-medium text-horizon-200 hover:bg-horizon-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
+            >
+              <Camera className="h-4 w-4 shrink-0" /> Reprendre
             </button>
             <button
               type="button"
               onClick={handleRemove}
               disabled={isBusy}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-rose-400/20 px-3 py-2 text-xs font-medium text-rose-200 hover:bg-rose-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-rose-400/20 px-2 py-2 text-xs font-medium text-rose-200 hover:bg-rose-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50"
             >
-              <Trash2 className="h-4 w-4" /> Retirer
+              <Trash2 className="h-4 w-4 shrink-0" /> Retirer
             </button>
           </div>
         </div>
@@ -306,7 +401,7 @@ export const SmartPhotoUploader = ({
             </button>
             <button
               type="button"
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => void openCamera()}
               disabled={isBusy}
               className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-horizon-400/12 px-3 py-2 text-xs font-medium text-horizon-200 hover:bg-horizon-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
             >
@@ -334,6 +429,90 @@ export const SmartPhotoUploader = ({
               <RefreshCw className="h-4 w-4" /> Réessayer l’envoi
             </button>
           )}
+        </div>
+      )}
+
+      {isCameraOpen && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-abyss-900/95 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Prendre une photo — ${label}`}
+        >
+          <div className="w-full max-w-lg rounded-3xl border border-white/[0.1] bg-abyss-700 p-4 shadow-abyss sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-stellar-100">
+                <Camera className="mr-2 inline h-4 w-4 text-horizon-300" />
+                {label}
+              </h4>
+              <button
+                type="button"
+                onClick={closeWebcam}
+                aria-label="Fermer la caméra"
+                className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.1] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-900">
+              {/* Mirror the preview for selfies; the saved photo stays unmirrored. */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`aspect-[4/3] w-full object-cover ${
+                  captureFacingMode === 'user' ? '-scale-x-100' : ''
+                }`}
+              />
+              {isCameraStarting && (
+                <div className="absolute inset-0 grid place-items-center bg-abyss-900/80">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-abyss-700 px-3 py-2 text-xs text-stellar-200">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Ouverture de la caméra…
+                  </span>
+                </div>
+              )}
+              {cameraError && (
+                <div className="absolute inset-0 grid place-items-center bg-abyss-900/90 p-4">
+                  <p className="max-w-sm text-center text-xs leading-5 text-rose-100" role="alert">
+                    {cameraError}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {cameraError ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeWebcam();
+                    fileInputRef.current?.click();
+                  }}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"
+                >
+                  <ImagePlus className="h-4 w-4" /> Choisir un fichier
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void captureFromWebcam()}
+                  disabled={isCameraStarting}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:opacity-50"
+                >
+                  <Camera className="h-4 w-4" /> Capturer
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={closeWebcam}
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-4 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

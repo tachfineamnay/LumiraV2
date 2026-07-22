@@ -6,24 +6,24 @@ test.describe('Landing Page', () => {
     await expect(page.locator('h1').filter({ hasText: 'Oracle' })).toBeVisible();
     await expect(page.locator('h1').filter({ hasText: 'Lumira' })).toBeVisible();
     await expect(
-      page.getByRole('link', { name: /commencer mon voyage.*29€/i }).first(),
+      page.getByRole('link', { name: /commencer mon voyage.*17€/i }).first(),
     ).toBeVisible();
   });
 
-  test('should display the one-time lifetime offer without tier cards', async ({ page }) => {
+  test('should display the one-time early offer without tier cards', async ({ page }) => {
     await page.goto('/');
 
-    // Lifetime access has one offer; historical tier cards are not part of this funnel.
+    // Early access has one offer; historical tier cards are not part of this funnel.
     await expect(page.getByTestId('level-p-init')).not.toBeVisible();
     await expect(page.getByTestId('level-p-itgr')).not.toBeVisible();
     await expect(
-      page.getByRole('link', { name: /commencer mon voyage.*29€/i }).first(),
+      page.getByRole('link', { name: /commencer mon voyage.*17€/i }).first(),
     ).toBeVisible();
   });
 
   test('CTA points to the checkout page', async ({ page }) => {
     await page.goto('/');
-    const cta = page.getByRole('link', { name: /commencer mon voyage.*29€/i }).first();
+    const cta = page.getByRole('link', { name: /commencer mon voyage.*17€/i }).first();
     await expect(cta).toBeVisible();
     await expect(cta).toHaveAttribute('href', '/commande');
   });

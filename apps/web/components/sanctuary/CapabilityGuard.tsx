@@ -3,7 +3,7 @@
 import React from 'react';
 import { useSanctuaire } from '../../context/SanctuaireContext';
 import Link from 'next/link';
-import { Lock, Crown, Sparkles, MessageCircle } from 'lucide-react';
+import { Lock, Crown, Sparkles, FileText } from 'lucide-react';
 
 // =============================================================================
 // TYPES
@@ -101,9 +101,9 @@ function SubscriptionPrompt() {
 
         <div className="flex flex-wrap justify-center gap-3 pt-2">
           {[
-            { icon: MessageCircle, label: 'Chat illimité' },
-            { icon: Sparkles, label: 'Journal des rêves' },
-            { icon: Crown, label: 'Guidance 30 jours' },
+            { icon: FileText, label: 'PDF privé' },
+            { icon: Sparkles, label: 'Audio privé' },
+            { icon: Crown, label: 'Sanctuaire 3 mois' },
           ].map(({ icon: Icon, label }) => (
             <div
               key={label}
@@ -120,10 +120,12 @@ function SubscriptionPrompt() {
           className="inline-flex items-center gap-2 mt-4 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-semibold hover:from-amber-400 hover:to-amber-500 transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)]"
         >
           <Crown className="w-4 h-4" />
-          Obtenir l&apos;accès à vie — 29€
+          Obtenir l&apos;accès early — 17€
         </Link>
 
-        <p className="text-[10px] text-white/30 pt-2">Paiement unique · aucun renouvellement</p>
+        <p className="text-[10px] text-white/30 pt-2">
+          Paiement unique · 3 mois · aucun renouvellement
+        </p>
       </div>
     </div>
   );

@@ -8,6 +8,18 @@ jest.mock('@packages/shared', () => ({
     levels.length > 0 ? ['content.basic', 'readings.pdf', 'chat_unlimited', 'dreams'] : [],
   ),
   getHighestLevel: jest.fn((levels: number[]) => (levels.length > 0 ? Math.max(...levels) : 0)),
+  LUMIRA_EARLY_OFFER: { accessDurationMonths: 3, amountCents: 1700, code: 'lumira_early_v1' },
+  isEarlyAccessActive: jest.fn((paidAt: Date | null) => {
+    if (!paidAt) return false;
+    const expires = new Date(paidAt);
+    expires.setUTCMonth(expires.getUTCMonth() + 3);
+    return expires.getTime() > Date.now();
+  }),
+  getEarlyAccessExpiresAt: jest.fn((paidAt: Date) => {
+    const expires = new Date(paidAt);
+    expires.setUTCMonth(expires.getUTCMonth() + 3);
+    return expires;
+  }),
 }));
 
 describe('UsersService', () => {
@@ -85,19 +97,21 @@ describe('UsersService', () => {
   // =========================================================================
 
   describe('getEntitlements', () => {
-    it('should return level 4 capabilities for any paid order', async () => {
-      prisma.order.count.mockResolvedValue(1);
+    it('should return level 4 capabilities for an active early-access order', async () => {
+      prisma.order.findMany.mockResolvedValue([{ paidAt: new Date() }]);
 
       const result = await service.getEntitlements('user-1');
 
       expect(result.highestLevel).toBe(4);
       expect(result.capabilities.length).toBeGreaterThan(0);
-      expect(result.products).toContain('lifetime-access');
+      expect(result.products).toContain('early-access-3m');
       expect(result.orderCount).toBe(1);
+      expect(result.accessDurationMonths).toBe(3);
+      expect(result.accessExpiresAt).toBeTruthy();
     });
 
     it('should return level 0 with no capabilities for no paid order', async () => {
-      prisma.order.count.mockResolvedValue(0);
+      prisma.order.findMany.mockResolvedValue([]);
 
       const result = await service.getEntitlements('user-1');
 
@@ -105,15 +119,29 @@ describe('UsersService', () => {
       expect(result.capabilities).toEqual([]);
       expect(result.products).toEqual([]);
       expect(result.orderCount).toBe(0);
+      expect(result.accessExpiresAt).toBeNull();
     });
 
-    it('does not inspect subscription status to determine lifetime access', async () => {
-      prisma.order.count.mockResolvedValue(2);
+    it('does not inspect subscription status to determine early access', async () => {
+      prisma.order.findMany.mockResolvedValue([{ paidAt: new Date() }, { paidAt: new Date() }]);
 
       const result = await service.getEntitlements('user-1');
 
       expect(result.highestLevel).toBe(4);
       expect(prisma.subscription.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('denies entitlements when the early-access window has expired', async () => {
+      const expiredPaidAt = new Date();
+      expiredPaidAt.setUTCMonth(expiredPaidAt.getUTCMonth() - 4);
+      prisma.order.findMany.mockResolvedValue([{ paidAt: expiredPaidAt }]);
+
+      const result = await service.getEntitlements('user-1');
+
+      expect(result.highestLevel).toBe(0);
+      expect(result.capabilities).toEqual([]);
+      expect(result.products).toEqual([]);
+      expect(result.orderCount).toBe(1);
     });
   });
 
@@ -124,7 +152,9 @@ describe('UsersService', () => {
   describe('findUserWithPaidOrder', () => {
     it('should return user when paid order exists', async () => {
       prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.order.findFirst.mockResolvedValue({ id: 'order-1', status: 'PAID', amount: 2900 });
+      prisma.order.findMany.mockResolvedValue([
+        { paidAt: new Date(), status: 'PAID', amount: 1700 },
+      ]);
 
       const result = await service.findUserWithPaidOrder('marie@test.com');
 
@@ -142,8 +172,7 @@ describe('UsersService', () => {
 
     it('should return null when user has no valid orders', async () => {
       prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.order.findFirst.mockResolvedValue(null);
-      prisma.order.findMany.mockResolvedValue([]); // debug logging
+      prisma.order.findMany.mockResolvedValue([]);
 
       const result = await service.findUserWithPaidOrder('marie@test.com');
 
@@ -164,11 +193,14 @@ describe('UsersService', () => {
 
     it('should accept COMPLETED orders', async () => {
       prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.order.findFirst.mockResolvedValue({
-        id: 'order-1',
-        status: 'COMPLETED',
-        amount: 2900,
-      });
+      prisma.order.findMany.mockResolvedValue([
+        {
+          id: 'order-1',
+          status: 'COMPLETED',
+          amount: 1700,
+          paidAt: new Date(),
+        },
+      ]);
 
       const result = await service.findUserWithPaidOrder('marie@test.com');
       expect(result).toBeTruthy();
@@ -176,10 +208,7 @@ describe('UsersService', () => {
 
     it('should reject PENDING orders with amount > 0 (awaiting webhook)', async () => {
       prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.order.findFirst.mockResolvedValue(null);
-      prisma.order.findMany.mockResolvedValue([
-        { id: 'order-1', status: 'PENDING', amount: 2900, createdAt: new Date() },
-      ]);
+      prisma.order.findMany.mockResolvedValue([]);
 
       const result = await service.findUserWithPaidOrder('marie@test.com');
       expect(result).toBeNull();
@@ -187,10 +216,7 @@ describe('UsersService', () => {
 
     it('should reject PENDING orders with amount 0 (no free bypass)', async () => {
       prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.order.findFirst.mockResolvedValue(null);
-      prisma.order.findMany.mockResolvedValue([
-        { id: 'order-1', status: 'PENDING', amount: 0, createdAt: new Date() },
-      ]);
+      prisma.order.findMany.mockResolvedValue([]);
 
       const result = await service.findUserWithPaidOrder('marie@test.com');
       expect(result).toBeNull();

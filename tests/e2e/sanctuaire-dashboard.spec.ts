@@ -11,7 +11,7 @@ test.describe('Sanctuaire — accueil', () => {
 
     await page.goto('/sanctuaire');
 
-    await expect(page.getByText('Accès à vie', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Accès early · 3 mois', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Votre lecture est prête' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Mes lectures' }).first()).toBeVisible();
     await expect(page.getByText(/abonnement|voir les offres|initié/i)).toHaveCount(0);
@@ -54,7 +54,9 @@ test.describe('Sanctuaire — accueil', () => {
     await page.getByLabel('Lieu de naissance').fill('Lyon, France');
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Ce que vous souhaitez éclairer' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Ce que vous souhaitez éclairer' }),
+    ).toBeVisible();
     await page.getByLabel(/Votre question/).fill('Que dois-je comprendre maintenant ?');
     await page.getByRole('button', { name: 'Continuer' }).click();
 

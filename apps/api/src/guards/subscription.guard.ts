@@ -1,9 +1,11 @@
 import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
+import { isEarlyAccessActive } from '@packages/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
- * Legacy-named guard for Sanctuaire content. It authorizes from a paid Order,
- * never from Subscription status, because Lumira access is lifetime.
+ * Legacy-named guard for Sanctuaire content. Authorizes from a paid Order whose
+ * early-access window (paidAt + 3 months) is still open. Subscription status is
+ * never the authorization source.
  * Must be used AFTER JwtAuthGuard so that req.user.id is available.
  *
  * @example
@@ -21,16 +23,23 @@ export class SubscriptionGuard implements CanActivate {
       throw new ForbiddenException('Authentication required.');
     }
 
-    const paidOrder = await this.prisma.order.findFirst({
+    const paidOrders = await this.prisma.order.findMany({
       where: {
         userId,
         status: { in: ['PAID', 'PROCESSING', 'AWAITING_VALIDATION', 'COMPLETED', 'FAILED'] },
+        paidAt: { not: null },
       },
-      select: { id: true },
+      select: { paidAt: true },
+      orderBy: { paidAt: 'desc' },
+      take: 20,
     });
 
-    if (!paidOrder) {
-      throw new ForbiddenException('A paid order is required to access this resource.');
+    const hasActiveAccess = paidOrders.some((order) => isEarlyAccessActive(order.paidAt));
+
+    if (!hasActiveAccess) {
+      throw new ForbiddenException(
+        'An active early access period is required to access this resource.',
+      );
     }
 
     return true;

@@ -1,8 +1,9 @@
 /**
- * Oracle Lumira - Entitlements System V2
+ * Oracle Lumira - Entitlements System V1 early
  *
- * V2: Single 29€/month subscription — all capabilities granted to subscribers.
- * The capability list is kept for fine-grained feature-flag checks (e.g. chat_unlimited).
+ * Early cohort: one-time payment grants Sanctuaire capabilities for a fixed
+ * window (see LUMIRA_EARLY_OFFER.accessDurationMonths). Not a monthly subscription
+ * and not lifetime access.
  */
 
 // =============================================================================
@@ -12,8 +13,11 @@
 export interface EntitlementsResponse {
   capabilities: string[];
   products: string[];
-  highestLevel: number; // Always 4 for subscribers (backward compat)
+  highestLevel: number; // Always 4 for active early access (backward compat)
   orderCount: number;
+  /** ISO timestamp when Sanctuaire access ends; null if no active window */
+  accessExpiresAt?: string | null;
+  accessDurationMonths?: number;
 }
 
 // =============================================================================

@@ -18,7 +18,7 @@ test.describe('Order Flow — lifetime access', () => {
     });
     await page.goto('/commande');
     await expect(page.getByText('paiement unique', { exact: true })).toBeVisible();
-    await expect(page.getByText(/accès à vie/i)).toBeVisible();
+    await expect(page.getByText(/accès 3 mois|early/i).first()).toBeVisible();
     await expect(page.getByTestId('level-p-init')).not.toBeVisible();
     await expect(page.getByTestId('level-p-itgr')).not.toBeVisible();
     await page.locator('[name="firstName"]').fill(TEST_USER.firstName);
@@ -36,14 +36,14 @@ test.describe('Order Flow — lifetime access', () => {
       });
     });
 
-    await page.getByRole('button', { name: /payer 29€/i }).click();
+    await page.getByRole('button', { name: /payer 17€/i }).click();
 
     await expect(page.getByText('Paiement sécurisé', { exact: true })).toBeVisible();
     expect(checkoutPayload).toMatchObject({
       email: TEST_USER.email,
       firstName: TEST_USER.firstName,
       lastName: TEST_USER.lastName,
-      productLevel: '4',
+      productLevel: 'lumira_early_v1',
     });
   });
 });

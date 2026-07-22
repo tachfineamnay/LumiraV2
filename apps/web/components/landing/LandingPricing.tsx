@@ -2,21 +2,20 @@ import Link from 'next/link';
 import {
   Crown,
   Sparkles,
-  MessageCircle,
   Star,
   Check,
   ShieldCheck,
   FileText,
   Headphones,
-  Palette,
-  Compass,
-  PenLine,
+  UserCheck,
+  Shield,
+  Landmark,
 } from 'lucide-react';
 import { SUBSCRIPTION } from '../../lib/products';
 
 const GROUP_ICONS = [
-  [FileText, Headphones, Palette],
-  [MessageCircle, Compass, PenLine],
+  [Shield, FileText, UserCheck],
+  [FileText, Headphones, Landmark],
 ] as const;
 
 export function LandingPricing() {
@@ -32,8 +31,9 @@ export function LandingPricing() {
           </h2>
           <p className="text-cosmic-ethereal max-w-2xl mx-auto text-lg leading-relaxed font-light">
             Nous aurions pu facturer chaque livrable séparément. Nous avons choisi l&apos;accès
-            complet à <span className="text-white/80 font-medium">29€ une seule fois</span> — parce
-            que votre transformation ne devrait pas avoir de prix d&apos;entrée prohibitif.
+            complet à{' '}
+            <span className="text-white/80 font-medium">{SUBSCRIPTION.price}€ une seule fois</span>{' '}
+            — accès Sanctuaire {SUBSCRIPTION.accessDurationMonths} mois pour les early adopters.
           </p>
         </div>
 
@@ -58,7 +58,8 @@ export function LandingPricing() {
                     <span className="text-lg text-white/40">paiement unique</span>
                   </div>
                   <p className="mt-2 text-white/50 text-sm">
-                    Accès à vie · Aucun renouvellement · Offre de lancement
+                    Accès {SUBSCRIPTION.accessDurationMonths} mois · Aucun renouvellement · Offre
+                    early
                   </p>
                 </div>
                 <div className="flex flex-col items-start md:items-end gap-3">

@@ -12,7 +12,7 @@ test.describe('Sanctuaire — compatibilité des anciennes routes', () => {
   }) => {
     await page.goto('/sanctuaire/abonnement');
     await page.waitForURL('**/sanctuaire/profile', { timeout: 10_000 });
-    await expect(page.getByText('Accès à vie', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Accès early · 3 mois', { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/abonnement|paiement récurrent|annuler/i)).toHaveCount(0);
   });
 

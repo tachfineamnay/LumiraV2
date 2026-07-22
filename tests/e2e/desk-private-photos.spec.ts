@@ -92,7 +92,7 @@ function buildControlCenter(
       firstName: 'Client',
       lastName: 'Test',
       email: 'client@example.test',
-      access: 'LIFETIME',
+      access: 'EARLY_3M',
     },
     readiness: {
       ...readiness,

@@ -406,8 +406,7 @@ export function ReadingPreparation({
       failedSignatureRef.current = '';
       if (mountedRef.current) setSaveState('saving');
 
-      const execute = async (): Promise<boolean> => {
-        if (saveEpoch !== saveEpochRef.current) return true;
+      const attemptSave = async (): Promise<DraftResponse | null> => {
         const payload: {
           currentStep: number;
           data: PersistedDraftData;
@@ -422,7 +421,6 @@ export function ReadingPreparation({
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), 15_000);
         activeSaveRequestsRef.current.add(controller);
-
         try {
           const response = await fetch('/api/bff/users/onboarding', {
             method: 'PATCH',
@@ -436,11 +434,61 @@ export function ReadingPreparation({
             body: JSON.stringify(payload),
           });
           if (!response.ok) {
-            const failure = new Error('Draft save failed') as Error & { status?: number };
+            const body = (await response.json().catch(() => null)) as {
+              code?: string;
+            } | null;
+            const failure = new Error('Draft save failed') as Error & {
+              status?: number;
+              code?: string;
+            };
             failure.status = response.status;
+            if (body?.code) failure.code = body.code;
             throw failure;
           }
-          const responseData = (await response.json().catch(() => null)) as DraftResponse | null;
+          return (await response.json().catch(() => null)) as DraftResponse | null;
+        } finally {
+          window.clearTimeout(timeout);
+          activeSaveRequestsRef.current.delete(controller);
+        }
+      };
+
+      // A paid order can be confirmed by webhook while the client is already
+      // filling the form: the draft scope silently moves from legacy to
+      // order-scoped. Re-read the scope once and retry so no input is lost.
+      const recoverOrderScope = async (): Promise<boolean> => {
+        const response = await fetch('/api/bff/users/onboarding', {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) return false;
+        const fresh = (await response.json().catch(() => null)) as DraftResponse | null;
+        if (!fresh || fresh.status === 'COMPLETED' || fresh.canEdit === false) return false;
+        orderIdRef.current = fresh.orderId;
+        revisionRef.current = typeof fresh.revision === 'number' ? fresh.revision : undefined;
+        return true;
+      };
+
+      const execute = async (): Promise<boolean> => {
+        if (saveEpoch !== saveEpochRef.current) return true;
+
+        try {
+          let responseData: DraftResponse | null;
+          try {
+            responseData = await attemptSave();
+          } catch (firstError) {
+            const code = (firstError as { code?: string }).code;
+            if (
+              requestStatus(firstError) === 409 &&
+              code === 'ACTIVE_ORDER_CHANGED' &&
+              saveEpoch === saveEpochRef.current &&
+              (await recoverOrderScope())
+            ) {
+              responseData = await attemptSave();
+            } else {
+              throw firstError;
+            }
+          }
 
           if (saveEpoch !== saveEpochRef.current) return true;
           if (typeof responseData?.revision === 'number') {
@@ -477,9 +525,6 @@ export function ReadingPreparation({
             }
           }
           return false;
-        } finally {
-          window.clearTimeout(timeout);
-          activeSaveRequestsRef.current.delete(controller);
         }
       };
 
@@ -930,9 +975,26 @@ export function ReadingPreparation({
       setIsComplete(true);
       await onCompleted().catch(() => undefined);
     } catch (error) {
+      const errorCode = (error as { response?: { data?: { code?: string } } })?.response?.data
+        ?.code;
+      if (requestStatus(error) === 409 && errorCode === 'ACTIVE_ORDER_CHANGED') {
+        // Refresh the scope so the next "Confirmer" targets the right order.
+        try {
+          const scope = await sanctuaireApi.get('/users/onboarding', { timeout: 15_000 });
+          const fresh = (scope.data ?? null) as DraftResponse | null;
+          if (fresh && fresh.status !== 'COMPLETED' && fresh.canEdit !== false) {
+            orderIdRef.current = fresh.orderId;
+            revisionRef.current = typeof fresh.revision === 'number' ? fresh.revision : undefined;
+          }
+        } catch {
+          // The user can still retry manually; the draft is preserved server-side.
+        }
+      }
       setActionError(
         requestStatus(error) === 409
-          ? 'Ce dossier vient d’être scellé ou la production a commencé. Rechargez votre Sanctuaire.'
+          ? errorCode === 'ACTIVE_ORDER_CHANGED'
+            ? 'Votre commande vient d’être confirmée. Votre brouillon est conservé : cliquez à nouveau sur Confirmer.'
+            : 'Ce dossier vient d’être scellé ou la production a commencé. Rechargez votre Sanctuaire.'
           : 'Le dossier n’a pas pu être transmis. Votre brouillon reste sauvegardé : réessayez dans un instant.',
       );
     } finally {

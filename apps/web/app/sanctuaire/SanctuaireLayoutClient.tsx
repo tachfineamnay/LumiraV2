@@ -31,8 +31,14 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
 
   if (pathname === '/sanctuaire/login') return <>{children}</>;
 
-  const userName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Votre profil';
-  const userInitial = user?.firstName?.[0]?.toUpperCase() || 'U';
+  const userName =
+    [user?.firstName, user?.lastName]
+      .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+      .join(' ')
+      .trim() ||
+    user?.email ||
+    'Votre profil';
+  const userInitial = userName[0]?.toUpperCase() || 'U';
 
   return (
     <SanctuaireGuard>
@@ -54,7 +60,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
             <div className="hidden items-center gap-2 lg:flex" aria-label="Statut d’accès">
               <ShieldCheck className="h-4 w-4 text-horizon-300" />
               <span className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-200">
-                Accès à vie
+                Accès early · 3 mois
               </span>
             </div>
 
@@ -98,7 +104,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                         <p className="truncate text-sm font-medium text-stellar-100">{userName}</p>
                         <p className="truncate text-xs text-stellar-500">{user?.email}</p>
                         <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-horizon-400/25 bg-horizon-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-horizon-200">
-                          <ShieldCheck className="h-3 w-3" /> Accès à vie
+                          <ShieldCheck className="h-3 w-3" /> Accès early · 3 mois
                         </p>
                       </div>
                       <nav className="p-2" aria-label="Profil et réglages">

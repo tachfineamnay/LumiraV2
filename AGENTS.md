@@ -17,7 +17,7 @@ Ne jamais réintroduire une ancienne règle produit uniquement parce qu'elle app
 
 ## Invariants produit actuels
 
-- Le Sanctuaire est un accès permanent obtenu après au moins une commande `PAID`, pas un abonnement mensuel résiliable.
+- Le Sanctuaire early est un accès de 3 mois obtenu après au moins une commande `PAID` (offre `lumira_early_v1`), pas un abonnement mensuel résiliable ni un accès à vie.
 - L'accès client est délivré soit par un handoff serveur après vérification Stripe, soit par un lien magique e-mail à usage unique. Ne pas réintroduire mot de passe ou code OTP client sans décision produit explicite.
 - Les liens magiques doivent rester non énumérables, stockés sous forme de hash, expirables et consommables une seule fois.
 - L'authentification du Desk expert reste séparée de l'authentification client.
