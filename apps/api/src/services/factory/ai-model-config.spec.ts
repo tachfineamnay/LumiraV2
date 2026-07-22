@@ -12,7 +12,7 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
     expect(normalized.config.agents.EDITOR.model).toBe('gpt-5.4-2026-03-05');
     expect(normalized.config.agents.NARRATOR.model).toBe('gpt-4o-2024-11-20');
-    expect(normalized.config.agents.CONFIDANT.enabled).toBe(false);
+    expect(Object.values(normalized.config.agents).every((agent) => agent.enabled)).toBe(true);
   });
 
   it('accepts per_agent mode with vertex and gemini pinned models', () => {
@@ -66,6 +66,7 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
     expect(normalized.config.agents.SCRIBE.maxOutputTokens).toBe(24000);
     expect(normalized.config.agents.GUIDE.model).toBe('gpt-5.4-2026-03-05');
+    expect(normalized.config.agents.ONIRIQUE.enabled).toBe(true);
   });
 
   it('rejects aliases and invalid configuration in strict validation mode', () => {

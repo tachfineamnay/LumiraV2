@@ -64,7 +64,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       maxOutputTokens: 12000,
     },
     CONFIDANT: {
-      enabled: false,
+      enabled: true,
       provider: 'openai',
       model: 'gpt-4o-2024-11-20',
       temperature: 0.6,
@@ -72,7 +72,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       maxOutputTokens: 1600,
     },
     ONIRIQUE: {
-      enabled: false,
+      enabled: true,
       provider: 'openai',
       model: 'gpt-4o-2024-11-20',
       temperature: 0.65,
