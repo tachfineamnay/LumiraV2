@@ -20,6 +20,9 @@ import {
   History,
   RotateCcw,
   Trash2,
+  Unlock,
+  FileText,
+  Download,
 } from 'lucide-react';
 import { ConfirmModal } from '../shared/ConfirmModal';
 
@@ -28,6 +31,18 @@ import { ConfirmModal } from '../shared/ConfirmModal';
 // =============================================================================
 
 type StudioStep = 'dossier' | 'briefing' | 'revision';
+
+type DeliveryRow = {
+  id: string;
+  readingVersionId: string;
+  version: number;
+  sealedAt: string | null;
+  contentHash: string;
+  pdfKey: string;
+  emailStatus: string;
+  createdAt: string;
+  isCurrent: boolean;
+};
 
 interface OrderWorkflowProps {
   orderId: string;
@@ -70,6 +85,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const [versions, setVersions] = useState<
     Array<{ content: string; timestamp: string; action: string }>
   >([]);
+
+  // PDF delivery history (Desk only)
+  const [showDeliveries, setShowDeliveries] = useState(false);
+  const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
+  const [isLoadingDeliveries, setIsLoadingDeliveries] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
 
   // Seal confirmation modal
   const [showSealConfirm, setShowSealConfirm] = useState(false);
@@ -342,6 +363,48 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     }
   };
 
+  const handleReopen = async () => {
+    setIsReopening(true);
+    try {
+      await expertApi.post(`/expert/orders/${orderId}/reopen`, {});
+      toast.success('Lecture réouverte pour révision', {
+        description: 'Éditez ou régénérez, puis re-scellez pour renvoyer au client.',
+      });
+      await fetchOrder();
+      setStep('revision');
+    } catch {
+      toast.error('Impossible de réouvrir cette lecture');
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
+  const fetchDeliveries = useCallback(async () => {
+    setIsLoadingDeliveries(true);
+    try {
+      const { data } = await expertApi.get(`/expert/orders/${orderId}/deliveries`);
+      setDeliveries(data.deliveries || []);
+    } catch {
+      toast.error('Historique PDF indisponible');
+    } finally {
+      setIsLoadingDeliveries(false);
+    }
+  }, [orderId]);
+
+  const openDeliveryPdf = async (deliveryId: string) => {
+    try {
+      const { data } = await expertApi.get(
+        `/expert/orders/${orderId}/deliveries/${deliveryId}/pdf`,
+        { responseType: 'blob' },
+      );
+      const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error('Impossible d’ouvrir ce PDF');
+    }
+  };
+
   const handleInsertText = (text: string) => {
     setEditorContent((prev) => prev + '\n\n' + text);
     toast.success('Texte inséré');
@@ -349,6 +412,8 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
   // Derived state
   const isReadOnly = order?.status === 'COMPLETED';
+  const isPostDeliveryRevision =
+    order?.status === 'AWAITING_VALIDATION' && Boolean(order.deliveredAt);
   const levelConfig = order
     ? LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1]
     : LEVEL_CONFIG[1];
@@ -429,6 +494,39 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   Livrée
                 </span>
               )}
+              {isPostDeliveryRevision && (
+                <span className="hidden sm:inline px-3 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-700 border border-amber-500/30">
+                  Révision post-livraison
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeliveries(true);
+                  void fetchDeliveries();
+                }}
+                title="Historique PDF livrés"
+                aria-label="Historique PDF livrés"
+                className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors flex items-center justify-center"
+              >
+                <FileText className="w-4 h-4" />
+              </button>
+              {isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => void handleReopen()}
+                  disabled={isReopening}
+                  title="Réouvrir pour révision"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-2 min-h-[40px] rounded-lg bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {isReopening ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Unlock className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">Réouvrir</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowDeleteOrder(true)}
                 title="Supprimer la commande"
@@ -485,6 +583,15 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
           </div>
         </div>
       </div>
+
+      {isPostDeliveryRevision && (
+        <div className="flex-shrink-0 px-3 sm:px-4 py-2 bg-amber-500/10 border-b border-amber-500/20">
+          <p className="text-xs sm:text-sm text-amber-800 text-center">
+            Révision post-livraison — le client verra uniquement la prochaine version scellée. Les
+            PDF précédents restent dans l’historique Desk ; l’audio sera remplacé.
+          </p>
+        </div>
+      )}
 
       {/* ═══════════════ STEP CONTENT ═══════════════ */}
       <div className="flex-1 overflow-hidden">
@@ -586,6 +693,97 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                         >
                           <RotateCcw className="w-3 h-3" />
                           <span>Restaurer cette version</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════════════ PDF DELIVERY HISTORY DRAWER ═══════════════ */}
+      <AnimatePresence>
+        {showDeliveries && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            onClick={() => setShowDeliveries(false)}
+          >
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25 }}
+              className="absolute right-0 top-0 h-full w-full max-w-md bg-desk-surface border-l border-desk-border flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-4 border-b border-desk-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-desk-text">Historique PDF</h2>
+                    <p className="text-xs text-desk-subtle">
+                      {deliveries.length} livraison{deliveries.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowDeliveries(false)}
+                  title="Fermer"
+                  className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {isLoadingDeliveries ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                  </div>
+                ) : deliveries.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileText className="w-12 h-12 text-desk-subtle mx-auto mb-3" />
+                    <p className="text-desk-muted">Aucun PDF livré pour le moment</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {deliveries.map((delivery) => (
+                      <div
+                        key={delivery.id}
+                        className="bg-desk-card border border-desk-border rounded-xl p-4"
+                      >
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <span className="text-sm font-medium text-desk-text">
+                            Version {delivery.version}
+                          </span>
+                          {delivery.isCurrent && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/25">
+                              Courante
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-desk-subtle mb-3">
+                          {delivery.sealedAt
+                            ? new Date(delivery.sealedAt).toLocaleString('fr-FR')
+                            : new Date(delivery.createdAt).toLocaleString('fr-FR')}
+                          {' · '}
+                          Email {delivery.emailStatus.toLowerCase()}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void openDeliveryPdf(delivery.id)}
+                          className="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-500"
+                        >
+                          <Download className="w-3 h-3" />
+                          Ouvrir le PDF
                         </button>
                       </div>
                     ))}

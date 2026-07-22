@@ -135,6 +135,7 @@ export function StepRevision({
                 hour: '2-digit',
                 minute: '2-digit',
               })}
+              {' — utilisez Réouvrir pour une nouvelle révision'}
             </span>
           </div>
         </div>

@@ -277,6 +277,40 @@ export class ExpertController {
   }
 
   /**
+   * Reopen a COMPLETED reading for expert revision (edit / regenerate / re-seal).
+   */
+  @Post('orders/:id/reopen')
+  async reopenOrder(
+    @Param('id') orderId: string,
+    @Body() body: { reason?: string },
+    @CurrentExpert() expert: Expert,
+  ) {
+    return this.expertService.reopenForRevision(orderId, expert, body?.reason);
+  }
+
+  /**
+   * PDF delivery history for Desk (not exposed to Sanctuaire clients).
+   */
+  @Get('orders/:id/deliveries')
+  async listOrderDeliveries(@Param('id') orderId: string) {
+    return this.expertService.listOrderDeliveries(orderId);
+  }
+
+  @Get('orders/:id/deliveries/:deliveryId/pdf')
+  async downloadOrderDeliveryPdf(
+    @Param('id') orderId: string,
+    @Param('deliveryId') deliveryId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const pdf = await this.expertService.getOrderDeliveryPdf(orderId, deliveryId);
+    res.set({
+      'Content-Type': pdf.contentType,
+      'Content-Disposition': `inline; filename="${pdf.filename}"`,
+    });
+    return new StreamableFile(pdf.stream);
+  }
+
+  /**
    * Full regeneration from Studio - completely re-runs AI generation.
    * Saves current content to version history before regenerating.
    */

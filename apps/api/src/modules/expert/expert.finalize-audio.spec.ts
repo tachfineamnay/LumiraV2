@@ -23,9 +23,14 @@ describe('ExpertService audio enqueue after finalize', () => {
           orderNumber: 'LUM-001',
           status: 'AWAITING_VALIDATION',
           generatedContent: { pdf_content: { introduction: 'x', sections: [], conclusion: 'y' } },
+          expertReview: null,
           user: { profile: {} },
         }),
         update: jest.fn().mockResolvedValue({ id: 'ord-1', orderNumber: 'LUM-001' }),
+      },
+      orderFile: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'af-1', key: 'audio/old.mp3' }]),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       readingVersion: {
         create: jest.fn().mockResolvedValue({ id: 'rv-1', contentHash: 'hash' }),
@@ -55,6 +60,7 @@ describe('ExpertService audio enqueue after finalize', () => {
     const notificationsService = {
       sendDeliveryEmailTracked: jest.fn().mockResolvedValue(undefined),
     };
+    const s3Service = { deleteObject: jest.fn().mockResolvedValue(undefined) };
 
     const service = new ExpertService(
       prisma as never,
@@ -66,9 +72,9 @@ describe('ExpertService audio enqueue after finalize', () => {
       {} as never,
       gateway as never,
       productionControl as never,
+      s3Service as never,
     );
 
-    // Avoid real email path complexity — stub private method
     (service as unknown as { sendDeliveryEmail: jest.Mock }).sendDeliveryEmail = jest
       .fn()
       .mockResolvedValue(undefined);
@@ -76,11 +82,11 @@ describe('ExpertService audio enqueue after finalize', () => {
       .fn()
       .mockResolvedValue(undefined);
 
-    return { service, productionControl, digitalSoulService, gateway };
+    return { service, productionControl, digitalSoulService, gateway, prisma, s3Service };
   }
 
-  it('enqueues AUDIO_GENERATION after finalizeFromStudio succeeds', async () => {
-    const { service, productionControl } = buildService();
+  it('replaces prior audio then enqueues AUDIO_GENERATION after finalize', async () => {
+    const { service, productionControl, prisma, s3Service } = buildService();
     const result = await service.finalizeFromStudio(
       'ord-1',
       'Contenu final validé',
@@ -88,6 +94,10 @@ describe('ExpertService audio enqueue after finalize', () => {
     );
 
     expect(result.success).toBe(true);
+    expect(s3Service.deleteObject).toHaveBeenCalledWith('audio/old.mp3', 'readings');
+    expect(prisma.orderFile.deleteMany).toHaveBeenCalledWith({
+      where: { orderId: 'ord-1', type: 'AUDIO_READING' },
+    });
     expect(productionControl.enqueueAudio).toHaveBeenCalledWith('ord-1', expert);
   });
 

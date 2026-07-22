@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
@@ -106,6 +107,23 @@ export class S3Service {
       }
       this.logger.error(`S3 getObject failed (${bucket})`);
       throw error;
+    }
+  }
+
+  async deleteObject(key: string, bucket: S3BucketKind = 'readings'): Promise<void> {
+    try {
+      await this.s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: this.resolveBucket(bucket),
+          Key: key,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `S3 deleteObject failed (${bucket}/${key}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 

@@ -17,8 +17,16 @@ import { VertexOracle } from '../../services/factory/VertexOracle';
 import { productLevelFromAmountCents } from '../../services/factory/product-level.util';
 import { ExpertGateway } from './expert.gateway';
 import { ProductionControlService } from './production-control.service';
+import {
+  isActiveProductionJob,
+  readCurrentProduction,
+  readExpertReview,
+  toJson,
+} from './production-control.types';
+import { S3Service } from '../uploads/s3.service';
 import * as bcrypt from 'bcryptjs';
 import { Expert, Order, Prisma, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
+import { Readable } from 'stream';
 import {
   buildGeneratedReadingVersion,
   buildStudioReadingVersion,
@@ -91,16 +99,18 @@ export class ExpertService {
     private vertexOracle: VertexOracle,
     private gateway: ExpertGateway,
     private productionControl: ProductionControlService,
+    private s3Service: S3Service,
   ) {
     this.logger.log(`🔌 DigitalSoulService injected via DI`);
   }
 
   /**
-   * After PDF seal, queue managed TTS. Never fail the seal if enqueue fails
-   * (conflict = audio already present / job active; other errors are logged).
+   * After PDF seal, replace any prior TTS asset then queue managed audio.
+   * Never fail the seal if enqueue fails.
    */
   private async enqueueAudioBestEffort(orderId: string, expert: ExpertEntity): Promise<void> {
     try {
+      await this.replaceCurrentAudioAssets(orderId);
       await this.productionControl.enqueueAudio(orderId, expert as Expert);
       this.logger.log(`🎙️ Audio production queued after finalize for ${orderId}`);
     } catch (error) {
@@ -114,6 +124,47 @@ export class ExpertService {
         }`,
       );
     }
+  }
+
+  /** Drop current AUDIO_READING rows (and best-effort S3 objects). No audio history. */
+  private async replaceCurrentAudioAssets(orderId: string): Promise<void> {
+    const audioFiles = await this.prisma.orderFile.findMany({
+      where: { orderId, type: 'AUDIO_READING' },
+      select: { id: true, key: true },
+    });
+
+    for (const file of audioFiles) {
+      if (file.key) {
+        await this.s3Service.deleteObject(file.key, 'readings');
+      }
+    }
+
+    if (audioFiles.length > 0) {
+      await this.prisma.orderFile.deleteMany({
+        where: { orderId, type: 'AUDIO_READING' },
+      });
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { expertReview: true },
+    });
+    if (!order) return;
+
+    const review = readExpertReview(order.expertReview);
+    if (!review.assets?.audio) return;
+
+    const restAssets = { ...review.assets };
+    delete restAssets.audio;
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        expertReview: toJson({
+          ...review,
+          assets: Object.keys(restAssets).length > 0 ? restAssets : undefined,
+        }),
+      },
+    });
   }
 
   // ========================
@@ -652,7 +703,7 @@ export class ExpertService {
       PROCESSING: ['AWAITING_VALIDATION', 'FAILED'],
       AWAITING_VALIDATION: ['COMPLETED', 'PROCESSING'],
       FAILED: ['PROCESSING'],
-      COMPLETED: [],
+      COMPLETED: ['AWAITING_VALIDATION'],
       REFUNDED: [],
       PENDING: [],
     };
@@ -682,6 +733,173 @@ export class ExpertService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+  }
+
+  /**
+   * Reopen a delivered reading for expert revision. Client intake stays sealed.
+   * Prior DeliveryRecord PDF keys are preserved for Desk history.
+   */
+  async reopenForRevision(
+    orderId: string,
+    expert: ExpertEntity,
+    reason?: string,
+  ): Promise<{
+    success: boolean;
+    orderId: string;
+    orderNumber: string;
+    status: string;
+  }> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Commande non trouvée');
+    }
+    if (order.status !== 'COMPLETED') {
+      throw new BadRequestException(
+        `Seule une lecture livrée (COMPLETED) peut être réouverte (actuel : ${order.status})`,
+      );
+    }
+
+    const activeJob = readCurrentProduction(order.expertReview);
+    if (isActiveProductionJob(activeJob)) {
+      throw new ConflictException(
+        `Un traitement est déjà actif (${activeJob?.stage || activeJob?.status})`,
+      );
+    }
+
+    const now = new Date();
+    const review = readExpertReview(order.expertReview);
+    const previousValidation =
+      order.expertValidation &&
+      typeof order.expertValidation === 'object' &&
+      !Array.isArray(order.expertValidation)
+        ? (order.expertValidation as Record<string, unknown>)
+        : {};
+
+    await this.prisma.$transaction(async (tx) => {
+      const latestSealed = await tx.readingVersion.findFirst({
+        where: { orderId, status: 'SEALED' },
+        orderBy: { version: 'desc' },
+        select: { id: true },
+      });
+      if (latestSealed) {
+        await tx.readingVersion.update({
+          where: { id: latestSealed.id },
+          data: { reopenedAt: now },
+        });
+      }
+
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: 'AWAITING_VALIDATION',
+          expertReview: toJson({
+            ...review,
+            lastReopen: {
+              at: now.toISOString(),
+              byExpertId: expert.id,
+              byExpertName: expert.name,
+              reason: reason?.trim() || null,
+            },
+          }),
+          expertValidation: {
+            ...previousValidation,
+            lastReopen: {
+              action: 'reopen',
+              reopenedBy: expert.id,
+              reopenedAt: now.toISOString(),
+              reason: reason?.trim() || null,
+            },
+          },
+        },
+      });
+    });
+
+    this.logger.log(
+      `♻️ Order ${order.orderNumber} reopened for revision by ${expert.email}${
+        reason ? ` (${reason})` : ''
+      }`,
+    );
+
+    return {
+      success: true,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: 'AWAITING_VALIDATION',
+    };
+  }
+
+  async listOrderDeliveries(orderId: string): Promise<{
+    deliveries: Array<{
+      id: string;
+      readingVersionId: string;
+      version: number;
+      sealedAt: string | null;
+      contentHash: string;
+      pdfKey: string;
+      emailStatus: string;
+      createdAt: string;
+      isCurrent: boolean;
+    }>;
+  }> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, generatedContent: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Commande non trouvée');
+    }
+
+    const currentVersionId =
+      ((order.generatedContent as Record<string, unknown> | null)?.canonicalReadingVersionId as
+        | string
+        | undefined) || null;
+
+    const rows = await this.prisma.deliveryRecord.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        readingVersion: {
+          select: { version: true, sealedAt: true },
+        },
+      },
+    });
+
+    return {
+      deliveries: rows.map((row) => ({
+        id: row.id,
+        readingVersionId: row.readingVersionId,
+        version: row.readingVersion.version,
+        sealedAt: row.readingVersion.sealedAt?.toISOString() || null,
+        contentHash: row.contentHash,
+        pdfKey: row.pdfKey,
+        emailStatus: row.emailStatus,
+        createdAt: row.createdAt.toISOString(),
+        isCurrent: row.readingVersionId === currentVersionId,
+      })),
+    };
+  }
+
+  async getOrderDeliveryPdf(
+    orderId: string,
+    deliveryId: string,
+  ): Promise<{ stream: Readable; contentType: string; filename: string }> {
+    const delivery = await this.prisma.deliveryRecord.findFirst({
+      where: { id: deliveryId, orderId },
+      include: {
+        order: { select: { orderNumber: true } },
+        readingVersion: { select: { version: true } },
+      },
+    });
+    if (!delivery) {
+      throw new NotFoundException('Livraison introuvable');
+    }
+
+    const object = await this.s3Service.getObject(delivery.pdfKey, 'readings');
+    return {
+      stream: object.stream,
+      contentType: object.contentType || 'application/pdf',
+      filename: `${delivery.order.orderNumber}-v${delivery.readingVersion.version}.pdf`,
+    };
   }
 
   /**
