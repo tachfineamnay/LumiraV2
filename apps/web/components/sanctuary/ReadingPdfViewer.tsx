@@ -123,18 +123,18 @@ export function ReadingPdfViewer({
 
   return (
     <div
-      className={`flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-900 ${className}`}
+      className={`flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border border-ivoire-500/[0.06] bg-[#050A18] ${className}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-abyss-800/90 px-4 py-3 sm:px-6">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-ivoire-500/8 bg-brume-800/90 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-horizon-400/20 text-horizon-300">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ivoire-400/12 text-ivoire-400">
             <FileText className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h1 className="truncate font-playfair text-xl italic text-stellar-100 sm:text-2xl">
+            <h1 className="truncate font-playfair text-xl italic text-ivoire-100 sm:text-2xl">
               {title}
             </h1>
-            <p className="text-xs text-stellar-500">
+            <p className="text-xs text-brume-300">
               {numPages > 0 ? `${numPages} page${numPages > 1 ? 's' : ''}` : 'Document PDF'}
             </p>
           </div>
@@ -145,19 +145,19 @@ export function ReadingPdfViewer({
             type="button"
             onClick={handleZoomOut}
             disabled={scale <= 0.7}
-            className="grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-lg text-ivoire-200 hover:bg-brume-700/30 disabled:opacity-40"
             aria-label="Zoom arrière"
           >
             <ZoomOut className="h-4 w-4" />
           </button>
-          <span className="min-w-[3rem] text-center text-xs tabular-nums text-stellar-500">
+          <span className="min-w-[3rem] text-center text-xs tabular-nums text-brume-300">
             {Math.round(scale * 100)}%
           </span>
           <button
             type="button"
             onClick={handleZoomIn}
             disabled={scale >= 2.2}
-            className="grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-lg text-ivoire-200 hover:bg-brume-700/30 disabled:opacity-40"
             aria-label="Zoom avant"
           >
             <ZoomIn className="h-4 w-4" />
@@ -166,7 +166,7 @@ export function ReadingPdfViewer({
             type="button"
             onClick={handleDownload}
             disabled={!blobUrl}
-            className="ml-1 grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
+            className="ml-1 grid h-10 w-10 place-items-center rounded-lg text-ivoire-200 hover:bg-brume-700/30 disabled:opacity-40"
             aria-label="Télécharger"
           >
             <Download className="h-4 w-4" />
@@ -175,7 +175,7 @@ export function ReadingPdfViewer({
             type="button"
             onClick={handleOpenExternal}
             disabled={!blobUrl}
-            className="grid h-10 w-10 place-items-center rounded-lg text-stellar-300 hover:bg-white/10 disabled:opacity-40"
+            className="grid h-10 w-10 place-items-center rounded-lg text-ivoire-200 hover:bg-brume-700/30 disabled:opacity-40"
             aria-label="Ouvrir dans un nouvel onglet"
           >
             <ExternalLink className="h-4 w-4" />
@@ -183,12 +183,12 @@ export function ReadingPdfViewer({
         </div>
       </div>
 
-      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto bg-abyss-950">
+      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto bg-[#030510]">
         {isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-abyss-900/80">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#050A18]/80">
             <div className="px-4 text-center">
-              <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-horizon-400" />
-              <p className="text-sm text-stellar-400">Chargement de votre lecture...</p>
+              <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-ivoire-400" />
+              <p className="text-sm text-brume-200">Chargement de votre lecture...</p>
             </div>
           </div>
         )}
@@ -198,11 +198,11 @@ export function ReadingPdfViewer({
             <div className="max-w-sm text-center">
               <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-400" />
               <p className="mb-1 font-medium text-white">Impossible d&apos;afficher le PDF</p>
-              <p className="mb-4 text-sm text-stellar-400">{error}</p>
+              <p className="mb-4 text-sm text-brume-200">{error}</p>
               <button
                 type="button"
                 onClick={() => setReloadKey((k) => k + 1)}
-                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-horizon-400/20 px-4 py-2.5 text-sm font-medium text-horizon-300 hover:bg-horizon-400/30"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-ivoire-400/12 px-4 py-2.5 text-sm font-medium text-ivoire-400 hover:bg-ivoire-400/18"
               >
                 <RefreshCw className="h-4 w-4" />
                 Réessayer

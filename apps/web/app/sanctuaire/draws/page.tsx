@@ -122,11 +122,11 @@ export default function DrawsPage() {
     <div className="mx-auto w-full max-w-4xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
             Sanctuaire Lumira
           </p>
-          <h1 className="mt-2 font-playfair text-3xl italic text-stellar-100">Mes lectures</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-stellar-400">
+          <h1 className="mt-2 font-playfair text-3xl italic text-ivoire-100">Mes lectures</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-brume-200">
             Suivez leur préparation, puis retrouvez l’audio et le document validés par l’équipe.
           </p>
         </div>
@@ -135,7 +135,7 @@ export default function DrawsPage() {
             type="button"
             onClick={() => void loadReadings()}
             disabled={isRefreshing}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-stellar-300 hover:bg-white/[0.05] disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 py-2 text-sm text-ivoire-200 hover:bg-brume-700/25 disabled:cursor-wait disabled:opacity-60"
           >
             {isRefreshing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -172,12 +172,12 @@ export default function DrawsPage() {
       )}
 
       {allReadings.length === 0 ? (
-        <section className="mt-8 rounded-3xl border border-white/[0.08] bg-white/[0.03] p-8 text-center sm:p-12">
-          <Sparkles className="mx-auto h-8 w-8 text-horizon-300" />
-          <h2 className="mt-4 font-playfair text-2xl italic text-stellar-100">
+        <section className="mt-8 rounded-3xl border border-ivoire-500/[0.06] bg-brume-800/20 p-8 text-center sm:p-12">
+          <Sparkles className="mx-auto h-8 w-8 text-ivoire-400" />
+          <h2 className="mt-4 font-playfair text-2xl italic text-ivoire-100">
             Aucune lecture en préparation
           </h2>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-stellar-400">
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-brume-200">
             Préparez et confirmez votre dossier. Votre lecture apparaîtra ici dès sa prise en
             charge.
           </p>
@@ -198,32 +198,29 @@ export default function DrawsPage() {
             const displayDate = reading.deliveredAt || reading.createdAt;
 
             return (
-              <article
-                key={reading.id}
-                className="rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6"
-              >
+              <article key={reading.id} className="glass-aube p-5 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-3">
-                      <FileText className="mt-0.5 h-5 w-5 shrink-0 text-horizon-300" />
+                      <FileText className="mt-0.5 h-5 w-5 shrink-0 text-ivoire-400" />
                       <div className="min-w-0">
-                        <h2 className="text-lg font-medium text-stellar-100">{reading.title}</h2>
-                        <p className="mt-2 text-sm leading-6 text-stellar-400">
+                        <h2 className="text-lg font-medium text-ivoire-100">{reading.title}</h2>
+                        <p className="mt-2 text-sm leading-6 text-brume-200">
                           {status.description}
                         </p>
                       </div>
                     </div>
                     {reading.intention && (
-                      <div className="mt-4 border-l-2 border-horizon-400/25 pl-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stellar-500">
+                      <div className="mt-4 border-l-2 border-ivoire-400/20 pl-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brume-300">
                           Votre intention
                         </p>
-                        <p className="mt-1 text-sm leading-6 text-stellar-300">
+                        <p className="mt-1 text-sm leading-6 text-ivoire-200">
                           {reading.intention}
                         </p>
                       </div>
                     )}
-                    <p className="mt-4 text-xs text-stellar-500">
+                    <p className="mt-4 text-xs text-brume-300">
                       {reading.status === 'COMPLETED' ? 'Disponible' : 'Dossier ouvert'} le{' '}
                       {new Date(displayDate).toLocaleDateString('fr-FR', {
                         day: 'numeric',
@@ -240,13 +237,13 @@ export default function DrawsPage() {
                 </div>
 
                 {reading.status === 'COMPLETED' && (
-                  <div className="mt-6 border-t border-white/[0.06] pt-5">
+                  <div className="mt-6 border-t border-ivoire-500/[0.05] pt-5">
                     {hasAssets ? (
                       <div className="space-y-4">
                         {audioUrl ? (
                           <MysticAudioPlayer audioUrl={audioUrl} />
                         ) : pdfUrl ? (
-                          <p className="rounded-2xl border border-horizon-400/20 bg-horizon-400/[0.07] px-4 py-3 text-sm text-stellar-300">
+                          <p className="rounded-2xl border border-ivoire-400/15 bg-ivoire-400/[0.06] px-4 py-3 text-sm text-ivoire-200">
                             Narration en préparation — actualisez dans quelques minutes.
                           </p>
                         ) : null}
@@ -264,7 +261,7 @@ export default function DrawsPage() {
                               type="button"
                               onClick={() => void downloadPdf(reading)}
                               disabled={downloadingId !== null}
-                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05] disabled:cursor-wait disabled:opacity-60"
+                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-5 py-3 text-sm font-medium text-ivoire-200 hover:bg-brume-700/25 disabled:cursor-wait disabled:opacity-60"
                             >
                               {downloadingId === reading.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -277,8 +274,8 @@ export default function DrawsPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-3 rounded-2xl border border-horizon-400/15 bg-horizon-400/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm leading-6 text-stellar-400">
+                      <div className="flex flex-col gap-3 rounded-2xl border border-ivoire-400/10 bg-ivoire-400/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm leading-6 text-brume-200">
                           La lecture est validée. Ses fichiers sont encore en cours de mise à
                           disposition.
                         </p>
@@ -286,7 +283,7 @@ export default function DrawsPage() {
                           type="button"
                           onClick={() => void loadReadings()}
                           disabled={isRefreshing}
-                          className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-stellar-200 hover:bg-white/[0.05] disabled:opacity-60"
+                          className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 py-2 text-sm text-ivoire-200 hover:bg-brume-700/25 disabled:opacity-60"
                         >
                           {isRefreshing ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -311,18 +308,18 @@ export default function DrawsPage() {
 function ReadingsSkeleton() {
   return (
     <div className="mx-auto w-full max-w-4xl animate-pulse px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
-      <div className="h-3 w-32 rounded-full bg-white/[0.06]" />
-      <div className="mt-4 h-9 w-48 rounded-xl bg-white/[0.07]" />
-      <div className="mt-3 h-4 w-full max-w-lg rounded-full bg-white/[0.05]" />
+      <div className="h-3 w-32 rounded-full bg-brume-700/20" />
+      <div className="mt-4 h-9 w-48 rounded-xl bg-brume-700/20" />
+      <div className="mt-3 h-4 w-full max-w-lg rounded-full bg-brume-800/25" />
       {[0, 1].map((item) => (
         <div
           key={item}
-          className="mt-6 rounded-3xl border border-white/[0.06] bg-white/[0.025] p-6"
+          className="mt-6 rounded-3xl border border-ivoire-500/[0.05] bg-brume-800/15 p-6"
         >
-          <div className="h-6 w-2/3 rounded-lg bg-white/[0.07]" />
-          <div className="mt-4 h-4 w-full rounded-full bg-white/[0.05]" />
-          <div className="mt-2 h-4 w-4/5 rounded-full bg-white/[0.05]" />
-          <div className="mt-6 h-12 w-full rounded-xl bg-white/[0.06]" />
+          <div className="h-6 w-2/3 rounded-lg bg-brume-700/20" />
+          <div className="mt-4 h-4 w-full rounded-full bg-brume-800/25" />
+          <div className="mt-2 h-4 w-4/5 rounded-full bg-brume-800/25" />
+          <div className="mt-6 h-12 w-full rounded-xl bg-brume-700/20" />
         </div>
       ))}
     </div>

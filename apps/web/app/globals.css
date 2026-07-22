@@ -180,6 +180,169 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   L'AUBE DU SANCTUAIRE — Atmosphere & Glassmorphism
+   Scoped: applied only via .sanctuaire-aube wrapper
+   ═══════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* --- Dawn atmosphere (replaces .starfield in the sanctuary) --- */
+  .sanctuaire-aube {
+    background-color: #050a18;
+    background-image:
+      /* Upper mist — deep blue halo */
+      radial-gradient(ellipse 130% 50% at 50% -10%, rgba(30, 60, 110, 0.18) 0%, transparent 70%),
+      /* Dawn rose whisper — very subtle top-right */
+        radial-gradient(ellipse 55% 35% at 82% 8%, rgba(200, 136, 154, 0.04) 0%, transparent 55%),
+      /* Lavender whisper — touch top-left */
+        radial-gradient(ellipse 45% 30% at 15% 12%, rgba(176, 160, 212, 0.025) 0%, transparent 45%),
+      /* Ivory halo — horizon glow at bottom */
+        radial-gradient(ellipse 100% 28% at 50% 105%, rgba(240, 232, 208, 0.05) 0%, transparent 45%),
+      /* Soft gold — low center warmth */
+        radial-gradient(ellipse 70% 20% at 50% 100%, rgba(244, 185, 66, 0.025) 0%, transparent 35%),
+      /* Central mist — living atmosphere */
+        radial-gradient(circle at 50% 45%, rgba(21, 38, 72, 0.1) 0%, transparent 55%),
+      /* Night-to-mist gradient */
+        linear-gradient(180deg, #050a18 0%, #0a1528 20%, #0f1a35 50%, #142242 100%);
+  }
+
+  /* --- Dawn glassmorphism card --- */
+  .glass-aube {
+    backdrop-filter: blur(24px) saturate(1.15);
+    -webkit-backdrop-filter: blur(24px) saturate(1.15);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.035) 0%,
+      rgba(240, 232, 208, 0.012) 100%
+    );
+    border: 1px solid rgba(240, 232, 208, 0.07);
+    box-shadow:
+      0 8px 32px rgba(5, 10, 24, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    border-radius: 1.25rem;
+    transition: all 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glass-aube:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(240, 232, 208, 0.02) 100%
+    );
+    border-color: rgba(240, 232, 208, 0.12);
+    box-shadow:
+      0 12px 40px rgba(5, 10, 24, 0.35),
+      0 0 30px rgba(240, 232, 208, 0.04);
+  }
+
+  /* --- Sidebar dawn glass --- */
+  .glass-sidebar-aube {
+    background: linear-gradient(
+      180deg,
+      rgba(10, 21, 40, 0.96) 0%,
+      rgba(15, 26, 53, 0.98) 50%,
+      rgba(20, 34, 66, 0.96) 100%
+    );
+    backdrop-filter: blur(24px) saturate(1.1);
+    -webkit-backdrop-filter: blur(24px) saturate(1.1);
+    border-right: 1px solid rgba(240, 232, 208, 0.05);
+  }
+
+  /* --- Header dawn glass --- */
+  .glass-header-aube {
+    background: rgba(10, 21, 40, 0.88);
+    backdrop-filter: blur(20px) saturate(1.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.1);
+    border-bottom: 1px solid rgba(240, 232, 208, 0.04);
+  }
+
+  /* --- Dawn premium card --- */
+  .card-aube {
+    backdrop-filter: blur(20px) saturate(1.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.1);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(240, 232, 208, 0.01) 100%
+    );
+    border: 1px solid rgba(240, 232, 208, 0.06);
+    box-shadow:
+      0 8px 32px rgba(5, 10, 24, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    border-radius: 1rem;
+    transition: all 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-aube:hover {
+    border-color: rgba(244, 185, 66, 0.1);
+    box-shadow:
+      0 16px 48px rgba(5, 10, 24, 0.4),
+      0 0 35px rgba(244, 185, 66, 0.04);
+    transform: translateY(-1px);
+  }
+}
+
+@layer utilities {
+  /* --- Dawn scrollbar --- */
+  .scrollbar-aube {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(212, 178, 120, 0.2) transparent;
+  }
+
+  .scrollbar-aube::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .scrollbar-aube::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-aube::-webkit-scrollbar-thumb {
+    background: rgba(212, 178, 120, 0.2);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-aube::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 178, 120, 0.35);
+  }
+
+  /* --- Dawn text glow --- */
+  .text-glow-ivoire {
+    text-shadow: 0 0 20px rgba(240, 232, 208, 0.2);
+  }
+
+  .text-glow-aube {
+    text-shadow:
+      0 0 25px rgba(212, 178, 120, 0.12),
+      0 0 50px rgba(212, 178, 120, 0.04);
+  }
+
+  /* --- Dawn gradient text --- */
+  .text-gradient-aube {
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-image: linear-gradient(135deg, #e8d8b8, #f0e8d0, #fffcf5);
+  }
+
+  /* --- Dawn entry animation --- */
+  .animate-aube-enter {
+    animation: light-reveal 0.8s ease-out both;
+  }
+
+  @keyframes light-reveal {
+    0% {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
 @layer utilities {
   /* Skip paint work for below-fold landing sections until near viewport */
   .content-visibility-auto {
@@ -463,7 +626,7 @@
   margin-bottom: 1rem;
   color: #0f172a;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid rgba(245, 158, 11, 0.2);
+  border-bottom: 2px solid rgba(212, 178, 120, 0.15);
 }
 
 .ProseMirror h1:first-child {
@@ -486,7 +649,7 @@
   line-height: 1.4;
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
-  color: rgba(217, 119, 6, 0.85);
+  color: rgba(212, 178, 120, 0.75);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -502,10 +665,10 @@
 
 /* — Blockquotes — */
 .ProseMirror blockquote {
-  border-left: 3px solid rgba(245, 158, 11, 0.4);
+  border-left: 3px solid rgba(212, 178, 120, 0.3);
   margin: 1.5rem 0;
   padding: 0.75rem 1.25rem;
-  background: rgba(245, 158, 11, 0.04);
+  background: rgba(240, 232, 208, 0.04);
   border-radius: 0 0.5rem 0.5rem 0;
   font-style: italic;
   color: #64748b;
@@ -531,14 +694,14 @@
 }
 
 .ProseMirror li::marker {
-  color: rgba(245, 158, 11, 0.6);
+  color: rgba(212, 178, 120, 0.5);
 }
 
 /* — Horizontal rule — */
 .ProseMirror hr {
   border: none;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(240, 232, 208, 0.2), transparent);
   margin: 2.5rem auto;
   max-width: 40%;
 }
@@ -554,7 +717,7 @@
 }
 
 .ProseMirror mark {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(240, 232, 208, 0.1);
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
 }

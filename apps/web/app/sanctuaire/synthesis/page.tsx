@@ -58,15 +58,15 @@ export default function SynthesisPage() {
       <div className="mx-auto grid min-h-[60vh] max-w-xl place-items-center px-4 text-center">
         <div>
           <AlertCircle className="mx-auto h-8 w-8 text-rose-300" />
-          <h1 className="mt-4 font-playfair text-2xl italic text-stellar-100">
+          <h1 className="mt-4 font-playfair text-2xl italic text-ivoire-100">
             Votre synthèse est momentanément indisponible
           </h1>
-          <p className="mt-2 text-sm leading-6 text-stellar-400">{error}</p>
+          <p className="mt-2 text-sm leading-6 text-brume-200">{error}</p>
           <button
             type="button"
             onClick={() => void loadSynthesis()}
             disabled={isRefreshing}
-            className="mt-6 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-stellar-200 hover:bg-white/[0.05] disabled:opacity-60"
+            className="mt-6 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 py-2 text-sm text-ivoire-200 hover:bg-brume-800/25 disabled:opacity-60"
           >
             {isRefreshing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -82,23 +82,24 @@ export default function SynthesisPage() {
 
   const hasContent = Boolean(
     synthesis?.archetype ||
-      synthesis?.synthesis ||
-      synthesis?.keyBlockage ||
-      synthesis?.emotionalState ||
-      synthesis?.lifeMission ||
-      synthesis?.keywords?.length,
+    synthesis?.synthesis ||
+    synthesis?.keyBlockage ||
+    synthesis?.emotionalState ||
+    synthesis?.lifeMission ||
+    synthesis?.keywords?.length,
   );
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
             Sanctuaire Lumira
           </p>
-          <h1 className="mt-2 font-playfair text-3xl italic text-stellar-100">Ma synthèse</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-stellar-400">
-            Les repères essentiels validés dans votre lecture, réunis pour être retrouvés rapidement.
+          <h1 className="mt-2 font-playfair text-3xl italic text-ivoire-100">Ma synthèse</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-brume-200">
+            Les repères essentiels validés dans votre lecture, réunis pour être retrouvés
+            rapidement.
           </p>
         </div>
         {hasContent && (
@@ -106,7 +107,7 @@ export default function SynthesisPage() {
             type="button"
             onClick={() => void loadSynthesis()}
             disabled={isRefreshing}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-stellar-300 hover:bg-white/[0.05] disabled:opacity-60"
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 py-2 text-sm text-ivoire-200 hover:bg-brume-800/25 disabled:opacity-60"
           >
             {isRefreshing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -119,12 +120,12 @@ export default function SynthesisPage() {
       </header>
 
       {!hasContent ? (
-        <section className="mt-8 rounded-3xl border border-white/[0.08] bg-white/[0.03] p-8 text-center sm:p-12">
-          <Sparkles className="mx-auto h-8 w-8 text-horizon-300" />
-          <h2 className="mt-4 font-playfair text-2xl italic text-stellar-100">
+        <section className="mt-8 rounded-3xl border border-white/[0.08] bg-brume-800/20 p-8 text-center sm:p-12">
+          <Sparkles className="mx-auto h-8 w-8 text-ivoire-400" />
+          <h2 className="mt-4 font-playfair text-2xl italic text-ivoire-100">
             Votre synthèse apparaîtra après votre première lecture
           </h2>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-stellar-400">
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-brume-200">
             Elle regroupera seulement les enseignements qui auront été générés puis validés par
             l’équipe Lumira.
           </p>
@@ -138,19 +139,19 @@ export default function SynthesisPage() {
       ) : (
         <div className="mt-8 space-y-5">
           {synthesis?.archetype && (
-            <section className="overflow-hidden rounded-3xl border border-horizon-400/20 bg-horizon-400/[0.055] p-6 sm:p-8">
+            <section className="overflow-hidden rounded-3xl border border-ivoire-400/20 bg-ivoire-400/[0.045] p-6 sm:p-8">
               <div className="flex items-start gap-4">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-horizon-400/15 text-horizon-300">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ivoire-400/10 text-ivoire-400">
                   <Sparkles className="h-6 w-6" />
                 </span>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
                     Votre archétype
                   </p>
-                  <h2 className="mt-2 font-playfair text-3xl italic text-stellar-100">
+                  <h2 className="mt-2 font-playfair text-3xl italic text-ivoire-100">
                     {synthesis.archetype}
                   </h2>
-                  <p className="mt-3 text-sm leading-6 text-stellar-400">
+                  <p className="mt-3 text-sm leading-6 text-brume-200">
                     Un repère central de votre lecture, à considérer comme une dynamique d’évolution
                     plutôt qu’une étiquette définitive.
                   </p>
@@ -188,10 +189,10 @@ export default function SynthesisPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200/75">
                     Point de vigilance
                   </p>
-                  <h2 className="mt-2 font-playfair text-xl italic text-stellar-100">
+                  <h2 className="mt-2 font-playfair text-xl italic text-ivoire-100">
                     Ce qui mérite votre attention
                   </h2>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-stellar-400">
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-brume-200">
                     {synthesis.keyBlockage}
                   </p>
                 </div>
@@ -200,29 +201,29 @@ export default function SynthesisPage() {
           )}
 
           {synthesis?.synthesis && (
-            <section className="rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-horizon-300">
+            <section className="rounded-3xl border glass-aube p-5 sm:p-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ivoire-400">
                 À retenir
               </p>
-              <h2 className="mt-2 font-playfair text-2xl italic text-stellar-100">
+              <h2 className="mt-2 font-playfair text-2xl italic text-ivoire-100">
                 Vos conseils essentiels
               </h2>
-              <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-stellar-300">
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-ivoire-200">
                 {synthesis.synthesis}
               </p>
             </section>
           )}
 
           {synthesis?.keywords?.length ? (
-            <section className="rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5 sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
+            <section className="rounded-3xl border border-white/[0.08] bg-brume-800/15 p-5 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brume-300">
                 Mots d’ancrage
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {synthesis.keywords.map((keyword) => (
                   <span
                     key={keyword}
-                    className="rounded-full border border-horizon-400/20 bg-horizon-400/[0.07] px-3 py-1.5 text-sm text-horizon-200"
+                    className="rounded-full border border-ivoire-400/20 bg-ivoire-400/[0.06] px-3 py-1.5 text-sm text-ivoire-300"
                   >
                     {keyword}
                   </span>
@@ -233,12 +234,12 @@ export default function SynthesisPage() {
 
           <Link
             href="/sanctuaire/draws"
-            className="flex min-h-[56px] items-center justify-between rounded-2xl border border-white/[0.08] px-4 text-sm text-stellar-300 transition-colors hover:bg-white/[0.04]"
+            className="flex min-h-[56px] items-center justify-between rounded-2xl border border-white/[0.08] px-4 text-sm text-ivoire-200 transition-colors hover:bg-brume-800/22"
           >
             <span className="flex items-center gap-3">
-              <BookOpen className="h-5 w-5 text-horizon-300" /> Revenir à la lecture complète
+              <BookOpen className="h-5 w-5 text-ivoire-400" /> Revenir à la lecture complète
             </span>
-            <ArrowRight className="h-4 w-4 text-stellar-500" />
+            <ArrowRight className="h-4 w-4 text-brume-300" />
           </Link>
         </div>
       )}
@@ -258,15 +259,15 @@ function SynthesisSection({
   content: string;
 }) {
   return (
-    <section className="rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6">
-      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.04] text-horizon-300">
+    <section className="rounded-3xl border glass-aube p-5 sm:p-6">
+      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brume-800/22 text-ivoire-400">
         {icon}
       </span>
-      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
+      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-brume-300">
         {eyebrow}
       </p>
-      <h2 className="mt-2 font-playfair text-xl italic text-stellar-100">{title}</h2>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-stellar-400">{content}</p>
+      <h2 className="mt-2 font-playfair text-xl italic text-ivoire-100">{title}</h2>
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-brume-200">{content}</p>
     </section>
   );
 }
@@ -274,24 +275,24 @@ function SynthesisSection({
 function SynthesisSkeleton() {
   return (
     <div className="mx-auto w-full max-w-4xl animate-pulse px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
-      <div className="h-3 w-32 rounded-full bg-white/[0.06]" />
-      <div className="mt-4 h-9 w-44 rounded-xl bg-white/[0.07]" />
-      <div className="mt-3 h-4 w-full max-w-xl rounded-full bg-white/[0.05]" />
-      <div className="mt-8 rounded-3xl border border-white/[0.06] bg-white/[0.025] p-7">
-        <div className="h-12 w-12 rounded-2xl bg-white/[0.07]" />
-        <div className="mt-5 h-8 w-64 max-w-full rounded-xl bg-white/[0.07]" />
-        <div className="mt-4 h-4 w-full rounded-full bg-white/[0.05]" />
+      <div className="h-3 w-32 rounded-full bg-brume-700/20" />
+      <div className="mt-4 h-9 w-44 rounded-xl bg-brume-700/20" />
+      <div className="mt-3 h-4 w-full max-w-xl rounded-full bg-brume-800/25" />
+      <div className="mt-8 rounded-3xl border border-ivoire-500/[0.05] bg-brume-800/15 p-7">
+        <div className="h-12 w-12 rounded-2xl bg-brume-700/20" />
+        <div className="mt-5 h-8 w-64 max-w-full rounded-xl bg-brume-700/20" />
+        <div className="mt-4 h-4 w-full rounded-full bg-brume-800/25" />
       </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         {[0, 1].map((item) => (
           <div
             key={item}
-            className="rounded-3xl border border-white/[0.06] bg-white/[0.025] p-6"
+            className="rounded-3xl border border-ivoire-500/[0.05] bg-brume-800/15 p-6"
           >
-            <div className="h-10 w-10 rounded-2xl bg-white/[0.07]" />
-            <div className="mt-5 h-6 w-2/3 rounded-lg bg-white/[0.07]" />
-            <div className="mt-4 h-4 w-full rounded-full bg-white/[0.05]" />
-            <div className="mt-2 h-4 w-4/5 rounded-full bg-white/[0.05]" />
+            <div className="h-10 w-10 rounded-2xl bg-brume-700/20" />
+            <div className="mt-5 h-6 w-2/3 rounded-lg bg-brume-700/20" />
+            <div className="mt-4 h-4 w-full rounded-full bg-brume-800/25" />
+            <div className="mt-2 h-4 w-4/5 rounded-full bg-brume-800/25" />
           </div>
         ))}
       </div>

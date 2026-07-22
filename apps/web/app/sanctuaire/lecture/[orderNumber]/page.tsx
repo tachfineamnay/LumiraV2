@@ -57,8 +57,8 @@ export default function SanctuaireLecturePage() {
 
   if (authLoading || loadingMeta) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-horizon-400" />
+      <div className="flex min-h-[50vh] bg-brume-800/20 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-ivoire-200" />
       </div>
     );
   }
@@ -66,13 +66,13 @@ export default function SanctuaireLecturePage() {
   if (!isAuthenticated || missing || !orderNumber) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <p className="font-playfair text-2xl italic text-stellar-100">Lecture introuvable</p>
-        <p className="mt-3 text-sm text-stellar-400">
+        <p className="font-playfair text-2xl italic text-ivoire-100">Lecture introuvable</p>
+        <p className="mt-3 text-sm text-brume-200">
           Cette lecture n’est pas disponible depuis votre Sanctuaire pour le moment.
         </p>
         <Link
           href="/sanctuaire"
-          className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900"
+          className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-brume-800/20 px-5 py-3 text-sm font-semibold text-ivoire-100"
         >
           <ArrowLeft className="h-4 w-4" /> Retour au Sanctuaire
         </Link>
@@ -84,7 +84,7 @@ export default function SanctuaireLecturePage() {
     <div className="mx-auto w-full max-w-5xl px-3 py-6 pb-24 sm:px-6 sm:py-8 lg:pb-10">
       <Link
         href="/sanctuaire"
-        className="mb-4 inline-flex min-h-[40px] items-center gap-2 text-sm text-stellar-400 hover:text-horizon-300"
+        className="mb-4 inline-flex min-h-[40px] items-center gap-2 text-sm text-brume-200 hover:text-ivoire-400"
       >
         <ArrowLeft className="h-4 w-4" /> Retour au Sanctuaire
       </Link>

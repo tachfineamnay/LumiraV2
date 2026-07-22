@@ -91,26 +91,26 @@ function SummaryCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6">
+    <section className="rounded-3xl border border-ivoire-500/[0.06] glass-aube p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-horizon-400/10 text-horizon-300">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ivoire-400/8 text-ivoire-400">
           {icon}
         </span>
-        <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11px] font-medium text-stellar-400">
+        <span className="rounded-full border border-ivoire-500/[0.06] bg-brume-800/20 px-3 py-1 text-[11px] font-medium text-brume-200">
           {status}
         </span>
       </div>
-      <h2 className="mt-4 font-playfair text-xl italic text-stellar-100">{title}</h2>
-      <div className="mt-3 text-sm leading-7 text-stellar-400">{children}</div>
+      <h2 className="mt-4 font-playfair text-xl italic text-ivoire-100">{title}</h2>
+      <div className="mt-3 text-sm leading-7 text-brume-200">{children}</div>
     </section>
   );
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-t border-white/[0.06] py-4 first:border-t-0 first:pt-0 last:pb-0">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stellar-500">{label}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stellar-300">{value}</p>
+    <div className="border-t border-ivoire-500/[0.05] py-4 first:border-t-0 first:pt-0 last:pb-0">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brume-300">{label}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ivoire-200">{value}</p>
     </div>
   );
 }
@@ -234,13 +234,13 @@ export default function ReadingDossierPage() {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
         <header className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
             Votre transmission
           </p>
-          <h1 className="mt-3 font-playfair text-3xl italic text-stellar-100 sm:text-4xl">
+          <h1 className="mt-3 font-playfair text-3xl italic text-ivoire-100 sm:text-4xl">
             Mon dossier de lecture
           </h1>
-          <p className="mt-3 text-base leading-7 text-stellar-400">
+          <p className="mt-3 text-base leading-7 text-brume-200">
             Complétez ou modifiez votre dossier ici. Rien n’est transmis tant que vous n’avez pas
             scellé.
           </p>
@@ -260,13 +260,13 @@ export default function ReadingDossierPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
       <header className="max-w-3xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
           Votre transmission
         </p>
-        <h1 className="mt-3 font-playfair text-3xl italic text-stellar-100 sm:text-4xl">
+        <h1 className="mt-3 font-playfair text-3xl italic text-ivoire-100 sm:text-4xl">
           Mon dossier de lecture
         </h1>
-        <p className="mt-3 text-base leading-7 text-stellar-400">
+        <p className="mt-3 text-base leading-7 text-brume-200">
           Retrouvez ici les éléments que vous avez confirmés pour préparer votre lecture.
         </p>
       </header>
@@ -274,21 +274,21 @@ export default function ReadingDossierPage() {
       <section className="mt-8 overflow-hidden rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.055] p-5 sm:p-7">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-400/15 text-emerald-300">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ivoire-400/10 text-emerald-300">
               <FileLock2 className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brume-300">
                 Dossier scellé
               </p>
-              <h2 className="mt-2 font-playfair text-2xl italic text-stellar-100">
+              <h2 className="mt-2 font-playfair text-2xl italic text-ivoire-100">
                 {productionActive
                   ? 'Votre dossier est utilisé pour préparer la lecture'
                   : delivered
                     ? 'Les éléments de cette lecture restent consultables'
                     : 'Votre dossier est enregistré'}
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-brume-200">
                 {delivered
                   ? 'Cette lecture reste liée aux éléments que vous aviez confirmés au moment de sa préparation.'
                   : 'L’équipe travaille uniquement à partir de la version que vous avez relue et confirmée.'}
@@ -299,7 +299,7 @@ export default function ReadingDossierPage() {
           {delivered ? (
             <Link
               href="/sanctuaire"
-              className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05]"
+              className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-5 py-3 text-sm font-medium text-ivoire-200 hover:bg-brume-800/25"
             >
               Voir ma lecture
             </Link>
@@ -315,20 +315,20 @@ export default function ReadingDossierPage() {
         >
           <div className="space-y-2">
             <p className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-stellar-600" />
+              <CalendarDays className="h-4 w-4 text-brume-400" />
               {birthDate || 'Date non renseignée'}
             </p>
             <p className="flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-stellar-600" />
+              <Clock3 className="h-4 w-4 text-brume-400" />
               {birthTime || 'Heure non transmise — facultative'}
             </p>
             <p className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-stellar-600" />
+              <MapPin className="h-4 w-4 text-brume-400" />
               {birthPlace || 'Lieu non renseigné'}
             </p>
             {usageName && (
               <p className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-stellar-600" />
+                <Sparkles className="h-4 w-4 text-brume-400" />
                 Appelé(e) {usageName}
               </p>
             )}
@@ -344,20 +344,20 @@ export default function ReadingDossierPage() {
             <div className="space-y-3">
               {openReading && (
                 <div>
-                  <p className="text-xs uppercase tracking-[0.12em] text-stellar-500">Cadre</p>
-                  <p className="mt-1 text-stellar-300">Lecture ouverte, sans question imposée</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-brume-300">Cadre</p>
+                  <p className="mt-1 text-ivoire-200">Lecture ouverte, sans question imposée</p>
                 </div>
               )}
               {specificQuestion && (
                 <div>
-                  <p className="text-xs uppercase tracking-[0.12em] text-stellar-500">Question</p>
-                  <p className="mt-1 text-stellar-300">« {specificQuestion} »</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-brume-300">Question</p>
+                  <p className="mt-1 text-ivoire-200">« {specificQuestion} »</p>
                 </div>
               )}
               {objective && (
                 <div>
-                  <p className="text-xs uppercase tracking-[0.12em] text-stellar-500">Objectif</p>
-                  <p className="mt-1 text-stellar-300">{objective}</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-brume-300">Objectif</p>
+                  <p className="mt-1 text-ivoire-200">{objective}</p>
                 </div>
               )}
             </div>
@@ -372,25 +372,25 @@ export default function ReadingDossierPage() {
           status={facePhoto || palmPhoto ? 'Sélectionnées' : 'Facultatives'}
         >
           <div className="grid grid-cols-2 gap-3">
-            <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.025]">
+            <div className="overflow-hidden rounded-2xl border border-ivoire-500/[0.05] bg-brume-800/15">
               {facePhoto ? (
                 <SanctuairePrivatePhoto kind="face" alt="Photo de visage privée" />
               ) : (
                 <div className="flex aspect-[4/3] flex-col items-center justify-center p-4 text-center">
                   <ShieldCheck className="h-5 w-5 text-emerald-300" />
-                  <p className="mt-2 text-sm text-stellar-300">Visage</p>
-                  <p className="mt-1 text-xs text-stellar-500">Non transmis</p>
+                  <p className="mt-2 text-sm text-ivoire-200">Visage</p>
+                  <p className="mt-1 text-xs text-brume-300">Non transmis</p>
                 </div>
               )}
             </div>
-            <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.025]">
+            <div className="overflow-hidden rounded-2xl border border-ivoire-500/[0.05] bg-brume-800/15">
               {palmPhoto ? (
                 <SanctuairePrivatePhoto kind="palm" alt="Photo de paume privée" />
               ) : (
                 <div className="flex aspect-[4/3] flex-col items-center justify-center p-4 text-center">
                   <ShieldCheck className="h-5 w-5 text-emerald-300" />
-                  <p className="mt-2 text-sm text-stellar-300">Paume</p>
-                  <p className="mt-1 text-xs text-stellar-500">Non transmise</p>
+                  <p className="mt-2 text-sm text-ivoire-200">Paume</p>
+                  <p className="mt-1 text-xs text-brume-300">Non transmise</p>
                 </div>
               )}
             </div>
@@ -404,48 +404,48 @@ export default function ReadingDossierPage() {
         >
           <div className="space-y-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.12em] text-stellar-500">Style</p>
-              <p className="mt-1 text-stellar-300">{deliveryStyleLabel(deliveryStyle)}</p>
+              <p className="text-xs uppercase tracking-[0.12em] text-brume-300">Style</p>
+              <p className="mt-1 text-ivoire-200">{deliveryStyleLabel(deliveryStyle)}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.12em] text-stellar-500">Rythme</p>
-              <p className="mt-1 text-stellar-300">{paceLabel(pace)}</p>
+              <p className="text-xs uppercase tracking-[0.12em] text-brume-300">Rythme</p>
+              <p className="mt-1 text-ivoire-200">{paceLabel(pace)}</p>
             </div>
           </div>
         </SummaryCard>
       </div>
 
-      <section className="mt-6 rounded-3xl border border-white/[0.08] bg-abyss-600/50 p-5 sm:p-6">
+      <section className="mt-6 rounded-3xl border border-ivoire-500/[0.06] glass-aube p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-horizon-400/10 text-horizon-300">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ivoire-400/8 text-ivoire-400">
             <Sparkles className="h-5 w-5" />
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1 text-[11px] font-medium text-stellar-400">
+          <span className="rounded-full border border-ivoire-500/[0.06] bg-brume-800/20 px-3 py-1 text-[11px] font-medium text-brume-200">
             {contextFields.length
               ? `${contextFields.length} élément${contextFields.length > 1 ? 's' : ''}`
               : 'Facultatif'}
           </span>
         </div>
-        <h2 className="mt-4 font-playfair text-xl italic text-stellar-100">Contexte personnel</h2>
+        <h2 className="mt-4 font-playfair text-xl italic text-ivoire-100">Contexte personnel</h2>
         {contextFields.length ? (
-          <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:p-5">
+          <div className="mt-4 rounded-2xl border border-ivoire-500/[0.04] p-4 sm:p-5">
             {contextFields.map((field) => (
               <DetailRow key={field.label} label={field.label} value={field.value} />
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-sm leading-7 text-stellar-400">
+          <p className="mt-3 text-sm leading-7 text-brume-200">
             Aucun contexte intime supplémentaire n’a été transmis.
           </p>
         )}
       </section>
 
-      <section className="mt-6 rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5 sm:p-6">
+      <section className="mt-6 rounded-3xl border border-ivoire-500/[0.06] bg-brume-800/15 p-5 sm:p-6">
         <div className="flex items-start gap-3">
-          <Eye className="mt-0.5 h-5 w-5 shrink-0 text-horizon-300" />
+          <Eye className="mt-0.5 h-5 w-5 shrink-0 text-ivoire-400" />
           <div>
-            <h2 className="text-sm font-medium text-stellar-100">Vous gardez le contrôle</h2>
-            <p className="mt-2 text-sm leading-6 text-stellar-500">
+            <h2 className="text-sm font-medium text-ivoire-100">Vous gardez le contrôle</h2>
+            <p className="mt-2 text-sm leading-6 text-brume-300">
               Une fois le dossier scellé, la version confirmée reste liée à cette lecture et ne
               change pas silencieusement.
             </p>

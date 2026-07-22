@@ -40,8 +40,8 @@ function ProgressRing({ progress, size = 88 }: { progress: number; size?: number
       />
       <defs>
         <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#E8A838" />
-          <stop offset="100%" stopColor="#F4B942" />
+          <stop offset="0%" stopColor="#E8D8B8" />
+          <stop offset="100%" stopColor="#F0E8D0" />
         </linearGradient>
       </defs>
     </svg>
@@ -61,8 +61,8 @@ export function MandalaNav() {
         className="relative mx-auto flex-shrink-0 scale-[0.72] sm:scale-90 md:scale-100 origin-center"
         style={{ width: containerSize, height: containerSize, maxWidth: '100%' }}
       >
-        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-serenity-600/5 to-transparent blur-3xl" />
-        <div className="absolute inset-8 rounded-full bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm border border-white/[0.04]" />
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brume-600/8 to-transparent blur-3xl" />
+        <div className="absolute inset-8 rounded-full bg-gradient-to-br from-white/[0.02] to-transparent backdrop-blur-sm border border-ivoire-500/[0.03]" />
 
         <svg
           className="absolute inset-0 w-full h-full"
@@ -115,9 +115,9 @@ export function MandalaNav() {
 
           <defs>
             <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#E8A838" />
-              <stop offset="50%" stopColor="#F4B942" />
-              <stop offset="100%" stopColor="#E8A838" />
+              <stop offset="0%" stopColor="#E8D8B8" />
+              <stop offset="50%" stopColor="#F0E8D0" />
+              <stop offset="100%" stopColor="#E8D8B8" />
             </linearGradient>
           </defs>
         </svg>
@@ -135,12 +135,12 @@ export function MandalaNav() {
         >
           <Link href="/sanctuaire">
             <div className="relative group cursor-pointer">
-              <div className="absolute -inset-6 rounded-full bg-gradient-to-br from-horizon-400/20 to-horizon-500/10 blur-2xl group-hover:blur-3xl transition-all duration-700 opacity-50 group-hover:opacity-80" />
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-horizon-300 via-horizon-400 to-horizon-500 flex items-center justify-center shadow-lg shadow-horizon-400/20 group-hover:shadow-horizon-400/40 transition-all duration-500 border border-horizon-200/30">
+              <div className="absolute -inset-6 rounded-full bg-gradient-to-br from-ivoire-400/15 to-ivoire-500/8 blur-2xl group-hover:blur-3xl transition-all duration-700 opacity-50 group-hover:opacity-80" />
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-ivoire-400 via-horizon-300 to-ivoire-500 flex items-center justify-center shadow-lg shadow-ivoire-400/15 group-hover:shadow-ivoire-400/25 transition-all duration-500 border border-ivoire-300/25">
                 <Star className="w-8 h-8 sm:w-10 sm:h-10 text-abyss-800 fill-abyss-800" />
               </div>
               <div className="absolute -bottom-9 left-1/2 -translate-x-1/2 text-center whitespace-nowrap">
-                <span className="text-sm font-semibold text-horizon-300 tracking-wide">
+                <span className="text-sm font-semibold text-ivoire-400 tracking-wide">
                   Sanctuaire
                 </span>
               </div>
@@ -179,31 +179,27 @@ export function MandalaNav() {
                   <div
                     className={`absolute inset-0 w-[72px] h-[72px] rounded-full transition-all duration-500 ${
                       active
-                        ? 'bg-horizon-400/15 blur-xl'
-                        : 'bg-transparent group-hover:bg-serenity-400/10 blur-lg'
+                        ? 'bg-ivoire-400/10 blur-xl'
+                        : 'bg-transparent group-hover:bg-brume-500/15 blur-lg'
                     }`}
                   />
                   <div
                     className={`relative w-[72px] h-[72px] rounded-full flex items-center justify-center transition-all duration-500 border ${
                       active
-                        ? 'bg-gradient-to-br from-horizon-400/15 to-horizon-500/5 border-horizon-400/30'
-                        : 'bg-abyss-500/30 border-white/[0.06] group-hover:bg-abyss-400/40 group-hover:border-serenity-400/20'
+                        ? 'bg-gradient-to-br from-ivoire-400/10 to-brume-500/8 border-ivoire-400/20'
+                        : 'bg-brume-700/25 border-ivoire-500/[0.05] group-hover:bg-brume-600/30 group-hover:border-brume-400/15'
                     }`}
                   >
                     <Icon
                       className={`w-7 h-7 transition-all duration-500 ${
-                        active
-                          ? 'text-horizon-300'
-                          : 'text-stellar-400 group-hover:text-stellar-200'
+                        active ? 'text-ivoire-400' : 'text-brume-200 group-hover:text-ivoire-200'
                       }`}
                     />
                   </div>
                   <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-center whitespace-nowrap">
                     <span
                       className={`text-xs font-medium transition-colors duration-300 ${
-                        active
-                          ? 'text-horizon-300'
-                          : 'text-stellar-500 group-hover:text-stellar-300'
+                        active ? 'text-ivoire-400' : 'text-brume-300 group-hover:text-ivoire-200'
                       }`}
                     >
                       {item.label}
@@ -211,7 +207,7 @@ export function MandalaNav() {
                     {item.sublabel && (
                       <span
                         className={`block text-[9px] transition-colors duration-300 ${
-                          active ? 'text-horizon-400/60' : 'text-stellar-600'
+                          active ? 'text-ivoire-400/60' : 'text-brume-400'
                         }`}
                       >
                         {item.sublabel}

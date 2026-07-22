@@ -35,16 +35,16 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         <div>
           <Link
             href="/sanctuaire/profile"
-            className="inline-flex items-center gap-2 text-stellar-400 hover:text-horizon-300 transition-colors text-sm mb-2 min-h-[40px]"
+            className="inline-flex items-center gap-2 text-brume-200 hover:text-ivoire-400 transition-colors text-sm mb-2 min-h-[40px]"
           >
             <ArrowLeft className="w-4 h-4" />
             Retour au profil
           </Link>
-          <h1 className="text-xl sm:text-2xl font-playfair italic text-white flex items-center gap-2">
-            <Settings className="w-5 h-5 text-horizon-400" />
+          <h1 className="text-xl sm:text-2xl font-playfair italic text-ivoire-100 flex items-center gap-2">
+            <Settings className="w-5 h-5 text-ivoire-400" />
             Réglages
           </h1>
-          <p className="text-xs text-stellar-500 mt-1">
+          <p className="text-xs text-brume-300 mt-1">
             Préférences et confidentialité de votre compte.
           </p>
         </div>
@@ -65,8 +65,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
               href={tab.href}
               className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 min-h-[44px] rounded-xl whitespace-nowrap text-sm transition-all flex-shrink-0 ${
                 isActive
-                  ? 'bg-white/10 text-white border border-white/10'
-                  : 'text-stellar-400 hover:bg-white/5 border border-transparent'
+                  ? 'bg-brume-800/25 text-ivoire-100 border border-ivoire-500/[0.08]'
+                  : 'text-brume-200 hover:bg-brume-800/25 border border-transparent'
               }`}
             >
               <tab.icon className={`w-4 h-4 ${isActive ? tab.color : ''}`} />

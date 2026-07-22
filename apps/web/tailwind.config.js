@@ -56,6 +56,48 @@ module.exports = {
           600: '#475569', // Subtle
         },
 
+        // ═══════════════════════════════════════════════════════════
+        // L'AUBE DU SANCTUAIRE — Dawn palette (scoped to /sanctuaire)
+        // ═══════════════════════════════════════════════════════════
+
+        // Bleu brume — depth opening to clarity
+        brume: {
+          800: '#0F1D38',
+          700: '#152648',
+          600: '#1C3058',
+          500: '#253D6B',
+          400: '#2F4D7E',
+          300: '#3E6298',
+          200: '#5B82B5',
+        },
+
+        // Ivoire d'aube — warm light halos
+        ivoire: {
+          500: '#D4C5A0',
+          400: '#E8D8B8',
+          300: '#F0E8D0',
+          200: '#F8F2E4',
+          100: '#FFFCF5',
+        },
+
+        // Rose d'aube — use very sparingly
+        aurore: {
+          500: '#A86888',
+          400: '#C8889A',
+          300: '#DCA0B0',
+          200: '#EBBCC8',
+          100: '#F5D8E0',
+        },
+
+        // Lavande — subtle elevation
+        lavande: {
+          500: '#7B68A8',
+          400: '#9580C0',
+          300: '#B0A0D4',
+          200: '#C8B8E0',
+          100: '#E0D8F0',
+        },
+
         // Legacy compatibility aliases
         cosmic: {
           void: '#0C1225',
@@ -127,6 +169,8 @@ module.exports = {
         'gold-gradient': 'linear-gradient(135deg, #E8A838, #F4B942, #FFCC5C)',
         'horizon-glow': 'linear-gradient(180deg, transparent 0%, #E8A838 50%, #D4943C 100%)',
         'abyss-fade': 'linear-gradient(180deg, #040610 0%, #0C1225 50%, #101830 100%)',
+        'aube-gradient':
+          'linear-gradient(180deg, #050A18 0%, #0A1528 25%, #0F1A35 55%, #142242 100%)',
       },
       boxShadow: {
         'gold-glow': '0 0 40px rgba(232, 168, 56, 0.3)',
@@ -134,6 +178,8 @@ module.exports = {
         'serenity-glow': '0 0 40px rgba(20, 82, 102, 0.4)',
         abyss: '0 20px 40px rgba(4, 6, 16, 0.6)',
         stellar: '0 8px 32px rgba(4, 6, 16, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03)',
+        'ivoire-soft': '0 0 40px rgba(240, 232, 208, 0.08)',
+        'aube-glow': '0 8px 32px rgba(5, 10, 24, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04)',
       },
       animation: {
         'mandala-rotate': 'mandala-rotate 60s linear infinite',
@@ -143,6 +189,8 @@ module.exports = {
         twinkle: 'twinkle 3s ease-in-out infinite',
         shimmer: 'shimmer 0.7s ease-in-out',
         breathe: 'breathe 6s ease-in-out infinite',
+        'dawn-breathe': 'dawn-breathe 8s ease-in-out infinite',
+        'light-reveal': 'light-reveal 0.8s ease-out forwards',
       },
       keyframes: {
         'mandala-rotate': {
@@ -172,6 +220,14 @@ module.exports = {
         breathe: {
           '0%, 100%': { opacity: '0.6' },
           '50%': { opacity: '1' },
+        },
+        'dawn-breathe': {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '0.7' },
+        },
+        'light-reveal': {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },
     },

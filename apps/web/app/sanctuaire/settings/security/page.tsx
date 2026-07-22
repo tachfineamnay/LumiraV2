@@ -10,32 +10,32 @@ export default function SecuritySettingsPage() {
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500">
       <div>
-        <h2 className="text-xl sm:text-2xl font-playfair italic text-white">
+        <h2 className="text-xl sm:text-2xl font-playfair italic text-ivoire-100">
           Sécurité & Confidentialité
         </h2>
-        <p className="text-stellar-400 text-sm mt-1">
+        <p className="text-brume-200 text-sm mt-1">
           Protégez votre compte et vos données personnelles.
         </p>
       </div>
 
       <GlassCard className="p-5 sm:p-8">
-        <h3 className="text-lg font-playfair text-white mb-2 flex items-center gap-2">
-          <Lock className="w-5 h-5 text-horizon-400" /> Mot de passe
+        <h3 className="text-lg font-playfair text-ivoire-100 mb-2 flex items-center gap-2">
+          <Lock className="w-5 h-5 text-ivoire-400" /> Mot de passe
         </h3>
-        <p className="text-stellar-400 text-sm mb-4">
+        <p className="text-brume-200 text-sm mb-4">
           La modification du mot de passe depuis le Sanctuaire arrive bientôt.
         </p>
-        <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-stellar-500 text-sm">
+        <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brume-800/25 border border-ivoire-500/[0.08] text-brume-300 text-sm">
           <Clock className="w-4 h-4" />
           Bientôt disponible
         </div>
       </GlassCard>
 
       <GlassCard className="p-5 sm:p-8">
-        <h3 className="text-lg font-playfair text-white mb-2 flex items-center gap-2">
+        <h3 className="text-lg font-playfair text-ivoire-100 mb-2 flex items-center gap-2">
           <Download className="w-5 h-5 text-purple-400" /> Mes Données (RGPD)
         </h3>
-        <p className="text-stellar-400 text-sm mb-4">
+        <p className="text-brume-200 text-sm mb-4">
           L&apos;export de vos données personnelles sera disponible prochainement. Contactez le
           support pour une demande urgente.
         </p>

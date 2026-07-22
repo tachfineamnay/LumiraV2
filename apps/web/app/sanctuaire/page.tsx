@@ -137,40 +137,38 @@ function SanctuaireHome() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
       <header className="max-w-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
           Sanctuaire Lumira
         </p>
-        <h1 className="mt-3 font-playfair text-3xl italic text-stellar-100 sm:text-4xl">
+        <h1 className="mt-3 font-playfair text-3xl italic text-ivoire-100 sm:text-4xl">
           Bonjour {user?.firstName || ''}
         </h1>
-        <p className="mt-3 text-base leading-7 text-stellar-400">
+        <p className="mt-3 text-base leading-7 text-brume-200">
           Votre dossier, votre lecture et les échanges avec l’équipe sont réunis ici.
         </p>
       </header>
 
       <section
         className={`mt-8 overflow-hidden rounded-3xl border p-5 shadow-abyss sm:p-7 ${
-          isReady
-            ? 'border-emerald-400/20 bg-emerald-400/[0.045]'
-            : 'border-white/[0.08] bg-abyss-600/50'
+          isReady ? 'border-emerald-400/20 bg-emerald-400/[0.045]' : 'glass-aube'
         }`}
       >
         <div className="flex items-start gap-4">
           <span
             className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${
-              isReady ? 'bg-emerald-400/15 text-emerald-300' : 'bg-horizon-400/15 text-horizon-300'
+              isReady ? 'bg-emerald-400/15 text-emerald-300' : 'bg-ivoire-400/10 text-ivoire-400'
             }`}
           >
             {isReady ? <Checkmark /> : <Sparkles className="h-5 w-5" />}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brume-300">
               Votre situation
             </p>
-            <h2 className="mt-2 font-playfair text-2xl italic text-stellar-100">
+            <h2 className="mt-2 font-playfair text-2xl italic text-ivoire-100">
               {homeState.title}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stellar-400">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-brume-200">
               {homeState.description}
             </p>
           </div>
@@ -178,7 +176,7 @@ function SanctuaireHome() {
 
         {savedDraftStep !== null && (
           <div
-            className="mt-6 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs text-stellar-400"
+            className="mt-6 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-ivoire-500/[0.06] bg-brume-800/20 px-3 py-2 text-xs text-brume-200"
             aria-label={`Brouillon sauvegardé à l’étape ${savedDraftStep} sur 5`}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
@@ -200,7 +198,7 @@ function SanctuaireHome() {
         {isReady && !latestReading && !readingsError && (
           <p
             role="status"
-            className="mt-6 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm leading-6 text-stellar-400"
+            className="mt-6 rounded-2xl border border-ivoire-500/[0.06] bg-brume-800/20 px-4 py-3 text-sm leading-6 text-brume-200"
           >
             Votre dossier est prêt, mais la lecture n’apparaît pas encore ici. Actualisez dans un
             instant ou ouvrez « Mes lectures ».
@@ -211,10 +209,10 @@ function SanctuaireHome() {
           <div className="mt-7 space-y-5">
             {latestReading?.title && (
               <div className="border-l-2 border-emerald-400/35 pl-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-stellar-500">
+                <p className="text-xs uppercase tracking-[0.14em] text-brume-300">
                   Dernière lecture
                 </p>
-                <p className="mt-1 text-lg font-medium text-stellar-100">{latestReading.title}</p>
+                <p className="mt-1 text-lg font-medium text-ivoire-100">{latestReading.title}</p>
               </div>
             )}
 
@@ -223,10 +221,10 @@ function SanctuaireHome() {
             ) : audioPending ? (
               <div
                 role="status"
-                className="rounded-2xl border border-horizon-400/20 bg-horizon-400/[0.07] px-4 py-3 text-sm leading-6 text-stellar-300"
+                className="rounded-2xl border border-ivoire-400/15 bg-ivoire-400/[0.06] px-4 py-3 text-sm leading-6 text-ivoire-200"
               >
-                <p className="font-medium text-horizon-200">Narration en préparation</p>
-                <p className="mt-1 text-stellar-400">
+                <p className="font-medium text-ivoire-300">Narration en préparation</p>
+                <p className="mt-1 text-brume-200">
                   Votre PDF est disponible. L’enregistrement audio arrive dès qu’il est prêt —
                   actualisez cette page dans quelques minutes.
                 </p>
@@ -234,7 +232,7 @@ function SanctuaireHome() {
                   type="button"
                   onClick={() => void refreshReadings()}
                   disabled={isRefreshing}
-                  className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-xs font-semibold text-horizon-200 hover:bg-horizon-300/10 disabled:opacity-60"
+                  className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-xs font-semibold text-ivoire-300 hover:bg-horizon-300/10 disabled:opacity-60"
                 >
                   {isRefreshing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -267,7 +265,7 @@ function SanctuaireHome() {
                   type="button"
                   onClick={() => void downloadPdf()}
                   disabled={isDownloading}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-5 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05] disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-5 py-3 text-sm font-medium text-ivoire-200 hover:bg-brume-700/25 disabled:cursor-wait disabled:opacity-60"
                 >
                   {isDownloading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -279,21 +277,21 @@ function SanctuaireHome() {
               )}
             </div>
 
-            <div className="grid gap-3 border-t border-white/[0.06] pt-5 sm:grid-cols-2">
+            <div className="grid gap-3 border-t border-ivoire-500/[0.05] pt-5 sm:grid-cols-2">
               <Link
                 href="/sanctuaire/synthesis"
-                className="flex min-h-[52px] items-center gap-3 rounded-2xl px-3 text-sm text-stellar-300 transition-colors hover:bg-white/[0.04]"
+                className="flex min-h-[52px] items-center gap-3 rounded-2xl px-3 text-sm text-ivoire-200 transition-colors hover:bg-brume-700/20"
               >
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[0.04] text-horizon-300">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-brume-800/22 text-ivoire-400">
                   <Layers className="h-4 w-4" />
                 </span>
                 Retrouver l’essentiel dans ma synthèse
               </Link>
               <Link
                 href="/sanctuaire/chat"
-                className="flex min-h-[52px] items-center gap-3 rounded-2xl px-3 text-sm text-stellar-300 transition-colors hover:bg-white/[0.04]"
+                className="flex min-h-[52px] items-center gap-3 rounded-2xl px-3 text-sm text-ivoire-200 transition-colors hover:bg-brume-700/20"
               >
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/[0.04] text-horizon-300">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-brume-800/22 text-ivoire-400">
                   <MessageCircle className="h-4 w-4" />
                 </span>
                 Demander un éclairage à l’équipe
@@ -357,10 +355,10 @@ function Checkmark() {
 function SanctuaireHomeSkeleton() {
   return (
     <div className="mx-auto w-full max-w-5xl animate-pulse px-4 py-8 sm:px-6 sm:py-12">
-      <div className="h-4 w-40 rounded-full bg-white/[0.06]" />
-      <div className="mt-4 h-10 w-72 max-w-full rounded-2xl bg-white/[0.07]" />
-      <div className="mt-3 h-4 w-96 max-w-full rounded-full bg-white/[0.05]" />
-      <div className="mt-8 h-48 rounded-3xl bg-white/[0.04]" />
+      <div className="h-4 w-40 rounded-full bg-brume-700/20" />
+      <div className="mt-4 h-10 w-72 max-w-full rounded-2xl bg-brume-700/20" />
+      <div className="mt-3 h-4 w-96 max-w-full rounded-full bg-brume-800/25" />
+      <div className="mt-8 h-48 rounded-3xl bg-brume-800/22" />
     </div>
   );
 }

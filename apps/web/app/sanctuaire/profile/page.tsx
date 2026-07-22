@@ -148,7 +148,7 @@ export default function ProfilePage() {
     <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
       {/* Premium Identity Card Header */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="card-premium p-6 md:p-8">
+        <div className="glass-aube p-6 md:p-8">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
             {/* Avatar with Glow */}
             <div className="relative">
@@ -171,10 +171,10 @@ export default function ProfilePage() {
 
             {/* User Info */}
             <div className="flex-1">
-              <h1 className="text-2xl md:text-3xl font-playfair italic text-gradient-gold mb-2">
+              <h1 className="text-2xl md:text-3xl font-playfair italic text-gradient-aube mb-2">
                 {user?.firstName} {user?.lastName}
               </h1>
-              <p className="text-stellar-400 text-sm mb-3">{user?.email}</p>
+              <p className="text-brume-200 text-sm mb-3">{user?.email}</p>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-600/20 to-transparent border border-amber-400/30 backdrop-blur-md">
                   <span className="text-sm">👑</span>
@@ -200,7 +200,7 @@ export default function ProfilePage() {
 
             {/* Action Button */}
             <Link href="/sanctuaire/settings/preferences">
-              <button className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/5 text-stellar-300 border border-white/10 hover:bg-white/10 hover:border-horizon-400/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
+              <button className="flex items-center gap-2 px-5 py-3 rounded-xl bg-brume-800/25 text-ivoire-200 border border-ivoire-500/[0.06] hover:bg-brume-700/25 hover:border-horizon-400/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
                 <Target className="w-4 h-4" />
                 Réglages
               </button>
@@ -220,71 +220,71 @@ export default function ProfilePage() {
           transition={{ delay: 0.1 }}
         >
           <GlassCard className="p-6 md:p-8">
-            <h2 className="text-lg font-playfair italic text-horizon-300 mb-6 flex items-center gap-2">
+            <h2 className="text-lg font-playfair italic text-ivoire-400 mb-6 flex items-center gap-2">
               <User className="w-5 h-5" />
               Informations Personnelles
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
+                <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <User className="w-3 h-3" /> Prénom
                 </label>
-                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
+                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {user?.firstName || 'Non renseigné'}
                 </div>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
+                <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <User className="w-3 h-3" /> Nom
                 </label>
-                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
+                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {user?.lastName || 'Non renseigné'}
                 </div>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
+                <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Mail className="w-3 h-3" /> Email
                 </label>
-                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
+                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {user?.email || 'Non renseigné'}
                 </div>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
+                <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Phone className="w-3 h-3" /> Téléphone
                 </label>
-                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-400">
+                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-brume-200">
                   {user?.phone || 'Non renseigné'}
                 </div>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
+                <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Calendar className="w-3 h-3" /> Date de naissance
                 </label>
-                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
+                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {formatDate(profile?.birthDate)}
                 </div>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
+                <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Clock className="w-3 h-3" /> Heure de naissance
                 </label>
-                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
+                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {profile?.birthTime || 'Non renseigné'}
                 </div>
               </div>
 
               <div className="md:col-span-2">
-                <label className="flex items-center gap-2 text-xs text-stellar-400 uppercase tracking-wider mb-2 font-medium">
+                <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <MapPin className="w-3 h-3" /> Lieu de naissance
                 </label>
-                <div className="p-4 rounded-xl bg-abyss-600/40 border border-white/[0.06] text-stellar-200">
+                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {profile?.birthPlace || 'Non renseigné'}
                 </div>
               </div>
@@ -314,7 +314,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* État Vibratoire */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-stellar-400 mb-2">
+                <div className="flex items-center gap-2 text-sm text-brume-200 mb-2">
                   <Sparkles className="w-4 h-4 text-emerald-400" />
                   État Vibratoire
                 </div>
@@ -323,7 +323,7 @@ export default function ProfilePage() {
                   <label className="text-xs text-emerald-400 uppercase tracking-wider mb-2 block">
                     Ce qui vous porte
                   </label>
-                  <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-stellar-200 min-h-[80px]">
+                  <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-ivoire-200 min-h-[80px]">
                     {profile?.highs || 'Non renseigné'}
                   </div>
                 </div>
@@ -332,7 +332,7 @@ export default function ProfilePage() {
                   <label className="text-xs text-rose-400 uppercase tracking-wider mb-2 block">
                     Ce qui pèse
                   </label>
-                  <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-stellar-200 min-h-[80px]">
+                  <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-ivoire-200 min-h-[80px]">
                     {profile?.lows || 'Non renseigné'}
                   </div>
                 </div>
@@ -340,25 +340,25 @@ export default function ProfilePage() {
 
               {/* Profil Somatique */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-stellar-400 mb-2">
+                <div className="flex items-center gap-2 text-sm text-brume-200 mb-2">
                   <Activity className="w-4 h-4 text-serenity-400" />
                   Profil Somatique
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-stellar-500 uppercase tracking-wider mb-2 block">
+                    <label className="text-xs text-brume-300 uppercase tracking-wider mb-2 block">
                       Côté fort
                     </label>
-                    <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200 text-center">
+                    <div className="p-3 rounded-xl bg-brume-800/20 border border-ivoire-500/[0.04] text-ivoire-200 text-center">
                       {profile?.strongSide || '—'}
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-stellar-500 uppercase tracking-wider mb-2 block">
+                    <label className="text-xs text-brume-300 uppercase tracking-wider mb-2 block">
                       Côté faible
                     </label>
-                    <div className="p-3 rounded-xl bg-abyss-500/30 border border-white/5 text-stellar-200 text-center">
+                    <div className="p-3 rounded-xl bg-brume-800/20 border border-ivoire-500/[0.04] text-ivoire-200 text-center">
                       {profile?.weakSide || '—'}
                     </div>
                   </div>
@@ -369,7 +369,7 @@ export default function ProfilePage() {
                     <label className="text-xs text-emerald-400 uppercase tracking-wider mb-2 block">
                       Zone de force
                     </label>
-                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-stellar-200 text-center">
+                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-ivoire-200 text-center">
                       {profile?.strongZone || 'Non défini'}
                     </div>
                   </div>
@@ -377,7 +377,7 @@ export default function ProfilePage() {
                     <label className="text-xs text-rose-400 uppercase tracking-wider mb-2 block">
                       Zone fragile
                     </label>
-                    <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-stellar-200 text-center">
+                    <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-ivoire-200 text-center">
                       {profile?.weakZone || 'Non défini'}
                     </div>
                   </div>
@@ -388,7 +388,7 @@ export default function ProfilePage() {
                     <label className="text-xs text-amber-400 uppercase tracking-wider mb-2 block">
                       Maux physiques
                     </label>
-                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-stellar-200">
+                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-ivoire-200">
                       {profile.ailments}
                     </div>
                   </div>
@@ -397,8 +397,8 @@ export default function ProfilePage() {
             </div>
 
             {/* Rythme & Style */}
-            <div className="mt-6 pt-6 border-t border-white/5">
-              <div className="flex items-center gap-2 text-sm text-stellar-400 mb-4">
+            <div className="mt-6 pt-6 border-t border-ivoire-500/[0.04]">
+              <div className="flex items-center gap-2 text-sm text-brume-200 mb-4">
                 <Heart className="w-4 h-4 text-horizon-400" />
                 Préférences de Guidance
               </div>
@@ -408,18 +408,16 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{deliveryStyle.icon}</span>
                     <div>
-                      <div className="text-stellar-200 font-medium">{deliveryStyle.title}</div>
-                      <div className="text-xs text-stellar-500">{deliveryStyle.subtitle}</div>
+                      <div className="text-ivoire-200 font-medium">{deliveryStyle.title}</div>
+                      <div className="text-xs text-brume-300">{deliveryStyle.subtitle}</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-abyss-500/30 border border-white/5">
+                <div className="p-4 rounded-xl bg-brume-800/20 border border-ivoire-500/[0.04]">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-stellar-500 uppercase tracking-wider">
-                      Rythme
-                    </span>
-                    <span className="text-stellar-200 font-medium">
+                    <span className="text-xs text-brume-300 uppercase tracking-wider">Rythme</span>
+                    <span className="text-ivoire-200 font-medium">
                       {getPaceLabel(profile?.pace)}
                     </span>
                   </div>
@@ -477,7 +475,7 @@ export default function ProfilePage() {
               ) : (
                 <button
                   onClick={() => setIsEditingPhotos(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-horizon-400/20 text-horizon-300 border border-horizon-400/30 hover:bg-horizon-400/30 transition-all text-sm"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-horizon-400/20 text-ivoire-400 border border-horizon-400/30 hover:bg-horizon-400/30 transition-all text-sm"
                 >
                   <Edit3 className="w-4 h-4" />
                   Modifier
@@ -488,7 +486,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Photo de visage */}
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-3">
+                <label className="flex items-center gap-2 text-xs text-brume-300 uppercase tracking-wider mb-3">
                   <Camera className="w-3 h-3" /> Photo de visage
                 </label>
 
@@ -513,7 +511,7 @@ export default function ProfilePage() {
 
               {/* Photo de paume */}
               <div>
-                <label className="flex items-center gap-2 text-xs text-stellar-500 uppercase tracking-wider mb-3">
+                <label className="flex items-center gap-2 text-xs text-brume-300 uppercase tracking-wider mb-3">
                   <Hand className="w-3 h-3" /> Photo de paume
                 </label>
 

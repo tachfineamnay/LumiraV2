@@ -42,10 +42,10 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <SanctuaireGuard>
-      <div className="starfield min-h-dvh bg-abyss-700 text-stellar-100 selection:bg-horizon-400/20">
+      <div className="sanctuaire-aube relative min-h-dvh text-ivoire-100 selection:bg-horizon-300/15">
         <SanctuaireSidebar />
         <div className="relative z-10 min-h-dvh lg:ml-64">
-          <header className="sticky top-0 z-40 flex min-h-[64px] items-center justify-between border-b border-white/[0.05] bg-abyss-700/88 px-3 py-3 backdrop-blur-xl sm:px-5">
+          <header className="glass-header-aube sticky top-0 z-40 flex min-h-[64px] items-center justify-between px-3 py-3 sm:px-5">
             <Link
               href="/sanctuaire"
               aria-label="Accueil du Sanctuaire Lumira"
@@ -54,13 +54,13 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-horizon-400 text-abyss-900 shadow-gold-soft">
                 <Star className="h-4 w-4 fill-current" />
               </span>
-              <span className="font-playfair text-sm italic text-stellar-200">Lumira</span>
+              <span className="font-playfair text-sm italic text-ivoire-200">Lumira</span>
             </Link>
 
-            <div className="hidden items-center gap-2 lg:flex" aria-label="Confidentialité du Sanctuaire">
-              <ShieldCheck className="h-4 w-4 text-horizon-300" />
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-200">
-                Espace privé et sécurisé
+            <div className="hidden items-center gap-2 lg:flex" aria-label="Statut d’accès">
+              <ShieldCheck className="h-4 w-4 text-ivoire-400" />
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-300">
+                Accès early · 3 mois
               </span>
             </div>
 
@@ -72,16 +72,16 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                   aria-expanded={isProfileOpen}
                   aria-haspopup="menu"
                   aria-controls="sanctuaire-profile-menu"
-                  className="flex min-h-[44px] items-center gap-2 rounded-xl border border-white/[0.08] bg-abyss-500/50 px-2 py-2 text-left transition-colors hover:bg-abyss-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 sm:px-3"
+                  className="flex min-h-[44px] items-center gap-2 rounded-xl border border-ivoire-500/[0.06] bg-brume-700/40 px-2 py-2 text-left transition-colors hover:bg-brume-600/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 sm:px-3"
                 >
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-horizon-400 text-sm font-bold text-abyss-800">
                     {userInitial}
                   </span>
-                  <span className="hidden max-w-[150px] truncate text-sm text-stellar-200 sm:block">
+                  <span className="hidden max-w-[150px] truncate text-sm text-ivoire-200 sm:block">
                     {userName}
                   </span>
                   <ChevronDown
-                    className={`h-4 w-4 text-stellar-500 transition-transform ${
+                    className={`h-4 w-4 text-brume-300 transition-transform ${
                       isProfileOpen ? 'rotate-180' : ''
                     }`}
                   />
@@ -98,13 +98,13 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                     <div
                       id="sanctuaire-profile-menu"
                       role="menu"
-                      className="absolute right-0 z-50 mt-2 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-600/95 shadow-abyss backdrop-blur-xl"
+                      className="absolute right-0 z-50 mt-2 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-ivoire-500/[0.06] glass-aube shadow-aube-glow"
                     >
-                      <div className="border-b border-white/[0.05] p-4">
-                        <p className="truncate text-sm font-medium text-stellar-100">{userName}</p>
-                        <p className="truncate text-xs text-stellar-500">{user?.email}</p>
-                        <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-horizon-400/25 bg-horizon-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-horizon-200">
-                          <ShieldCheck className="h-3 w-3" /> Accès de lancement · 3 mois
+                      <div className="border-b border-ivoire-500/[0.04] p-4">
+                        <p className="truncate text-sm font-medium text-ivoire-100">{userName}</p>
+                        <p className="truncate text-xs text-brume-300">{user?.email}</p>
+                        <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-ivoire-500/[0.06] bg-ivoire-400/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ivoire-300">
+                          <ShieldCheck className="h-3 w-3" /> Accès early · 3 mois
                         </p>
                       </div>
                       <nav className="p-2" aria-label="Dossier, profil et réglages">
@@ -115,13 +115,13 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                               key={item.key}
                               href={item.route}
                               role="menuitem"
-                              className="flex min-h-[52px] items-center gap-3 rounded-xl px-3 py-2 text-sm text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+                              className="flex min-h-[52px] items-center gap-3 rounded-xl px-3 py-2 text-sm text-ivoire-200 hover:bg-brume-700/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
                             >
-                              <Icon className="h-5 w-5 shrink-0 text-horizon-300" />
+                              <Icon className="h-5 w-5 shrink-0 text-ivoire-400" />
                               <span className="min-w-0">
                                 <span className="block truncate">{item.label}</span>
                                 {item.sublabel && (
-                                  <span className="mt-0.5 block truncate text-[11px] text-stellar-500">
+                                  <span className="mt-0.5 block truncate text-[11px] text-brume-300">
                                     {item.sublabel}
                                   </span>
                                 )}
@@ -130,7 +130,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                           );
                         })}
                       </nav>
-                      <div className="border-t border-white/[0.05] p-2">
+                      <div className="border-t border-ivoire-500/[0.04] p-2">
                         <button
                           type="button"
                           onClick={() => {
