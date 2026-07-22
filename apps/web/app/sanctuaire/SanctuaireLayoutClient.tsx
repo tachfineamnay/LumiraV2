@@ -104,7 +104,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                         <p className="truncate text-sm font-medium text-stellar-100">{userName}</p>
                         <p className="truncate text-xs text-stellar-500">{user?.email}</p>
                         <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-horizon-400/25 bg-horizon-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-horizon-200">
-                          <ShieldCheck className="h-3 w-3" /> Accès early · 3 mois
+                          <ShieldCheck className="h-3 w-3" /> Accès de lancement · 3 mois
                         </p>
                       </div>
                       <nav className="p-2" aria-label="Dossier, profil et réglages">
