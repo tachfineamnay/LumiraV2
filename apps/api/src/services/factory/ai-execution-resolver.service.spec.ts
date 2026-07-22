@@ -130,6 +130,31 @@ describe('AiExecutionResolverService', () => {
     expect(resolved.maxTokens).toBe(24000);
   });
 
+  it('heals gpt-3.5-pro to an operational SCRIBE model before provider call', async () => {
+    const snapshot = {
+      ...baseSnapshot,
+      modelConfig: {
+        ...baseSnapshot.modelConfig,
+        agents: {
+          ...baseSnapshot.modelConfig.agents,
+          SCRIBE: {
+            enabled: true,
+            provider: 'openai',
+            model: 'gpt-3.5-pro',
+            maxOutputTokens: 8000,
+          },
+        },
+      },
+    } as unknown as AiPromptSnapshot;
+
+    const resolved = await service.resolve(
+      buildAiContext('SCRIBE', AiMission.READING_GENERATION),
+      snapshot,
+    );
+
+    expect(resolved.model).toBe('gpt-5.5-2026-04-23');
+  });
+
   it('uses per-agent provider and model without reading AiRoutingRule', async () => {
     const snapshot: AiPromptSnapshot = {
       ...baseSnapshot,

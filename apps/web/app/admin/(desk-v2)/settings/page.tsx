@@ -218,6 +218,25 @@ function seedModelsForProvider(provider: ProviderId): CatalogModel[] {
   return provider === 'openai' ? SEED_OPENAI_MODELS : SEED_GOOGLE_MODELS;
 }
 
+function sanitizeOperationalModels(
+  config: ModelConfig,
+  resolveModels: (provider: ProviderId) => CatalogModel[],
+): ModelConfig {
+  const agents = { ...config.agents };
+  let changed = false;
+  for (const key of Object.keys(agents) as AgentKey[]) {
+    const agent = agents[key];
+    const provider = config.providerMode === 'openai_only' ? 'openai' : agent.provider;
+    const options = resolveModels(provider);
+    const fallback = options[0]?.id || seedModelsForProvider(provider)[0].id;
+    if (!options.some((option) => option.id === agent.model)) {
+      agents[key] = { ...agent, model: fallback };
+      changed = true;
+    }
+  }
+  return changed ? { ...config, agents } : config;
+}
+
 function messageFromError(error: unknown): string {
   const value = error as {
     response?: { status?: number; data?: { message?: string; error?: string } };
@@ -513,8 +532,9 @@ export default function SettingsPage() {
         ]);
       setPrompts(promptResponse.data);
       setDefaults(defaultResponse.data);
-      setModelConfig(modelResponse.data.config);
-      setSavedModelConfig(modelResponse.data.config);
+      const loadedConfig = modelResponse.data.config as ModelConfig;
+      setModelConfig(loadedConfig);
+      setSavedModelConfig(loadedConfig);
       setModelConfigMeta(modelResponse.data.meta);
       setCredentials(statusResponse.data);
       setReadiness(readinessResponse.data);
@@ -536,6 +556,10 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    setModelConfig((prev) => (prev ? sanitizeOperationalModels(prev, modelsForProvider) : prev));
+  }, [availableModels, modelsForProvider]);
 
   const modelDirty =
     modelConfig && savedModelConfig
@@ -1284,10 +1308,7 @@ export default function SettingsPage() {
             const providerLocked = modelConfig.providerMode === 'openai_only';
             const effectiveProvider = providerLocked ? 'openai' : item.provider;
             const catalogOptions = modelsForProvider(effectiveProvider);
-            const modelOptions =
-              catalogOptions.some((option) => option.id === item.model) || !item.model
-                ? catalogOptions
-                : [{ id: item.model, label: `${item.model} (enregistré)` }, ...catalogOptions];
+            const modelOptions = catalogOptions;
             const isGpt5 = effectiveProvider === 'openai' && item.model.startsWith('gpt-5.');
             const useTempKnobs = !isGpt5;
             const price =

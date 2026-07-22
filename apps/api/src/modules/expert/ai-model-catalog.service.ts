@@ -102,16 +102,7 @@ export class AiModelCatalogService {
         .filter((model) => this.isOpenAiGenerativeModel(model.id))
         .sort((a, b) => a.id.localeCompare(b.id));
 
-      if (models.length === 0) {
-        return {
-          configured: true,
-          models: this.seedEntries('openai'),
-          source: 'seed',
-          error: 'Aucun modèle génératif listé, seeds utilisés',
-        };
-      }
-
-      return { configured: true, models, source: 'live' };
+      return this.operationalOrSeed('openai', models, true);
     } catch (error) {
       this.logger.warn(`OpenAI model catalog failed: ${this.safeError(error)}`);
       return {
@@ -164,16 +155,7 @@ export class AiModelCatalogService {
         .filter((model) => model.id)
         .sort((a, b) => a.id.localeCompare(b.id));
 
-      if (models.length === 0) {
-        return {
-          configured: true,
-          models: this.seedEntries('gemini'),
-          source: 'seed',
-          error: 'Aucun modèle generateContent, seeds utilisés',
-        };
-      }
-
-      return { configured: true, models, source: 'live' };
+      return this.operationalOrSeed('gemini', models, true);
     } catch (error) {
       this.logger.warn(`Gemini model catalog failed: ${this.safeError(error)}`);
       return {
@@ -226,16 +208,7 @@ export class AiModelCatalogService {
         .filter((model) => /gemini/i.test(model.id))
         .sort((a, b) => a.id.localeCompare(b.id));
 
-      if (models.length === 0) {
-        return {
-          configured: true,
-          models: this.seedEntries('vertex'),
-          source: 'seed',
-          error: 'Aucun modèle Gemini publisher, seeds utilisés',
-        };
-      }
-
-      return { configured: true, models, source: 'live' };
+      return this.operationalOrSeed('vertex', models, true);
     } catch (error) {
       this.logger.warn(`Vertex model catalog failed: ${this.safeError(error)}`);
       return {
@@ -266,6 +239,28 @@ export class AiModelCatalogService {
           ? VERTEX_V1_MODELS
           : GEMINI_V1_MODELS;
     return ids.map((id) => ({ id, label: id }));
+  }
+
+  /**
+   * Live catalogs are intersected with the product allowlist. If none of the
+   * operational seeds appear in the live list, fall back to seeds.
+   */
+  private operationalOrSeed(
+    provider: AiProvider,
+    liveModels: ModelCatalogEntry[],
+    configured: boolean,
+  ): ProviderModelCatalog {
+    const seedIds = new Set(this.seedEntries(provider).map((entry) => entry.id));
+    const operational = liveModels.filter((model) => seedIds.has(model.id));
+    if (operational.length === 0) {
+      return {
+        configured,
+        models: this.seedEntries(provider),
+        source: 'seed',
+        error: 'Aucun modèle opérationnel dans le catalogue live, seeds utilisés',
+      };
+    }
+    return { configured, models: operational, source: 'live' };
   }
 
   private isOpenAiGenerativeModel(id: string): boolean {

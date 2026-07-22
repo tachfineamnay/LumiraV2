@@ -98,13 +98,10 @@ describe('AiModelCatalogService', () => {
     );
   });
 
-  it('lists live OpenAI/Gemini/Vertex models and caches for an hour', async () => {
+  it('lists live OpenAI/Gemini/Vertex models intersected with V1 allowlist and caches', async () => {
     const first = await service.getAvailableModels();
     expect(first.openai.source).toBe('live');
-    expect(first.openai.models.map((m) => m.id)).toEqual([
-      'gpt-4o-2024-11-20',
-      'gpt-4o-mini-2024-07-18',
-    ]);
+    expect(first.openai.models.map((m) => m.id)).toEqual(['gpt-4o-2024-11-20']);
     expect(first.gemini.source).toBe('live');
     expect(first.gemini.models.map((m) => m.id)).toEqual(['gemini-2.5-flash']);
     expect(first.vertex.source).toBe('live');
@@ -116,6 +113,25 @@ describe('AiModelCatalogService', () => {
     expect(second).toBe(first);
     expect(openaiModule.__mockList).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to seeds when live ∩ allowlist is empty', async () => {
+    openaiModule.__mockList.mockResolvedValueOnce({
+      data: [
+        { id: 'gpt-4o-mini-2024-07-18', owned_by: 'openai', created: 1 },
+        { id: 'gpt-3.5-turbo', owned_by: 'openai', created: 2 },
+      ],
+    });
+    service.clearCache();
+
+    const payload = await service.getAvailableModels({ force: true });
+    expect(payload.openai.source).toBe('seed');
+    expect(payload.openai.models.map((m) => m.id)).toEqual([
+      'gpt-5.5-2026-04-23',
+      'gpt-5.4-2026-03-05',
+      'gpt-4o-2024-11-20',
+    ]);
+    expect(payload.openai.error).toMatch(/Aucun modèle opérationnel/);
   });
 
   it('forces refresh when requested', async () => {

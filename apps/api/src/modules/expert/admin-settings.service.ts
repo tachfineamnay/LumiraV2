@@ -500,6 +500,23 @@ export class AdminSettingsService {
       const normalized = normalizeAiModelConfig(JSON.parse(active.value));
       if (normalized.issues.length > 0) {
         this.logger.warn(`Stored MODEL_CONFIG was normalized: ${normalized.issues.join(' | ')}`);
+        const healedValue = JSON.stringify(normalized.config, null, 2);
+        const activePretty = (() => {
+          try {
+            return JSON.stringify(JSON.parse(active.value), null, 2);
+          } catch {
+            return active.value;
+          }
+        })();
+        if (healedValue !== activePretty) {
+          await this.persistPromptVersion(
+            PROMPT_KEYS.MODEL_CONFIG,
+            healedValue,
+            'system-heal',
+            `Auto-healed non-operational MODEL_CONFIG: ${normalized.issues.join(' | ')}`,
+          );
+          this.logger.warn('Stored MODEL_CONFIG auto-healed to operational models only');
+        }
       }
       return {
         config: normalized.config,

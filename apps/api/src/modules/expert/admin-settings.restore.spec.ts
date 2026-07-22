@@ -164,4 +164,84 @@ describe('AdminSettingsService restore latest custom', () => {
     expect(desk.meta.hasRestorableCustom).toBe(true);
     expect(desk.config.providerMode).toBe('openai_only');
   });
+
+  it('auto-heals stored MODEL_CONFIG with non-operational models', async () => {
+    const broken = {
+      ...DEFAULT_AI_MODEL_CONFIG,
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
+          model: 'gpt-3.5-pro',
+        },
+      },
+    };
+    promptVersion.findFirst.mockResolvedValue({
+      id: 'mc-broken',
+      key: 'MODEL_CONFIG',
+      version: 7,
+      value: JSON.stringify(broken),
+      changedBy: 'founder',
+      comment: 'Desk',
+      isActive: true,
+      createdAt: new Date(),
+    });
+    promptVersion.findMany.mockResolvedValue([
+      {
+        id: 'mc-broken',
+        key: 'MODEL_CONFIG',
+        version: 7,
+        value: JSON.stringify(broken),
+        changedBy: 'founder',
+        comment: 'Desk',
+        isActive: true,
+        createdAt: new Date(),
+      },
+    ]);
+    promptVersion.updateMany.mockResolvedValue({ count: 1 });
+    promptVersion.create.mockResolvedValue({ version: 8 });
+
+    const desk = await service.getModelConfigForDesk();
+    expect(desk.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
+    expect(promptVersion.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          key: 'MODEL_CONFIG',
+          changedBy: 'system-heal',
+          isActive: true,
+        }),
+      }),
+    );
+    expect(aiRuntimeCache.invalidateAll).toHaveBeenCalled();
+  });
+
+  it('rejects saveModelConfig when requesting a non-operational model', async () => {
+    promptVersion.findFirst.mockResolvedValue({
+      id: 'mc',
+      key: 'MODEL_CONFIG',
+      version: 5,
+      value: JSON.stringify(DEFAULT_AI_MODEL_CONFIG),
+      changedBy: 'production-migration',
+      comment: 'baseline',
+      isActive: true,
+      createdAt: new Date(),
+    });
+    promptVersion.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.saveModelConfig(
+        {
+          agents: {
+            ...DEFAULT_AI_MODEL_CONFIG.agents,
+            SCRIBE: {
+              ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
+              model: 'gpt-3.5-pro',
+            },
+          },
+        },
+        'founder',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(promptVersion.create).not.toHaveBeenCalled();
+  });
 });

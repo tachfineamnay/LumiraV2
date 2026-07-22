@@ -9,7 +9,7 @@ import {
   AiPromptSnapshot,
   ResolvedAiExecution,
 } from './ai-execution.types';
-import { normalizeAiModelConfig } from './ai-model-config';
+import { normalizeAiModelConfig, assertOperationalModel } from './ai-model-config';
 
 @Injectable()
 export class AiExecutionResolverService {
@@ -55,6 +55,8 @@ export class AiExecutionResolverService {
     this.logger.log(
       `[${ctx.agent}] ${routingSource} → ${config.provider}/${config.model} mode=${modelConfig.providerMode}`,
     );
+
+    assertOperationalModel(config.provider, config.model, ctx.agent);
 
     return {
       provider: config.provider,

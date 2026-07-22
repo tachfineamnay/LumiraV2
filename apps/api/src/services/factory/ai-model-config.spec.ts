@@ -1,4 +1,5 @@
 import {
+  assertOperationalModel,
   DEFAULT_AI_MODEL_CONFIG,
   estimateOpenAiCost,
   normalizeAiModelConfig,
@@ -47,7 +48,7 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.EDITOR.model).toBe('gemini-2.5-flash');
   });
 
-  it('accepts Desk-chosen model ids outside the seed catalog', () => {
+  it('restores defaults for non-operational model ids such as gpt-3.5-pro', () => {
     const normalized = normalizeAiModelConfig({
       providerMode: 'openai_only',
       agents: {
@@ -55,7 +56,29 @@ describe('ai-model-config', () => {
         SCRIBE: {
           enabled: true,
           provider: 'openai',
-          model: 'gpt-4o-mini-2024-07-18',
+          model: 'gpt-3.5-pro',
+          temperature: 0.5,
+          topP: 0.9,
+          maxOutputTokens: 8000,
+        },
+      },
+    });
+
+    expect(normalized.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
+    expect(normalized.issues).toContain(
+      'SCRIBE: modèle gpt-3.5-pro non opérationnel, gpt-5.5-2026-04-23 restauré',
+    );
+  });
+
+  it('accepts pinned V1 OpenAI snapshots only', () => {
+    const normalized = normalizeAiModelConfig({
+      providerMode: 'openai_only',
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-4o-2024-11-20',
           temperature: 0.5,
           topP: 0.9,
           maxOutputTokens: 8000,
@@ -64,7 +87,14 @@ describe('ai-model-config', () => {
     });
 
     expect(normalized.issues).toEqual([]);
-    expect(normalized.config.agents.SCRIBE.model).toBe('gpt-4o-mini-2024-07-18');
+    expect(normalized.config.agents.SCRIBE.model).toBe('gpt-4o-2024-11-20');
+  });
+
+  it('assertOperationalModel rejects phantom ids', () => {
+    expect(() => assertOperationalModel('openai', 'gpt-3.5-pro', 'SCRIBE')).toThrow(
+      /\[SCRIBE\] modèle non opérationnel: gpt-3\.5-pro/,
+    );
+    expect(() => assertOperationalModel('openai', 'gpt-5.5-2026-04-23')).not.toThrow();
   });
 
   it('restores safe defaults for unknown mode and empty models', () => {

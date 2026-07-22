@@ -87,8 +87,6 @@ const REASONING_VALUES = new Set(['low', 'medium', 'high']);
 const VERBOSITY_VALUES = new Set(['low', 'medium', 'high']);
 const ALLOWED_PROVIDERS = new Set<AiProvider>(['openai', 'vertex', 'gemini']);
 const ALLOWED_MODES = new Set<AiProviderMode>(['openai_only', 'per_agent']);
-// Seed catalogs kept for UI fallback only — not used as hard allowlists.
-
 const DEFAULT_GOOGLE_KNOBS: Record<
   AgentType,
   { temperature: number; topP: number; maxOutputTokens: number }
@@ -126,10 +124,14 @@ function finiteNumber(value: unknown): number | undefined {
 }
 
 function isAllowedModel(provider: AiProvider, model: string): boolean {
-  // Soft validation: Desk is source of truth. Any non-empty model id is accepted.
-  // Seed lists remain available as UI fallbacks when live catalogs fail.
-  void provider;
-  return typeof model === 'string' && model.trim().length > 0;
+  if (typeof model !== 'string' || model.trim().length === 0) return false;
+  return (modelsForProvider(provider) as readonly string[]).includes(model.trim());
+}
+
+export function assertOperationalModel(provider: AiProvider, model: string, agent?: string): void {
+  if (isAllowedModel(provider, model)) return;
+  const prefix = agent ? `[${agent}] ` : '';
+  throw new Error(`${prefix}modèle non opérationnel: ${model || '(vide)'} (provider ${provider})`);
 }
 
 function normalizeAgent(
@@ -164,8 +166,11 @@ function normalizeAgent(
   const requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
   let model = requestedModel;
   if (!isAllowedModel(provider, model)) {
-    model = provider === 'openai' ? fallback.model : modelsForProvider(provider)[0];
-    issues.push(`${agent}: modèle absent ou invalide, ${model} restauré`);
+    const restored = provider === 'openai' ? fallback.model : modelsForProvider(provider)[0];
+    issues.push(
+      `${agent}: modèle ${requestedModel || '(vide)'} non opérationnel, ${restored} restauré`,
+    );
+    model = restored;
   }
 
   const enabled = typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled;
