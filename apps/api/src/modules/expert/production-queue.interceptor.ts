@@ -30,7 +30,7 @@ export class ProductionQueueInterceptor implements NestInterceptor {
     const path = (request.originalUrl || request.url || '').split('?')[0];
 
     if (path.endsWith('/expert/process-order')) {
-      return from(this.enqueueAndWaitForLegacyProcess(request));
+      return from(this.enqueueLegacyProcess(request));
     }
 
     const audioTestMatch = path.match(/\/expert\/test-audio\/([^/]+)$/);
@@ -40,36 +40,34 @@ export class ProductionQueueInterceptor implements NestInterceptor {
 
     const generateMatch = path.match(/\/expert\/orders\/([^/]+)\/generate$/);
     if (generateMatch) {
-      return from(
-        this.production.enqueueReading(generateMatch[1], request.expert, {
-          expertPrompt: this.stringValue(request.body?.expertPrompt),
-          expertInstructions: this.stringValue(request.body?.expertInstructions),
-        }),
-      );
+      return from(this.enqueueReading(generateMatch[1], request));
     }
 
     const fullMatch = path.match(/\/expert\/orders\/([^/]+)\/generate-full$/);
     if (fullMatch) {
-      return from(this.enqueueAndWait(fullMatch[1], request));
+      return from(this.enqueueReading(fullMatch[1], request));
+    }
+
+    const regenerateMatch = path.match(/\/expert\/orders\/([^/]+)\/regenerate$/);
+    if (regenerateMatch) {
+      return from(this.enqueueReading(regenerateMatch[1], request));
     }
 
     return next.handle();
   }
 
-  private async enqueueAndWaitForLegacyProcess(request: ExpertRequest) {
+  private async enqueueLegacyProcess(request: ExpertRequest) {
     const orderId = this.stringValue(request.body?.orderId);
     if (!orderId) throw new BadRequestException('orderId est requis');
-    return this.enqueueAndWait(orderId, request);
+    return this.enqueueReading(orderId, request);
   }
 
-  private async enqueueAndWait(orderId: string, request: ExpertRequest) {
+  private async enqueueReading(orderId: string, request: ExpertRequest) {
     if (!request.expert) throw new BadRequestException('Expert non résolu');
-    const queued = await this.production.enqueueReading(orderId, request.expert, {
+    return this.production.enqueueReading(orderId, request.expert, {
       expertPrompt: this.stringValue(request.body?.expertPrompt),
       expertInstructions: this.stringValue(request.body?.expertInstructions),
     });
-
-    return this.production.waitForJob(queued.jobId);
   }
 
   private stringValue(value: unknown): string | undefined {
