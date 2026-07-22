@@ -16,7 +16,6 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
-  Optional,
   ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -24,7 +23,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { VertexOracle, OracleResponse, UserProfile, OrderContext } from './VertexOracle';
 import { productLevelFromAmountCents } from './product-level.util';
 import { PdfFactory, ReadingPdfData } from './PdfFactory';
-import { AudioGenerationService } from './AudioGenerationService';
 import {
   OrderForReadingSource,
   ReadingSourceResolver,
@@ -74,7 +72,6 @@ export class DigitalSoulService {
     private readonly vertexOracle: VertexOracle,
     private readonly pdfFactory: PdfFactory,
     private readonly readingSourceResolver: ReadingSourceResolver,
-    @Optional() private readonly audioGenerationService?: AudioGenerationService,
   ) {
     this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
     // Canonical production bucket with compatibility for older deployments.
@@ -432,14 +429,8 @@ export class DigitalSoulService {
     this.logger.log(`   ⏱️ Time: ${elapsed}ms`);
     this.logger.log(`${'='.repeat(60)}\n`);
 
-    // Fire-and-forget: generate TTS audio in background (only when service is injected via DI)
-    if (this.audioGenerationService) {
-      this.audioGenerationService.generateAllAudio(orderId).catch((err) => {
-        this.logger.error(
-          `🎤 Background audio generation failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-    }
+    // Audio is enqueued by ExpertService after seal (managed AUDIO_GENERATION job).
+    // Do not fire-and-forget generateAllAudio here — it no-ops without a RUNNING job.
 
     return {
       orderId: order.id,
@@ -816,15 +807,7 @@ export class DigitalSoulService {
       this.logger.log(`   ⏱️ TOTAL TIME: ${totalElapsed}ms (${Math.round(totalElapsed / 1000)}s)`);
       this.logger.log(`${'='.repeat(60)}\n`);
 
-      // Fire-and-forget: generate TTS audio in background
-      if (this.audioGenerationService) {
-        this.logger.log('🎙️ Triggering background audio generation...');
-        this.audioGenerationService.generateAllAudio(orderId).catch((err) => {
-          this.logger.error(
-            `🎤 Background audio generation failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
-      }
+      // Audio is enqueued by ExpertService after seal (managed AUDIO_GENERATION job).
 
       return {
         orderId: order.id,

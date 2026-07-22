@@ -558,10 +558,25 @@ export class ExpertController {
     return this.adminSettingsService.resetAllPromptsToDefaults();
   }
 
+  @Post('settings/prompts-restore-latest-customs')
+  @Roles('ADMIN')
+  async restoreAllLatestCustomPrompts(@Body('changedBy') changedBy?: string) {
+    return this.adminSettingsService.restoreAllLatestCustomPrompts(changedBy);
+  }
+
+  @Post('settings/prompts/:key/restore-latest-custom')
+  @Roles('ADMIN')
+  async restoreLatestCustomPrompt(
+    @Param('key') key: string,
+    @Body('changedBy') changedBy?: string,
+  ) {
+    return this.adminSettingsService.restoreLatestCustomPrompt(key, changedBy);
+  }
+
   @Get('settings/model-config')
   @Roles('ADMIN')
   async getModelConfig() {
-    return this.adminSettingsService.getModelConfig();
+    return this.adminSettingsService.getModelConfigForDesk();
   }
 
   @Put('settings/model-config')

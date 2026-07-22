@@ -38,7 +38,28 @@ export interface PromptWithMeta {
   isCustom: boolean;
   changedBy?: string;
   updatedAt?: string;
+  /** True when a non-system historical version can be restored. */
+  hasRestorableCustom: boolean;
 }
+
+export interface ModelConfigMeta {
+  isCustom: boolean;
+  version: number;
+  changedBy?: string;
+  hasRestorableCustom: boolean;
+}
+
+export interface ModelConfigDeskResponse {
+  config: ModelConfig;
+  meta: ModelConfigMeta;
+}
+
+export interface RestoreLatestCustomsResult {
+  restored: Array<{ key: string; version: number }>;
+  skipped: Array<{ key: string; reason: string }>;
+}
+
+const SYSTEM_PROMPT_AUTHORS = new Set(['production-migration', 'system', 'seed', 'migration']);
 
 export interface PromptVersionHistory {
   id: string;
@@ -189,30 +210,87 @@ export class AdminSettingsService {
     return { success: true, message: 'Identifiants Vertex supprimés.' };
   }
 
+  isSystemPromptAuthor(changedBy?: string | null, comment?: string | null): boolean {
+    const author = (changedBy || '').trim().toLowerCase();
+    if (author && SYSTEM_PROMPT_AUTHORS.has(author)) return true;
+    const note = (comment || '').toLowerCase();
+    if (/production-migration|openai-only v1 production baseline|production baseline/.test(note)) {
+      return true;
+    }
+    return false;
+  }
+
+  async findLatestCustomPromptVersion(key: PromptKey) {
+    const versions = await this.prisma.promptVersion.findMany({
+      where: { key },
+      orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
+    });
+    return (
+      versions.find((version) => !this.isSystemPromptAuthor(version.changedBy, version.comment)) ||
+      null
+    );
+  }
+
   async getAllPrompts(): Promise<Record<string, PromptWithMeta>> {
     const defaults = this.getDefaultPrompts();
-    const activeVersions = await this.prisma.promptVersion.findMany({
-      where: { isActive: true },
-      orderBy: [{ key: 'asc' }, { version: 'desc' }],
+    const allVersions = await this.prisma.promptVersion.findMany({
+      orderBy: [{ key: 'asc' }, { version: 'desc' }, { createdAt: 'desc' }],
     });
-    const activeByKey = new Map<string, (typeof activeVersions)[number]>();
-    for (const version of activeVersions) {
-      if (!activeByKey.has(version.key)) activeByKey.set(version.key, version);
+
+    const activeByKey = new Map<string, (typeof allVersions)[number]>();
+    const latestCustomByKey = new Map<string, (typeof allVersions)[number]>();
+    for (const version of allVersions) {
+      if (version.isActive && !activeByKey.has(version.key)) {
+        activeByKey.set(version.key, version);
+      }
+      if (
+        !latestCustomByKey.has(version.key) &&
+        !this.isSystemPromptAuthor(version.changedBy, version.comment)
+      ) {
+        latestCustomByKey.set(version.key, version);
+      }
     }
 
     const result: Record<string, PromptWithMeta> = {};
     for (const key of Object.values(PROMPT_KEYS)) {
       const active = activeByKey.get(key);
-      result[key] = active
-        ? {
-            key,
-            value: active.value,
-            version: active.version,
-            isCustom: true,
-            changedBy: active.changedBy || undefined,
-            updatedAt: active.createdAt.toISOString(),
-          }
-        : { key, value: defaults[key] || '', version: 0, isCustom: false };
+      const latestCustom = latestCustomByKey.get(key);
+      const activeIsCustom = Boolean(
+        active && !this.isSystemPromptAuthor(active.changedBy, active.comment),
+      );
+      const hasRestorableCustom = Boolean(
+        latestCustom && (!activeIsCustom || latestCustom.version !== active?.version),
+      );
+
+      if (active && activeIsCustom) {
+        result[key] = {
+          key,
+          value: active.value,
+          version: active.version,
+          isCustom: true,
+          changedBy: active.changedBy || undefined,
+          updatedAt: active.createdAt.toISOString(),
+          hasRestorableCustom,
+        };
+      } else if (active) {
+        result[key] = {
+          key,
+          value: active.value,
+          version: active.version,
+          isCustom: false,
+          changedBy: active.changedBy || undefined,
+          updatedAt: active.createdAt.toISOString(),
+          hasRestorableCustom,
+        };
+      } else {
+        result[key] = {
+          key,
+          value: defaults[key] || '',
+          version: 0,
+          isCustom: false,
+          hasRestorableCustom,
+        };
+      }
     }
     return result;
   }
@@ -324,6 +402,58 @@ export class AdminSettingsService {
     return { success: true };
   }
 
+  async restoreLatestCustomPrompt(
+    key: string,
+    changedBy?: string,
+  ): Promise<{ success: boolean; version: number }> {
+    this.assertPromptKey(key);
+    const latestCustom = await this.findLatestCustomPromptVersion(key);
+    if (!latestCustom) {
+      throw new BadRequestException(`Aucune version personnalisée restaurable pour ${key}.`);
+    }
+    await this.restorePromptVersion(key, latestCustom.version, changedBy || 'desk-restore');
+    const active = await this.prisma.promptVersion.findFirst({
+      where: { key, isActive: true },
+      orderBy: { version: 'desc' },
+    });
+    return { success: true, version: active?.version ?? latestCustom.version + 1 };
+  }
+
+  async restoreAllLatestCustomPrompts(changedBy?: string): Promise<RestoreLatestCustomsResult> {
+    const restored: RestoreLatestCustomsResult['restored'] = [];
+    const skipped: RestoreLatestCustomsResult['skipped'] = [];
+
+    for (const key of Object.values(PROMPT_KEYS)) {
+      try {
+        const latestCustom = await this.findLatestCustomPromptVersion(key);
+        if (!latestCustom) {
+          skipped.push({ key, reason: 'aucune version personnalisée' });
+          continue;
+        }
+        const active = await this.prisma.promptVersion.findFirst({
+          where: { key, isActive: true },
+          orderBy: { version: 'desc' },
+        });
+        const activeIsCustom = Boolean(
+          active && !this.isSystemPromptAuthor(active.changedBy, active.comment),
+        );
+        if (activeIsCustom && active?.version === latestCustom.version) {
+          skipped.push({ key, reason: 'déjà la version personnalisée active' });
+          continue;
+        }
+        const result = await this.restoreLatestCustomPrompt(key, changedBy || 'desk-restore');
+        restored.push({ key, version: result.version });
+      } catch (error) {
+        skipped.push({
+          key,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { restored, skipped };
+  }
+
   async resetPromptToDefault(key: string): Promise<{ success: boolean }> {
     this.assertPromptKey(key);
     await this.prisma.promptVersion.updateMany({ where: { key }, data: { isActive: false } });
@@ -338,21 +468,59 @@ export class AdminSettingsService {
   }
 
   async getModelConfig(): Promise<ModelConfig> {
+    const desk = await this.getModelConfigForDesk();
+    return desk.config;
+  }
+
+  async getModelConfigForDesk(): Promise<ModelConfigDeskResponse> {
     const active = await this.prisma.promptVersion.findFirst({
       where: { key: PROMPT_KEYS.MODEL_CONFIG, isActive: true },
       orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
     });
-    if (!active?.value) return this.getDefaultModelConfig();
+    const latestCustom = await this.findLatestCustomPromptVersion(PROMPT_KEYS.MODEL_CONFIG);
+    const activeIsCustom = Boolean(
+      active && !this.isSystemPromptAuthor(active.changedBy, active.comment),
+    );
+    const hasRestorableCustom = Boolean(
+      latestCustom && (!activeIsCustom || latestCustom.version !== active?.version),
+    );
+
+    if (!active?.value) {
+      return {
+        config: this.getDefaultModelConfig(),
+        meta: {
+          isCustom: false,
+          version: 0,
+          hasRestorableCustom,
+        },
+      };
+    }
 
     try {
       const normalized = normalizeAiModelConfig(JSON.parse(active.value));
       if (normalized.issues.length > 0) {
         this.logger.warn(`Stored MODEL_CONFIG was normalized: ${normalized.issues.join(' | ')}`);
       }
-      return normalized.config;
+      return {
+        config: normalized.config,
+        meta: {
+          isCustom: activeIsCustom,
+          version: active.version,
+          changedBy: active.changedBy || undefined,
+          hasRestorableCustom,
+        },
+      };
     } catch (error) {
       this.logger.error(`Stored MODEL_CONFIG is unreadable: ${String(error)}`);
-      return this.getDefaultModelConfig();
+      return {
+        config: this.getDefaultModelConfig(),
+        meta: {
+          isCustom: false,
+          version: active.version,
+          changedBy: active.changedBy || undefined,
+          hasRestorableCustom,
+        },
+      };
     }
   }
 

@@ -3,7 +3,6 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import dynamicImport from 'next/dynamic';
 import Link from 'next/link';
 import {
   AlertCircle,
@@ -16,14 +15,6 @@ import {
 } from 'lucide-react';
 import { MysticAudioPlayer } from '../../../components/ui/MysticAudioPlayer';
 import sanctuaireApi from '../../../lib/sanctuaireApi';
-
-const ReadingViewerModal = dynamicImport(
-  () =>
-    import('../../../components/sanctuary/ReadingViewerModal').then(
-      (module) => module.ReadingViewerModal,
-    ),
-  { ssr: false },
-);
 
 type ReadingStatus = 'PAID' | 'PROCESSING' | 'AWAITING_VALIDATION' | 'COMPLETED';
 
@@ -71,11 +62,6 @@ export default function DrawsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPdf, setSelectedPdf] = useState<{
-    url: string;
-    title: string;
-    orderNumber: string;
-  } | null>(null);
 
   const loadReadings = useCallback(async (initial = false) => {
     if (initial) setIsLoading(true);
@@ -134,16 +120,6 @@ export default function DrawsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
-      {selectedPdf && (
-        <ReadingViewerModal
-          isOpen
-          onClose={() => setSelectedPdf(null)}
-          pdfUrl={selectedPdf.url}
-          title={selectedPdf.title}
-          orderNumber={selectedPdf.orderNumber}
-        />
-      )}
-
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-300">
@@ -202,7 +178,8 @@ export default function DrawsPage() {
             Aucune lecture en préparation
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-stellar-400">
-            Préparez et confirmez votre dossier. Votre lecture apparaîtra ici dès sa prise en charge.
+            Préparez et confirmez votre dossier. Votre lecture apparaîtra ici dès sa prise en
+            charge.
           </p>
           <Link
             href="/sanctuaire/dossier"
@@ -241,7 +218,9 @@ export default function DrawsPage() {
                         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stellar-500">
                           Votre intention
                         </p>
-                        <p className="mt-1 text-sm leading-6 text-stellar-300">{reading.intention}</p>
+                        <p className="mt-1 text-sm leading-6 text-stellar-300">
+                          {reading.intention}
+                        </p>
                       </div>
                     )}
                     <p className="mt-4 text-xs text-stellar-500">
@@ -264,22 +243,21 @@ export default function DrawsPage() {
                   <div className="mt-6 border-t border-white/[0.06] pt-5">
                     {hasAssets ? (
                       <div className="space-y-4">
-                        {audioUrl && <MysticAudioPlayer audioUrl={audioUrl} />}
+                        {audioUrl ? (
+                          <MysticAudioPlayer audioUrl={audioUrl} />
+                        ) : pdfUrl ? (
+                          <p className="rounded-2xl border border-horizon-400/20 bg-horizon-400/[0.07] px-4 py-3 text-sm text-stellar-300">
+                            Narration en préparation — actualisez dans quelques minutes.
+                          </p>
+                        ) : null}
                         <div className="flex flex-col gap-3 sm:flex-row">
                           {pdfUrl && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSelectedPdf({
-                                  url: pdfUrl,
-                                  title: reading.title,
-                                  orderNumber: reading.orderNumber,
-                                })
-                              }
+                            <Link
+                              href={`/sanctuaire/lecture/${encodeURIComponent(reading.orderNumber)}`}
                               className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
                             >
                               <FileText className="h-4 w-4" /> Lire ma lecture
-                            </button>
+                            </Link>
                           )}
                           {pdfUrl && (
                             <button
@@ -301,7 +279,8 @@ export default function DrawsPage() {
                     ) : (
                       <div className="flex flex-col gap-3 rounded-2xl border border-horizon-400/15 bg-horizon-400/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm leading-6 text-stellar-400">
-                          La lecture est validée. Ses fichiers sont encore en cours de mise à disposition.
+                          La lecture est validée. Ses fichiers sont encore en cours de mise à
+                          disposition.
                         </p>
                         <button
                           type="button"

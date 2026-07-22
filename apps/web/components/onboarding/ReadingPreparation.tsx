@@ -301,10 +301,14 @@ function formatBirthDate(value: string): string {
 export function ReadingPreparation({
   onCompleted,
   onClose,
+  variant = 'overlay',
 }: {
   onCompleted: () => Promise<void>;
-  onClose: () => void;
+  onClose?: () => void;
+  variant?: 'overlay' | 'inline';
 }) {
+  const isInline = variant === 'inline';
+  const dismiss = onClose ?? (() => undefined);
   const {
     register,
     reset,
@@ -632,7 +636,9 @@ export function ReadingPreparation({
     mountedRef.current = true;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (!isInline) {
+      document.body.style.overflow = 'hidden';
+    }
     void loadServerDraft();
 
     return () => {
@@ -641,10 +647,12 @@ export function ReadingPreparation({
       saveEpochRef.current += 1;
       activeSaveRequestsRef.current.forEach((controller) => controller.abort());
       activeSaveRequestsRef.current.clear();
-      document.body.style.overflow = previousOverflow;
-      previousFocusRef.current?.focus?.();
+      if (!isInline) {
+        document.body.style.overflow = previousOverflow;
+        previousFocusRef.current?.focus?.();
+      }
     };
-  }, [loadServerDraft]);
+  }, [isInline, loadServerDraft]);
 
   useEffect(() => {
     if (loadState !== 'ready' || isSubmitting || isComplete || saveState === 'conflict') return;
@@ -758,15 +766,16 @@ export function ReadingPreparation({
       setIsClosing(false);
       return;
     }
-    onClose();
-  }, [flushDraft, isClosing, isPhotoBusy, isSubmitting, loadState, onClose, waitForPhotoUploads]);
+    dismiss();
+  }, [dismiss, flushDraft, isClosing, isPhotoBusy, isSubmitting, loadState, waitForPhotoUploads]);
 
   useEffect(() => {
+    if (isInline) return;
     if (!['ready', 'error', 'sealed'].includes(loadState)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (loadState === 'error' || loadState === 'sealed') onClose();
+        if (loadState === 'error' || loadState === 'sealed') dismiss();
         else void handleClose();
         return;
       }
@@ -790,7 +799,7 @@ export function ReadingPreparation({
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [handleClose, loadState, onClose]);
+  }, [dismiss, handleClose, isInline, loadState]);
 
   const uploadPrivatePhoto = useCallback((preview: string, kind: 'FACE' | 'PALM') => {
     const base = uploadOnboardingPhoto(preview, kind, orderIdRef.current).then((storageRef) => {
@@ -1036,18 +1045,19 @@ export function ReadingPreparation({
   );
 
   if (loadState === 'loading') {
-    return <LoadingDialog />;
+    return <LoadingDialog variant={variant} />;
   }
 
   if (loadState === 'error') {
     return (
       <BlockingDialog
         dialogRef={dialogRef}
+        variant={variant}
         title="Impossible de retrouver votre brouillon"
         description={loadError}
         primaryLabel="Réessayer"
         onPrimary={() => void loadServerDraft()}
-        onClose={onClose}
+        onClose={dismiss}
       />
     );
   }
@@ -1056,11 +1066,13 @@ export function ReadingPreparation({
     return (
       <BlockingDialog
         dialogRef={dialogRef}
+        variant={variant}
         title="Ce dossier est déjà confirmé"
         description="La version transmise pour cette lecture est désormais immuable. Vous pouvez la consulter depuis Mon dossier."
         primaryLabel="Retour à mon Sanctuaire"
-        onPrimary={onClose}
-        onClose={onClose}
+        onPrimary={dismiss}
+        onClose={dismiss}
+        hideClose={isInline}
       />
     );
   }
@@ -1069,12 +1081,22 @@ export function ReadingPreparation({
     return (
       <div
         ref={dialogRef}
-        className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl"
-        role="dialog"
-        aria-modal="true"
+        className={
+          isInline
+            ? 'rounded-3xl border border-emerald-400/20 bg-abyss-700/80 p-6 text-center sm:p-9'
+            : 'fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl'
+        }
+        role={isInline ? 'status' : 'dialog'}
+        aria-modal={isInline ? undefined : true}
         aria-labelledby="reading-preparation-complete-title"
       >
-        <section className="w-full max-w-xl rounded-3xl border border-emerald-400/20 bg-abyss-700 p-6 text-center shadow-abyss sm:p-9">
+        <section
+          className={
+            isInline
+              ? 'w-full'
+              : 'w-full max-w-xl rounded-3xl border border-emerald-400/20 bg-abyss-700 p-6 text-center shadow-abyss sm:p-9'
+          }
+        >
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
             <CheckCircle2 className="h-8 w-8" />
           </span>
@@ -1093,13 +1115,15 @@ export function ReadingPreparation({
             La version que vous venez de relire est maintenant liée à cette lecture. L’équipe vous
             écrira lorsqu’elle sera disponible.
           </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-7 min-h-[48px] w-full rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 sm:w-auto"
-          >
-            Retour à mon Sanctuaire
-          </button>
+          {!isInline && (
+            <button
+              type="button"
+              onClick={dismiss}
+              className="mt-7 min-h-[48px] w-full rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 sm:w-auto"
+            >
+              Retour à mon Sanctuaire
+            </button>
+          )}
         </section>
       </div>
     );
@@ -1110,15 +1134,26 @@ export function ReadingPreparation({
   return (
     <div
       ref={dialogRef}
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-abyss-900/98 backdrop-blur-xl p-0 lg:p-6"
-      role="dialog"
-      aria-modal="true"
+      id="dossier-preparation"
+      className={
+        isInline
+          ? 'overflow-hidden rounded-3xl border border-white/[0.08] bg-abyss-800 shadow-abyss'
+          : 'fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-abyss-900/98 backdrop-blur-xl p-0 lg:p-6'
+      }
+      role={isInline ? 'region' : 'dialog'}
+      aria-modal={isInline ? undefined : true}
       aria-labelledby="reading-preparation-title"
       aria-describedby="reading-preparation-description"
     >
       <div
-        className="mx-auto flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-abyss-800 lg:h-[min(760px,calc(100dvh-3rem))] lg:rounded-3xl lg:border lg:border-white/[0.08] lg:shadow-abyss"
-        style={mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined}
+        className={
+          isInline
+            ? 'mx-auto flex w-full max-w-5xl flex-col'
+            : 'mx-auto flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-abyss-800 lg:h-[min(760px,calc(100dvh-3rem))] lg:rounded-3xl lg:border lg:border-white/[0.08] lg:shadow-abyss'
+        }
+        style={
+          !isInline && mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined
+        }
       >
         <header className="shrink-0 border-b border-white/[0.07] bg-abyss-700/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 lg:pt-3">
           <div className="flex min-w-0 items-center justify-between gap-3">
@@ -1130,15 +1165,21 @@ export function ReadingPreparation({
                 {saveLabel}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => void handleClose()}
-              disabled={isSubmitting || isClosing}
-              aria-label="Enregistrer et reprendre plus tard"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/[0.08] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
-            >
-              {isClosing ? <Loader2 className="h-5 w-5 animate-spin" /> : <X className="h-5 w-5" />}
-            </button>
+            {!isInline && (
+              <button
+                type="button"
+                onClick={() => void handleClose()}
+                disabled={isSubmitting || isClosing}
+                aria-label="Enregistrer et reprendre plus tard"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/[0.08] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
+              >
+                {isClosing ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <X className="h-5 w-5" />
+                )}
+              </button>
+            )}
           </div>
           <div className="mt-3 lg:hidden">
             <div className="flex items-center justify-between text-xs text-stellar-500">
@@ -1156,7 +1197,13 @@ export function ReadingPreparation({
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div
+          className={
+            isInline
+              ? 'grid lg:grid-cols-[220px_minmax(0,1fr)]'
+              : 'grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]'
+          }
+        >
           <aside className="hidden min-h-0 border-r border-white/[0.07] bg-abyss-700/60 p-4 lg:flex lg:flex-col">
             <p className="px-2 text-xs font-semibold uppercase tracking-[0.14em] text-stellar-500">
               Progression
@@ -1207,7 +1254,13 @@ export function ReadingPreparation({
               else void next();
             }}
           >
-            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 [scroll-padding-bottom:7rem] sm:px-8 sm:py-7">
+            <div
+              className={
+                isInline
+                  ? 'custom-scrollbar overflow-y-auto overscroll-contain px-4 py-5 sm:px-8 sm:py-7'
+                  : 'custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 [scroll-padding-bottom:7rem] sm:px-8 sm:py-7'
+              }
+            >
               <div className="mx-auto max-w-3xl">
                 <h1
                   ref={titleRef}
@@ -2027,10 +2080,15 @@ function TrustNote() {
   );
 }
 
-function LoadingDialog() {
+function LoadingDialog({ variant = 'overlay' }: { variant?: 'overlay' | 'inline' }) {
+  const isInline = variant === 'inline';
   return (
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-abyss-900/98 p-6"
+      className={
+        isInline
+          ? 'grid place-items-center rounded-3xl border border-white/[0.08] bg-abyss-800 p-10'
+          : 'fixed inset-0 z-[100] grid place-items-center bg-abyss-900/98 p-6'
+      }
       role="status"
       aria-label="Chargement du brouillon"
     >
@@ -2050,6 +2108,8 @@ function BlockingDialog({
   primaryLabel,
   onPrimary,
   onClose,
+  variant = 'overlay',
+  hideClose = false,
 }: {
   dialogRef: React.RefObject<HTMLDivElement>;
   title: string;
@@ -2057,24 +2117,33 @@ function BlockingDialog({
   primaryLabel: string;
   onPrimary: () => void;
   onClose: () => void;
+  variant?: 'overlay' | 'inline';
+  hideClose?: boolean;
 }) {
+  const isInline = variant === 'inline';
   return (
     <div
       ref={dialogRef}
-      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
-      role="dialog"
-      aria-modal="true"
+      className={
+        isInline
+          ? 'grid place-items-center overflow-y-auto rounded-3xl border border-white/[0.08] bg-abyss-800 p-4'
+          : 'fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
+      }
+      role={isInline ? 'region' : 'dialog'}
+      aria-modal={isInline ? undefined : true}
       aria-labelledby="reading-preparation-blocked-title"
     >
       <section className="relative w-full max-w-lg rounded-3xl border border-white/[0.09] bg-abyss-700 p-6 text-center shadow-abyss sm:p-8">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fermer"
-          className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-xl text-stellar-400 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        {!hideClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-xl text-stellar-400 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-horizon-400/10 text-horizon-300">
           <RefreshCw className="h-7 w-7" />
         </span>

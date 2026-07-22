@@ -37,6 +37,14 @@ interface PromptWithMeta {
   isCustom: boolean;
   changedBy?: string;
   updatedAt?: string;
+  hasRestorableCustom?: boolean;
+}
+
+interface ModelConfigMeta {
+  isCustom: boolean;
+  version: number;
+  changedBy?: string;
+  hasRestorableCustom: boolean;
 }
 
 interface PromptHistory {
@@ -265,6 +273,7 @@ function PromptPanel({
   saving,
   onSave,
   onReset,
+  onRestoreLatestCustom,
   onDirtyChange,
 }: {
   promptKey: string;
@@ -273,6 +282,7 @@ function PromptPanel({
   saving: boolean;
   onSave: (key: string, value: string, comment?: string) => Promise<void>;
   onReset: (key: string) => Promise<void>;
+  onRestoreLatestCustom: (key: string) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const [value, setValue] = useState(prompt.value);
@@ -313,8 +323,12 @@ function PromptPanel({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Pill level={prompt.isCustom ? 'warning' : 'pass'}>
-            {prompt.isCustom ? `Personnalisé v${prompt.version}` : 'Défaut contrôlé'}
+          <Pill level={prompt.isCustom ? 'pass' : 'warning'}>
+            {prompt.isCustom
+              ? `Personnalisé v${prompt.version}`
+              : prompt.version > 0
+                ? `Baseline système v${prompt.version}`
+                : 'Défaut code'}
           </Pill>
           {value !== defaultValue && (
             <span className="text-xs text-desk-muted">Différent du défaut</span>
@@ -377,6 +391,17 @@ function PromptPanel({
             Revenir au défaut
           </button>
         )}
+        {prompt.hasRestorableCustom && (
+          <button
+            type="button"
+            onClick={() => void onRestoreLatestCustom(promptKey)}
+            disabled={saving}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/20"
+          >
+            <History className="h-4 w-4" />
+            Réactiver dernière perso
+          </button>
+        )}
       </div>
 
       {historyOpen && (
@@ -431,6 +456,7 @@ export default function SettingsPage() {
   const [defaults, setDefaults] = useState<Record<string, string> | null>(null);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
   const [savedModelConfig, setSavedModelConfig] = useState<ModelConfig | null>(null);
+  const [modelConfigMeta, setModelConfigMeta] = useState<ModelConfigMeta | null>(null);
   const [credentials, setCredentials] = useState<CredentialsStatus | null>(null);
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
@@ -487,8 +513,9 @@ export default function SettingsPage() {
         ]);
       setPrompts(promptResponse.data);
       setDefaults(defaultResponse.data);
-      setModelConfig(modelResponse.data);
-      setSavedModelConfig(modelResponse.data);
+      setModelConfig(modelResponse.data.config);
+      setSavedModelConfig(modelResponse.data.config);
+      setModelConfigMeta(modelResponse.data.meta);
       setCredentials(statusResponse.data);
       setReadiness(readinessResponse.data);
       void loadCatalog(false);
@@ -497,6 +524,7 @@ export default function SettingsPage() {
       setDefaults(null);
       setModelConfig(null);
       setSavedModelConfig(null);
+      setModelConfigMeta(null);
       setCredentials(null);
       setReadiness(null);
       setLoadError(messageFromError(error));
@@ -550,6 +578,43 @@ export default function SettingsPage() {
     try {
       await expertApi.post(`/expert/settings/prompts/${key}/reset`);
       setSuccess(`${key} restauré au défaut contrôlé.`);
+      setDirtyPrompt(false);
+      await loadAll();
+    } catch (error) {
+      setActionError(messageFromError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restoreLatestCustom = async (key: string) => {
+    clearFeedback();
+    setSaving(true);
+    try {
+      const { data } = await expertApi.post(
+        `/expert/settings/prompts/${key}/restore-latest-custom`,
+      );
+      setSuccess(`${key} réactivé (v${data.version}).`);
+      setDirtyPrompt(false);
+      await loadAll();
+    } catch (error) {
+      setActionError(messageFromError(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restoreAllLatestCustoms = async () => {
+    clearFeedback();
+    setSaving(true);
+    try {
+      const { data } = await expertApi.post('/expert/settings/prompts-restore-latest-customs');
+      const count = data.restored?.length ?? 0;
+      setSuccess(
+        count > 0
+          ? `${count} configuration(s) personnalisée(s) réactivée(s).`
+          : 'Aucune version personnalisée à réactiver.',
+      );
       setDirtyPrompt(false);
       await loadAll();
     } catch (error) {
@@ -746,6 +811,44 @@ export default function SettingsPage() {
           <span>{actionError || success}</span>
         </div>
       )}
+
+      {(() => {
+        const promptNeedsRecovery = Object.values(prompts).some(
+          (prompt) => prompt.hasRestorableCustom && !prompt.isCustom,
+        );
+        const modelNeedsRecovery = Boolean(
+          modelConfigMeta?.hasRestorableCustom && !modelConfigMeta.isCustom,
+        );
+        if (!promptNeedsRecovery && !modelNeedsRecovery) return null;
+        return (
+          <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-desk-text">
+                  Configuration IA non personnalisée active
+                </p>
+                <p className="mt-1 text-sm text-desk-muted">
+                  Des versions Desk (prompts et/ou modèles) existent en historique. Un deploy peut
+                  avoir réactivé une baseline système — réactivez vos réglages avant le lancement.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void restoreAllLatestCustoms()}
+                disabled={saving}
+                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <History className="h-4 w-4" />
+                )}
+                Réactiver les dernières versions perso
+              </button>
+            </div>
+          </Card>
+        );
+      })()}
 
       <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Paramètres IA">
         {tabs.map((tab) => {
@@ -1036,6 +1139,7 @@ export default function SettingsPage() {
             saving={saving}
             onSave={savePrompt}
             onReset={resetPrompt}
+            onRestoreLatestCustom={restoreLatestCustom}
             onDirtyChange={setDirtyPrompt}
           />
         </Card>
@@ -1085,6 +1189,7 @@ export default function SettingsPage() {
                       saving={saving}
                       onSave={savePrompt}
                       onReset={resetPrompt}
+                      onRestoreLatestCustom={restoreLatestCustom}
                       onDirtyChange={setDirtyPrompt}
                     />
                   </div>
@@ -1130,11 +1235,37 @@ export default function SettingsPage() {
           </Card>
 
           <Card className="border-blue-500/30 p-5">
-            <h2 className="font-semibold text-desk-text">Mode de routage</h2>
-            <p className="mt-1 text-sm text-desk-muted">
-              `openai_only` force OpenAI. `per_agent` laisse chaque agent choisir OpenAI, Vertex ou
-              Gemini. Les prompts restent partagés.
-            </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-desk-text">Mode de routage</h2>
+                <p className="mt-1 text-sm text-desk-muted">
+                  `openai_only` force OpenAI. `per_agent` laisse chaque agent choisir OpenAI, Vertex
+                  ou Gemini. Les prompts restent partagés. Source de vérité : `MODEL_CONFIG` en base
+                  (pas AiRoutingRule).
+                </p>
+                {modelConfigMeta && (
+                  <p className="mt-2 text-xs text-desk-subtle">
+                    {modelConfigMeta.isCustom
+                      ? `Config modèles personnalisée v${modelConfigMeta.version}`
+                      : modelConfigMeta.version > 0
+                        ? `Baseline système v${modelConfigMeta.version}`
+                        : 'Défaut code (aucune version active)'}
+                    {modelConfigMeta.changedBy ? ` · ${modelConfigMeta.changedBy}` : ''}
+                  </p>
+                )}
+              </div>
+              {modelConfigMeta?.hasRestorableCustom && (
+                <button
+                  type="button"
+                  onClick={() => void restoreLatestCustom('MODEL_CONFIG')}
+                  disabled={saving}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50"
+                >
+                  <History className="h-4 w-4" />
+                  Réactiver dernière perso
+                </button>
+              )}
+            </div>
             <label className="mt-4 block text-sm text-desk-muted">
               Provider mode
               <select

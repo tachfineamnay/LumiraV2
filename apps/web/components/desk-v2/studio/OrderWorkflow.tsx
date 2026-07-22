@@ -318,7 +318,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     setIsSealing(true);
     try {
       await expertApi.post(`/expert/orders/${orderId}/finalize`, { finalContent: editorContent });
-      toast.success('Lecture scellée et envoyée au client !');
+      toast.success('Lecture scellée — PDF envoyé, audio en file', {
+        description:
+          'Le client reçoit le PDF immédiatement. La narration TTS suit en arrière-plan.',
+        duration: 6000,
+      });
       router.push('/admin/board');
     } catch {
       toast.error('Erreur lors du scellement');

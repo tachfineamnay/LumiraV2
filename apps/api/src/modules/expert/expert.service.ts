@@ -16,6 +16,7 @@ import { DigitalSoulService } from '../../services/factory/DigitalSoulService';
 import { VertexOracle } from '../../services/factory/VertexOracle';
 import { productLevelFromAmountCents } from '../../services/factory/product-level.util';
 import { ExpertGateway } from './expert.gateway';
+import { ProductionControlService } from './production-control.service';
 import * as bcrypt from 'bcryptjs';
 import { Expert, Order, Prisma, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
 import {
@@ -89,8 +90,30 @@ export class ExpertService {
     private digitalSoulService: DigitalSoulService,
     private vertexOracle: VertexOracle,
     private gateway: ExpertGateway,
+    private productionControl: ProductionControlService,
   ) {
     this.logger.log(`🔌 DigitalSoulService injected via DI`);
+  }
+
+  /**
+   * After PDF seal, queue managed TTS. Never fail the seal if enqueue fails
+   * (conflict = audio already present / job active; other errors are logged).
+   */
+  private async enqueueAudioBestEffort(orderId: string, expert: ExpertEntity): Promise<void> {
+    try {
+      await this.productionControl.enqueueAudio(orderId, expert as Expert);
+      this.logger.log(`🎙️ Audio production queued after finalize for ${orderId}`);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        this.logger.log(`🎙️ Audio enqueue skipped for ${orderId}: ${error.message}`);
+        return;
+      }
+      this.logger.error(
+        `🎙️ Failed to enqueue audio after finalize for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   // ========================
@@ -919,6 +942,7 @@ export class ExpertService {
         });
 
         await this.sendDeliveryEmail(dto.orderId, expert.name || 'Un expert Lumira');
+        await this.enqueueAudioBestEffort(dto.orderId, expert);
 
         this.logger.log(`✅ Order ${order.orderNumber} approved and PDF delivered`);
         return updatedOrder;
@@ -1309,6 +1333,7 @@ MESSAGE DE L'EXPERT:`;
       });
 
       await this.sendDeliveryEmail(orderId, expert.name || 'Un expert Lumira');
+      await this.enqueueAudioBestEffort(orderId, expert);
 
       this.logger.log(`✅ Order ${order.orderNumber} sealed and PDF delivered from Studio`);
       this.gateway.notifyOrderSealed({
@@ -1386,6 +1411,9 @@ MESSAGE DE L'EXPERT:`;
 
       // 4. Send a tracked, retry-safe email notification to the client.
       await this.sendDeliveryEmail(orderId, expert.name || 'Un expert Lumira');
+
+      // 5. Queue managed audio (worker TTS). Best-effort: seal already succeeded.
+      await this.enqueueAudioBestEffort(orderId, expert);
 
       this.logger.log(`✅ Order ${order.orderNumber} finalized - PDF: ${result.pdfUrl}`);
       this.gateway.notifyOrderSealed({

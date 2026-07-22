@@ -256,10 +256,11 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
         const ordersRes = await sanctuaireApi.get('/users/orders/completed');
         ordersData = ordersRes.data as CompletedOrder[];
       } catch (ordersErr: unknown) {
+        // Do not logout on an isolated orders failure — profile/entitlements already
+        // proved the session. Keep orders empty and continue bootstrap.
         const status = (ordersErr as { response?: { status?: number } })?.response?.status;
-        if (status === 401) {
-          await handleLogout();
-          return;
+        if (status && status !== 401) {
+          console.warn('Completed orders fetch failed:', status);
         }
       }
 

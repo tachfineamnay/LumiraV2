@@ -88,3 +88,25 @@ Pour la production, utiliser `prisma migrate deploy` via le workflow Docker/Cool
 - Les anciennes données restent lisibles ou sont migrées.
 - Les contraintes empêchent les doublons métier attendus.
 - Le déploiement peut appliquer la migration sans intervention manuelle improvisée.
+
+## Configuration IA Desk (inviolable en prod)
+
+Source de vérité runtime pour les lectures :
+
+| Donnée                        | Table / source                     | SoT                                                                      |
+| ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| Prompts agents + `LUMIRA_DNA` | `PromptVersion` (`isActive`)       | Oui                                                                      |
+| Modèles / providers           | `PromptVersion` clé `MODEL_CONFIG` | Oui                                                                      |
+| Credentials Vertex            | `SystemSetting` chiffré            | Oui                                                                      |
+| Clés OpenAI / Gemini          | variables d'environnement          | Oui                                                                      |
+| `AiRoutingRule`               | table legacy                       | **Non** — Tranche A ignore la matrice ; ne pas la réintroduire comme SoT |
+
+Interdit dans toute nouvelle migration SQL :
+
+- `UPDATE "PromptVersion" SET "isActive" = false` massif sur les clés métier ;
+- `INSERT INTO "PromptVersion"` forçant `MODEL_CONFIG` / prompts fondateur sans garde « seulement si aucune ligne active » ;
+- `UPDATE "PromptVersion" SET "value"` sur `MODEL_CONFIG` (mutation in-place) — créer une nouvelle version active si un changement de données est vraiment nécessaire, ou ne pas toucher.
+
+Autorisé : seed **uniquement** si aucune version `isActive` n'existe pour la clé (`INSERT … WHERE NOT EXISTS`).
+
+Les défauts dans le code API (`getDefaultPrompts`, `DEFAULT_AI_MODEL_CONFIG`) sont un fallback runtime, jamais une raison d'écraser la DB au deploy.

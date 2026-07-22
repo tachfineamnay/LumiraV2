@@ -17,6 +17,10 @@ describe('Desk expert fire-and-forget UX contracts', () => {
     expect(workflow).toContain("router.push('/admin/board')");
   });
 
+  it('announces audio queue after seal', () => {
+    expect(workflow).toContain("toast.success('Lecture scellée — PDF envoyé, audio en file'");
+  });
+
   it('keeps briefing usable with a non-blocking production banner', () => {
     expect(briefing).toContain('Estimation : 2 à 5 minutes');
     expect(briefing).toContain('Retour au board');
