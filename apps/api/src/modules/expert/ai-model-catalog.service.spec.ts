@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { GoogleGenAI } from '@google/genai';
 import { AiModelCatalogService } from './ai-model-catalog.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -13,17 +14,17 @@ jest.mock('openai', () => {
   };
 });
 
-jest.mock('google-auth-library', () => ({
-  GoogleAuth: jest.fn().mockImplementation(() => ({
-    getClient: async () => ({
-      getAccessToken: async () => ({ token: 'test-token' }),
-    }),
-  })),
+jest.mock('@google/genai', () => ({
+  GoogleGenAI: jest.fn(),
 }));
 
 const openaiModule = jest.requireMock('openai') as {
   __mockList: jest.Mock;
 };
+
+async function* asPager(models: Array<Record<string, unknown>>) {
+  for (const model of models) yield model;
+}
 
 describe('AiModelCatalogService', () => {
   const prisma = {
@@ -41,11 +42,13 @@ describe('AiModelCatalogService', () => {
   });
 
   let service: AiModelCatalogService;
-  const fetchMock = jest.fn();
+  let geminiList: jest.Mock;
+  let vertexList: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (global as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
+    geminiList = jest.fn();
+    vertexList = jest.fn();
     openaiModule.__mockList.mockResolvedValue({
       data: [
         { id: 'gpt-4o-2024-11-20', owned_by: 'openai', created: 1 },
@@ -61,36 +64,28 @@ describe('AiModelCatalogService', () => {
         private_key: '-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----\n',
       }),
     });
-    fetchMock.mockImplementation(async (url: string) => {
-      if (String(url).includes('generativelanguage.googleapis.com')) {
-        return {
-          ok: true,
-          json: async () => ({
-            models: [
-              {
-                name: 'models/gemini-2.5-flash',
-                displayName: 'Gemini 2.5 Flash',
-                supportedGenerationMethods: ['generateContent'],
-              },
-              {
-                name: 'models/embedding-001',
-                displayName: 'Embedding',
-                supportedGenerationMethods: ['embedContent'],
-              },
-            ],
-          }),
-        };
-      }
-      return {
-        ok: true,
-        json: async () => ({
-          publisherModels: [
-            { name: 'publishers/google/models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro' },
-            { name: 'publishers/google/models/textembedding-gecko', displayName: 'Embedding' },
-          ],
-        }),
-      };
-    });
+    geminiList.mockResolvedValue(
+      asPager([
+        {
+          name: 'models/gemini-2.5-flash',
+          supportedActions: ['generateContent'],
+        },
+        {
+          name: 'models/embedding-001',
+          supportedActions: ['embedContent'],
+        },
+      ]),
+    );
+    vertexList.mockRejectedValue(new Error('no reliable list'));
+
+    (GoogleGenAI as unknown as jest.Mock).mockImplementation(
+      (options: { vertexai?: boolean; apiKey?: string }) => {
+        if (options.vertexai) {
+          return { models: { list: vertexList } };
+        }
+        return { models: { list: geminiList } };
+      },
+    );
 
     service = new AiModelCatalogService(
       { get: configGet } as unknown as ConfigService,
@@ -98,24 +93,30 @@ describe('AiModelCatalogService', () => {
     );
   });
 
-  it('lists live OpenAI/Gemini/Vertex models intersected with V1 allowlist and caches', async () => {
+  it('lists live OpenAI/Gemini intersected with allowlist; Vertex uses supported when list fails', async () => {
     const first = await service.getAvailableModels();
     expect(first.openai.source).toBe('live');
-    expect(first.openai.models.map((m) => m.id)).toEqual(['gpt-4o-2024-11-20']);
+    expect(first.openai.models.filter((m) => m.status === 'verified').map((m) => m.id)).toEqual([
+      'gpt-4o-2024-11-20',
+    ]);
     expect(first.gemini.source).toBe('live');
-    expect(first.gemini.models.map((m) => m.id)).toEqual(['gemini-2.5-flash']);
-    expect(first.vertex.source).toBe('live');
-    expect(first.vertex.models.map((m) => m.id)).toEqual(['gemini-2.5-pro']);
+    expect(first.gemini.models.filter((m) => m.status === 'verified').map((m) => m.id)).toEqual([
+      'gemini-2.5-flash',
+    ]);
+    expect(first.vertex.source).toBe('supported');
+    expect(first.vertex.models.every((m) => m.status === 'supported')).toBe(true);
+    expect(first.vertex.location).toBe('us-central1');
+    expect(first.vertex.error).toMatch(/non vérifiée/i);
 
     openaiModule.__mockList.mockClear();
-    fetchMock.mockClear();
+    geminiList.mockClear();
     const second = await service.getAvailableModels();
     expect(second).toBe(first);
     expect(openaiModule.__mockList).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(geminiList).not.toHaveBeenCalled();
   });
 
-  it('falls back to seeds when live ∩ allowlist is empty', async () => {
+  it('does not promote empty live ∩ allowlist as a fake live catalog', async () => {
     openaiModule.__mockList.mockResolvedValueOnce({
       data: [
         { id: 'gpt-4o-mini-2024-07-18', owned_by: 'openai', created: 1 },
@@ -125,13 +126,9 @@ describe('AiModelCatalogService', () => {
     service.clearCache();
 
     const payload = await service.getAvailableModels({ force: true });
-    expect(payload.openai.source).toBe('seed');
-    expect(payload.openai.models.map((m) => m.id)).toEqual([
-      'gpt-5.5-2026-04-23',
-      'gpt-5.4-2026-03-05',
-      'gpt-4o-2024-11-20',
-    ]);
-    expect(payload.openai.error).toMatch(/Aucun modèle opérationnel/);
+    expect(payload.openai.source).toBe('supported');
+    expect(payload.openai.models.every((m) => m.status === 'supported')).toBe(true);
+    expect(payload.openai.error).toMatch(/non vérifiée|Aucun modèle Lumira/i);
   });
 
   it('forces refresh when requested', async () => {
@@ -141,15 +138,20 @@ describe('AiModelCatalogService', () => {
     expect(openaiModule.__mockList).toHaveBeenCalled();
   });
 
-  it('falls back to seed catalogs when providers fail', async () => {
+  it('returns supported (not live) when providers fail', async () => {
     openaiModule.__mockList.mockRejectedValueOnce(new Error('openai down'));
-    fetchMock.mockRejectedValue(new Error('network'));
+    geminiList.mockRejectedValueOnce(new Error('gemini down'));
     service.clearCache();
 
     const payload = await service.getAvailableModels({ force: true });
-    expect(payload.openai.source).toBe('seed');
+    expect(payload.openai.source).toBe('error');
     expect(payload.openai.models.length).toBeGreaterThan(0);
-    expect(payload.gemini.source).toBe('seed');
-    expect(payload.vertex.source).toBe('seed');
+    expect(payload.openai.models[0].status).toBe('supported');
+    expect(payload.gemini.source).toBe('error');
+    expect(payload.vertex.source).toBe('supported');
+  });
+
+  it('uses the same VERTEX_LOCATION as runtime', () => {
+    expect(service.getVertexLocation()).toBe('us-central1');
   });
 });

@@ -453,7 +453,8 @@ export class VertexOracle implements OnModuleInit {
       this.openaiAdapter = null;
     }
 
-    this.vertexAdapter = new VertexAdapter(() => this.loadVertexCredentialsJson());
+    const vertexLocation = this.configService.get<string>('VERTEX_LOCATION')?.trim();
+    this.vertexAdapter = new VertexAdapter(() => this.loadVertexCredentialsJson(), vertexLocation);
     this.geminiAdapter = new GeminiAdapter(() =>
       this.configService.get<string>('GEMINI_API_KEY')?.trim(),
     );
@@ -561,7 +562,13 @@ export class VertexOracle implements OnModuleInit {
         ...baseRun,
         status: 'ERROR',
         durationMs: Date.now() - startedAt,
-        errorCode: error instanceof Error ? error.message.slice(0, 200) : 'unknown_error',
+        errorCode:
+          error instanceof Error
+            ? ((error as Error & { code?: string }).code
+                ? `${(error as Error & { code?: string }).code}:${error.message}`
+                : error.message
+              ).slice(0, 200)
+            : 'unknown_error',
       });
       throw error;
     }
@@ -611,12 +618,28 @@ export class VertexOracle implements OnModuleInit {
     if (/timeout après|aborted/i.test(error.message)) {
       return false;
     }
+    const code = (error as Error & { code?: string }).code;
+    if (
+      code === 'quota_billing' ||
+      code === 'invalid_key' ||
+      code === 'forbidden' ||
+      code === 'model_not_found' ||
+      code === 'region_not_supported' ||
+      code === 'api_not_enabled' ||
+      code === 'credentials_invalid' ||
+      code === 'structured_output_unsupported' ||
+      code === 'timeout'
+    ) {
+      return false;
+    }
     const status =
       (error as Error & { status?: number; statusCode?: number }).status ??
       (error as Error & { statusCode?: number }).statusCode;
     return (
       status === 429 ||
       (typeof status === 'number' && status >= 500) ||
+      code === 'rate_limit' ||
+      code === 'network' ||
       /network|socket|econn|etimedout|fetch failed/i.test(error.message)
     );
   }
@@ -669,9 +692,7 @@ export class VertexOracle implements OnModuleInit {
   ): Promise<T> {
     const resolved = await this.resolveExecution(ctx);
     const adapter = this.requireAdapter(resolved.provider);
-    this.logger.log(
-      `[${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}`,
-    );
+    this.logResolvedRoute(ctx.agent, resolved);
 
     const text = await this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) =>
       adapter.complete(
@@ -699,14 +720,24 @@ export class VertexOracle implements OnModuleInit {
   ): Promise<string> {
     const resolved = await this.resolveExecution(ctx);
     const adapter = this.requireAdapter(resolved.provider);
-    this.logger.log(
-      `[${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}`,
-    );
+    this.logResolvedRoute(ctx.agent, resolved);
 
     return this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) =>
       adapter.complete(
         this.buildLlmRequest(resolved, userContent, signal, timeoutMs, { maxTokens }),
       ),
+    );
+  }
+
+  private logResolvedRoute(agent: AgentType, resolved: ResolvedAiExecution): void {
+    const vertexExtra =
+      resolved.provider === 'vertex' && this.vertexAdapter
+        ? ` auth=service_account location=${this.vertexAdapter.getLocation()}`
+        : resolved.provider === 'gemini'
+          ? ' auth=api_key'
+          : '';
+    this.logger.log(
+      `[${agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}${vertexExtra}`,
     );
   }
 
@@ -824,6 +855,7 @@ Retourne uniquement le contenu corrigé.`;
     const ctx = buildAiContext('CONFIDANT', AiMission.CHAT_SESSION, routing);
     const resolved = await this.resolveExecution(ctx);
     const adapter = this.requireAdapter(resolved.provider);
+    this.logResolvedRoute(ctx.agent, resolved);
     const instructions = this.buildConfidantSystemPrompt(context, resolved.systemPrompt);
     const historyBlock = conversationHistory
       .slice(-12)

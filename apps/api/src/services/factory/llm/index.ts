@@ -4,3 +4,6 @@ export * from './vertex.adapter';
 export * from './gemini.adapter';
 export * from './settings-crypto';
 export * from './google-schema';
+export * from './vertex-location';
+export * from './google-genai.client';
+export * from './ai-errors';

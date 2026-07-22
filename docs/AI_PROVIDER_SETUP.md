@@ -1,130 +1,119 @@
-# Configuration des providers IA (Gemini & OpenAI)
+# Configuration des providers IA (OpenAI, Gemini API, Vertex AI)
 
-Ce guide décrit comment configurer les clés API utilisées par Lumira V2 en production.
+Ce guide décrit la configuration serveur de Lumira V2 pour la couche IA.
 
-## Variables serveur requises
+## Architecture
 
-| Variable         | Service                 | Usage                                                              |
-| ---------------- | ----------------------- | ------------------------------------------------------------------ |
-| `GEMINI_API_KEY` | API NestJS (`apps/api`) | SCRIBE, GUIDE, EDITOR, CONFIDANT, ONIRIQUE, NARRATOR (mode Gemini) |
-| `OPENAI_API_KEY` | API NestJS (`apps/api`) | Agents basculés sur OpenAI dans Paramètres IA                      |
+```text
+MODEL_CONFIG
+  → AiExecutionResolverService
+  → OpenAiAdapter | GeminiAdapter | VertexAdapter
+  → OpenAI Responses API | Gemini Developer API | Vertex AI
+```
+
+Un seul SDK Google unifié : `@google/genai`.
+
+- **Gemini API** (`provider: gemini`) : clé `GEMINI_API_KEY`, endpoint Developer API (`generativelanguage.googleapis.com`). Jamais de compte de service.
+- **Vertex AI** (`provider: vertex`) : compte de service chiffré dans le Desk, projet + `VERTEX_LOCATION`. Jamais `GEMINI_API_KEY`.
+- **OpenAI** (`provider: openai`) : `OPENAI_API_KEY`.
+
+Aucun fallback automatique d’un provider vers un autre pendant une génération.
+
+## Modes de routage (`MODEL_CONFIG.providerMode`)
+
+| Mode          | Comportement                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| `openai_only` | Tous les agents utilisent OpenAI. Les sélecteurs provider sont verrouillés dans le Desk.             |
+| `per_agent`   | Chaque agent utilise exactement son `provider` / `model` sauvegardé. Aucun héritage `AiRoutingRule`. |
+
+## Variables serveur
+
+```env
+OPENAI_API_KEY=
+GEMINI_API_KEY=
+VERTEX_LOCATION=us-central1
+SETTINGS_ENCRYPTION_KEY=
+```
+
+| Variable                  | Usage                                                                                                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`          | Requis si un agent actif utilise OpenAI (ou mode `openai_only`)                                                                                             |
+| `GEMINI_API_KEY`          | Requis si un agent actif utilise Gemini API                                                                                                                 |
+| `VERTEX_LOCATION`         | Région Vertex unique (catalogue, diagnostics, runtime). Défaut documenté : `us-central1`. Utiliser `global` uniquement si les modèles ciblés le supportent. |
+| `SETTINGS_ENCRYPTION_KEY` | Chiffrement AES-GCM du JSON compte de service Vertex stocké en base                                                                                         |
 
 **Important :**
 
 - Ne jamais ajouter de préfixe `NEXT_PUBLIC_` pour ces clés.
-- Ne jamais committer de secrets dans Git (`.env`, Coolify, etc. uniquement).
-- Les clés ne sont **jamais** exposées au frontend ni dans les logs.
+- Ne jamais committer de secrets.
+- Les credentials Vertex restent dans le Desk (chiffrés), pas dans une variable publique.
 
-## Où placer les clés
+## Coolify
 
-### Développement local
+1. Service **API** (`apps/api`) → Environment Variables.
+2. Définir `OPENAI_API_KEY`, `GEMINI_API_KEY`, `VERTEX_LOCATION`, `SETTINGS_ENCRYPTION_KEY` selon les providers actifs.
+3. Redémarrer le conteneur API.
+4. Dans le Desk : Paramètres IA → Credentials → uploader le JSON service account Vertex si besoin → Tester.
 
-Dans le fichier `.env` à la racine du monorepo (voir `.env.example`) :
+Le frontend (`apps/web`) n’a pas besoin de ces variables.
 
-```env
-GEMINI_API_KEY="votre-clé-google-ai-studio"
-OPENAI_API_KEY="votre-clé-openai-platform"
-```
+## Distinction Gemini API / Vertex AI
 
-### Production (Coolify)
+|                      | Gemini API                          | Vertex AI                                  |
+| -------------------- | ----------------------------------- | ------------------------------------------ |
+| Auth                 | Clé AI Studio                       | Compte de service Google Cloud             |
+| SDK                  | `@google/genai` (`vertexai: false`) | `@google/genai` (`vertexai: true`)         |
+| Identifiants modèles | `gemini-2.5-pro`, etc.              | Mêmes IDs métier, endpoint Cloud différent |
+| Région               | N/A                                 | `VERTEX_LOCATION`                          |
 
-1. Ouvrir le service **API** (`apps/api`) dans Coolify.
-2. Aller dans **Environment Variables**.
-3. Ajouter `GEMINI_API_KEY` et/ou `OPENAI_API_KEY` avec les valeurs réelles.
-4. **Redémarrer** le conteneur API après toute modification.
+## Catalogues modèles (Desk)
 
-Le frontend (`apps/web`) n'a pas besoin de ces variables.
-
-## Obtenir les clés
-
-### Gemini (`GEMINI_API_KEY`)
-
-1. [Google AI Studio](https://aistudio.google.com/apikey)
-2. Créer une clé API pour le projet Google Cloud associé.
-3. Vérifier que la facturation / les quotas sont actifs si vous dépassez le tier gratuit.
-
-### OpenAI (`OPENAI_API_KEY`)
-
-1. [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Créer une clé API avec accès aux modèles configurés (ex. `gpt-4o`, `gpt-4o-mini`).
-
-**Attention :** un abonnement ChatGPT Plus **n'est pas** une clé API OpenAI. Il faut un compte sur OpenAI Platform avec facturation API activée.
-
-## Redémarrage
-
-Après ajout ou rotation d'une clé :
-
-```bash
-# Coolify : redémarrer le service API via l'interface
-# Local :
-pnpm --filter api dev   # ou redémarrer le processus en cours
-```
-
-Les variables d'environnement ne sont lues qu'au démarrage du processus API.
+| Libellé              | Signification                                             |
+| -------------------- | --------------------------------------------------------- |
+| Live vérifié         | Listé par l’API provider ∩ allowlist Lumira               |
+| Supporté non vérifié | Allowlist produit uniquement (jamais présenté comme live) |
+| Indisponible         | Non accessible pour le compte                             |
+| Erreur de catalogue  | Listing impossible ; allowlist affichée comme supportée   |
 
 ## Tests dans le Desk
 
-1. Se connecter au Desk expert (admin).
-2. **Paramètres IA → Credentials**.
-3. Vérifier le badge (Configurée, Non configurée, Connexion réussie, etc.).
-4. Cliquer **Tester la connexion** ou **Retester**.
-5. Contrôler :
-   - le modèle testé (depuis l'onglet **Modèles**) ;
-   - la date du dernier test ;
-   - le statut multimodal Gemini (si applicable).
+1. Paramètres IA → Connexion.
+2. Vérifier configuré / source credentials / région Vertex.
+3. Tester : texte, vision, JSON structuré.
+4. Paramètres IA → Modèles : mode `openai_only` ou `per_agent`, provider + modèle par agent.
+5. Préproduction : readiness dynamique selon les providers réellement actifs.
 
-Les tests appellent réellement l'API avec un prompt minimal et une limite de tokens faible (timeout ~20 s).
+## Erreurs fréquentes
 
-## Endpoint de santé IA
+| Symptôme                 | Cause                             | Action                                                          |
+| ------------------------ | --------------------------------- | --------------------------------------------------------------- |
+| Non configurée           | Variable / credentials absents    | Coolify / Desk, redémarrer                                      |
+| Clé invalide (401)       | Mauvaise clé                      | Régénérer, redémarrer                                           |
+| Permission refusée (403) | Droits projet / API               | IAM + activer Vertex AI API                                     |
+| Quota / facturation      | Crédit épuisé                     | Facturation OpenAI / AI Studio / GCP                            |
+| Région non supportée     | `VERTEX_LOCATION` incompatible    | Aligner sur une région Gemini supportée                         |
+| Modèle inaccessible      | Nom hors allowlist ou hors compte | Corriger dans Modèles + retester                                |
+| JSON structuré KO        | Modèle / schema Google            | Retester structured ; ne pas modifier les schémas métier OpenAI |
 
-Sans authentification, sans secrets, **sans appel payant** à chaque requête :
+Les messages Desk incluent toujours le provider et le modèle effectifs.
+
+## Santé IA
 
 ```http
 GET /api/health/ai
 ```
 
-Réponse exemple :
-
-```json
-{
-  "gemini": {
-    "configured": true,
-    "text": "ok",
-    "multimodal": "ok",
-    "model": "gemini-2.5-flash"
-  },
-  "openai": {
-    "configured": false,
-    "text": "not_tested",
-    "model": "gpt-4o-mini"
-  }
-}
-```
-
-Les champs `text` / `multimodal` reflètent le **dernier test volontaire** (Desk ou script), mis en cache ~5 minutes. Tant qu'aucun test n'a été lancé, la valeur est `not_tested`.
-
-## Erreurs fréquentes
-
-| Symptôme                     | Cause probable               | Action                                                  |
-| ---------------------------- | ---------------------------- | ------------------------------------------------------- |
-| Non configurée               | Variable absente ou vide     | Ajouter la clé dans Coolify / `.env`, redémarrer l'API  |
-| Clé API invalide (401)       | Clé erronée ou révoquée      | Regénérer la clé, mettre à jour l'env, redémarrer       |
-| Permission refusée (403)     | Clé sans accès au modèle     | Vérifier les droits du projet / activer l'API           |
-| Quota ou facturation absente | Pas de crédit / quota épuisé | Activer la facturation Google AI Studio ou OpenAI       |
-| Limite 429                   | Trop de requêtes             | Attendre, réduire la fréquence des tests                |
-| Modèle inaccessible          | Nom de modèle incorrect      | Corriger dans Paramètres IA → Modèles                   |
-| Délai dépassé                | Réseau ou API lente          | Retester ; vérifier la connectivité sortante du serveur |
+Sans secrets, sans appel payant à chaque requête. Les statuts `text` / `multimodal` reflètent le dernier test volontaire (~5 min cache).
 
 ## Sécurité
 
-- Rotation régulière des clés en production.
-- Ne pas partager les clés dans Slack, e-mail ou tickets.
-- Les réponses API et logs serveur masquent les patterns de clés (`AIza…`, `sk-…`).
-- OpenAI et Gemini sont configurés **uniquement** côté serveur (`VertexOracle`, `AudioScriptService`, etc.).
+- Rotation régulière des clés.
+- Logs sanitizés (`sk-…`, `AIza…`, Bearer, private keys).
+- Pas de fallback opaque OpenAI → Google.
 
-## Vérification rapide en local
+## Vérification rapide
 
 ```bash
-pnpm --filter api test -- ai-provider-diagnostics
+pnpm --filter api test -- ai-provider-diagnostics ai-model-catalog ai-production-readiness
 curl http://localhost:3001/api/health/ai
 ```

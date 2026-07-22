@@ -30,7 +30,17 @@ describe('ai-provider-diagnostics.utils', () => {
     });
 
     it('maps quota errors', () => {
-      expect(classifyAiError('RESOURCE_EXHAUSTED quota exceeded').category).toBe('quota');
+      expect(classifyAiError('RESOURCE_EXHAUSTED quota exceeded billing').category).toBe('quota');
+    });
+
+    it('includes provider and model in user messages when provided', () => {
+      const result = classifyAiError('404 model does not exist', {
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+      });
+      expect(result.category).toBe('model_not_found');
+      expect(result.userMessage).toMatch(/Gemini API/);
+      expect(result.userMessage).toMatch(/gemini-2.5-flash/);
     });
 
     it('maps timeout errors', () => {

@@ -19,6 +19,46 @@ export type VertexV1Model = (typeof VERTEX_V1_MODELS)[number];
 export const GEMINI_V1_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'] as const;
 export type GeminiV1Model = (typeof GEMINI_V1_MODELS)[number];
 
+/** Product allowlist — models Lumira supports, not necessarily live-verified. */
+export const LUMIRA_SUPPORTED_MODELS: Record<AiProvider, readonly string[]> = {
+  openai: OPENAI_V1_MODELS,
+  vertex: VERTEX_V1_MODELS,
+  gemini: GEMINI_V1_MODELS,
+};
+
+export type AgentCapability = 'text' | 'vision' | 'structured' | 'long_text' | 'fast_text';
+
+export const AGENT_REQUIRED_CAPABILITIES: Record<AgentType, readonly AgentCapability[]> = {
+  SCRIBE: ['text', 'vision', 'structured'],
+  GUIDE: ['text', 'structured'],
+  EDITOR: ['text'],
+  NARRATOR: ['text', 'long_text'],
+  CONFIDANT: ['text', 'fast_text'],
+  ONIRIQUE: ['text', 'structured'],
+};
+
+const MODEL_CAPABILITIES: Record<string, readonly AgentCapability[]> = {
+  'gpt-5.5-2026-04-23': ['text', 'vision', 'structured', 'long_text'],
+  'gpt-5.4-2026-03-05': ['text', 'vision', 'structured', 'long_text'],
+  'gpt-4o-2024-11-20': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-2.5-pro': ['text', 'vision', 'structured', 'long_text'],
+  'gemini-2.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+};
+
+export function modelCapabilities(model: string): readonly AgentCapability[] {
+  return MODEL_CAPABILITIES[model] ?? ['text'];
+}
+
+export function modelSupportsAgent(model: string, agent: AgentType): boolean {
+  const required = AGENT_REQUIRED_CAPABILITIES[agent];
+  const available = new Set(modelCapabilities(model));
+  return required.every((cap) => available.has(cap));
+}
+
+export function modelsForAgent(provider: AiProvider, agent: AgentType): readonly string[] {
+  return modelsForProvider(provider).filter((model) => modelSupportsAgent(model, agent));
+}
+
 export const OPENAI_MODEL_PRICING_USD_PER_MILLION: Record<string, [number, number]> = {
   'gpt-5.5': [5, 30],
   'gpt-5.5-2026-04-23': [5, 30],

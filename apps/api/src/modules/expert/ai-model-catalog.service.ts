@@ -1,32 +1,49 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleAuth } from 'google-auth-library';
+import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   GEMINI_V1_MODELS,
+  LUMIRA_SUPPORTED_MODELS,
   OPENAI_V1_MODELS,
   VERTEX_V1_MODELS,
 } from '../../services/factory/ai-model-config';
 import {
+  createGeminiDeveloperClient,
+  createVertexAiClient,
   decryptSettingsValue,
   parseVertexServiceAccount,
+  resolveVertexLocation,
   VERTEX_CREDENTIALS_KEY,
 } from '../../services/factory/llm';
 import { AiProvider } from '../../services/factory/ai-execution.types';
+
+export type ModelCatalogStatus = 'verified' | 'supported' | 'unavailable' | 'unknown';
+
+export type ModelCatalogSource = 'live' | 'supported' | 'unavailable' | 'error';
 
 export interface ModelCatalogEntry {
   id: string;
   label: string;
   ownedBy?: string;
   createdAt?: number;
+  /** Availability relative to the account / provider. */
+  status: ModelCatalogStatus;
 }
 
 export interface ProviderModelCatalog {
   configured: boolean;
   models: ModelCatalogEntry[];
   error?: string;
-  source: 'live' | 'seed' | 'unavailable';
+  /**
+   * `live` = listed by the provider API and intersected with Lumira allowlist.
+   * `supported` = Lumira allowlist only (not confirmed live).
+   * `unavailable` = provider not configured.
+   * `error` = listing failed; models may still show supported (unverified).
+   */
+  source: ModelCatalogSource;
+  location?: string;
 }
 
 export interface AvailableModelsResponse {
@@ -78,13 +95,17 @@ export class AiModelCatalogService {
     this.cache = null;
   }
 
+  getVertexLocation(): string {
+    return resolveVertexLocation(this.configService);
+  }
+
   private async listOpenAiModels(): Promise<ProviderModelCatalog> {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY')?.trim();
     if (!apiKey) {
       return {
         configured: false,
-        models: this.seedEntries('openai'),
-        source: 'seed',
+        models: this.supportedEntries('openai', 'unknown'),
+        source: 'unavailable',
         error: 'OPENAI_API_KEY non configurée',
       };
     }
@@ -92,23 +113,16 @@ export class AiModelCatalogService {
     try {
       const client = new OpenAI({ apiKey, maxRetries: 0 });
       const listed = await client.models.list();
-      const models = listed.data
-        .map((model) => ({
-          id: model.id,
-          label: model.id,
-          ownedBy: model.owned_by,
-          createdAt: model.created,
-        }))
-        .filter((model) => this.isOpenAiGenerativeModel(model.id))
-        .sort((a, b) => a.id.localeCompare(b.id));
-
-      return this.operationalOrSeed('openai', models, true);
+      const liveIds = new Set(
+        listed.data.map((model) => model.id).filter((id) => this.isOpenAiGenerativeModel(id)),
+      );
+      return this.intersectWithAllowlist('openai', liveIds, true);
     } catch (error) {
       this.logger.warn(`OpenAI model catalog failed: ${this.safeError(error)}`);
       return {
         configured: true,
-        models: this.seedEntries('openai'),
-        source: 'seed',
+        models: this.supportedEntries('openai', 'supported'),
+        source: 'error',
         error: this.safeError(error),
       };
     }
@@ -119,105 +133,102 @@ export class AiModelCatalogService {
     if (!apiKey) {
       return {
         configured: false,
-        models: this.seedEntries('gemini'),
-        source: 'seed',
+        models: this.supportedEntries('gemini', 'unknown'),
+        source: 'unavailable',
         error: 'GEMINI_API_KEY non configurée',
       };
     }
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
-      );
-      if (!response.ok) {
-        throw new Error(`Gemini listModels HTTP ${response.status}`);
-      }
-      const body = (await response.json()) as {
-        models?: Array<{
-          name?: string;
-          displayName?: string;
-          supportedGenerationMethods?: string[];
-        }>;
-      };
-      const models = (body.models ?? [])
-        .filter((model) =>
-          (model.supportedGenerationMethods ?? []).some((method) =>
-            /generateContent/i.test(method),
-          ),
-        )
-        .map((model) => {
-          const raw = model.name?.replace(/^models\//, '') || '';
-          return {
-            id: raw,
-            label: model.displayName || raw,
-          };
-        })
-        .filter((model) => model.id)
-        .sort((a, b) => a.id.localeCompare(b.id));
-
-      return this.operationalOrSeed('gemini', models, true);
+      const client = createGeminiDeveloperClient(apiKey);
+      const liveIds = await this.listGenerateContentModelIds(client);
+      return this.intersectWithAllowlist('gemini', liveIds, true);
     } catch (error) {
       this.logger.warn(`Gemini model catalog failed: ${this.safeError(error)}`);
       return {
         configured: true,
-        models: this.seedEntries('gemini'),
-        source: 'seed',
+        models: this.supportedEntries('gemini', 'supported'),
+        source: 'error',
         error: this.safeError(error),
       };
     }
   }
 
+  /**
+   * Vertex: no undocumented REST list as source of truth.
+   * Prefer official SDK pager when available; otherwise return explicit
+   * Lumira-supported models marked as `supported` (never as live).
+   */
   private async listVertexModels(): Promise<ProviderModelCatalog> {
+    const location = this.getVertexLocation();
     const json = await this.loadVertexCredentialsJson();
     if (!json) {
       return {
         configured: false,
-        models: this.seedEntries('vertex'),
-        source: 'seed',
+        models: this.supportedEntries('vertex', 'unknown'),
+        source: 'unavailable',
         error: 'Identifiants Vertex non configurés',
+        location,
       };
     }
 
     try {
       const account = parseVertexServiceAccount(json);
-      const projectId = account.project_id;
-      const auth = new GoogleAuth({
-        credentials: account as never,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      });
-      const client = await auth.getClient();
-      const token = await client.getAccessToken();
-      if (!token.token) throw new Error('Impossible d’obtenir un access token Vertex');
-
-      const location = this.configService.get<string>('VERTEX_LOCATION', 'us-central1');
-      const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models`;
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token.token}` },
-      });
-      if (!response.ok) {
-        throw new Error(`Vertex listModels HTTP ${response.status}`);
+      const client = createVertexAiClient(account, location);
+      try {
+        const liveIds = await this.listGenerateContentModelIds(client);
+        if (liveIds.size > 0) {
+          const catalog = this.intersectWithAllowlist('vertex', liveIds, true);
+          return { ...catalog, location };
+        }
+      } catch (listError) {
+        this.logger.warn(
+          `Vertex SDK model list unavailable, using supported allowlist: ${this.safeError(listError)}`,
+        );
       }
-      const body = (await response.json()) as {
-        publisherModels?: Array<{ name?: string; displayName?: string }>;
-      };
-      const models = (body.publisherModels ?? [])
-        .map((model) => {
-          const raw = model.name?.split('/').pop() || '';
-          return { id: raw, label: model.displayName || raw };
-        })
-        .filter((model) => /gemini/i.test(model.id))
-        .sort((a, b) => a.id.localeCompare(b.id));
 
-      return this.operationalOrSeed('vertex', models, true);
+      // Honest: supported by Lumira, not confirmed live for this project/region.
+      return {
+        configured: true,
+        models: this.supportedEntries('vertex', 'supported'),
+        source: 'supported',
+        location,
+        error:
+          'Liste supportée non vérifiée — le SDK n’a pas renvoyé de catalogue live fiable pour ce projet/région.',
+      };
     } catch (error) {
       this.logger.warn(`Vertex model catalog failed: ${this.safeError(error)}`);
       return {
         configured: true,
-        models: this.seedEntries('vertex'),
-        source: 'seed',
+        models: this.supportedEntries('vertex', 'supported'),
+        source: 'error',
+        location,
         error: this.safeError(error),
       };
     }
+  }
+
+  private async listGenerateContentModelIds(client: GoogleGenAI): Promise<Set<string>> {
+    const ids = new Set<string>();
+    const pager = await client.models.list({ config: { pageSize: 100 } });
+    for await (const model of pager) {
+      const rawName = typeof model.name === 'string' ? model.name : '';
+      const id =
+        rawName
+          .replace(/^models\//, '')
+          .split('/')
+          .pop() || '';
+      if (!id) continue;
+      const actions = (model as { supportedActions?: string[] }).supportedActions ?? [];
+      const methods =
+        (model as { supportedGenerationMethods?: string[] }).supportedGenerationMethods ?? [];
+      const canGenerate =
+        actions.length === 0 && methods.length === 0
+          ? /gemini/i.test(id)
+          : [...actions, ...methods].some((method) => /generateContent/i.test(method));
+      if (canGenerate) ids.add(id);
+    }
+    return ids;
   }
 
   private async loadVertexCredentialsJson(): Promise<string | null> {
@@ -231,36 +242,48 @@ export class AiModelCatalogService {
     );
   }
 
-  private seedEntries(provider: AiProvider): ModelCatalogEntry[] {
-    const ids =
-      provider === 'openai'
-        ? OPENAI_V1_MODELS
-        : provider === 'vertex'
-          ? VERTEX_V1_MODELS
-          : GEMINI_V1_MODELS;
-    return ids.map((id) => ({ id, label: id }));
+  private supportedEntries(provider: AiProvider, status: ModelCatalogStatus): ModelCatalogEntry[] {
+    const ids = LUMIRA_SUPPORTED_MODELS[provider];
+    return ids.map((id) => ({ id, label: id, status }));
   }
 
   /**
-   * Live catalogs are intersected with the product allowlist. If none of the
-   * operational seeds appear in the live list, fall back to seeds.
+   * Intersect live IDs with Lumira allowlist.
+   * Never promote allowlist seeds as `live` when the intersection is empty.
    */
-  private operationalOrSeed(
+  private intersectWithAllowlist(
     provider: AiProvider,
-    liveModels: ModelCatalogEntry[],
+    liveIds: Set<string>,
     configured: boolean,
   ): ProviderModelCatalog {
-    const seedIds = new Set(this.seedEntries(provider).map((entry) => entry.id));
-    const operational = liveModels.filter((model) => seedIds.has(model.id));
-    if (operational.length === 0) {
+    const allowlist = LUMIRA_SUPPORTED_MODELS[provider];
+    const verified = allowlist
+      .filter((id) => liveIds.has(id))
+      .map((id) => ({ id, label: id, status: 'verified' as const }));
+
+    if (verified.length === 0) {
       return {
         configured,
-        models: this.seedEntries(provider),
-        source: 'seed',
-        error: 'Aucun modèle opérationnel dans le catalogue live, seeds utilisés',
+        models: allowlist.map((id) => ({
+          id,
+          label: id,
+          status: 'supported' as const,
+        })),
+        source: 'supported',
+        error:
+          'Aucun modèle Lumira confirmé dans le catalogue live — liste supportée non vérifiée.',
       };
     }
-    return { configured, models: operational, source: 'live' };
+
+    const missing = allowlist
+      .filter((id) => !liveIds.has(id))
+      .map((id) => ({ id, label: id, status: 'unavailable' as const }));
+
+    return {
+      configured,
+      models: [...verified, ...missing],
+      source: 'live',
+    };
   }
 
   private isOpenAiGenerativeModel(id: string): boolean {
@@ -279,4 +302,11 @@ export class AiModelCatalogService {
     const message = error instanceof Error ? error.message : String(error);
     return message.replace(/sk-[a-zA-Z0-9_-]+/g, '[redacted]').slice(0, 200);
   }
+}
+
+/** @deprecated seed helpers kept for Desk fallback labels only */
+export function legacySeedModelIds(provider: AiProvider): readonly string[] {
+  if (provider === 'openai') return OPENAI_V1_MODELS;
+  if (provider === 'vertex') return VERTEX_V1_MODELS;
+  return GEMINI_V1_MODELS;
 }

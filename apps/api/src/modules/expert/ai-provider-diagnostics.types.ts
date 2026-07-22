@@ -16,7 +16,12 @@ export type AiErrorCategory =
   | 'quota'
   | 'rate_limit'
   | 'model_not_found'
+  | 'region_not_supported'
+  | 'api_not_enabled'
+  | 'credentials_invalid'
+  | 'structured_output_unsupported'
   | 'timeout'
+  | 'network'
   | 'unknown';
 
 export type DiagnosticsProvider = 'openai' | 'gemini' | 'vertex';
@@ -38,6 +43,9 @@ export interface ProviderCredentialStatus {
   lastError?: string;
   text: ProviderProbeStatus;
   multimodal?: ProviderProbeStatus;
+  structured?: ProviderProbeStatus;
+  credentialSource?: string;
+  location?: string;
 }
 
 export interface AiHealthSnapshot {

@@ -9,6 +9,7 @@ import {
   normalizeAiModelConfig,
 } from '../../services/factory/ai-model-config';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
+import { AiModelCatalogService } from './ai-model-catalog.service';
 import {
   AiCredentialsStatusResponse,
   ProviderConnectionTestResult,
@@ -83,6 +84,7 @@ export class AdminSettingsService {
     private readonly configService: ConfigService,
     private readonly aiProviderDiagnostics: AiProviderDiagnosticsService,
     private readonly aiRuntimeCache: AiRuntimeCacheService,
+    private readonly aiModelCatalog: AiModelCatalogService,
   ) {}
 
   private getSettingsEncryptionKey(): Buffer {
@@ -341,6 +343,9 @@ export class AdminSettingsService {
 
     this.logger.log(`Prompt ${key} saved as v${result}`);
     this.aiRuntimeCache.invalidateAll(`prompt:${key}`);
+    if (key === PROMPT_KEYS.MODEL_CONFIG) {
+      this.aiModelCatalog.clearCache();
+    }
     return { success: true, version: result };
   }
 

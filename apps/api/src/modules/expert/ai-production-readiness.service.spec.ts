@@ -165,7 +165,11 @@ describe('AiProductionReadinessService', () => {
         },
       }),
     };
-    return new AiProductionReadinessService(prisma as never, diagnostics as never);
+    return new AiProductionReadinessService(
+      prisma as never,
+      diagnostics as never,
+      { get: jest.fn(() => 'us-central1') } as never,
+    );
   }
 
   it('returns GO only when tests, tracked agents, PDF and audio all pass', async () => {
@@ -180,6 +184,118 @@ describe('AiProductionReadinessService', () => {
     expect(result.checks.find((check) => check.id === 'run_narrator')?.level).toBe('pass');
     expect(result.checks.find((check) => check.id === 'pipeline_assets')?.level).toBe('pass');
     expect(result.recentRunSummary.estimatedCost).toBe(0.009375);
+  });
+
+  it('does not require OpenAI when no active agent uses it', async () => {
+    const googleOnly = {
+      providerMode: 'per_agent' as const,
+      agents: {
+        ...modelConfig.agents,
+        SCRIBE: {
+          ...modelConfig.agents.SCRIBE,
+          provider: 'vertex' as const,
+          model: 'gemini-2.5-pro',
+          temperature: 0.7,
+          topP: 0.9,
+        },
+        EDITOR: {
+          ...modelConfig.agents.EDITOR,
+          provider: 'gemini' as const,
+          model: 'gemini-2.5-flash',
+          temperature: 0.4,
+          topP: 0.9,
+        },
+        GUIDE: {
+          ...modelConfig.agents.GUIDE,
+          provider: 'gemini' as const,
+          model: 'gemini-2.5-flash',
+          temperature: 0.5,
+          topP: 0.9,
+        },
+        NARRATOR: {
+          ...modelConfig.agents.NARRATOR,
+          provider: 'gemini' as const,
+          model: 'gemini-2.5-flash',
+        },
+        CONFIDANT: { ...modelConfig.agents.CONFIDANT, enabled: false },
+        ONIRIQUE: { ...modelConfig.agents.ONIRIQUE, enabled: false },
+      },
+    };
+    const activePrompts = [
+      {
+        id: 'model-config',
+        key: 'MODEL_CONFIG',
+        version: 1,
+        value: JSON.stringify(googleOnly),
+        changedBy: 'test',
+        comment: 'google',
+        createdAt: new Date('2026-07-20T12:00:00Z'),
+      },
+      {
+        id: 'guide',
+        key: 'GUIDE',
+        version: 2,
+        value: 'Parcours pratique de 30 jours, batch de 10 jours.',
+        changedBy: 'test',
+        comment: 'guide',
+        createdAt: new Date('2026-07-20T12:01:00Z'),
+      },
+    ];
+    const prisma = {
+      expert: {
+        findUnique: jest.fn().mockResolvedValue({
+          email: 'expert@oraclelumira.com',
+          role: ExpertRole.ADMIN,
+          isActive: true,
+        }),
+        count: jest.fn().mockResolvedValue(1),
+      },
+      promptVersion: { findMany: jest.fn().mockResolvedValue(activePrompts) },
+      aiRoutingRule: { findMany: jest.fn().mockResolvedValue([]) },
+      aiRun: { findMany: jest.fn().mockResolvedValue([]) },
+      order: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const diagnostics = {
+      getCredentialsStatus: jest.fn().mockResolvedValue({
+        openai: {
+          configured: false,
+          text: 'not_tested',
+          multimodal: 'not_tested',
+          model: 'gpt-5.5-2026-04-23',
+          state: 'not_configured',
+          envVar: 'OPENAI_API_KEY',
+        },
+        gemini: {
+          configured: true,
+          text: 'ok',
+          multimodal: 'ok',
+          structured: 'ok',
+          model: 'gemini-2.5-flash',
+          state: 'connection_ok',
+          envVar: 'GEMINI_API_KEY',
+        },
+        vertex: {
+          configured: true,
+          text: 'ok',
+          multimodal: 'ok',
+          structured: 'ok',
+          model: 'gemini-2.5-pro',
+          state: 'connection_ok',
+          envVar: 'VERTEX_CREDENTIALS_JSON',
+          location: 'us-central1',
+        },
+      }),
+    };
+    const result = await new AiProductionReadinessService(
+      prisma as never,
+      diagnostics as never,
+      { get: jest.fn(() => 'us-central1') } as never,
+    ).getReadiness();
+
+    expect(result.checks.find((check) => check.id === 'openai_key')).toBeUndefined();
+    expect(result.checks.find((check) => check.id === 'gemini_key')?.level).toBe('pass');
+    expect(result.checks.find((check) => check.id === 'vertex_key')?.level).toBe('pass');
+    expect(result.verdict).toBe('CONDITIONAL_GO');
   });
 
   it('returns CONDITIONAL_GO before a tracked complete generation', async () => {

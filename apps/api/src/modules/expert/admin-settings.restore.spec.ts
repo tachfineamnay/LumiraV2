@@ -21,6 +21,7 @@ describe('AdminSettingsService restore latest custom', () => {
   };
 
   const aiRuntimeCache = { invalidateAll: jest.fn() };
+  const aiModelCatalog = { clearCache: jest.fn() };
   let service: AdminSettingsService;
 
   beforeEach(() => {
@@ -30,6 +31,7 @@ describe('AdminSettingsService restore latest custom', () => {
       { get: jest.fn() } as unknown as ConfigService,
       {} as AiProviderDiagnosticsService,
       aiRuntimeCache as unknown as AiRuntimeCacheService,
+      aiModelCatalog as never,
     );
   });
 

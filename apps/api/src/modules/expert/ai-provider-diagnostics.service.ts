@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -10,6 +9,8 @@ import {
 } from '../../services/factory/ai-model-config';
 import {
   decryptSettingsValue,
+  GeminiAdapter,
+  resolveVertexLocation,
   VERTEX_CREDENTIALS_KEY,
   VertexAdapter,
 } from '../../services/factory/llm';
@@ -38,6 +39,7 @@ const MODEL_CONFIG_KEY = 'MODEL_CONFIG';
 interface CachedProviderProbes {
   text: ProviderProbeResult;
   multimodal?: ProviderProbeResult;
+  structured?: ProviderProbeResult;
   expiresAt: number;
 }
 
@@ -67,6 +69,10 @@ export class AiProviderDiagnosticsService {
       select: { value: true },
     });
     return Boolean(setting?.value?.trim());
+  }
+
+  getVertexLocation(): string {
+    return resolveVertexLocation(this.configService);
   }
 
   async getConfiguredGeminiModel(): Promise<string> {
@@ -173,6 +179,7 @@ export class AiProviderDiagnosticsService {
       this.getConfiguredVertexModel(),
       this.isVertexConfigured(),
     ]);
+    const location = this.getVertexLocation();
 
     const gemini = this.buildCredentialStatus(
       'GEMINI_API_KEY',
@@ -180,6 +187,7 @@ export class AiProviderDiagnosticsService {
       geminiModel,
       this.geminiCache,
       true,
+      'GEMINI_API_KEY (env)',
     );
     const openai = this.buildCredentialStatus(
       'OPENAI_API_KEY',
@@ -187,6 +195,7 @@ export class AiProviderDiagnosticsService {
       openaiModel,
       this.openaiCache,
       true,
+      'OPENAI_API_KEY (env)',
     );
     const vertex = this.buildCredentialStatus(
       'VERTEX_CREDENTIALS_JSON',
@@ -194,6 +203,8 @@ export class AiProviderDiagnosticsService {
       vertexModel,
       this.vertexCache,
       true,
+      'Compte de service chiffré (Desk)',
+      location,
     );
 
     return {
@@ -224,9 +235,35 @@ export class AiProviderDiagnosticsService {
       return this.buildResultFromCache('gemini', model, this.geminiCache!);
     }
 
-    const text = await this.runGeminiTextProbe(apiKey, model, timeoutMs);
-    const multimodal = await this.runGeminiMultimodalProbe(apiKey, model, timeoutMs);
-    this.geminiCache = { text, multimodal, expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS };
+    this.logger.log(
+      `Testing Gemini Developer API text + vision with model "${model}" auth=api_key`,
+    );
+    const text = await this.runGeminiTextProbe(model, timeoutMs);
+    const multimodal =
+      text.status === 'ok'
+        ? await this.runGeminiMultimodalProbe(model, timeoutMs)
+        : {
+            status: 'not_tested' as const,
+            model,
+            testedAt,
+            error: 'Vision non testée car le test texte a échoué.',
+          };
+    const structured =
+      text.status === 'ok'
+        ? await this.runGeminiStructuredProbe(model, timeoutMs)
+        : {
+            status: 'not_tested' as const,
+            model,
+            testedAt,
+            error: 'JSON structuré non testé car le test texte a échoué.',
+          };
+
+    this.geminiCache = {
+      text,
+      multimodal,
+      structured,
+      expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
+    };
     return this.buildResultFromCache('gemini', model, this.geminiCache);
   }
 
@@ -261,7 +298,12 @@ export class AiProviderDiagnosticsService {
             error: 'Vision non testée car le test texte a échoué.',
           };
 
-    this.openaiCache = { text, multimodal, expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS };
+    this.openaiCache = {
+      text,
+      multimodal,
+      structured: text,
+      expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
+    };
     return this.buildResultFromCache('openai', model, this.openaiCache);
   }
 
@@ -273,6 +315,7 @@ export class AiProviderDiagnosticsService {
     const timeoutMs = options?.timeoutMs ?? DEFAULT_AI_TEST_TIMEOUT_MS;
     const testedAt = new Date().toISOString();
     const configured = await this.isVertexConfigured();
+    const location = this.getVertexLocation();
 
     if (!configured) {
       return this.buildFailureResult('vertex', model, testedAt, {
@@ -284,7 +327,9 @@ export class AiProviderDiagnosticsService {
       return this.buildResultFromCache('vertex', model, this.vertexCache!);
     }
 
-    this.logger.log(`Testing Vertex AI text + vision with model "${model}"`);
+    this.logger.log(
+      `Testing Vertex AI text + vision with model "${model}" auth=service_account location=${location}`,
+    );
     const text = await this.runVertexTextProbe(model, timeoutMs);
     const multimodal =
       text.status === 'ok'
@@ -295,8 +340,22 @@ export class AiProviderDiagnosticsService {
             testedAt,
             error: 'Vision non testée car le test texte a échoué.',
           };
+    const structured =
+      text.status === 'ok'
+        ? await this.runVertexStructuredProbe(model, timeoutMs)
+        : {
+            status: 'not_tested' as const,
+            model,
+            testedAt,
+            error: 'JSON structuré non testé car le test texte a échoué.',
+          };
 
-    this.vertexCache = { text, multimodal, expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS };
+    this.vertexCache = {
+      text,
+      multimodal,
+      structured,
+      expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
+    };
     return this.buildResultFromCache('vertex', model, this.vertexCache);
   }
 
@@ -321,11 +380,17 @@ export class AiProviderDiagnosticsService {
     model: string,
     cache: CachedProviderProbes | null,
     includeMultimodal: boolean,
+    credentialSource: string,
+    location?: string,
   ): ProviderCredentialStatus {
     const text = cache?.text.status ?? 'not_tested';
     const multimodal = includeMultimodal ? (cache?.multimodal?.status ?? 'not_tested') : undefined;
-    const error = cache?.text.error ?? cache?.multimodal?.error;
-    const errorCategory = cache?.text.errorCategory ?? cache?.multimodal?.errorCategory;
+    const structured = cache?.structured?.status ?? 'not_tested';
+    const error = cache?.text.error ?? cache?.multimodal?.error ?? cache?.structured?.error;
+    const errorCategory =
+      cache?.text.errorCategory ??
+      cache?.multimodal?.errorCategory ??
+      cache?.structured?.errorCategory;
     return {
       envVar,
       configured,
@@ -334,6 +399,9 @@ export class AiProviderDiagnosticsService {
       lastError: error,
       text,
       multimodal,
+      structured,
+      credentialSource,
+      location,
       state: this.resolveCredentialState(configured, text, multimodal, errorCategory),
     };
   }
@@ -348,7 +416,9 @@ export class AiProviderDiagnosticsService {
     if (text === 'not_tested') return 'not_tested';
     if (text === 'ok' && (!multimodal || multimodal === 'ok')) return 'connection_ok';
     if (errorCategory === 'quota') return 'quota_billing';
-    if (errorCategory === 'model_not_found') return 'model_inaccessible';
+    if (errorCategory === 'model_not_found' || errorCategory === 'region_not_supported') {
+      return 'model_inaccessible';
+    }
     return 'test_failed';
   }
 
@@ -366,8 +436,11 @@ export class AiProviderDiagnosticsService {
       testedAt: cache.text.testedAt ?? new Date().toISOString(),
       text: cache.text.status,
       multimodal: cache.multimodal?.status,
-      error: cache.text.error ?? cache.multimodal?.error,
-      errorCategory: cache.text.errorCategory ?? cache.multimodal?.errorCategory,
+      error: cache.text.error ?? cache.multimodal?.error ?? cache.structured?.error,
+      errorCategory:
+        cache.text.errorCategory ??
+        cache.multimodal?.errorCategory ??
+        cache.structured?.errorCategory,
       projectId: success ? `${provider}-api` : undefined,
     };
   }
@@ -388,6 +461,7 @@ export class AiProviderDiagnosticsService {
     const cache: CachedProviderProbes = {
       text: probe,
       multimodal: { ...probe, status: 'not_tested' },
+      structured: { ...probe, status: 'not_tested' },
       expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
     };
     if (provider === 'gemini') this.geminiCache = cache;
@@ -396,64 +470,111 @@ export class AiProviderDiagnosticsService {
     return this.buildResultFromCache(provider, model, cache);
   }
 
-  private async runGeminiTextProbe(
-    apiKey: string,
-    model: string,
-    timeoutMs: number,
-  ): Promise<ProviderProbeResult> {
+  private createGeminiAdapter(): GeminiAdapter {
+    return new GeminiAdapter(() => this.configService.get<string>('GEMINI_API_KEY')?.trim());
+  }
+
+  private createVertexAdapter(): VertexAdapter {
+    return new VertexAdapter(() => this.loadVertexCredentialsJson(), this.getVertexLocation());
+  }
+
+  private async runGeminiTextProbe(model: string, timeoutMs: number): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const result = await withTimeout(
-        genAI.getGenerativeModel({ model }).generateContent({
-          contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-          generationConfig: { maxOutputTokens: 8 },
+      const adapter = this.createGeminiAdapter();
+      const controller = new AbortController();
+      await withTimeout(
+        adapter.complete({
+          model,
+          systemPrompt: 'Réponds brièvement.',
+          userContent: 'ping',
+          maxTokens: 8,
+          temperature: 0,
+          topP: 1,
+          signal: controller.signal,
+          timeoutMs,
         }),
         timeoutMs,
         'Gemini text probe',
       );
-      result.response.text();
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      return this.probeFromError(model, testedAt, error, 'Gemini text probe');
+      return this.probeFromError(model, testedAt, error, 'Gemini text probe', 'gemini');
     }
   }
 
   private async runGeminiMultimodalProbe(
-    apiKey: string,
     model: string,
     timeoutMs: number,
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const result = await withTimeout(
-        genAI.getGenerativeModel({ model }).generateContent({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { text: 'Décris cette image en un mot.' },
-                { inlineData: { mimeType: 'image/png', data: MINIMAL_PNG_BASE64 } },
-              ],
-            },
-          ],
-          generationConfig: { maxOutputTokens: 8 },
+      const adapter = this.createGeminiAdapter();
+      const controller = new AbortController();
+      await withTimeout(
+        adapter.complete({
+          model,
+          systemPrompt: 'Réponds brièvement.',
+          userContent: 'Décris cette image en un mot.',
+          images: [{ mimeType: 'image/png', base64: MINIMAL_PNG_BASE64 }],
+          maxTokens: 8,
+          temperature: 0,
+          topP: 1,
+          signal: controller.signal,
+          timeoutMs,
         }),
         timeoutMs,
         'Gemini multimodal probe',
       );
-      result.response.text();
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      return this.probeFromError(model, testedAt, error, 'Gemini multimodal probe');
+      return this.probeFromError(model, testedAt, error, 'Gemini multimodal probe', 'gemini');
+    }
+  }
+
+  private async runGeminiStructuredProbe(
+    model: string,
+    timeoutMs: number,
+  ): Promise<ProviderProbeResult> {
+    const testedAt = new Date().toISOString();
+    try {
+      const adapter = this.createGeminiAdapter();
+      const controller = new AbortController();
+      const result = await withTimeout(
+        adapter.complete({
+          model,
+          systemPrompt: 'Retourne uniquement le JSON demandé.',
+          userContent: 'Réponds avec ok=true.',
+          maxTokens: 64,
+          temperature: 0,
+          topP: 1,
+          jsonSchema: {
+            name: 'lumira_health_probe',
+            schema: {
+              type: 'object',
+              properties: { ok: { type: 'boolean' } },
+              required: ['ok'],
+              additionalProperties: false,
+            },
+          },
+          signal: controller.signal,
+          timeoutMs,
+        }),
+        timeoutMs,
+        'Gemini structured probe',
+      );
+      const parsed = JSON.parse(result.text || '{}') as { ok?: boolean };
+      if (parsed.ok !== true) throw new Error('Réponse structurée Gemini invalide');
+      return { status: 'ok', model, testedAt };
+    } catch (error) {
+      return this.probeFromError(model, testedAt, error, 'Gemini structured probe', 'gemini');
     }
   }
 
   private async runVertexTextProbe(model: string, timeoutMs: number): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     try {
-      const adapter = new VertexAdapter(() => this.loadVertexCredentialsJson());
+      const adapter = this.createVertexAdapter();
       const controller = new AbortController();
       await withTimeout(
         adapter.complete({
@@ -471,7 +592,7 @@ export class AiProviderDiagnosticsService {
       );
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      return this.probeFromError(model, testedAt, error, 'Vertex text probe');
+      return this.probeFromError(model, testedAt, error, 'Vertex text probe', 'vertex');
     }
   }
 
@@ -481,7 +602,7 @@ export class AiProviderDiagnosticsService {
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     try {
-      const adapter = new VertexAdapter(() => this.loadVertexCredentialsJson());
+      const adapter = this.createVertexAdapter();
       const controller = new AbortController();
       await withTimeout(
         adapter.complete({
@@ -500,7 +621,46 @@ export class AiProviderDiagnosticsService {
       );
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      return this.probeFromError(model, testedAt, error, 'Vertex multimodal probe');
+      return this.probeFromError(model, testedAt, error, 'Vertex multimodal probe', 'vertex');
+    }
+  }
+
+  private async runVertexStructuredProbe(
+    model: string,
+    timeoutMs: number,
+  ): Promise<ProviderProbeResult> {
+    const testedAt = new Date().toISOString();
+    try {
+      const adapter = this.createVertexAdapter();
+      const controller = new AbortController();
+      const result = await withTimeout(
+        adapter.complete({
+          model,
+          systemPrompt: 'Retourne uniquement le JSON demandé.',
+          userContent: 'Réponds avec ok=true.',
+          maxTokens: 64,
+          temperature: 0,
+          topP: 1,
+          jsonSchema: {
+            name: 'lumira_health_probe',
+            schema: {
+              type: 'object',
+              properties: { ok: { type: 'boolean' } },
+              required: ['ok'],
+              additionalProperties: false,
+            },
+          },
+          signal: controller.signal,
+          timeoutMs,
+        }),
+        timeoutMs,
+        'Vertex structured probe',
+      );
+      const parsed = JSON.parse(result.text || '{}') as { ok?: boolean };
+      if (parsed.ok !== true) throw new Error('Réponse structurée Vertex invalide');
+      return { status: 'ok', model, testedAt };
+    } catch (error) {
+      return this.probeFromError(model, testedAt, error, 'Vertex structured probe', 'vertex');
     }
   }
 
@@ -527,7 +687,6 @@ export class AiProviderDiagnosticsService {
     };
   }
 
-  /** Narrow OpenAI Responses union (Response | Stream) to plain output text. */
   private openAiOutputText(response: unknown): string {
     const value = response as { output_text?: unknown };
     return typeof value.output_text === 'string' ? value.output_text : '';
@@ -558,7 +717,7 @@ export class AiProviderDiagnosticsService {
       if (parsed.ok !== true) throw new Error('Réponse structurée OpenAI invalide');
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      return this.probeFromError(model, testedAt, error, 'OpenAI Responses text probe');
+      return this.probeFromError(model, testedAt, error, 'OpenAI Responses text probe', 'openai');
     }
   }
 
@@ -600,7 +759,13 @@ export class AiProviderDiagnosticsService {
       if (parsed.ok !== true) throw new Error('Réponse multimodale OpenAI invalide');
       return { status: 'ok', model, testedAt };
     } catch (error) {
-      return this.probeFromError(model, testedAt, error, 'OpenAI Responses multimodal probe');
+      return this.probeFromError(
+        model,
+        testedAt,
+        error,
+        'OpenAI Responses multimodal probe',
+        'openai',
+      );
     }
   }
 
@@ -609,9 +774,14 @@ export class AiProviderDiagnosticsService {
     testedAt: string,
     error: unknown,
     label: string,
+    provider: DiagnosticsProvider,
   ): ProviderProbeResult {
     const raw = error instanceof Error ? error.message : String(error);
-    const classified = classifyAiError(raw);
+    const classified = classifyAiError(raw, {
+      provider,
+      model,
+      location: provider === 'vertex' ? this.getVertexLocation() : undefined,
+    });
     this.logger.warn(`${label} failed: ${sanitizeAiErrorMessage(raw)}`);
     return {
       status: 'error',

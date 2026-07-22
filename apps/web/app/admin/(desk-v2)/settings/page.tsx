@@ -78,13 +78,15 @@ interface CatalogModel {
   label: string;
   ownedBy?: string;
   createdAt?: number;
+  status?: 'verified' | 'supported' | 'unavailable' | 'unknown';
 }
 
 interface ProviderCatalog {
   configured: boolean;
   models: CatalogModel[];
   error?: string;
-  source: 'live' | 'seed' | 'unavailable';
+  source: 'live' | 'supported' | 'unavailable' | 'error' | 'seed';
+  location?: string;
 }
 
 interface AvailableModelsResponse {
@@ -103,6 +105,9 @@ interface ProviderStatus {
   lastError?: string;
   text: ProbeStatus;
   multimodal?: ProbeStatus;
+  structured?: ProbeStatus;
+  credentialSource?: string;
+  location?: string;
 }
 
 interface CredentialsStatus {
@@ -210,12 +215,32 @@ const SEED_GOOGLE_MODELS: CatalogModel[] = [
 
 const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
   { id: 'openai', label: 'OpenAI' },
-  { id: 'vertex', label: 'Vertex AI' },
-  { id: 'gemini', label: 'Gemini API' },
+  { id: 'vertex', label: 'Vertex AI — projet Google Cloud' },
+  { id: 'gemini', label: 'Gemini API — clé AI Studio' },
 ];
 
+function catalogSourceLabel(source: ProviderCatalog['source'] | undefined): string {
+  switch (source) {
+    case 'live':
+      return 'Live vérifié';
+    case 'supported':
+      return 'Supporté non vérifié';
+    case 'unavailable':
+      return 'Indisponible';
+    case 'error':
+      return 'Erreur de catalogue';
+    case 'seed':
+      return 'Supporté non vérifié';
+    default:
+      return 'Inconnu';
+  }
+}
+
 function seedModelsForProvider(provider: ProviderId): CatalogModel[] {
-  return provider === 'openai' ? SEED_OPENAI_MODELS : SEED_GOOGLE_MODELS;
+  return (provider === 'openai' ? SEED_OPENAI_MODELS : SEED_GOOGLE_MODELS).map((model) => ({
+    ...model,
+    status: 'supported' as const,
+  }));
 }
 
 function sanitizeOperationalModels(
@@ -506,8 +531,11 @@ export default function SettingsPage() {
           : provider === 'vertex'
             ? availableModels?.vertex
             : availableModels?.gemini;
-      const live = catalog?.models?.length ? catalog.models : seedModelsForProvider(provider);
-      return live;
+      if (!catalog?.models?.length) {
+        return seedModelsForProvider(provider);
+      }
+      // Prefer verified/live models; keep supported visible but marked.
+      return catalog.models.filter((model) => model.status !== 'unavailable');
     },
     [availableModels],
   );
@@ -700,9 +728,11 @@ export default function SettingsPage() {
       if (!current) return current;
       const nextAgent = { ...current.agents[agent], ...patch };
       if (patch.provider && patch.provider !== current.agents[agent].provider) {
-        const allowed = modelsForProvider(patch.provider).map((option) => option.id);
+        const options = modelsForProvider(patch.provider);
+        const verified = options.find((option) => option.status === 'verified');
+        const allowed = options.map((option) => option.id);
         if (!allowed.includes(nextAgent.model)) {
-          nextAgent.model = defaultModelForProvider(patch.provider);
+          nextAgent.model = verified?.id || defaultModelForProvider(patch.provider);
         }
         if (patch.provider === 'openai' && nextAgent.model.startsWith('gpt-5.')) {
           nextAgent.reasoningEffort = nextAgent.reasoningEffort || 'medium';
@@ -1065,19 +1095,19 @@ export default function SettingsPage() {
               {
                 id: 'openai' as const,
                 title: 'OpenAI',
-                subtitle: 'Lectures et agents en mode openai_only',
+                subtitle: 'Clé plateforme — obligatoire uniquement si un agent actif l’utilise',
                 status: credentials.openai,
               },
               {
                 id: 'vertex' as const,
-                title: 'Vertex AI',
-                subtitle: 'Recommandé pour SCRIBE / lectures',
+                title: 'Vertex AI — projet Google Cloud',
+                subtitle: 'Compte de service chiffré dans le Desk (jamais GEMINI_API_KEY)',
                 status: credentials.vertex,
               },
               {
                 id: 'gemini' as const,
-                title: 'Gemini API',
-                subtitle: 'Recommandé pour EDITOR / assistance expert',
+                title: 'Gemini API — clé AI Studio',
+                subtitle: 'GEMINI_API_KEY — Developer API, distinct de Vertex',
                 status: credentials.gemini,
               },
             ] as const
@@ -1092,8 +1122,17 @@ export default function SettingsPage() {
                     <h2 className="font-semibold text-desk-text">{card.title}</h2>
                     <p className="mt-1 text-sm text-desk-muted">{card.subtitle}</p>
                     <p className="mt-1 text-sm text-desk-muted">
-                      Modèle testé : {card.status.model}
+                      Source : {card.status.credentialSource || card.status.envVar}
                     </p>
+                    <p className="mt-1 text-sm text-desk-muted">
+                      Modèle testé : {card.status.model}
+                      {card.status.location ? ` · région ${card.status.location}` : ''}
+                    </p>
+                    {card.status.lastTestedAt && (
+                      <p className="mt-1 text-xs text-desk-subtle">
+                        Dernier test : {new Date(card.status.lastTestedAt).toLocaleString('fr-FR')}
+                      </p>
+                    )}
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Pill level={card.status.configured ? 'pass' : 'fail'}>
                         {card.status.configured ? 'Configuré' : 'Non configuré'}
@@ -1119,6 +1158,17 @@ export default function SettingsPage() {
                         }
                       >
                         Vision {card.status.multimodal || 'not_tested'}
+                      </Pill>
+                      <Pill
+                        level={
+                          card.status.structured === 'ok'
+                            ? 'pass'
+                            : card.status.structured === 'error'
+                              ? 'fail'
+                              : 'warning'
+                        }
+                      >
+                        JSON {card.status.structured || 'not_tested'}
                       </Pill>
                     </div>
                   </div>
@@ -1229,16 +1279,20 @@ export default function SettingsPage() {
           <Card className="border-blue-500/30 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-desk-text">Catalogues modèles live</h2>
+                <h2 className="font-semibold text-desk-text">Catalogues modèles</h2>
                 <p className="mt-1 text-sm text-desk-muted">
-                  Listes fournies par OpenAI, Vertex et Gemini (cache 1 h). Les seeds ne servent
-                  qu’en secours si l’API catalogue échoue.
+                  Live vérifié = listé par le provider et dans l’allowlist Lumira. Supporté non
+                  vérifié = allowlist produit uniquement (jamais présenté comme catalogue live).
                 </p>
                 {availableModels && (
                   <p className="mt-2 text-xs text-desk-subtle">
                     Dernière synchro : {new Date(availableModels.fetchedAt).toLocaleString('fr-FR')}{' '}
-                    · OpenAI {availableModels.openai.source} · Vertex{' '}
-                    {availableModels.vertex.source} · Gemini {availableModels.gemini.source}
+                    · OpenAI {catalogSourceLabel(availableModels.openai.source)} · Vertex{' '}
+                    {catalogSourceLabel(availableModels.vertex.source)}
+                    {availableModels.vertex.location
+                      ? ` (${availableModels.vertex.location})`
+                      : ''}{' '}
+                    · Gemini {catalogSourceLabel(availableModels.gemini.source)}
                   </p>
                 )}
               </div>
@@ -1311,16 +1365,21 @@ export default function SettingsPage() {
             const modelOptions = catalogOptions;
             const isGpt5 = effectiveProvider === 'openai' && item.model.startsWith('gpt-5.');
             const useTempKnobs = !isGpt5;
-            const price =
+            const catalog =
               availableModels?.[
                 effectiveProvider === 'openai'
                   ? 'openai'
                   : effectiveProvider === 'vertex'
                     ? 'vertex'
                     : 'gemini'
-              ]?.source === 'live'
-                ? 'Catalogue live'
-                : 'Liste de secours';
+              ];
+            const selectedStatus = modelOptions.find((option) => option.id === item.model)?.status;
+            const price = catalogSourceLabel(catalog?.source);
+            const unverifiedWarning =
+              selectedStatus === 'supported' ||
+              catalog?.source === 'supported' ||
+              catalog?.source === 'error' ||
+              catalog?.source === 'seed';
             return (
               <Card key={agent.key} className="p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1336,6 +1395,12 @@ export default function SettingsPage() {
                     </div>
                     <p className="mt-1 text-sm text-desk-muted">{agent.description}</p>
                     <p className="mt-1 text-xs text-desk-muted">{price}</p>
+                    {unverifiedWarning && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        Modèle non vérifié par un test réel — lancez un test Credentials avant
+                        production.
+                      </p>
+                    )}
                   </div>
                   <label className="inline-flex min-h-10 items-center gap-2 text-sm text-desk-muted">
                     <input
@@ -1393,6 +1458,11 @@ export default function SettingsPage() {
                       {modelOptions.map((option) => (
                         <option key={option.id} value={option.id}>
                           {option.label}
+                          {option.status === 'verified'
+                            ? ' · vérifié'
+                            : option.status === 'supported'
+                              ? ' · supporté non vérifié'
+                              : ''}
                         </option>
                       ))}
                     </select>
