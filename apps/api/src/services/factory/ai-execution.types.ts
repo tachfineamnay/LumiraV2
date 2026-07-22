@@ -17,8 +17,8 @@ export interface AiPromptSnapshot {
   modelConfig: AiModelConfigSnapshot;
 }
 
-export type AiProviderMode = 'openai_only' | 'comparison';
-export type AiProvider = 'gemini' | 'openai';
+export type AiProviderMode = 'openai_only' | 'per_agent';
+export type AiProvider = 'openai' | 'vertex' | 'gemini';
 
 export interface AiAgentModelConfig {
   enabled: boolean;

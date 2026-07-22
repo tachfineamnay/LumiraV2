@@ -3,11 +3,21 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
-import { normalizeAiModelConfig } from '../../services/factory/ai-model-config';
+import {
+  GEMINI_V1_MODELS,
+  normalizeAiModelConfig,
+  VERTEX_V1_MODELS,
+} from '../../services/factory/ai-model-config';
+import {
+  decryptSettingsValue,
+  VERTEX_CREDENTIALS_KEY,
+  VertexAdapter,
+} from '../../services/factory/llm';
 import {
   AiCredentialsStatusResponse,
   AiErrorCategory,
   AiHealthSnapshot,
+  DiagnosticsProvider,
   ProviderConnectionTestResult,
   ProviderCredentialState,
   ProviderCredentialStatus,
@@ -36,6 +46,7 @@ export class AiProviderDiagnosticsService {
   private readonly logger = new Logger(AiProviderDiagnosticsService.name);
   private geminiCache: CachedProviderProbes | null = null;
   private openaiCache: CachedProviderProbes | null = null;
+  private vertexCache: CachedProviderProbes | null = null;
 
   constructor(
     private readonly configService: ConfigService,
@@ -50,19 +61,37 @@ export class AiProviderDiagnosticsService {
     return this.hasEnvKey('OPENAI_API_KEY');
   }
 
+  async isVertexConfigured(): Promise<boolean> {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: VERTEX_CREDENTIALS_KEY },
+      select: { value: true },
+    });
+    return Boolean(setting?.value?.trim());
+  }
+
   async getConfiguredGeminiModel(): Promise<string> {
-    const active = await this.loadStoredModelConfig();
-    if (active && typeof active === 'object') {
-      const record = active as Record<string, unknown>;
-      if (typeof record.heavyModel === 'string') return record.heavyModel;
-      if (typeof record.flashModel === 'string') return record.flashModel;
-    }
-    return 'gemini-2.5-flash';
+    const config = normalizeAiModelConfig(await this.loadStoredModelConfig()).config;
+    const geminiAgent = Object.values(config.agents).find(
+      (agent) => agent.enabled && agent.provider === 'gemini',
+    );
+    return geminiAgent?.model ?? GEMINI_V1_MODELS[1] ?? 'gemini-2.5-flash';
+  }
+
+  async getConfiguredVertexModel(): Promise<string> {
+    const config = normalizeAiModelConfig(await this.loadStoredModelConfig()).config;
+    const vertexAgent = Object.values(config.agents).find(
+      (agent) => agent.enabled && agent.provider === 'vertex',
+    );
+    return vertexAgent?.model ?? VERTEX_V1_MODELS[0];
   }
 
   async getConfiguredOpenAIModel(): Promise<string> {
     const stored = await this.loadStoredModelConfig();
-    return normalizeAiModelConfig(stored).config.agents.SCRIBE.model;
+    const config = normalizeAiModelConfig(stored).config;
+    const openaiAgent = Object.values(config.agents).find(
+      (agent) => agent.enabled && agent.provider === 'openai',
+    );
+    return openaiAgent?.model ?? config.agents.SCRIBE.model;
   }
 
   private async loadStoredModelConfig(): Promise<unknown> {
@@ -76,6 +105,17 @@ export class AiProviderDiagnosticsService {
     } catch {
       return undefined;
     }
+  }
+
+  private async loadVertexCredentialsJson(): Promise<string | null> {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: VERTEX_CREDENTIALS_KEY },
+    });
+    if (!setting?.value) return null;
+    return decryptSettingsValue(
+      setting.value,
+      this.configService.get<string>('SETTINGS_ENCRYPTION_KEY'),
+    );
   }
 
   getAiHealthSnapshot(): AiHealthSnapshot {
@@ -92,13 +132,21 @@ export class AiProviderDiagnosticsService {
         multimodal: this.openaiCache?.multimodal?.status ?? 'not_tested',
         model: this.openaiCache?.text.model ?? 'pending',
       },
+      vertex: {
+        configured: false,
+        text: this.vertexCache?.text.status ?? 'not_tested',
+        multimodal: this.vertexCache?.multimodal?.status ?? 'not_tested',
+        model: this.vertexCache?.text.model ?? 'pending',
+      },
     };
   }
 
   async getAiHealthSnapshotWithModels(): Promise<AiHealthSnapshot> {
-    const [geminiModel, openaiModel] = await Promise.all([
+    const [geminiModel, openaiModel, vertexModel, vertexConfigured] = await Promise.all([
       this.getConfiguredGeminiModel(),
       this.getConfiguredOpenAIModel(),
+      this.getConfiguredVertexModel(),
+      this.isVertexConfigured(),
     ]);
     const base = this.getAiHealthSnapshot();
     return {
@@ -110,13 +158,20 @@ export class AiProviderDiagnosticsService {
         ...base.openai,
         model: base.openai.model === 'pending' ? openaiModel : base.openai.model,
       },
+      vertex: {
+        ...base.vertex,
+        configured: vertexConfigured,
+        model: base.vertex.model === 'pending' ? vertexModel : base.vertex.model,
+      },
     };
   }
 
   async getCredentialsStatus(): Promise<AiCredentialsStatusResponse> {
-    const [geminiModel, openaiModel] = await Promise.all([
+    const [geminiModel, openaiModel, vertexModel, vertexConfigured] = await Promise.all([
       this.getConfiguredGeminiModel(),
       this.getConfiguredOpenAIModel(),
+      this.getConfiguredVertexModel(),
+      this.isVertexConfigured(),
     ]);
 
     const gemini = this.buildCredentialStatus(
@@ -133,11 +188,19 @@ export class AiProviderDiagnosticsService {
       this.openaiCache,
       true,
     );
+    const vertex = this.buildCredentialStatus(
+      'VERTEX_CREDENTIALS_JSON',
+      vertexConfigured,
+      vertexModel,
+      this.vertexCache,
+      true,
+    );
 
     return {
       gemini,
       openai,
-      vertexConfigured: gemini.configured,
+      vertex,
+      vertexConfigured: vertex.configured,
       openaiConfigured: openai.configured,
     };
   }
@@ -202,9 +265,45 @@ export class AiProviderDiagnosticsService {
     return this.buildResultFromCache('openai', model, this.openaiCache);
   }
 
+  async testVertexConnection(options?: {
+    force?: boolean;
+    timeoutMs?: number;
+  }): Promise<ProviderConnectionTestResult> {
+    const model = await this.getConfiguredVertexModel();
+    const timeoutMs = options?.timeoutMs ?? DEFAULT_AI_TEST_TIMEOUT_MS;
+    const testedAt = new Date().toISOString();
+    const configured = await this.isVertexConfigured();
+
+    if (!configured) {
+      return this.buildFailureResult('vertex', model, testedAt, {
+        category: 'missing_key',
+        userMessage: 'Identifiants Vertex non configurés dans le Desk.',
+      });
+    }
+    if (!options?.force && this.isCacheValid(this.vertexCache)) {
+      return this.buildResultFromCache('vertex', model, this.vertexCache!);
+    }
+
+    this.logger.log(`Testing Vertex AI text + vision with model "${model}"`);
+    const text = await this.runVertexTextProbe(model, timeoutMs);
+    const multimodal =
+      text.status === 'ok'
+        ? await this.runVertexMultimodalProbe(model, timeoutMs)
+        : {
+            status: 'not_tested' as const,
+            model,
+            testedAt,
+            error: 'Vision non testée car le test texte a échoué.',
+          };
+
+    this.vertexCache = { text, multimodal, expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS };
+    return this.buildResultFromCache('vertex', model, this.vertexCache);
+  }
+
   clearCacheForTests(): void {
     this.geminiCache = null;
     this.openaiCache = null;
+    this.vertexCache = null;
   }
 
   private hasEnvKey(name: string): boolean {
@@ -254,7 +353,7 @@ export class AiProviderDiagnosticsService {
   }
 
   private buildResultFromCache(
-    provider: 'gemini' | 'openai',
+    provider: DiagnosticsProvider,
     model: string,
     cache: CachedProviderProbes,
   ): ProviderConnectionTestResult {
@@ -274,7 +373,7 @@ export class AiProviderDiagnosticsService {
   }
 
   private buildFailureResult(
-    provider: 'gemini' | 'openai',
+    provider: DiagnosticsProvider,
     model: string,
     testedAt: string,
     error: { category: AiErrorCategory; userMessage: string },
@@ -292,7 +391,8 @@ export class AiProviderDiagnosticsService {
       expiresAt: Date.now() + AI_HEALTH_CACHE_TTL_MS,
     };
     if (provider === 'gemini') this.geminiCache = cache;
-    else this.openaiCache = cache;
+    else if (provider === 'openai') this.openaiCache = cache;
+    else this.vertexCache = cache;
     return this.buildResultFromCache(provider, model, cache);
   }
 
@@ -347,6 +447,60 @@ export class AiProviderDiagnosticsService {
       return { status: 'ok', model, testedAt };
     } catch (error) {
       return this.probeFromError(model, testedAt, error, 'Gemini multimodal probe');
+    }
+  }
+
+  private async runVertexTextProbe(model: string, timeoutMs: number): Promise<ProviderProbeResult> {
+    const testedAt = new Date().toISOString();
+    try {
+      const adapter = new VertexAdapter(() => this.loadVertexCredentialsJson());
+      const controller = new AbortController();
+      await withTimeout(
+        adapter.complete({
+          model,
+          systemPrompt: 'Réponds brièvement.',
+          userContent: 'ping',
+          maxTokens: 8,
+          temperature: 0,
+          topP: 1,
+          signal: controller.signal,
+          timeoutMs,
+        }),
+        timeoutMs,
+        'Vertex text probe',
+      );
+      return { status: 'ok', model, testedAt };
+    } catch (error) {
+      return this.probeFromError(model, testedAt, error, 'Vertex text probe');
+    }
+  }
+
+  private async runVertexMultimodalProbe(
+    model: string,
+    timeoutMs: number,
+  ): Promise<ProviderProbeResult> {
+    const testedAt = new Date().toISOString();
+    try {
+      const adapter = new VertexAdapter(() => this.loadVertexCredentialsJson());
+      const controller = new AbortController();
+      await withTimeout(
+        adapter.complete({
+          model,
+          systemPrompt: 'Réponds brièvement.',
+          userContent: 'Décris cette image en un mot.',
+          images: [{ mimeType: 'image/png', base64: MINIMAL_PNG_BASE64 }],
+          maxTokens: 8,
+          temperature: 0,
+          topP: 1,
+          signal: controller.signal,
+          timeoutMs,
+        }),
+        timeoutMs,
+        'Vertex multimodal probe',
+      );
+      return { status: 'ok', model, testedAt };
+    } catch (error) {
+      return this.probeFromError(model, testedAt, error, 'Vertex multimodal probe');
     }
   }
 

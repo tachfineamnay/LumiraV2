@@ -15,14 +15,46 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.CONFIDANT.enabled).toBe(false);
   });
 
-  it('restores safe pinned defaults for comparison mode, Gemini and unknown models', () => {
+  it('accepts per_agent mode with vertex and gemini pinned models', () => {
+    const normalized = normalizeAiModelConfig({
+      providerMode: 'per_agent',
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          enabled: true,
+          provider: 'vertex',
+          model: 'gemini-2.5-pro',
+          temperature: 0.7,
+          topP: 0.9,
+          maxOutputTokens: 24000,
+        },
+        EDITOR: {
+          enabled: true,
+          provider: 'gemini',
+          model: 'gemini-2.5-flash',
+          temperature: 0.4,
+          topP: 0.9,
+          maxOutputTokens: 16000,
+        },
+      },
+    });
+
+    expect(normalized.issues).toEqual([]);
+    expect(normalized.config.providerMode).toBe('per_agent');
+    expect(normalized.config.agents.SCRIBE.provider).toBe('vertex');
+    expect(normalized.config.agents.SCRIBE.model).toBe('gemini-2.5-pro');
+    expect(normalized.config.agents.EDITOR.provider).toBe('gemini');
+    expect(normalized.config.agents.EDITOR.model).toBe('gemini-2.5-flash');
+  });
+
+  it('restores safe pinned defaults for unknown mode and unknown models', () => {
     const normalized = normalizeAiModelConfig({
       providerMode: 'comparison',
       agents: {
         SCRIBE: {
           enabled: true,
           provider: 'gemini',
-          model: 'gemini-2.5-flash',
+          model: 'unknown-model',
           maxOutputTokens: -1,
         },
       },

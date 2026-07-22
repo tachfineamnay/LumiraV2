@@ -11,6 +11,7 @@ import {
   AiExecutionContext,
   AiModelConfigSnapshot,
   AiPromptSnapshot,
+  AiProvider,
   ResolvedAiExecution,
 } from './ai-execution.types';
 import {
@@ -20,6 +21,15 @@ import {
 } from './ai-model-config';
 import { AiRunService } from './ai-run.service';
 import { AiRuntimeCacheService } from './ai-runtime-cache.service';
+import {
+  GeminiAdapter,
+  LlmAdapter,
+  LlmRequest,
+  OpenAiAdapter,
+  VertexAdapter,
+  decryptSettingsValue,
+  VERTEX_CREDENTIALS_KEY,
+} from './llm';
 
 export interface UserProfile {
   userId: string;
@@ -151,7 +161,6 @@ export interface DreamInterpretation {
 
 export type { AgentType, AiExecutionContext } from './ai-execution.types';
 
-type AIProvider = 'openai';
 type JsonSchema = Record<string, unknown>;
 type ImagePayload = { mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string };
 type TrackedResult = { text: string; inputTokens?: number; outputTokens?: number };
@@ -351,6 +360,9 @@ const DREAM_SCHEMA: JsonSchema = {
 export class VertexOracle implements OnModuleInit {
   private readonly logger = new Logger(VertexOracle.name);
   private openaiClient: OpenAI | null = null;
+  private openaiAdapter: OpenAiAdapter | null = null;
+  private vertexAdapter: VertexAdapter | null = null;
+  private geminiAdapter: GeminiAdapter | null = null;
   private initialized = false;
   private promptsLoaded = false;
   private lumiraDna = DEFAULT_LUMIRA_DNA;
@@ -431,17 +443,67 @@ export class VertexOracle implements OnModuleInit {
   private async ensureInitialized(): Promise<void> {
     if (this.initialized) return;
     await this.loadRuntimeConfiguration();
+
     const apiKey = this.configService.get<string>('OPENAI_API_KEY')?.trim();
-    if (!apiKey) throw new Error('OPENAI_API_KEY non configurée.');
-    this.openaiClient = new OpenAI({ apiKey, maxRetries: 0 });
+    if (apiKey) {
+      this.openaiClient = new OpenAI({ apiKey, maxRetries: 0 });
+      this.openaiAdapter = new OpenAiAdapter(this.openaiClient);
+    } else {
+      this.openaiClient = null;
+      this.openaiAdapter = null;
+    }
+
+    this.vertexAdapter = new VertexAdapter(() => this.loadVertexCredentialsJson());
+    this.geminiAdapter = new GeminiAdapter(() =>
+      this.configService.get<string>('GEMINI_API_KEY')?.trim(),
+    );
+
+    if (this.modelConfig.providerMode === 'openai_only' && !this.openaiAdapter) {
+      throw new Error('OPENAI_API_KEY non configurée.');
+    }
+
     this.initialized = true;
-    this.logger.log('Lumira Oracle prêt en mode OpenAI-only');
+    this.logger.log(
+      `Lumira Oracle prêt (mode=${this.modelConfig.providerMode}, openai=${Boolean(this.openaiAdapter)})`,
+    );
+  }
+
+  private async loadVertexCredentialsJson(): Promise<string | null> {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: VERTEX_CREDENTIALS_KEY },
+    });
+    if (!setting?.value) return null;
+    try {
+      return decryptSettingsValue(
+        setting.value,
+        this.configService.get<string>('SETTINGS_ENCRYPTION_KEY'),
+      );
+    } catch (error) {
+      this.logger.error(`Impossible de lire les identifiants Vertex: ${String(error)}`);
+      throw new Error('Identifiants Vertex illisibles.');
+    }
+  }
+
+  private requireAdapter(provider: AiProvider): LlmAdapter {
+    if (provider === 'openai') {
+      if (!this.openaiAdapter) throw new Error('Client OpenAI non initialisé.');
+      return this.openaiAdapter;
+    }
+    if (provider === 'vertex') {
+      if (!this.vertexAdapter) throw new Error('Adapter Vertex non initialisé.');
+      return this.vertexAdapter;
+    }
+    if (!this.geminiAdapter) throw new Error('Adapter Gemini non initialisé.');
+    return this.geminiAdapter;
   }
 
   invalidateCache(): void {
     this.initialized = false;
     this.promptsLoaded = false;
     this.openaiClient = null;
+    this.openaiAdapter = null;
+    this.vertexAdapter = null;
+    this.geminiAdapter = null;
     this.lumiraDna = DEFAULT_LUMIRA_DNA;
     this.agentContexts = { ...DEFAULT_AGENT_CONTEXTS };
     this.modelConfig = this.cloneModelConfig(DEFAULT_AI_MODEL_CONFIG);
@@ -458,71 +520,6 @@ export class VertexOracle implements OnModuleInit {
 
   private resolveExecution(ctx: AiExecutionContext): Promise<ResolvedAiExecution> {
     return this.aiExecutionResolver.resolve(ctx, this.getPromptSnapshot());
-  }
-
-  private requireOpenAI(): OpenAI {
-    if (!this.openaiClient) throw new Error('Client OpenAI non initialisé.');
-    return this.openaiClient;
-  }
-
-  private openAIParameters(
-    resolved: ResolvedAiExecution,
-    maxTokens = resolved.maxTokens,
-  ): Record<string, unknown> {
-    if (resolved.model.startsWith('gpt-5.')) {
-      return {
-        reasoning: { effort: resolved.reasoningEffort ?? 'medium' },
-        max_output_tokens: maxTokens,
-      };
-    }
-    return {
-      temperature: resolved.temperature ?? 0.3,
-      top_p: resolved.topP ?? 0.9,
-      max_output_tokens: maxTokens,
-    };
-  }
-
-  private textFormat(
-    resolved: ResolvedAiExecution,
-    schemaName?: string,
-    schema?: JsonSchema,
-  ): Record<string, unknown> {
-    return {
-      ...(resolved.model.startsWith('gpt-5.') ? { verbosity: resolved.verbosity ?? 'medium' } : {}),
-      ...(schemaName && schema
-        ? {
-            format: {
-              type: 'json_schema',
-              name: schemaName,
-              strict: true,
-              schema,
-            },
-          }
-        : {}),
-    };
-  }
-
-  private responseResult(response: unknown): TrackedResult {
-    const value = response as {
-      status?: string;
-      output_text?: unknown;
-      incomplete_details?: { reason?: string };
-      usage?: { input_tokens?: unknown; output_tokens?: unknown };
-    };
-    if (value.status === 'incomplete') {
-      throw new Error(
-        `Réponse OpenAI incomplète: ${value.incomplete_details?.reason || 'cause inconnue'}`,
-      );
-    }
-    const text = typeof value.output_text === 'string' ? value.output_text.trim() : '';
-    if (!text) throw new Error('Réponse OpenAI vide.');
-    return {
-      text,
-      inputTokens:
-        typeof value.usage?.input_tokens === 'number' ? value.usage.input_tokens : undefined,
-      outputTokens:
-        typeof value.usage?.output_tokens === 'number' ? value.usage.output_tokens : undefined,
-    };
   }
 
   private async runTrackedCall(
@@ -545,11 +542,10 @@ export class VertexOracle implements OnModuleInit {
 
     try {
       const result = await this.executeWithRetry(ctx.agent, operation, timeoutMs);
-      const estimatedCost = estimateOpenAiCost(
-        resolved.model,
-        result.inputTokens,
-        result.outputTokens,
-      );
+      const estimatedCost =
+        resolved.provider === 'openai'
+          ? estimateOpenAiCost(resolved.model, result.inputTokens, result.outputTokens)
+          : undefined;
       await this.aiRunService.recordRun({
         ...baseRun,
         status: 'SUCCESS',
@@ -629,6 +625,33 @@ export class VertexOracle implements OnModuleInit {
     }
   }
 
+  private buildLlmRequest(
+    resolved: ResolvedAiExecution,
+    userContent: string,
+    signal: AbortSignal,
+    timeoutMs: number,
+    options?: {
+      images?: ImagePayload[];
+      maxTokens?: number;
+      jsonSchema?: { name: string; schema: JsonSchema };
+    },
+  ): LlmRequest {
+    return {
+      model: resolved.model,
+      systemPrompt: resolved.systemPrompt,
+      userContent,
+      images: options?.images,
+      maxTokens: Math.min(options?.maxTokens ?? resolved.maxTokens, resolved.maxTokens),
+      temperature: resolved.temperature,
+      topP: resolved.topP,
+      reasoningEffort: resolved.reasoningEffort,
+      verbosity: resolved.verbosity,
+      jsonSchema: options?.jsonSchema,
+      signal,
+      timeoutMs,
+    };
+  }
+
   private async callJson<T>(
     ctx: AiExecutionContext,
     userContent: string,
@@ -638,40 +661,19 @@ export class VertexOracle implements OnModuleInit {
     images: ImagePayload[] = [],
   ): Promise<T> {
     const resolved = await this.resolveExecution(ctx);
-    const client = this.requireOpenAI();
-    this.logger.log(`[${ctx.agent}] ${resolved.routingSource} → openai/${resolved.model}`);
+    const adapter = this.requireAdapter(resolved.provider);
+    this.logger.log(
+      `[${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}`,
+    );
 
-    const input =
-      images.length > 0
-        ? [
-            {
-              role: 'user',
-              content: [
-                { type: 'input_text', text: userContent },
-                ...images.map((image) => ({
-                  type: 'input_image',
-                  image_url: `data:${image.mimeType};base64,${image.base64}`,
-                  detail: 'high',
-                })),
-              ],
-            },
-          ]
-        : userContent;
-
-    const text = await this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) => {
-      const response = await client.responses.create(
-        {
-          model: resolved.model,
-          instructions: resolved.systemPrompt,
-          input: input as unknown as Parameters<typeof client.responses.create>[0]['input'],
-          store: false,
-          ...this.openAIParameters(resolved),
-          text: this.textFormat(resolved, schemaName, schema),
-        } as Parameters<typeof client.responses.create>[0],
-        { signal, timeout: timeoutMs, maxRetries: 0 },
-      );
-      return this.responseResult(response);
-    });
+    const text = await this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) =>
+      adapter.complete(
+        this.buildLlmRequest(resolved, userContent, signal, timeoutMs, {
+          images,
+          jsonSchema: { name: schemaName, schema },
+        }),
+      ),
+    );
 
     try {
       return JSON.parse(text) as T;
@@ -689,24 +691,16 @@ export class VertexOracle implements OnModuleInit {
     maxTokens?: number,
   ): Promise<string> {
     const resolved = await this.resolveExecution(ctx);
-    const client = this.requireOpenAI();
-    const controlledMaxTokens = Math.min(maxTokens ?? resolved.maxTokens, resolved.maxTokens);
-    this.logger.log(`[${ctx.agent}] ${resolved.routingSource} → openai/${resolved.model}`);
+    const adapter = this.requireAdapter(resolved.provider);
+    this.logger.log(
+      `[${ctx.agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}`,
+    );
 
-    return this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) => {
-      const response = await client.responses.create(
-        {
-          model: resolved.model,
-          instructions: resolved.systemPrompt,
-          input: userContent,
-          store: false,
-          ...this.openAIParameters(resolved, controlledMaxTokens),
-          text: this.textFormat(resolved),
-        } as Parameters<typeof client.responses.create>[0],
-        { signal, timeout: timeoutMs, maxRetries: 0 },
-      );
-      return this.responseResult(response);
-    });
+    return this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) =>
+      adapter.complete(
+        this.buildLlmRequest(resolved, userContent, signal, timeoutMs, { maxTokens }),
+      ),
+    );
   }
 
   async generateCoreReading(
@@ -822,30 +816,20 @@ Retourne uniquement le contenu corrigé.`;
     await this.ensureInitialized();
     const ctx = buildAiContext('CONFIDANT', AiMission.CHAT_SESSION, routing);
     const resolved = await this.resolveExecution(ctx);
-    const client = this.requireOpenAI();
+    const adapter = this.requireAdapter(resolved.provider);
     const instructions = this.buildConfidantSystemPrompt(context, resolved.systemPrompt);
-    const input = [
-      ...conversationHistory.slice(-12).map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-      { role: 'user' as const, content: userMessage },
-    ];
+    const historyBlock = conversationHistory
+      .slice(-12)
+      .map((message) => `${message.role}: ${message.content}`)
+      .join('\n');
+    const userContent = [historyBlock, `user: ${userMessage}`].filter(Boolean).join('\n\n');
 
-    const result = await this.runTrackedCall(ctx, resolved, 60_000, async (signal) => {
-      const response = await client.responses.create(
-        {
-          model: resolved.model,
-          instructions,
-          input,
-          store: false,
-          ...this.openAIParameters(resolved),
-          text: this.textFormat(resolved),
-        } as Parameters<typeof client.responses.create>[0],
-        { signal, timeout: 60_000, maxRetries: 0 },
-      );
-      return this.responseResult(response);
-    });
+    const result = await this.runTrackedCall(ctx, resolved, 60_000, async (signal) =>
+      adapter.complete({
+        ...this.buildLlmRequest(resolved, userContent, signal, 60_000),
+        systemPrompt: instructions,
+      }),
+    );
     return result.trim();
   }
 
@@ -872,10 +856,13 @@ Retourne uniquement le contenu corrigé.`;
     );
   }
 
-  getAgentProviders(): Record<AgentType, AIProvider> {
+  getAgentProviders(): Record<AgentType, AiProvider> {
     return Object.fromEntries(
-      Object.keys(this.modelConfig.agents).map((agent) => [agent, 'openai']),
-    ) as Record<AgentType, AIProvider>;
+      Object.entries(this.modelConfig.agents).map(([agent, config]) => [
+        agent,
+        this.modelConfig.providerMode === 'openai_only' ? 'openai' : config.provider,
+      ]),
+    ) as Record<AgentType, AiProvider>;
   }
 
   getModelConfig(): AiModelConfigSnapshot {

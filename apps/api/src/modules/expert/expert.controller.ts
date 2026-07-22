@@ -476,6 +476,12 @@ export class ExpertController {
     return this.adminSettingsService.testVertexConnection();
   }
 
+  @Post('settings/gemini-test')
+  @Roles('ADMIN')
+  async testGeminiConnection() {
+    return this.adminSettingsService.testGeminiConnection();
+  }
+
   @Post('settings/openai-test')
   @Roles('ADMIN')
   async testOpenAIConnection() {

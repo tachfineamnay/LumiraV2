@@ -1,4 +1,10 @@
-import { AgentType, AiAgentModelConfig, AiModelConfigSnapshot } from './ai-execution.types';
+import {
+  AgentType,
+  AiAgentModelConfig,
+  AiModelConfigSnapshot,
+  AiProvider,
+  AiProviderMode,
+} from './ai-execution.types';
 
 export const OPENAI_V1_MODELS = [
   'gpt-5.5-2026-04-23',
@@ -6,6 +12,12 @@ export const OPENAI_V1_MODELS = [
   'gpt-4o-2024-11-20',
 ] as const;
 export type OpenAiV1Model = (typeof OPENAI_V1_MODELS)[number];
+
+export const VERTEX_V1_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'] as const;
+export type VertexV1Model = (typeof VERTEX_V1_MODELS)[number];
+
+export const GEMINI_V1_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'] as const;
+export type GeminiV1Model = (typeof GEMINI_V1_MODELS)[number];
 
 export const OPENAI_MODEL_PRICING_USD_PER_MILLION: Record<string, [number, number]> = {
   'gpt-5.5': [5, 30],
@@ -73,12 +85,34 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
 const AGENTS: AgentType[] = ['SCRIBE', 'EDITOR', 'GUIDE', 'NARRATOR', 'CONFIDANT', 'ONIRIQUE'];
 const REASONING_VALUES = new Set(['low', 'medium', 'high']);
 const VERBOSITY_VALUES = new Set(['low', 'medium', 'high']);
-const ALLOWED_MODELS = new Set<string>(OPENAI_V1_MODELS);
+const ALLOWED_PROVIDERS = new Set<AiProvider>(['openai', 'vertex', 'gemini']);
+const ALLOWED_MODES = new Set<AiProviderMode>(['openai_only', 'per_agent']);
+const OPENAI_MODELS = new Set<string>(OPENAI_V1_MODELS);
+const VERTEX_MODELS = new Set<string>(VERTEX_V1_MODELS);
+const GEMINI_MODELS = new Set<string>(GEMINI_V1_MODELS);
+
+const DEFAULT_GOOGLE_KNOBS: Record<
+  AgentType,
+  { temperature: number; topP: number; maxOutputTokens: number }
+> = {
+  SCRIBE: { temperature: 0.7, topP: 0.9, maxOutputTokens: 24000 },
+  EDITOR: { temperature: 0.4, topP: 0.9, maxOutputTokens: 16000 },
+  GUIDE: { temperature: 0.5, topP: 0.9, maxOutputTokens: 6000 },
+  NARRATOR: { temperature: 0.3, topP: 0.9, maxOutputTokens: 12000 },
+  CONFIDANT: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1600 },
+  ONIRIQUE: { temperature: 0.65, topP: 0.9, maxOutputTokens: 2500 },
+};
 
 export interface NormalizedAiModelConfig {
   config: AiModelConfigSnapshot;
   issues: string[];
   usedFallback: boolean;
+}
+
+export function modelsForProvider(provider: AiProvider): readonly string[] {
+  if (provider === 'openai') return OPENAI_V1_MODELS;
+  if (provider === 'vertex') return VERTEX_V1_MODELS;
+  return GEMINI_V1_MODELS;
 }
 
 function cloneDefaultAgent(agent: AgentType): AiAgentModelConfig {
@@ -93,10 +127,17 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function isAllowedModel(provider: AiProvider, model: string): boolean {
+  if (provider === 'openai') return OPENAI_MODELS.has(model);
+  if (provider === 'vertex') return VERTEX_MODELS.has(model);
+  return GEMINI_MODELS.has(model);
+}
+
 function normalizeAgent(
   agent: AgentType,
   value: unknown,
   issues: string[],
+  providerMode: AiProviderMode,
 ): AiAgentModelConfig {
   const fallback = cloneDefaultAgent(agent);
   if (!isRecord(value)) {
@@ -104,16 +145,33 @@ function normalizeAgent(
     return fallback;
   }
 
-  if (value.provider !== 'openai') {
+  const requestedProvider =
+    typeof value.provider === 'string' && ALLOWED_PROVIDERS.has(value.provider as AiProvider)
+      ? (value.provider as AiProvider)
+      : null;
+
+  if (!requestedProvider) {
     issues.push(`${agent}: provider non autorisé, OpenAI restauré`);
   }
 
+  let provider: AiProvider = requestedProvider ?? 'openai';
+  if (providerMode === 'openai_only') {
+    provider = 'openai';
+    if (requestedProvider && requestedProvider !== 'openai') {
+      issues.push(`${agent}: provider ignoré en openai_only, OpenAI forcé`);
+    }
+  }
+
+  const requestedModel = typeof value.model === 'string' ? value.model : undefined;
   const model =
-    typeof value.model === 'string' && ALLOWED_MODELS.has(value.model)
-      ? value.model
-      : fallback.model;
-  if (model !== value.model) {
-    issues.push(`${agent}: snapshot non autorisé, ${fallback.model} restauré`);
+    requestedModel && isAllowedModel(provider, requestedModel)
+      ? requestedModel
+      : provider === 'openai'
+        ? fallback.model
+        : modelsForProvider(provider)[0];
+
+  if (model !== requestedModel) {
+    issues.push(`${agent}: snapshot non autorisé pour ${provider}, ${model} restauré`);
   }
 
   const enabled = typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled;
@@ -122,35 +180,37 @@ function normalizeAgent(
   }
 
   const maxOutputTokens = finiteNumber(value.maxOutputTokens);
+  const defaultMax =
+    provider === 'openai' ? fallback.maxOutputTokens : DEFAULT_GOOGLE_KNOBS[agent].maxOutputTokens;
   const normalizedMaxTokens =
     maxOutputTokens !== undefined &&
     Number.isInteger(maxOutputTokens) &&
     maxOutputTokens >= 1 &&
     maxOutputTokens <= 100000
       ? maxOutputTokens
-      : fallback.maxOutputTokens;
+      : defaultMax;
   if (normalizedMaxTokens !== maxOutputTokens) {
-    issues.push(`${agent}: maxOutputTokens invalide, ${fallback.maxOutputTokens} restauré`);
+    issues.push(`${agent}: maxOutputTokens invalide, ${defaultMax} restauré`);
   }
 
   const result: AiAgentModelConfig = {
     enabled,
-    provider: 'openai',
+    provider,
     model,
     maxOutputTokens: normalizedMaxTokens,
   };
 
-  if (model.startsWith('gpt-5.')) {
+  if (provider === 'openai' && model.startsWith('gpt-5.')) {
     const reasoningValid =
       typeof value.reasoningEffort === 'string' && REASONING_VALUES.has(value.reasoningEffort);
     const verbosityValid =
       typeof value.verbosity === 'string' && VERBOSITY_VALUES.has(value.verbosity);
     result.reasoningEffort = reasoningValid
       ? (value.reasoningEffort as 'low' | 'medium' | 'high')
-      : fallback.reasoningEffort ?? 'medium';
+      : (fallback.reasoningEffort ?? 'medium');
     result.verbosity = verbosityValid
       ? (value.verbosity as 'low' | 'medium' | 'high')
-      : fallback.verbosity ?? 'medium';
+      : (fallback.verbosity ?? 'medium');
     if (!reasoningValid) {
       issues.push(`${agent}: reasoningEffort invalide, ${result.reasoningEffort} restauré`);
     }
@@ -162,10 +222,14 @@ function normalizeAgent(
 
   const temperature = finiteNumber(value.temperature);
   const topP = finiteNumber(value.topP);
+  const defaultTemp =
+    provider === 'openai' ? (fallback.temperature ?? 0.3) : DEFAULT_GOOGLE_KNOBS[agent].temperature;
+  const defaultTopP =
+    provider === 'openai' ? (fallback.topP ?? 0.9) : DEFAULT_GOOGLE_KNOBS[agent].topP;
   const temperatureValid = temperature !== undefined && temperature >= 0 && temperature <= 2;
   const topPValid = topP !== undefined && topP >= 0 && topP <= 1;
-  result.temperature = temperatureValid ? temperature : fallback.temperature ?? 0.3;
-  result.topP = topPValid ? topP : fallback.topP ?? 0.9;
+  result.temperature = temperatureValid ? temperature : defaultTemp;
+  result.topP = topPValid ? topP : defaultTopP;
   if (!temperatureValid) {
     issues.push(`${agent}: temperature invalide, ${result.temperature} restaurée`);
   }
@@ -180,16 +244,36 @@ export function normalizeAiModelConfig(input: unknown): NormalizedAiModelConfig 
   const root = isRecord(input) ? input : {};
   const storedAgents = isRecord(root.agents) ? root.agents : {};
 
-  if (root.providerMode !== 'openai_only') {
-    issues.push('providerMode absent ou non autorisé en V1, openai_only restauré');
+  let providerMode: AiProviderMode = 'openai_only';
+  if (
+    typeof root.providerMode === 'string' &&
+    ALLOWED_MODES.has(root.providerMode as AiProviderMode)
+  ) {
+    providerMode = root.providerMode as AiProviderMode;
+  } else {
+    issues.push('providerMode absent ou non autorisé, openai_only restauré');
   }
 
   const agents = Object.fromEntries(
-    AGENTS.map((agent) => [agent, normalizeAgent(agent, storedAgents[agent], issues)]),
+    AGENTS.map((agent) => [
+      agent,
+      normalizeAgent(agent, storedAgents[agent], issues, providerMode),
+    ]),
   ) as Record<AgentType, AiAgentModelConfig>;
 
+  if (providerMode === 'openai_only') {
+    for (const agent of AGENTS) {
+      if (agents[agent].provider !== 'openai') {
+        agents[agent] = {
+          ...cloneDefaultAgent(agent),
+          enabled: agents[agent].enabled,
+        };
+      }
+    }
+  }
+
   return {
-    config: { providerMode: 'openai_only', agents },
+    config: { providerMode, agents },
     issues,
     usedFallback: issues.length > 0 || !isRecord(input),
   };
@@ -211,5 +295,16 @@ export function estimateOpenAiCost(
   if (inputTokens == null && outputTokens == null) return undefined;
   const rates = OPENAI_MODEL_PRICING_USD_PER_MILLION[model];
   if (!rates) return undefined;
-  return (((inputTokens ?? 0) * rates[0]) + ((outputTokens ?? 0) * rates[1])) / 1_000_000;
+  return ((inputTokens ?? 0) * rates[0] + (outputTokens ?? 0) * rates[1]) / 1_000_000;
+}
+
+export function activeProvidersInConfig(config: AiModelConfigSnapshot): Set<AiProvider> {
+  if (config.providerMode === 'openai_only') {
+    return new Set<AiProvider>(['openai']);
+  }
+  const providers = new Set<AiProvider>();
+  for (const agent of Object.values(config.agents)) {
+    if (agent.enabled) providers.add(agent.provider);
+  }
+  return providers;
 }

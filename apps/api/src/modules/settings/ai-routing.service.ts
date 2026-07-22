@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ProductLevel, AiMission } from '@prisma/client';
 import { AiRuntimeCacheService } from '../../services/factory/ai-runtime-cache.service';
 
-export type AiProvider = 'gemini' | 'openai';
+export type AiProvider = 'gemini' | 'openai' | 'vertex';
 
 export interface ResolvedRouting {
   provider: AiProvider;

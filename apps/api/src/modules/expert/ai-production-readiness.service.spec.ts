@@ -132,7 +132,9 @@ describe('AiProductionReadinessService', () => {
       order: {
         findFirst: jest
           .fn()
-          .mockResolvedValue(options?.completedOrder === undefined ? completedOrder : options.completedOrder),
+          .mockResolvedValue(
+            options?.completedOrder === undefined ? completedOrder : options.completedOrder,
+          ),
       },
     };
     const diagnostics = {
@@ -152,6 +154,14 @@ describe('AiProductionReadinessService', () => {
           model: 'gemini-2.5-flash',
           state: 'not_configured',
           envVar: 'GEMINI_API_KEY',
+        },
+        vertex: {
+          configured: false,
+          text: 'not_tested',
+          multimodal: 'not_tested',
+          model: 'gemini-2.5-pro',
+          state: 'not_configured',
+          envVar: 'VERTEX_CREDENTIALS_JSON',
         },
       }),
     };

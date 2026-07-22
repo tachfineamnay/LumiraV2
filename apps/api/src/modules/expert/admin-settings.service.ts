@@ -133,7 +133,7 @@ export class AdminSettingsService {
       update: { value: encrypted, isEncrypted: true },
       create: { key: VERTEX_CREDENTIALS_KEY, value: encrypted, isEncrypted: true },
     });
-    this.logger.log('Vertex credentials stored for future comparison mode');
+    this.logger.log('Vertex credentials stored');
     return { success: true, message: 'Identifiants Vertex sauvegardés.' };
   }
 
@@ -173,6 +173,10 @@ export class AdminSettingsService {
   }
 
   async testVertexConnection(): Promise<VertexTestResult> {
+    return this.aiProviderDiagnostics.testVertexConnection({ force: true });
+  }
+
+  async testGeminiConnection(): Promise<VertexTestResult> {
     return this.aiProviderDiagnostics.testGeminiConnection({ force: true });
   }
 
@@ -297,12 +301,14 @@ export class AdminSettingsService {
       try {
         parsed = JSON.parse(target.value);
       } catch {
-        throw new BadRequestException('La version MODEL_CONFIG sélectionnée ne contient pas de JSON valide.');
+        throw new BadRequestException(
+          'La version MODEL_CONFIG sélectionnée ne contient pas de JSON valide.',
+        );
       }
       const normalized = normalizeAiModelConfig(parsed);
       if (normalized.issues.length > 0) {
         throw new BadRequestException(
-          `Cette version MODEL_CONFIG n'est pas compatible avec la V1: ${normalized.issues.join('; ')}`,
+          `Cette version MODEL_CONFIG n'est pas compatible: ${normalized.issues.join('; ')}`,
         );
       }
       await this.persistPromptVersion(
@@ -341,9 +347,7 @@ export class AdminSettingsService {
     try {
       const normalized = normalizeAiModelConfig(JSON.parse(active.value));
       if (normalized.issues.length > 0) {
-        this.logger.warn(
-          `Stored MODEL_CONFIG was normalized: ${normalized.issues.join(' | ')}`,
-        );
+        this.logger.warn(`Stored MODEL_CONFIG was normalized: ${normalized.issues.join(' | ')}`);
       }
       return normalized.config;
     } catch (error) {
@@ -369,7 +373,6 @@ export class AdminSettingsService {
     const candidate = {
       ...current,
       ...config,
-      providerMode: 'openai_only' as const,
       agents,
     };
     const normalized = normalizeAiModelConfig(candidate);
@@ -396,7 +399,10 @@ export class AdminSettingsService {
     return {
       providerMode: DEFAULT_AI_MODEL_CONFIG.providerMode,
       agents: Object.fromEntries(
-        Object.entries(DEFAULT_AI_MODEL_CONFIG.agents).map(([agent, value]) => [agent, { ...value }]),
+        Object.entries(DEFAULT_AI_MODEL_CONFIG.agents).map(([agent, value]) => [
+          agent,
+          { ...value },
+        ]),
       ) as ModelConfig['agents'],
     };
   }

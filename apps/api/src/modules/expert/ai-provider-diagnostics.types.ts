@@ -19,6 +19,8 @@ export type AiErrorCategory =
   | 'timeout'
   | 'unknown';
 
+export type DiagnosticsProvider = 'openai' | 'gemini' | 'vertex';
+
 export interface ProviderProbeResult {
   status: ProviderProbeStatus;
   model: string;
@@ -51,11 +53,17 @@ export interface AiHealthSnapshot {
     multimodal: ProviderProbeStatus;
     model: string;
   };
+  vertex: {
+    configured: boolean;
+    text: ProviderProbeStatus;
+    multimodal: ProviderProbeStatus;
+    model: string;
+  };
 }
 
 export interface ProviderConnectionTestResult {
   success: boolean;
-  provider: 'gemini' | 'openai';
+  provider: DiagnosticsProvider;
   model: string;
   testedAt: string;
   text: ProviderProbeStatus;
@@ -69,7 +77,8 @@ export interface ProviderConnectionTestResult {
 export interface AiCredentialsStatusResponse {
   gemini: ProviderCredentialStatus;
   openai: ProviderCredentialStatus;
-  /** @deprecated use gemini.configured */
+  vertex: ProviderCredentialStatus;
+  /** @deprecated use vertex.configured */
   vertexConfigured?: boolean;
   /** @deprecated use openai.configured */
   openaiConfigured?: boolean;

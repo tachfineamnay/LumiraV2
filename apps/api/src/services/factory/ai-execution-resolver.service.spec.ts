@@ -130,6 +130,61 @@ describe('AiExecutionResolverService', () => {
     expect(resolved.maxTokens).toBe(24000);
   });
 
+  it('uses per-agent provider and model without reading AiRoutingRule', async () => {
+    const snapshot: AiPromptSnapshot = {
+      ...baseSnapshot,
+      modelConfig: {
+        providerMode: 'per_agent',
+        agents: {
+          ...baseSnapshot.modelConfig.agents,
+          SCRIBE: {
+            enabled: true,
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            temperature: 0.7,
+            topP: 0.9,
+            maxOutputTokens: 24000,
+          },
+          EDITOR: {
+            enabled: true,
+            provider: 'gemini',
+            model: 'gemini-2.5-flash',
+            temperature: 0.4,
+            topP: 0.9,
+            maxOutputTokens: 16000,
+          },
+        },
+      },
+    };
+
+    aiRouting.resolveRule.mockResolvedValue({
+      provider: 'openai',
+      model: 'gpt-4o-2024-11-20',
+      temperature: 0.1,
+      maxTokens: 100,
+      source: 'rule:should-not-apply',
+      isCustomRule: true,
+    });
+
+    const scribe = await service.resolve(
+      buildAiContext('SCRIBE', AiMission.READING_GENERATION, {
+        productLevel: ProductLevel.INITIE,
+      }),
+      snapshot,
+    );
+    const editor = await service.resolve(
+      buildAiContext('EDITOR', AiMission.CONTENT_REFINEMENT),
+      snapshot,
+    );
+
+    expect(aiRouting.resolveRule).not.toHaveBeenCalled();
+    expect(scribe.provider).toBe('vertex');
+    expect(scribe.model).toBe('gemini-2.5-pro');
+    expect(scribe.routingSource).toBe('global:SCRIBE');
+    expect(editor.provider).toBe('gemini');
+    expect(editor.model).toBe('gemini-2.5-flash');
+  });
+
   it('falls back to global GUIDE config when productLevel is absent', async () => {
     const resolved = await service.resolve(
       buildAiContext('GUIDE', AiMission.TIMELINE_BATCH),

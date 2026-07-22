@@ -23,7 +23,10 @@ jest.mock('openai', () => ({
 describe('AiProviderDiagnosticsService', () => {
   let service: AiProviderDiagnosticsService;
   let configGet: jest.Mock;
-  let prisma: { promptVersion: { findFirst: jest.Mock } };
+  let prisma: {
+    promptVersion: { findFirst: jest.Mock };
+    systemSetting: { findUnique: jest.Mock };
+  };
 
   const modelConfigJson = JSON.stringify(DEFAULT_AI_MODEL_CONFIG);
 
@@ -33,6 +36,9 @@ describe('AiProviderDiagnosticsService', () => {
     prisma = {
       promptVersion: {
         findFirst: jest.fn().mockResolvedValue({ value: modelConfigJson }),
+      },
+      systemSetting: {
+        findUnique: jest.fn().mockResolvedValue(null),
       },
     };
 
@@ -59,7 +65,7 @@ describe('AiProviderDiagnosticsService', () => {
     expect(GoogleGenerativeAI).not.toHaveBeenCalled();
   });
 
-  it('tests gemini text and multimodal with the dormant comparison model', async () => {
+  it('tests gemini text and multimodal with the configured Gemini model', async () => {
     configGet.mockImplementation((key: string) =>
       key === 'GEMINI_API_KEY' ? 'test-gemini-key' : undefined,
     );

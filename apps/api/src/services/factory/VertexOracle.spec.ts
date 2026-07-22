@@ -118,6 +118,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
           provide: PrismaService,
           useValue: {
             promptVersion: { findMany: jest.fn().mockResolvedValue([]) },
+            systemSetting: { findUnique: jest.fn().mockResolvedValue(null) },
             aiRun: { aggregate: jest.fn().mockResolvedValue({ _sum: { estimatedCost: 0.01 } }) },
           },
         },

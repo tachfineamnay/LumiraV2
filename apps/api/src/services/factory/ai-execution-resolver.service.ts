@@ -17,6 +17,7 @@ export class AiExecutionResolverService {
 
   constructor(
     private readonly prisma: PrismaService,
+    /** Kept for DI compatibility; Tranche A never reads AiRoutingRule. */
     private readonly aiRouting: AiRoutingService,
   ) {}
 
@@ -31,65 +32,38 @@ export class AiExecutionResolverService {
     const modelConfig = normalized.config;
     const config = modelConfig.agents[ctx.agent];
     if (!config.enabled) {
-      throw new BadRequestException(`L'agent ${ctx.agent} est désactivé en V1.`);
+      throw new BadRequestException(`L'agent ${ctx.agent} est désactivé.`);
     }
 
-    let provider = config.provider;
-    let model = config.model;
-    let temperature = config.temperature;
-    let topP = config.topP;
-    let reasoningEffort = config.reasoningEffort;
-    let verbosity = config.verbosity;
-    let maxTokens = config.maxOutputTokens;
-    let routingSource = `global:${ctx.agent}`;
-    let rulePromptVersionId: string | undefined;
+    // Tranche A: openai_only | per_agent from MODEL_CONFIG only. Never call aiRouting.
+    void this.aiRouting;
 
-    // En V1 OpenAI-only, la configuration par agent est l'unique source de vérité.
-    // Les anciennes règles restent stockées pour comparaison future mais ne sont jamais lues.
-    if (modelConfig.providerMode !== 'openai_only' && ctx.productLevel) {
-      const rule = await this.aiRouting.resolveRule(ctx.productLevel, ctx.agent, ctx.mission);
-      if (rule) {
-        provider = rule.provider;
-        model = rule.model;
-        temperature = rule.temperature;
-        maxTokens = rule.maxTokens;
-        reasoningEffort = undefined;
-        verbosity = undefined;
-        rulePromptVersionId = rule.promptVersionId;
-        routingSource = rule.source;
-        topP = provider === 'openai' ? config.topP : undefined;
-        this.logger.log(
-          `[${ctx.agent}] Routing ${routingSource} → ${provider}/${model} mission=${ctx.mission}`,
-        );
-      }
-    }
-
-    if (modelConfig.providerMode === 'openai_only') {
-      provider = 'openai';
-      routingSource = `global:${ctx.agent}`;
-    }
-
-    const promptVersionId = ctx.promptVersionId ?? rulePromptVersionId;
+    const routingSource = `global:${ctx.agent}`;
+    const promptVersionId = ctx.promptVersionId;
     const agentPrompt = await this.resolveAgentPrompt(ctx.agent, snapshot, promptVersionId);
 
     if (!agentPrompt?.trim()) {
       throw new BadRequestException(`Le prompt actif de l'agent ${ctx.agent} est vide.`);
     }
     if (ctx.agent !== 'ONIRIQUE' && !snapshot.lumiraDna?.trim()) {
-      throw new BadRequestException("Le prompt actif LUMIRA_DNA est vide.");
+      throw new BadRequestException('Le prompt actif LUMIRA_DNA est vide.');
     }
 
     const systemPrompt =
       ctx.agent === 'ONIRIQUE' ? agentPrompt : `${snapshot.lumiraDna}\n\n---\n\n${agentPrompt}`;
 
+    this.logger.log(
+      `[${ctx.agent}] ${routingSource} → ${config.provider}/${config.model} mode=${modelConfig.providerMode}`,
+    );
+
     return {
-      provider,
-      model,
-      temperature,
-      topP,
-      reasoningEffort,
-      verbosity,
-      maxTokens,
+      provider: config.provider,
+      model: config.model,
+      temperature: config.temperature,
+      topP: config.topP,
+      reasoningEffort: config.reasoningEffort,
+      verbosity: config.verbosity,
+      maxTokens: config.maxOutputTokens,
       systemPrompt,
       promptVersionId,
       routingSource,
