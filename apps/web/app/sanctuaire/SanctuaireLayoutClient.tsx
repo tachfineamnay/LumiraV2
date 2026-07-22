@@ -44,23 +44,23 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
     <SanctuaireGuard>
       <div className="starfield min-h-dvh bg-abyss-700 text-stellar-100 selection:bg-horizon-400/20">
         <SanctuaireSidebar />
-        <div className="min-h-dvh lg:ml-64">
-          <header className="sticky top-0 z-40 flex min-h-[64px] items-center justify-between border-b border-white/[0.05] bg-abyss-700/90 px-3 py-3 backdrop-blur-xl sm:px-5">
+        <div className="relative z-10 min-h-dvh lg:ml-64">
+          <header className="sticky top-0 z-40 flex min-h-[64px] items-center justify-between border-b border-white/[0.05] bg-abyss-700/88 px-3 py-3 backdrop-blur-xl sm:px-5">
             <Link
               href="/sanctuaire"
               aria-label="Accueil du Sanctuaire Lumira"
               className="flex min-h-[44px] items-center gap-2 rounded-xl px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 lg:hidden"
             >
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-horizon-400 text-abyss-900">
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-horizon-400 text-abyss-900 shadow-gold-soft">
                 <Star className="h-4 w-4 fill-current" />
               </span>
               <span className="font-playfair text-sm italic text-stellar-200">Lumira</span>
             </Link>
 
-            <div className="hidden items-center gap-2 lg:flex" aria-label="Statut d’accès">
+            <div className="hidden items-center gap-2 lg:flex" aria-label="Confidentialité du Sanctuaire">
               <ShieldCheck className="h-4 w-4 text-horizon-300" />
               <span className="text-xs font-semibold uppercase tracking-[0.16em] text-horizon-200">
-                Accès early · 3 mois
+                Espace privé et sécurisé
               </span>
             </div>
 
@@ -98,7 +98,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                     <div
                       id="sanctuaire-profile-menu"
                       role="menu"
-                      className="absolute right-0 z-50 mt-2 w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-600/95 shadow-abyss backdrop-blur-xl"
+                      className="absolute right-0 z-50 mt-2 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-600/95 shadow-abyss backdrop-blur-xl"
                     >
                       <div className="border-b border-white/[0.05] p-4">
                         <p className="truncate text-sm font-medium text-stellar-100">{userName}</p>
@@ -107,7 +107,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                           <ShieldCheck className="h-3 w-3" /> Accès early · 3 mois
                         </p>
                       </div>
-                      <nav className="p-2" aria-label="Profil et réglages">
+                      <nav className="p-2" aria-label="Dossier, profil et réglages">
                         {PROFILE_MENU_NAV.map((item) => {
                           const Icon = item.icon;
                           return (
@@ -115,10 +115,17 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                               key={item.key}
                               href={item.route}
                               role="menuitem"
-                              className="flex min-h-[48px] items-center gap-3 rounded-xl px-3 py-2 text-sm text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+                              className="flex min-h-[52px] items-center gap-3 rounded-xl px-3 py-2 text-sm text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
                             >
-                              <Icon className="h-5 w-5 text-horizon-300" />
-                              <span>{item.label}</span>
+                              <Icon className="h-5 w-5 shrink-0 text-horizon-300" />
+                              <span className="min-w-0">
+                                <span className="block truncate">{item.label}</span>
+                                {item.sublabel && (
+                                  <span className="mt-0.5 block truncate text-[11px] text-stellar-500">
+                                    {item.sublabel}
+                                  </span>
+                                )}
+                              </span>
                             </Link>
                           );
                         })}
