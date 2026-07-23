@@ -51,9 +51,10 @@ export class AiExecutionResolverService {
 
     const systemPrompt =
       ctx.agent === 'ONIRIQUE' ? agentPrompt : `${snapshot.lumiraDna}\n\n---\n\n${agentPrompt}`;
+    const effectiveThinking = config.thinkingLevel ?? config.reasoningEffort;
 
     this.logger.log(
-      `[${ctx.agent}] ${routingSource} → ${config.provider}/${config.model} mode=${modelConfig.providerMode}`,
+      `[${ctx.agent}] ${routingSource} → ${config.provider}/${config.model} mode=${modelConfig.providerMode} thinking=${effectiveThinking ?? 'non défini'}`,
     );
 
     assertOperationalModel(config.provider, config.model, ctx.agent);
@@ -63,7 +64,9 @@ export class AiExecutionResolverService {
       model: config.model,
       temperature: config.temperature,
       topP: config.topP,
-      reasoningEffort: config.reasoningEffort,
+      thinkingLevel: config.thinkingLevel,
+      // Compatibility bridge: VertexOracle already forwards reasoningEffort to every adapter.
+      reasoningEffort: effectiveThinking,
       verbosity: config.verbosity,
       maxTokens: config.maxOutputTokens,
       systemPrompt,
