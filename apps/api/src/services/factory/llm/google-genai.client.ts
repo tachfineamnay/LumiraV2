@@ -81,7 +81,10 @@ export function buildGoogleGenerationConfig(req: LlmRequest): Record<string, unk
     abortSignal: req.signal,
   };
 
-  const thinkingLevel = req.thinkingLevel ?? req.reasoningEffort;
+  const explicitThinkingLevel = req.thinkingLevel ?? req.reasoningEffort;
+  const thinkingLevel =
+    explicitThinkingLevel ??
+    (isGeminiThinkingModel(req.model) && req.maxTokens <= 512 ? 'low' : undefined);
   if (isGeminiThinkingModel(req.model) && thinkingLevel) {
     config.thinkingConfig = {
       thinkingLevel: thinkingLevel.toUpperCase(),
