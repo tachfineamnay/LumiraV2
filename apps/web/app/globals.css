@@ -211,6 +211,17 @@
           #f5faff 100%
         );
     color: #0d1f35;
+    /* Révélation douce à l'entrée — fondu depuis l'obscurité */
+    animation: sanctuaire-reveal 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes sanctuaire-reveal {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
   }
 
   /* ─────────────────────────────────────────────────────────
