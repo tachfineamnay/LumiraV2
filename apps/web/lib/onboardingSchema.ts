@@ -121,26 +121,3 @@ export const readingPreparationSubmissionSchema = readingPreparationSchema
   });
 
 export type ReadingPreparationData = z.infer<typeof readingPreparationSchema>;
-
-// Compatibility exports for the archived onboarding variants. They are kept
-// until those components are removed, but the active flow uses the schema above.
-export const birthDataSchema = readingPreparationSchema.pick({
-  birthDate: true,
-  birthTime: true,
-  birthPlace: true,
-});
-export type BirthData = z.infer<typeof birthDataSchema>;
-
-export const intentionSchema = z.object({
-  spiritualQuestion: z
-    .string()
-    .min(10, 'Votre question doit contenir au moins 10 caractères.')
-    .max(1000, 'Votre question ne peut pas dépasser 1 000 caractères.'),
-});
-export type IntentionData = z.infer<typeof intentionSchema>;
-
-export const photosSchema = readingPreparationSchema.pick({ facePhoto: true, palmPhoto: true });
-export type PhotosData = z.infer<typeof photosSchema>;
-
-export const completeOnboardingSchema = birthDataSchema.merge(intentionSchema).merge(photosSchema);
-export type CompleteOnboardingData = z.infer<typeof completeOnboardingSchema>;

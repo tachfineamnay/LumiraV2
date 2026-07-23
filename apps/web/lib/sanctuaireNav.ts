@@ -2,7 +2,6 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BookOpen,
   ClipboardCheck,
-  Compass,
   Home,
   Layers,
   MessageCircle,
@@ -99,28 +98,6 @@ export const PROFILE_MENU_NAV: SanctuaireNavItem[] = [
     icon: Settings,
     route: '/sanctuaire/settings/preferences',
   },
-];
-
-/** @deprecated Legacy-only data for the archived MandalaNav component. */
-export const MANDALA_NAV = [
-  {
-    key: 'chemin',
-    label: 'Chemin',
-    sublabel: 'spirituel',
-    icon: Compass,
-    route: '/sanctuaire/path',
-    angle: -72,
-  },
-  { key: 'lectures', label: 'Lectures', icon: BookOpen, route: '/sanctuaire/draws', angle: 0 },
-  { key: 'synthese', label: 'Synthèse', icon: Layers, route: '/sanctuaire/synthesis', angle: 72 },
-  {
-    key: 'eclairage',
-    label: 'Éclairage',
-    icon: MessageCircle,
-    route: '/sanctuaire/chat',
-    angle: 144,
-  },
-  { key: 'profil', label: 'Profil', icon: User, route: '/sanctuaire/profile', angle: 216 },
 ];
 
 export function isNavActive(pathname: string | null | undefined, route: string): boolean {

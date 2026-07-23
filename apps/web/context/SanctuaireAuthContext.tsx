@@ -134,7 +134,6 @@ interface SanctuaireAuthContextType {
 // =============================================================================
 
 const TOKEN_KEY = 'sanctuaire_token';
-const EMAIL_SESSION_KEY = 'sanctuaire_email';
 const FIRST_VISIT_KEY = 'sanctuaire_first_visit';
 const COOLDOWN_KEY = 'sanctuaire_auth_cooldown';
 const COOLDOWN_DURATION = 60; // seconds
@@ -221,11 +220,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
   const handleLogout = useCallback(async () => {
     await clearSanctuaireSession();
     localStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(EMAIL_SESSION_KEY);
     sessionStorage.removeItem(FIRST_VISIT_KEY);
-    // 🧹 Clear onboarding draft on logout to prevent data leakage between users
-    localStorage.removeItem('holistic_wizard_draft');
-    localStorage.removeItem('holistic_wizard_email');
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);

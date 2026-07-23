@@ -31,7 +31,6 @@ import { GlassCard } from '../../../components/ui/GlassCard';
 import { SmartPhotoUploader } from '../../../components/onboarding/SmartPhotoUploader';
 import { SanctuairePrivatePhoto } from '../../../components/private-media/SanctuairePrivatePhoto';
 import { useSanctuaireAuth } from '../../../context/SanctuaireAuthContext';
-import { DELIVERY_STYLES } from '../../../lib/holisticSchema';
 import { uploadOnboardingPhoto } from '../../../lib/onboarding-upload';
 
 // =============================================================================
@@ -115,12 +114,48 @@ export default function ProfilePage() {
     }
   };
 
+  // Details mapping for both legacy and new delivery style values
+  const DELIVERY_STYLE_MAP = {
+    // New values
+    DOUX_ET_CLAIR: {
+      icon: '🛡️',
+      title: 'Douce et claire',
+      subtitle: 'Douceur, protection et bienveillance',
+    },
+    DIRECT_ET_CONCRET: {
+      icon: '⚔️',
+      title: 'Directe et concrète',
+      subtitle: 'Vérité crue et franchise absolue',
+    },
+    SYMBOLIQUE_ET_PROFOND: {
+      icon: '🔮',
+      title: 'Symbolique et profonde',
+      subtitle: 'Métaphores et révélations progressives',
+    },
+    // Legacy compatibility values
+    Gentle: {
+      icon: '🛡️',
+      title: 'Le Bouclier',
+      subtitle: 'Douceur, protection et bienveillance',
+    },
+    Direct: {
+      icon: '⚔️',
+      title: "L'Épée",
+      subtitle: 'Vérité crue et franchise absolue',
+    },
+    Mystic: {
+      icon: '🔮',
+      title: 'Le Miroir',
+      subtitle: 'Métaphores et révélations progressives',
+    },
+  } as const;
+
   // Get delivery style info
   const getDeliveryStyleInfo = (style: string | null | undefined) => {
-    if (!style || !(style in DELIVERY_STYLES)) {
+    if (!style || !(style in DELIVERY_STYLE_MAP)) {
       return { icon: '🎯', title: 'Non défini', subtitle: 'Pas encore configuré' };
     }
-    return DELIVERY_STYLES[style as keyof typeof DELIVERY_STYLES];
+    return DELIVERY_STYLE_MAP[style as keyof typeof DELIVERY_STYLE_MAP];
   };
 
   // Get pace label

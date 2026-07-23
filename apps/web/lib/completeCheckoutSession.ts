@@ -36,11 +36,6 @@ export async function completeCheckoutSession(paymentIntentId: string): Promise<
 
   await persistSanctuaireSession(token);
   sessionStorage.setItem(FIRST_VISIT_KEY, 'true');
-  sessionStorage.setItem('sanctuaire_email', user.email);
-
-  // Clear any previous onboarding draft so the new buyer starts clean
-  localStorage.removeItem('holistic_wizard_draft');
-  localStorage.removeItem('holistic_wizard_email');
 
   return { email: user.email as string };
 }
