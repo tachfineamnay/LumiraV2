@@ -16,6 +16,10 @@ export interface GoogleGenAiCallMeta {
 /** Stable Gemini / Vertex API surface for Lumira production calls. */
 export const GOOGLE_GENAI_API_VERSION = 'v1' as const;
 
+export function isGeminiThinkingModel(model: string): boolean {
+  return /^gemini-3(?:[.-]|$)/i.test(model.trim());
+}
+
 export function createGeminiDeveloperClient(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
@@ -76,6 +80,15 @@ export function buildGoogleGenerationConfig(req: LlmRequest): Record<string, unk
     systemInstruction: req.systemPrompt,
     abortSignal: req.signal,
   };
+
+  const thinkingLevel = req.thinkingLevel ?? req.reasoningEffort;
+  if (isGeminiThinkingModel(req.model) && thinkingLevel) {
+    config.thinkingConfig = {
+      thinkingLevel: thinkingLevel.toUpperCase(),
+      includeThoughts: false,
+    };
+  }
+
   if (req.jsonSchema) {
     config.responseMimeType = 'application/json';
     // Prefer responseJsonSchema (JSON Schema subset) over legacy Schema enums.
