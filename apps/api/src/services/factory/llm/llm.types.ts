@@ -1,4 +1,4 @@
-import { AiProvider } from '../ai-execution.types';
+import { AiProvider, AiThinkingLevel } from '../ai-execution.types';
 
 export type JsonSchema = Record<string, unknown>;
 
@@ -15,8 +15,10 @@ export interface LlmRequest {
   maxTokens: number;
   temperature?: number;
   topP?: number;
-  reasoningEffort?: 'low' | 'medium' | 'high';
-  verbosity?: 'low' | 'medium' | 'high';
+  thinkingLevel?: AiThinkingLevel;
+  /** Compatibility field populated by the existing runtime request builder. */
+  reasoningEffort?: AiThinkingLevel;
+  verbosity?: AiThinkingLevel;
   jsonSchema?: { name: string; schema: JsonSchema };
   signal: AbortSignal;
   timeoutMs: number;
