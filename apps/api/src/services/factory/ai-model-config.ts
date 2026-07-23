@@ -4,6 +4,7 @@ import {
   AiModelConfigSnapshot,
   AiProvider,
   AiProviderMode,
+  AiThinkingLevel,
 } from './ai-execution.types';
 
 /** Legacy model IDs kept for historical configurations, labels and migrations only. */
@@ -95,6 +96,21 @@ export function capabilityLabel(capability: AgentCapability): string {
   }
 }
 
+export function isOpenAiThinkingModel(model: string): boolean {
+  const normalized = model.trim().toLowerCase();
+  return /^gpt-5(?:[.-]|$)/.test(normalized) && !/(?:^|[.-])pro(?:[.-]|$)/.test(normalized);
+}
+
+export function isGeminiThinkingModel(model: string): boolean {
+  return /^gemini-3(?:[.-]|$)/i.test(model.trim());
+}
+
+export function supportsThinkingLevel(provider: AiProvider, model: string): boolean {
+  if (provider === 'openai') return isOpenAiThinkingModel(model);
+  if (provider === 'gemini' || provider === 'vertex') return isGeminiThinkingModel(model);
+  return false;
+}
+
 export interface ActiveProviderModelPair {
   provider: AiProvider;
   model: string;
@@ -148,6 +164,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       enabled: true,
       provider: 'openai',
       model: 'gpt-5.5-2026-04-23',
+      thinkingLevel: 'high',
       reasoningEffort: 'high',
       verbosity: 'high',
       maxOutputTokens: 24000,
@@ -156,6 +173,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       enabled: true,
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
+      thinkingLevel: 'medium',
       reasoningEffort: 'medium',
       verbosity: 'high',
       maxOutputTokens: 16000,
@@ -164,6 +182,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       enabled: true,
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
+      thinkingLevel: 'low',
       reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 6000,
@@ -196,8 +215,8 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
 };
 
 const AGENTS: AgentType[] = ['SCRIBE', 'EDITOR', 'GUIDE', 'NARRATOR', 'CONFIDANT', 'ONIRIQUE'];
-const REASONING_VALUES = new Set(['low', 'medium', 'high']);
-const VERBOSITY_VALUES = new Set(['low', 'medium', 'high']);
+const THINKING_VALUES = new Set<AiThinkingLevel>(['low', 'medium', 'high']);
+const VERBOSITY_VALUES = new Set<AiThinkingLevel>(['low', 'medium', 'high']);
 const ALLOWED_PROVIDERS = new Set<AiProvider>(['openai', 'vertex', 'gemini']);
 const DEFAULT_GOOGLE_KNOBS: Record<
   AgentType,
@@ -235,6 +254,10 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function isThinkingLevel(value: unknown): value is AiThinkingLevel {
+  return typeof value === 'string' && THINKING_VALUES.has(value as AiThinkingLevel);
+}
+
 function isAllowedModel(_provider: AiProvider, model: string): boolean {
   if (typeof model !== 'string' || model.trim().length === 0) return false;
   const normalized = model.trim();
@@ -264,6 +287,7 @@ export function assertSavableAgentModel(
   agent: AgentType,
   provider: AiProvider,
   model: string,
+  thinkingLevel?: AiThinkingLevel,
 ): void {
   if (!ALLOWED_PROVIDERS.has(provider)) {
     throw new Error(`${agent} — provider non autorisé: ${provider}`);
@@ -274,6 +298,12 @@ export function assertSavableAgentModel(
   if (!modelSupportsAgent(model, agent)) {
     const missing = missingAgentCapabilities(model, agent).map(capabilityLabel).join(' + ');
     throw new Error(`${agent} — ${model} ne supporte pas ${missing}.`);
+  }
+  if (!supportsThinkingLevel(provider, model)) {
+    throw new Error(`${agent} — ${model} ne supporte pas un niveau de réflexion explicite.`);
+  }
+  if (!thinkingLevel || !THINKING_VALUES.has(thinkingLevel)) {
+    throw new Error(`${agent} — sélectionnez un niveau de réflexion: low, medium ou high.`);
   }
 }
 
@@ -327,16 +357,33 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     maxOutputTokens: normalizedMaxTokens,
   };
 
-  if (provider === 'openai' && model.startsWith('gpt-5.')) {
-    const reasoningValid =
-      typeof value.reasoningEffort === 'string' && REASONING_VALUES.has(value.reasoningEffort);
+  const rawThinkingLevel = value.thinkingLevel ??
+    (provider === 'openai' ? value.reasoningEffort : undefined);
+  if (rawThinkingLevel !== undefined && !isThinkingLevel(rawThinkingLevel)) {
+    issues.push(`${agent}: thinkingLevel invalide — sélection manuelle requise`);
+  }
+  const thinkingLevel = isThinkingLevel(rawThinkingLevel) ? rawThinkingLevel : undefined;
+
+  if (supportsThinkingLevel(provider, model) && thinkingLevel) {
+    result.thinkingLevel = thinkingLevel;
+  }
+
+  if (provider === 'openai' && isOpenAiThinkingModel(model)) {
+    const effectiveThinking =
+      result.thinkingLevel ??
+      (isThinkingLevel(fallback.thinkingLevel)
+        ? fallback.thinkingLevel
+        : isThinkingLevel(fallback.reasoningEffort)
+          ? fallback.reasoningEffort
+          : undefined);
+    if (effectiveThinking) {
+      result.thinkingLevel = effectiveThinking;
+      result.reasoningEffort = effectiveThinking;
+    }
     const verbosityValid =
-      typeof value.verbosity === 'string' && VERBOSITY_VALUES.has(value.verbosity);
-    result.reasoningEffort = reasoningValid
-      ? (value.reasoningEffort as 'low' | 'medium' | 'high')
-      : (fallback.reasoningEffort ?? 'medium');
+      typeof value.verbosity === 'string' && VERBOSITY_VALUES.has(value.verbosity as AiThinkingLevel);
     result.verbosity = verbosityValid
-      ? (value.verbosity as 'low' | 'medium' | 'high')
+      ? (value.verbosity as AiThinkingLevel)
       : (fallback.verbosity ?? 'medium');
     return result;
   }
