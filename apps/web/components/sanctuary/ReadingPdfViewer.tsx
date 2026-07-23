@@ -123,9 +123,9 @@ export function ReadingPdfViewer({
 
   return (
     <div
-      className={`flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border border-ivoire-500/[0.06] bg-[#050A18] ${className}`}
+      className={`flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border border-[rgba(90,148,205,0.18)] bg-[#E4EFF8] ${className}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-ivoire-500/8 bg-brume-800/90 px-4 py-3 sm:px-6">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgba(90,148,205,0.14)] bg-[rgba(242,250,255,0.96)] px-4 py-3 backdrop-blur-xl sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ivoire-400/12 text-ivoire-400">
             <FileText className="h-5 w-5" />
@@ -183,12 +183,12 @@ export function ReadingPdfViewer({
         </div>
       </div>
 
-      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto bg-[#030510]">
+      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto bg-[#D8E9F4]">
         {isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#050A18]/80">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(232,245,252,0.85)] backdrop-blur-sm">
             <div className="px-4 text-center">
-              <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-ivoire-400" />
-              <p className="text-sm text-brume-200">Chargement de votre lecture...</p>
+              <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-[#8a6820]" />
+              <p className="text-sm text-[#385c7a]">Chargement de votre lecture...</p>
             </div>
           </div>
         )}
@@ -197,12 +197,12 @@ export function ReadingPdfViewer({
           <div className="flex min-h-[50vh] items-center justify-center px-4">
             <div className="max-w-sm text-center">
               <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-400" />
-              <p className="mb-1 font-medium text-white">Impossible d&apos;afficher le PDF</p>
-              <p className="mb-4 text-sm text-brume-200">{error}</p>
+              <p className="mb-1 font-medium text-[#0d1f35]">Impossible d&apos;afficher le PDF</p>
+              <p className="mb-4 text-sm text-[#385c7a]">{error}</p>
               <button
                 type="button"
                 onClick={() => setReloadKey((k) => k + 1)}
-                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-ivoire-400/12 px-4 py-2.5 text-sm font-medium text-ivoire-400 hover:bg-ivoire-400/18"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/70 px-4 py-2.5 text-sm font-medium text-[#385c7a] hover:bg-white/90"
               >
                 <RefreshCw className="h-4 w-4" />
                 Réessayer

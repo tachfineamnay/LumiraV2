@@ -393,6 +393,104 @@
     color: #7898b8 !important;
   }
 
+  /* ── LEGACY TOKEN OVERRIDES (stellar-*, abyss-*) ──
+     ReadingPreparation.tsx and other older components still use these.
+     Override them here to avoid touching the large component files.
+  */
+
+  /* stellar text → dark navy on light bg */
+  .sanctuaire-aube .text-stellar-100 {
+    color: #0d1f35;
+  }
+  .sanctuaire-aube .text-stellar-200 {
+    color: #1a3450;
+  }
+  .sanctuaire-aube .text-stellar-300 {
+    color: #284060;
+  }
+  .sanctuaire-aube .text-stellar-400 {
+    color: #3a5870;
+  }
+  .sanctuaire-aube .text-stellar-500 {
+    color: #587898;
+  }
+  .sanctuaire-aube .text-stellar-600 {
+    color: #7898b8;
+  }
+
+  /* abyss backgrounds → white/sky glass on light bg */
+  .sanctuaire-aube .bg-abyss-600 {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+  }
+  .sanctuaire-aube .bg-abyss-600\/50 {
+    background-color: rgba(255, 255, 255, 0.4) !important;
+  }
+  .sanctuaire-aube .bg-abyss-700 {
+    background-color: rgba(240, 248, 255, 0.65) !important;
+  }
+  .sanctuaire-aube .bg-abyss-700\/50 {
+    background-color: rgba(240, 248, 255, 0.42) !important;
+  }
+  .sanctuaire-aube .bg-abyss-800 {
+    background-color: rgba(230, 244, 255, 0.75) !important;
+  }
+  .sanctuaire-aube .bg-abyss-800\/50 {
+    background-color: rgba(230, 244, 255, 0.45) !important;
+  }
+  .sanctuaire-aube .bg-abyss-500\/50 {
+    background-color: rgba(255, 255, 255, 0.35) !important;
+  }
+
+  /* brume-800 extra opacities not yet covered */
+  .sanctuaire-aube .bg-brume-800\/90 {
+    background-color: rgba(242, 250, 255, 0.94) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/85 {
+    background-color: rgba(242, 250, 255, 0.9) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/80 {
+    background-color: rgba(242, 250, 255, 0.86) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/70 {
+    background-color: rgba(242, 250, 255, 0.8) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/60 {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/50 {
+    background-color: rgba(255, 255, 255, 0.68) !important;
+  }
+
+  /* border-white/* → sky blue borders */
+  .sanctuaire-aube .border-white\/10 {
+    border-color: rgba(90, 145, 200, 0.22) !important;
+  }
+  .sanctuaire-aube .border-white\/\[0\.08\] {
+    border-color: rgba(90, 145, 200, 0.2) !important;
+  }
+  .sanctuaire-aube .border-white\/\[0\.06\] {
+    border-color: rgba(90, 145, 200, 0.16) !important;
+  }
+  .sanctuaire-aube .border-white\/\[0\.05\] {
+    border-color: rgba(90, 145, 200, 0.13) !important;
+  }
+
+  /* horizon-400 focus rings → still golden on light bg (visible) */
+  .sanctuaire-aube .focus\:border-horizon-400:focus {
+    border-color: rgba(180, 136, 40, 0.7) !important;
+  }
+  .sanctuaire-aube .focus-visible\:ring-horizon-400\/30:focus-visible {
+    --tw-ring-color: rgba(180, 136, 40, 0.25);
+  }
+
+  /* hover:bg-white/* → sky tint */
+  .sanctuaire-aube .hover\:bg-white\/\[0\.05\]:hover {
+    background-color: rgba(195, 222, 245, 0.35) !important;
+  }
+  .sanctuaire-aube .hover\:bg-white\/\[0\.04\]:hover {
+    background-color: rgba(195, 222, 245, 0.28) !important;
+  }
+
   /* ── GLASS SURFACES — frosted white on morning sky ── */
 
   .glass-aube {

@@ -142,13 +142,13 @@ const EMPTY_DATA: ReadingPreparationData = {
 };
 
 const baseInputClass =
-  'mt-2 w-full rounded-xl border bg-abyss-600 px-3 py-3 text-base text-stellar-100 placeholder:text-stellar-600 outline-none transition-colors focus-visible:ring-2';
+  'mt-2 w-full rounded-xl border bg-white/60 px-3 py-3 text-base text-[#0d1f35] placeholder:text-[#7898b8] backdrop-blur-sm outline-none transition-colors focus-visible:ring-2';
 
 function inputClass(hasError: boolean) {
   return `${baseInputClass} ${
     hasError
-      ? 'border-rose-400/60 focus:border-rose-300 focus-visible:ring-rose-300/30'
-      : 'border-white/10 focus:border-horizon-400 focus-visible:ring-horizon-400/30'
+      ? 'border-rose-400/60 focus:border-rose-400 focus-visible:ring-rose-300/30'
+      : 'border-[rgba(90,148,205,0.22)] focus:border-[#5a94cd] focus-visible:ring-[rgba(90,148,205,0.20)]'
   }`;
 }
 
