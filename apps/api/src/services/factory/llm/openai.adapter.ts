@@ -47,7 +47,7 @@ export class OpenAiAdapter implements LlmAdapter {
   private openAIParameters(req: LlmRequest): Record<string, unknown> {
     if (req.model.startsWith('gpt-5.')) {
       return {
-        reasoning: { effort: req.reasoningEffort ?? 'medium' },
+        reasoning: { effort: req.thinkingLevel ?? req.reasoningEffort ?? 'medium' },
         max_output_tokens: req.maxTokens,
       };
     }
