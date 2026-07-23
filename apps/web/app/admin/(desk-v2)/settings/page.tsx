@@ -27,8 +27,9 @@ type AgentKey = 'SCRIBE' | 'EDITOR' | 'GUIDE' | 'NARRATOR' | 'CONFIDANT' | 'ONIR
 type TabId = 'readiness' | 'credentials' | 'personality' | 'agents' | 'models';
 type ProbeStatus = 'ok' | 'error' | 'not_tested';
 type ProviderId = 'openai' | 'vertex' | 'gemini';
-type ProviderMode = 'openai_only' | 'per_agent';
-type ModelId = string;
+type Capability = 'text' | 'vision' | 'structured' | 'long_text' | 'fast_text';
+
+type AgentVisualStatus = 'disabled' | 'functional' | 'failed' | 'detected' | 'missing';
 
 interface PromptWithMeta {
   key: string;
@@ -60,7 +61,7 @@ interface PromptHistory {
 interface AgentModelConfig {
   enabled: boolean;
   provider: ProviderId;
-  model: ModelId;
+  model: string;
   reasoningEffort?: 'low' | 'medium' | 'high';
   verbosity?: 'low' | 'medium' | 'high';
   temperature?: number;
@@ -69,29 +70,26 @@ interface AgentModelConfig {
 }
 
 interface ModelConfig {
-  providerMode: ProviderMode;
+  providerMode: 'per_agent';
   agents: Record<AgentKey, AgentModelConfig>;
 }
 
 interface CatalogModel {
   id: string;
-  label: string;
   displayName?: string;
-  ownedBy?: string;
-  createdAt?: number;
-  status?: 'verified' | 'supported' | 'unavailable' | 'unknown';
-  callable?: boolean;
   detected?: boolean;
+  callable?: boolean | null;
+  testedAt?: string;
   error?: string;
-  isInaccessible?: boolean;
 }
 
 interface ProviderCatalog {
   configured: boolean;
   models: CatalogModel[];
   error?: string;
-  source: 'live' | 'supported' | 'unavailable' | 'error' | 'seed';
+  source: 'live' | 'supported' | 'unavailable' | 'error';
   location?: string;
+  detectedCount?: number;
 }
 
 interface AvailableModelsResponse {
@@ -99,6 +97,18 @@ interface AvailableModelsResponse {
   openai: ProviderCatalog;
   gemini: ProviderCatalog;
   vertex: ProviderCatalog;
+}
+
+interface ModelProbeSnapshot {
+  provider: ProviderId;
+  model: string;
+  configured: boolean;
+  text: ProbeStatus;
+  multimodal: ProbeStatus;
+  structured: ProbeStatus;
+  lastError?: string;
+  lastTestedAt?: string;
+  location?: string;
 }
 
 interface ProviderStatus {
@@ -113,12 +123,14 @@ interface ProviderStatus {
   structured?: ProbeStatus;
   credentialSource?: string;
   location?: string;
+  activeModels?: string[];
 }
 
 interface CredentialsStatus {
   openai: ProviderStatus;
   gemini: ProviderStatus;
   vertex: ProviderStatus;
+  modelProbes?: ModelProbeSnapshot[];
 }
 
 interface ReadinessCheck {
@@ -199,38 +211,12 @@ const AGENTS: Array<{ key: AgentKey; label: string; description: string }> = [
   { key: 'SCRIBE', label: 'SCRIBE', description: 'Lecture principale multimodale et synthèse' },
   { key: 'EDITOR', label: 'EDITOR', description: 'Corrections guidées par l’expert' },
   { key: 'GUIDE', label: 'GUIDE', description: 'Parcours de 30 jours en lots de 10 jours' },
-  {
-    key: 'NARRATOR',
-    label: 'NARRATOR',
-    description: 'Adaptation de la lecture validée pour l’audio',
-  },
-  {
-    key: 'CONFIDANT',
-    label: 'CONFIDANT',
-    description: 'Compagnon optionnel, désactivé au lancement',
-  },
-  {
-    key: 'ONIRIQUE',
-    label: 'ONIRIQUE',
-    description: 'Interprétation des rêves, désactivée au lancement',
-  },
+  { key: 'NARRATOR', label: 'NARRATOR', description: 'Adaptation de la lecture pour l’audio' },
+  { key: 'CONFIDANT', label: 'CONFIDANT', description: 'Compagnon optionnel' },
+  { key: 'ONIRIQUE', label: 'ONIRIQUE', description: 'Interprétation des rêves' },
 ];
 
-const SEED_OPENAI_MODELS: CatalogModel[] = [
-  { id: 'gpt-5.5-2026-04-23', label: 'GPT-5.5 · snapshot 23/04/2026' },
-  { id: 'gpt-5.4-2026-03-05', label: 'GPT-5.4 · snapshot 05/03/2026' },
-  { id: 'gpt-4o-2024-11-20', label: 'GPT-4o · snapshot 20/11/2024' },
-];
-
-const SEED_GOOGLE_MODELS: CatalogModel[] = [
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-];
-
-const AGENT_REQUIRED_CAPS: Record<
-  AgentKey,
-  Array<'text' | 'vision' | 'structured' | 'long_text' | 'fast_text'>
-> = {
+const AGENT_REQUIRED_CAPS: Record<AgentKey, Capability[]> = {
   SCRIBE: ['text', 'vision', 'structured'],
   GUIDE: ['text', 'structured'],
   EDITOR: ['text'],
@@ -239,82 +225,26 @@ const AGENT_REQUIRED_CAPS: Record<
   ONIRIQUE: ['text', 'structured'],
 };
 
-const MODEL_CAPS: Record<
-  string,
-  Array<'text' | 'vision' | 'structured' | 'long_text' | 'fast_text'>
-> = {
-  'gpt-5.5-2026-04-23': ['text', 'vision', 'structured', 'long_text'],
-  'gpt-5.4-2026-03-05': ['text', 'vision', 'structured', 'long_text'],
-  'gpt-4o-2024-11-20': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
-  'gemini-2.5-pro': ['text', 'vision', 'structured', 'long_text'],
-  'gemini-2.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
-};
-
-function modelSupportsAgent(modelId: string, agent: AgentKey): boolean {
-  const required = AGENT_REQUIRED_CAPS[agent];
-  const available = new Set(MODEL_CAPS[modelId] ?? ['text']);
-  return required.every((cap) => available.has(cap));
-}
-
 const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
   { id: 'openai', label: 'OpenAI' },
-  { id: 'vertex', label: 'Vertex AI — projet Google Cloud' },
-  { id: 'gemini', label: 'Gemini API — clé AI Studio' },
+  { id: 'vertex', label: 'Vertex AI — Google Cloud' },
+  { id: 'gemini', label: 'Gemini API — AI Studio' },
 ];
-
-function catalogSourceLabel(source: ProviderCatalog['source'] | undefined): string {
-  switch (source) {
-    case 'live':
-      return 'Live vérifié';
-    case 'supported':
-      return 'Supporté non vérifié';
-    case 'unavailable':
-      return 'Indisponible';
-    case 'error':
-      return 'Erreur de catalogue';
-    case 'seed':
-      return 'Supporté non vérifié';
-    default:
-      return 'Inconnu';
-  }
-}
-
-function seedModelsForProvider(provider: ProviderId): CatalogModel[] {
-  return (provider === 'openai' ? SEED_OPENAI_MODELS : SEED_GOOGLE_MODELS).map((model) => ({
-    ...model,
-    status: 'supported' as const,
-  }));
-}
-
-function sanitizeOperationalModels(
-  config: ModelConfig,
-  _resolveModels: (provider: ProviderId, agent?: AgentKey) => CatalogModel[],
-): ModelConfig {
-  // Règle produit : Ne jamais changer automatiquement les modèles actifs en production
-  return config;
-}
 
 function messageFromError(error: unknown): string {
   const value = error as {
-    response?: { status?: number; data?: { message?: string; error?: string } };
+    response?: { status?: number; data?: { message?: string | string[]; error?: string } };
     message?: string;
   };
-  if (value.response?.status === 403) {
-    return 'Accès refusé : le compte connecté doit être ADMIN.';
-  }
-  return (
-    value.response?.data?.message ||
-    value.response?.data?.error ||
-    value.message ||
-    'Erreur inconnue'
-  );
+  if (value.response?.status === 403) return 'Accès refusé : le compte connecté doit être ADMIN.';
+  const message = value.response?.data?.message;
+  if (Array.isArray(message)) return message.join(' · ');
+  return message || value.response?.data?.error || value.message || 'Erreur inconnue';
 }
 
 function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <section
-      className={cn('rounded-2xl border border-desk-border bg-desk-surface shadow-sm', className)}
-    >
+    <section className={cn('rounded-2xl border border-desk-border bg-desk-surface shadow-sm', className)}>
       {children}
     </section>
   );
@@ -325,8 +255,8 @@ function Pill({ level, children }: { level: 'pass' | 'warning' | 'fail'; childre
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
-        level === 'pass' && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600',
-        level === 'warning' && 'border-amber-500/30 bg-amber-500/10 text-amber-600',
+        level === 'pass' && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700',
+        level === 'warning' && 'border-amber-500/30 bg-amber-500/10 text-amber-700',
         level === 'fail' && 'border-red-500/30 bg-red-500/10 text-red-600',
       )}
     >
@@ -406,21 +336,15 @@ function PromptPanel({
                 ? `Baseline système v${prompt.version}`
                 : 'Défaut code'}
           </Pill>
-          {value !== defaultValue && (
-            <span className="text-xs text-desk-muted">Différent du défaut</span>
-          )}
+          {value !== defaultValue && <span className="text-xs text-desk-muted">Différent du défaut</span>}
         </div>
         <button
           type="button"
           onClick={toggleHistory}
           disabled={historyLoading}
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-desk-muted hover:bg-desk-hover"
         >
-          {historyLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <History className="h-4 w-4" />
-          )}
+          {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <History className="h-4 w-4" />}
           Historique
         </button>
       </div>
@@ -434,15 +358,15 @@ function PromptPanel({
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-desk-muted">
         <span>{value.length.toLocaleString('fr-FR')} caractères</span>
-        {dirty && <span className="text-amber-600">Modification non enregistrée</span>}
+        {dirty && <span className="text-amber-700">Modification non enregistrée</span>}
       </div>
 
       {dirty && (
         <input
           value={comment}
           onChange={(event) => setComment(event.target.value)}
-          placeholder="Note de version recommandée"
-          className="w-full rounded-xl border border-desk-border bg-desk-input px-3 py-2.5 text-sm text-desk-text outline-none focus:border-amber-500/60"
+          placeholder="Note de version"
+          className="w-full rounded-xl border border-desk-border bg-desk-input px-3 py-2.5 text-sm text-desk-text outline-none"
         />
       )}
 
@@ -451,7 +375,7 @@ function PromptPanel({
           type="button"
           onClick={() => onSave(promptKey, value, comment)}
           disabled={!dirty || saving || !value.trim()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Enregistrer une version
@@ -461,7 +385,7 @@ function PromptPanel({
             type="button"
             onClick={() => onReset(promptKey)}
             disabled={saving}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-desk-border px-4 py-2 text-sm text-desk-text hover:bg-desk-hover"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-desk-border px-4 py-2 text-sm text-desk-text"
           >
             <RotateCcw className="h-4 w-4" />
             Revenir au défaut
@@ -472,7 +396,7 @@ function PromptPanel({
             type="button"
             onClick={() => void onRestoreLatestCustom(promptKey)}
             disabled={saving}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/20"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-700"
           >
             <History className="h-4 w-4" />
             Réactiver dernière perso
@@ -486,25 +410,21 @@ function PromptPanel({
             <p className="text-sm text-desk-muted">Aucune version enregistrée.</p>
           ) : (
             history.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 rounded-lg bg-desk-card p-3"
-              >
+              <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-desk-card p-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm text-desk-text">v{item.version}</span>
                     {item.isActive && <Pill level="pass">Active</Pill>}
                   </div>
                   <p className="truncate text-xs text-desk-muted">
-                    {item.comment || 'Sans note'} ·{' '}
-                    {new Date(item.createdAt).toLocaleString('fr-FR')}
+                    {item.comment || 'Sans note'} · {new Date(item.createdAt).toLocaleString('fr-FR')}
                   </p>
                 </div>
                 {!item.isActive && (
                   <button
                     type="button"
                     onClick={() => restore(item.version)}
-                    className="rounded-lg px-3 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-500/10"
+                    className="rounded-lg px-3 py-2 text-xs font-semibold text-amber-700"
                   >
                     Restaurer
                   </button>
@@ -525,7 +445,7 @@ export default function SettingsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<ProviderId | null>(null);
   const [dirtyPrompt, setDirtyPrompt] = useState(false);
   const [expandedAgent, setExpandedAgent] = useState<AgentKey | null>('SCRIBE');
   const [prompts, setPrompts] = useState<Record<string, PromptWithMeta> | null>(null);
@@ -536,9 +456,13 @@ export default function SettingsPage() {
   const [credentials, setCredentials] = useState<CredentialsStatus | null>(null);
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
-  const [testingProvider, setTestingProvider] = useState<ProviderId | null>(null);
   const [availableModels, setAvailableModels] = useState<AvailableModelsResponse | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
+
+  const clearFeedback = () => {
+    setActionError(null);
+    setSuccess(null);
+  };
 
   const loadCatalog = useCallback(async (force = false) => {
     setCatalogLoading(true);
@@ -548,82 +472,11 @@ export default function SettingsPage() {
         : await expertApi.get('/expert/settings/available-models');
       setAvailableModels(data);
     } catch (error) {
-      console.warn('Model catalog unavailable, using seeds', error);
-      setAvailableModels(null);
+      setActionError(messageFromError(error));
     } finally {
       setCatalogLoading(false);
     }
   }, []);
-
-  const modelsForProvider = useCallback(
-    (provider: ProviderId, agent?: AgentKey): CatalogModel[] => {
-      const catalog =
-        provider === 'openai'
-          ? availableModels?.openai
-          : provider === 'vertex'
-            ? availableModels?.vertex
-            : availableModels?.gemini;
-
-      let base: CatalogModel[] = [];
-      if (catalog?.models?.length) {
-        base = catalog.models
-          .filter((m) => m.callable === true || m.status === 'verified')
-          .map((m) => ({
-            id: m.id,
-            label: `${m.displayName || m.id} · Fonctionnel`,
-            displayName: m.displayName || m.id,
-            callable: true,
-            status: 'verified' as const,
-          }));
-      } else {
-        base = seedModelsForProvider(provider).map((m) => ({
-          ...m,
-          label: `${m.label || m.id} · Non vérifié`,
-        }));
-      }
-
-      if (agent) {
-        base = base.filter((model) => modelSupportsAgent(model.id, agent));
-      }
-
-      if (agent && modelConfig?.agents?.[agent]) {
-        const activeModelId = modelConfig.agents[agent].model;
-        const activeProvider =
-          modelConfig.providerMode === 'openai_only'
-            ? 'openai'
-            : modelConfig.agents[agent].provider;
-
-        if (activeProvider === provider && !base.some((m) => m.id === activeModelId)) {
-          base.unshift({
-            id: activeModelId,
-            label: `⚠️ ${activeModelId} (Inaccessible avec les credentials actuels)`,
-            displayName: activeModelId,
-            callable: false,
-            isInaccessible: true,
-          });
-        }
-      }
-
-      return base;
-    },
-    [availableModels, modelConfig],
-  );
-
-  const defaultModelForProvider = useCallback(
-    (provider: ProviderId, agent?: AgentKey): string => {
-      const options = modelsForProvider(provider, agent);
-      const verified = options.find((option) => option.status === 'verified');
-      return (
-        verified?.id ||
-        options[0]?.id ||
-        seedModelsForProvider(provider).find((model) =>
-          agent ? modelSupportsAgent(model.id, agent) : true,
-        )?.id ||
-        seedModelsForProvider(provider)[0].id
-      );
-    },
-    [modelsForProvider],
-  );
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -639,7 +492,10 @@ export default function SettingsPage() {
         ]);
       setPrompts(promptResponse.data);
       setDefaults(defaultResponse.data);
-      const loadedConfig = modelResponse.data.config as ModelConfig;
+      const loadedConfig = {
+        ...(modelResponse.data.config as ModelConfig),
+        providerMode: 'per_agent' as const,
+      };
       setModelConfig(loadedConfig);
       setSavedModelConfig(loadedConfig);
       setModelConfigMeta(modelResponse.data.meta);
@@ -647,13 +503,6 @@ export default function SettingsPage() {
       setReadiness(readinessResponse.data);
       void loadCatalog(false);
     } catch (error) {
-      setPrompts(null);
-      setDefaults(null);
-      setModelConfig(null);
-      setSavedModelConfig(null);
-      setModelConfigMeta(null);
-      setCredentials(null);
-      setReadiness(null);
       setLoadError(messageFromError(error));
     } finally {
       setLoading(false);
@@ -679,10 +528,92 @@ export default function SettingsPage() {
     return () => window.removeEventListener('beforeunload', beforeUnload);
   }, [dirtyPrompt, modelDirty]);
 
-  const clearFeedback = () => {
-    setActionError(null);
-    setSuccess(null);
-  };
+  const providerCatalog = useCallback(
+    (provider: ProviderId): ProviderCatalog | undefined =>
+      provider === 'openai'
+        ? availableModels?.openai
+        : provider === 'vertex'
+          ? availableModels?.vertex
+          : availableModels?.gemini,
+    [availableModels],
+  );
+
+  const findProbe = useCallback(
+    (provider: ProviderId, model: string): ModelProbeSnapshot | undefined =>
+      credentials?.modelProbes?.find(
+        (probe) => probe.provider === provider && probe.model === model,
+      ),
+    [credentials],
+  );
+
+  const blockingCapabilities = (agent: AgentKey): Capability[] =>
+    AGENT_REQUIRED_CAPS[agent].filter((cap) =>
+      cap === 'text' || cap === 'vision' || cap === 'structured',
+    );
+
+  const probePasses = useCallback(
+    (agent: AgentKey, probe?: ModelProbeSnapshot): boolean => {
+      if (!probe) return false;
+      return blockingCapabilities(agent).every((cap) => {
+        if (cap === 'text') return probe.text === 'ok';
+        if (cap === 'vision') return probe.multimodal === 'ok';
+        return probe.structured === 'ok';
+      });
+    },
+    [],
+  );
+
+  const probeFails = useCallback(
+    (agent: AgentKey, probe?: ModelProbeSnapshot): boolean => {
+      if (!probe) return false;
+      return blockingCapabilities(agent).some((cap) => {
+        if (cap === 'text') return probe.text === 'error';
+        if (cap === 'vision') return probe.multimodal === 'error';
+        return probe.structured === 'error';
+      });
+    },
+    [],
+  );
+
+  const modelsForProvider = useCallback(
+    (provider: ProviderId, agent: AgentKey): CatalogModel[] => {
+      const catalog = providerCatalog(provider);
+      const models = [...(catalog?.models ?? [])].sort((a, b) =>
+        (a.displayName || a.id).localeCompare(b.displayName || b.id),
+      );
+      const current = modelConfig?.agents[agent];
+      if (current?.provider === provider && current.model && !models.some((model) => model.id === current.model)) {
+        models.unshift({ id: current.model, displayName: current.model, detected: false, callable: null });
+      }
+      return models;
+    },
+    [modelConfig, providerCatalog],
+  );
+
+  const agentVisualStatus = useCallback(
+    (agent: AgentKey, item: AgentModelConfig): AgentVisualStatus => {
+      if (!item.enabled) return 'disabled';
+      if (!item.model) return 'missing';
+      const probe = findProbe(item.provider, item.model);
+      if (probeFails(agent, probe)) return 'failed';
+      if (probePasses(agent, probe)) return 'functional';
+      return providerCatalog(item.provider)?.models.some((model) => model.id === item.model)
+        ? 'detected'
+        : 'missing';
+    },
+    [findProbe, probeFails, probePasses, providerCatalog],
+  );
+
+  const providerUsed = useCallback(
+    (provider: ProviderId): boolean =>
+      Boolean(
+        modelConfig &&
+          Object.values(modelConfig.agents).some(
+            (agent) => agent.enabled && agent.provider === provider,
+          ),
+      ),
+    [modelConfig],
+  );
 
   const savePrompt = async (key: string, value: string, comment?: string) => {
     clearFeedback();
@@ -736,13 +667,11 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       const { data } = await expertApi.post('/expert/settings/prompts-restore-latest-customs');
-      const count = data.restored?.length ?? 0;
       setSuccess(
-        count > 0
-          ? `${count} configuration(s) personnalisée(s) réactivée(s).`
+        data.restored?.length
+          ? `${data.restored.length} configuration(s) personnalisée(s) réactivée(s).`
           : 'Aucune version personnalisée à réactiver.',
       );
-      setDirtyPrompt(false);
       await loadAll();
     } catch (error) {
       setActionError(messageFromError(error));
@@ -753,7 +682,6 @@ export default function SettingsPage() {
 
   const runProviderTest = async (provider: ProviderId) => {
     clearFeedback();
-    setTesting(true);
     setTestingProvider(provider);
     setTestResult(null);
     try {
@@ -766,22 +694,22 @@ export default function SettingsPage() {
       const { data } = await expertApi.post(path);
       setTestResult(data);
       if (data.success) {
-        const modelCount = data.models?.length ?? 1;
         setSuccess(
-          `${provider} validé (${modelCount} modèle${modelCount > 1 ? 's' : ''} · texte/vision/JSON selon besoins).`,
+          data.models?.length
+            ? `${provider} validé sur ${data.models.length} modèle(s) actif(s).`
+            : `${provider} configuré mais non utilisé : aucun appel lancé.`,
         );
       } else {
-        const failed =
+        setActionError(
           data.models?.find((entry: { success: boolean }) => !entry.success)?.error ||
-          data.error ||
-          `Le test ${provider} a échoué.`;
-        setActionError(failed);
+            data.error ||
+            `Le test ${provider} a échoué.`,
+        );
       }
       await loadAll();
     } catch (error) {
       setActionError(messageFromError(error));
     } finally {
-      setTesting(false);
       setTestingProvider(null);
     }
   };
@@ -791,17 +719,11 @@ export default function SettingsPage() {
     clearFeedback();
     setSaving(true);
     try {
-      const payload = {
+      const { data } = await expertApi.post('/expert/settings/model-config/test-and-apply', {
         providerMode: 'per_agent',
         agents: modelConfig.agents,
-      };
-      const { data } = await expertApi.post(
-        '/expert/settings/model-config/test-and-apply',
-        payload,
-      );
-      setSuccess(
-        data.message || 'Configuration des modèles testée et appliquée au runtime avec succès.',
-      );
+      });
+      setSuccess(data.message || 'Configuration IA testée et appliquée.');
       await loadAll();
     } catch (error) {
       setActionError(messageFromError(error));
@@ -813,34 +735,23 @@ export default function SettingsPage() {
   const updateAgent = (agent: AgentKey, patch: Partial<AgentModelConfig>) => {
     setModelConfig((current) => {
       if (!current) return current;
-      const nextAgent = { ...current.agents[agent], ...patch };
-      if (patch.provider && patch.provider !== current.agents[agent].provider) {
-        const options = modelsForProvider(patch.provider, agent);
-        const verified = options.find((option) => option.status === 'verified');
-        const allowed = options.map((option) => option.id);
-        if (!allowed.includes(nextAgent.model)) {
-          nextAgent.model = verified?.id || defaultModelForProvider(patch.provider, agent);
-        }
-        if (patch.provider === 'openai' && nextAgent.model.startsWith('gpt-5.')) {
-          nextAgent.reasoningEffort = nextAgent.reasoningEffort || 'medium';
-          nextAgent.verbosity = nextAgent.verbosity || 'medium';
-        } else {
-          nextAgent.temperature = nextAgent.temperature ?? 0.4;
-          nextAgent.topP = nextAgent.topP ?? 0.9;
-        }
+      const previous = current.agents[agent];
+      const providerChanged = patch.provider && patch.provider !== previous.provider;
+      const next: AgentModelConfig = {
+        ...previous,
+        ...patch,
+        ...(providerChanged ? { model: '' } : {}),
+      };
+      if (providerChanged && patch.provider === 'openai') {
+        next.reasoningEffort = next.reasoningEffort || 'medium';
+        next.verbosity = next.verbosity || 'medium';
       }
       return {
         ...current,
-        agents: {
-          ...current.agents,
-          [agent]: nextAgent,
-        },
+        providerMode: 'per_agent',
+        agents: { ...current.agents, [agent]: next },
       };
     });
-  };
-
-  const updateProviderMode = (providerMode: ProviderMode) => {
-    setModelConfig((current) => (current ? { ...current, providerMode } : current));
   };
 
   const tabs = useMemo(
@@ -869,29 +780,18 @@ export default function SettingsPage() {
     return (
       <div className="p-4 sm:p-6">
         <Card className="mx-auto max-w-2xl border-red-500/30 p-6">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="mt-0.5 h-6 w-6 shrink-0 text-red-600" />
-            <div>
-              <h1 className="text-lg font-semibold text-desk-text">
-                Configuration IA non vérifiée
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-desk-muted">
-                Le Desk n’affiche aucune valeur locale de secours. La configuration réelle doit être
-                lisible avant la production.
-              </p>
-              <p className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
-                {loadError || 'Réponse de configuration incomplète.'}
-              </p>
-              <button
-                type="button"
-                onClick={() => void loadAll()}
-                className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Relire la configuration
-              </button>
-            </div>
-          </div>
+          <h1 className="text-lg font-semibold text-desk-text">Configuration IA non lisible</h1>
+          <p className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
+            {loadError || 'Réponse de configuration incomplète.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadAll()}
+            className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Relire la configuration
+          </button>
         </Card>
       </div>
     );
@@ -906,9 +806,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-desk-text">Contrôle IA de production</h1>
-            <p className="text-xs text-desk-muted">
-              Configuration réelle, snapshots, prompts, vision et coûts
-            </p>
+            <p className="text-xs text-desk-muted">Un choix explicite, un test réel, une application atomique</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -926,7 +824,7 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={() => void loadAll()}
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-desk-border px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-desk-border px-3 text-sm text-desk-muted"
           >
             <RefreshCw className="h-4 w-4" />
             Actualiser
@@ -941,55 +839,30 @@ export default function SettingsPage() {
             'flex items-start gap-2 rounded-xl border p-3 text-sm',
             actionError
               ? 'border-red-500/30 bg-red-500/10 text-red-600'
-              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600',
+              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700',
           )}
         >
-          {actionError ? (
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          ) : (
-            <Check className="mt-0.5 h-4 w-4 shrink-0" />
-          )}
+          {actionError ? <AlertCircle className="mt-0.5 h-4 w-4" /> : <Check className="mt-0.5 h-4 w-4" />}
           <span>{actionError || success}</span>
         </div>
       )}
 
-      {(() => {
-        const promptNeedsRecovery = Object.values(prompts).some(
-          (prompt) => prompt.hasRestorableCustom && !prompt.isCustom,
-        );
-        const modelNeedsRecovery = Boolean(
-          modelConfigMeta?.hasRestorableCustom && !modelConfigMeta.isCustom,
-        );
-        if (!promptNeedsRecovery && !modelNeedsRecovery) return null;
-        return (
-          <Card className="border-amber-500/40 bg-amber-500/5 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-desk-text">
-                  Configuration IA non personnalisée active
-                </p>
-                <p className="mt-1 text-sm text-desk-muted">
-                  Des versions Desk (prompts et/ou modèles) existent en historique. Un deploy peut
-                  avoir réactivé une baseline système — réactivez vos réglages avant le lancement.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void restoreAllLatestCustoms()}
-                disabled={saving}
-                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <History className="h-4 w-4" />
-                )}
-                Réactiver les dernières versions perso
-              </button>
-            </div>
-          </Card>
-        );
-      })()}
+      {modelConfigMeta?.hasRestorableCustom && !modelConfigMeta.isCustom && (
+        <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-desk-text">Une configuration personnalisée existe dans l’historique.</p>
+            <button
+              type="button"
+              onClick={() => void restoreAllLatestCustoms()}
+              disabled={saving}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black"
+            >
+              <History className="h-4 w-4" />
+              Réactiver les dernières versions perso
+            </button>
+          </div>
+        </Card>
+      )}
 
       <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Paramètres IA">
         {tabs.map((tab) => {
@@ -1002,8 +875,8 @@ export default function SettingsPage() {
               className={cn(
                 'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium',
                 activeTab === tab.id
-                  ? 'border-amber-500/30 bg-amber-500/15 text-amber-600'
-                  : 'border-transparent text-desk-muted hover:bg-desk-hover hover:text-desk-text',
+                  ? 'border-amber-500/30 bg-amber-500/15 text-amber-700'
+                  : 'border-transparent text-desk-muted hover:bg-desk-hover',
               )}
             >
               <Icon className="h-4 w-4" />
@@ -1017,41 +890,28 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-desk-muted">Validés</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-600">
-                {readiness.summary.passes}
-              </p>
+              <p className="text-xs uppercase text-desk-muted">Validés</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-700">{readiness.summary.passes}</p>
             </Card>
             <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-desk-muted">À tester</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-600">
-                {readiness.summary.warnings}
-              </p>
+              <p className="text-xs uppercase text-desk-muted">À tester</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-700">{readiness.summary.warnings}</p>
             </Card>
             <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-desk-muted">Blocages</p>
-              <p className="mt-1 text-2xl font-semibold text-red-600">
-                {readiness.summary.failures}
-              </p>
+              <p className="text-xs uppercase text-desk-muted">Blocages</p>
+              <p className="mt-1 text-2xl font-semibold text-red-600">{readiness.summary.failures}</p>
             </Card>
           </div>
 
           <Card className="divide-y divide-desk-border">
             {readiness.checks.map((check) => (
-              <div
-                key={check.id}
-                className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
+              <div key={check.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-desk-text">{check.label}</h2>
                   <p className="mt-1 text-sm text-desk-muted">{check.detail}</p>
                 </div>
                 <Pill level={check.level}>
-                  {check.level === 'pass'
-                    ? 'Validé'
-                    : check.level === 'warning'
-                      ? 'À tester'
-                      : 'Bloquant'}
+                  {check.level === 'pass' ? 'Validé' : check.level === 'warning' ? 'À tester' : 'Bloquant'}
                 </Pill>
               </div>
             ))}
@@ -1060,233 +920,116 @@ export default function SettingsPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="p-5">
               <div className="flex items-center gap-2">
-                <CircleDollarSign className="h-5 w-5 text-amber-600" />
+                <CircleDollarSign className="h-5 w-5 text-amber-700" />
                 <h2 className="font-semibold text-desk-text">Télémétrie récente</h2>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl bg-desk-card p-3">
-                  <p className="text-xl font-semibold text-desk-text">
-                    {readiness.recentRunSummary.count}
-                  </p>
+                  <p className="text-xl font-semibold">{readiness.recentRunSummary.count}</p>
                   <p className="text-xs text-desk-muted">Appels</p>
                 </div>
                 <div className="rounded-xl bg-desk-card p-3">
-                  <p className="text-xl font-semibold text-red-600">
-                    {readiness.recentRunSummary.errors}
-                  </p>
+                  <p className="text-xl font-semibold text-red-600">{readiness.recentRunSummary.errors}</p>
                   <p className="text-xs text-desk-muted">Erreurs</p>
                 </div>
                 <div className="rounded-xl bg-desk-card p-3">
-                  <p className="text-xl font-semibold text-amber-600">
+                  <p className="text-xl font-semibold text-amber-700">
                     ${readiness.recentRunSummary.estimatedCost.toFixed(4)}
                   </p>
                   <p className="text-xs text-desk-muted">Coût</p>
                 </div>
               </div>
             </Card>
-
             <Card className="p-5">
               <h2 className="font-semibold text-desk-text">Source de vérité</h2>
               <dl className="mt-4 space-y-3 text-sm">
                 <div className="flex justify-between gap-3">
                   <dt className="text-desk-muted">Mode</dt>
-                  <dd className="font-mono text-desk-text">
-                    {readiness.effectiveConfig.providerMode}
-                  </dd>
+                  <dd className="font-mono">per_agent</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-desk-muted">Règles actives</dt>
-                  <dd className="font-mono text-desk-text">
-                    {readiness.activeRoutingRules.length}
-                  </dd>
+                  <dt className="text-desk-muted">Règles héritées</dt>
+                  <dd className="font-mono">{readiness.activeRoutingRules.length}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-desk-muted">Vérification</dt>
-                  <dd className="text-right text-desk-text">
-                    {new Date(readiness.generatedAt).toLocaleString('fr-FR')}
-                  </dd>
+                  <dd>{new Date(readiness.generatedAt).toLocaleString('fr-FR')}</dd>
                 </div>
               </dl>
             </Card>
           </div>
-
-          <Card className="overflow-hidden">
-            <div className="border-b border-desk-border p-4">
-              <h2 className="font-semibold text-desk-text">Appels réellement exécutés</h2>
-              <p className="mt-1 text-sm text-desk-muted">
-                Snapshot, source, tokens, durée et coût.
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-xs">
-                <thead className="bg-desk-card text-desk-muted">
-                  <tr>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Agent</th>
-                    <th className="px-4 py-3">Snapshot</th>
-                    <th className="px-4 py-3">Source</th>
-                    <th className="px-4 py-3">Tokens entrée / sortie</th>
-                    <th className="px-4 py-3">Durée</th>
-                    <th className="px-4 py-3">Coût</th>
-                    <th className="px-4 py-3">État</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-desk-border">
-                  {readiness.recentRuns.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-desk-muted">
-                        Aucun appel enregistré. Une génération de préproduction est encore
-                        nécessaire.
-                      </td>
-                    </tr>
-                  ) : (
-                    readiness.recentRuns.map((run) => (
-                      <tr key={run.id} className="text-desk-text">
-                        <td className="whitespace-nowrap px-4 py-3">
-                          {new Date(run.startedAt).toLocaleString('fr-FR')}
-                        </td>
-                        <td className="px-4 py-3 font-semibold">{run.agent}</td>
-                        <td className="whitespace-nowrap px-4 py-3 font-mono">{run.model}</td>
-                        <td className="whitespace-nowrap px-4 py-3 font-mono text-desk-muted">
-                          {run.routingSource || '—'}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3">
-                          {(run.inputTokens || 0).toLocaleString('fr-FR')} /{' '}
-                          {(run.outputTokens || 0).toLocaleString('fr-FR')}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3">
-                          {run.durationMs ? `${(run.durationMs / 1000).toFixed(1)} s` : '—'}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3">
-                          {run.estimatedCost != null ? `$${run.estimatedCost.toFixed(4)}` : '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Pill level={run.status === 'SUCCESS' ? 'pass' : 'fail'}>
-                            {run.status}
-                          </Pill>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
         </div>
       )}
 
-      {activeTab === 'credentials' && credentials && (
+      {activeTab === 'credentials' && (
         <div className="space-y-4">
           {(
             [
-              {
-                id: 'openai' as const,
-                title: 'OpenAI',
-                subtitle: 'Clé plateforme — obligatoire uniquement si un agent actif l’utilise',
-                status: credentials.openai,
-              },
-              {
-                id: 'vertex' as const,
-                title: 'Vertex AI — projet Google Cloud',
-                subtitle: 'Compte de service chiffré dans le Desk (jamais GEMINI_API_KEY)',
-                status: credentials.vertex,
-              },
-              {
-                id: 'gemini' as const,
-                title: 'Gemini API — clé AI Studio',
-                subtitle: 'GEMINI_API_KEY — Developer API, distinct de Vertex',
-                status: credentials.gemini,
-              },
+              { id: 'openai' as const, title: 'OpenAI', status: credentials.openai },
+              { id: 'vertex' as const, title: 'Vertex AI — Google Cloud', status: credentials.vertex },
+              { id: 'gemini' as const, title: 'Gemini API — AI Studio', status: credentials.gemini },
             ] as const
-          ).map((card) => (
-            <Card key={card.id} className="p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600">
-                    <Key className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-desk-text">{card.title}</h2>
-                    <p className="mt-1 text-sm text-desk-muted">{card.subtitle}</p>
-                    <p className="mt-1 text-sm text-desk-muted">
-                      Source : {card.status.credentialSource || card.status.envVar}
-                    </p>
-                    <p className="mt-1 text-sm text-desk-muted">
-                      Modèle testé : {card.status.model}
-                      {card.status.location ? ` · région ${card.status.location}` : ''}
-                    </p>
-                    {card.status.lastTestedAt && (
-                      <p className="mt-1 text-xs text-desk-subtle">
-                        Dernier test : {new Date(card.status.lastTestedAt).toLocaleString('fr-FR')}
+          ).map((card) => {
+            const used = providerUsed(card.id);
+            const failed = used && ['test_failed', 'quota_billing', 'model_inaccessible'].includes(card.status.state);
+            return (
+              <Card key={card.id} className={cn('p-5', failed && 'border-red-500/40')}>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600">
+                      <Key className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-desk-text">{card.title}</h2>
+                      <p className="mt-1 text-sm text-desk-muted">
+                        Source : {card.status.credentialSource || card.status.envVar}
                       </p>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Pill level={card.status.configured ? 'pass' : 'fail'}>
-                        {card.status.configured ? 'Configuré' : 'Non configuré'}
-                      </Pill>
-                      <Pill
-                        level={
-                          card.status.text === 'ok'
-                            ? 'pass'
-                            : card.status.text === 'error'
-                              ? 'fail'
-                              : 'warning'
-                        }
-                      >
-                        Texte {card.status.text}
-                      </Pill>
-                      <Pill
-                        level={
-                          card.status.multimodal === 'ok'
-                            ? 'pass'
-                            : card.status.multimodal === 'error'
-                              ? 'fail'
-                              : 'warning'
-                        }
-                      >
-                        Vision {card.status.multimodal || 'not_tested'}
-                      </Pill>
-                      <Pill
-                        level={
-                          card.status.structured === 'ok'
-                            ? 'pass'
-                            : card.status.structured === 'error'
-                              ? 'fail'
-                              : 'warning'
-                        }
-                      >
-                        JSON {card.status.structured || 'not_tested'}
-                      </Pill>
+                      <p className="mt-1 text-sm text-desk-muted">
+                        {used
+                          ? `Modèle(s) actif(s) : ${card.status.activeModels?.join(', ') || card.status.model}`
+                          : 'Aucun agent actif ne l’utilise'}
+                        {card.status.location ? ` · région ${card.status.location}` : ''}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Pill level={card.status.configured ? 'pass' : used ? 'fail' : 'warning'}>
+                          {card.status.configured ? 'Configuré' : 'Non configuré'}
+                        </Pill>
+                        {!used ? (
+                          <Pill level="warning">Non utilisé — aucun test</Pill>
+                        ) : (
+                          <>
+                            <Pill level={card.status.text === 'ok' ? 'pass' : card.status.text === 'error' ? 'fail' : 'warning'}>
+                              Texte {card.status.text}
+                            </Pill>
+                            <Pill level={card.status.multimodal === 'ok' ? 'pass' : card.status.multimodal === 'error' ? 'fail' : 'warning'}>
+                              Vision {card.status.multimodal || 'not_tested'}
+                            </Pill>
+                            <Pill level={card.status.structured === 'ok' ? 'pass' : card.status.structured === 'error' ? 'fail' : 'warning'}>
+                              JSON {card.status.structured || 'not_tested'}
+                            </Pill>
+                          </>
+                        )}
+                      </div>
+                      {used && card.status.lastError && (
+                        <p className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
+                          {card.status.lastError}
+                        </p>
+                      )}
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => void runProviderTest(card.id)}
+                    disabled={!used || testingProvider !== null}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {testingProvider === card.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
+                    {used ? 'Tester les modèles actifs' : 'Non utilisé'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void runProviderTest(card.id)}
-                  disabled={testing}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  {testing && testingProvider === card.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <TestTube className="h-4 w-4" />
-                  )}
-                  Tester
-                </button>
-              </div>
-              {(card.status.lastError ||
-                (testResult?.provider === card.id &&
-                  (testResult.error || (testResult.models && testResult.models.length > 0)))) && (
-                <div className="mt-3 space-y-2">
-                  {((testResult?.provider === card.id && testResult.error) ||
-                    card.status.lastError) && (
-                    <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
-                      {(testResult?.provider === card.id && testResult.error) ||
-                        card.status.lastError}
-                    </p>
-                  )}
-                  {testResult?.provider === card.id &&
-                    testResult.models?.map((entry) => (
+                {testResult?.provider === card.id && testResult.models && testResult.models.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {testResult.models.map((entry) => (
                       <p
                         key={entry.model}
                         className={cn(
@@ -1296,26 +1039,22 @@ export default function SettingsPage() {
                             : 'bg-red-500/10 text-red-600',
                         )}
                       >
-                        {entry.model}: texte {entry.text} · vision {entry.multimodal || 'n/a'} ·
-                        JSON {entry.structured || 'n/a'}
+                        {entry.model}: texte {entry.text} · vision {entry.multimodal || 'n/a'} · JSON{' '}
+                        {entry.structured || 'n/a'}
                         {entry.error ? ` — ${entry.error}` : ''}
                       </p>
                     ))}
-                </div>
-              )}
-            </Card>
-          ))}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
 
       {activeTab === 'personality' && (
         <Card className="p-5">
-          <div className="mb-5">
-            <h2 className="font-semibold text-desk-text">ADN commun de Lumira</h2>
-            <p className="mt-1 text-sm text-desk-muted">
-              Cadre partagé de ton, prudence et interprétation.
-            </p>
-          </div>
+          <h2 className="mb-5 font-semibold text-desk-text">ADN commun de Lumira</h2>
           <PromptPanel
             promptKey="LUMIRA_DNA"
             prompt={prompts.LUMIRA_DNA}
@@ -1341,28 +1080,17 @@ export default function SettingsPage() {
                   onClick={() => setExpandedAgent(open ? null : agent.key)}
                   className="flex min-h-16 w-full items-center justify-between gap-3 p-4 text-left"
                 >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600">
-                      <Bot className="h-4 w-4" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-desk-text">{agent.label}</span>
+                      <Pill level={config.enabled ? 'pass' : 'warning'}>{config.enabled ? 'Actif' : 'Désactivé'}</Pill>
+                      <span className="font-mono text-xs text-desk-muted">
+                        {config.provider}/{config.model || 'aucun modèle'}
+                      </span>
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-desk-text">{agent.label}</span>
-                        <Pill level={config.enabled ? 'pass' : 'warning'}>
-                          {config.enabled ? 'Actif' : 'Désactivé'}
-                        </Pill>
-                        <span className="font-mono text-xs text-desk-muted">
-                          {config.provider}/{config.model}
-                        </span>
-                      </div>
-                      <p className="truncate text-sm text-desk-muted">{agent.description}</p>
-                    </div>
+                    <p className="truncate text-sm text-desk-muted">{agent.description}</p>
                   </div>
-                  {open ? (
-                    <ChevronUp className="h-5 w-5 text-desk-muted" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5 text-desk-muted" />
-                  )}
+                  {open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </button>
                 {open && (
                   <div className="border-t border-desk-border p-4">
@@ -1384,140 +1112,108 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {activeTab === 'models' && modelConfig && (
+      {activeTab === 'models' && (
         <div className="space-y-4">
           <Card className="border-blue-500/30 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-desk-text">
-                  Découverte & Probing des modèles IA
-                </h2>
+                <h2 className="font-semibold text-desk-text">Catalogue des modèles</h2>
                 <p className="mt-1 text-sm text-desk-muted">
-                  Découverte automatique fondée sur vos credentials réellement configurés. Seuls les
-                  modèles validés par un probe minimal sont affichés comme fonctionnels dans les
-                  sélecteurs.
+                  La découverte liste les modèles sans les appeler. Aucun token n’est consommé ici.
+                  Un modèle devient fonctionnel uniquement après « Tester et appliquer ».
                 </p>
                 {availableModels && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-desk-border bg-desk-bg p-3">
-                      <div className="text-xs font-semibold text-desk-muted">OpenAI</div>
-                      <div className="mt-1 text-sm text-desk-text">
-                        <span className="font-mono text-emerald-600 font-bold">
-                          {availableModels.openai.models?.filter((m) => m.callable).length ?? 0}
-                        </span>{' '}
-                        fonctionnel(s) / {availableModels.openai.models?.length ?? 0} détecté(s)
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-desk-border bg-desk-bg p-3">
-                      <div className="text-xs font-semibold text-desk-muted">
-                        Gemini Developer API
-                      </div>
-                      <div className="mt-1 text-sm text-desk-text">
-                        <span className="font-mono text-emerald-600 font-bold">
-                          {availableModels.gemini.models?.filter((m) => m.callable).length ?? 0}
-                        </span>{' '}
-                        fonctionnel(s) / {availableModels.gemini.models?.length ?? 0} détecté(s)
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-desk-border bg-desk-bg p-3">
-                      <div className="text-xs font-semibold text-desk-muted">
-                        Vertex AI ({availableModels.vertex.location ?? 'us-central1'})
-                      </div>
-                      <div className="mt-1 text-sm text-desk-text">
-                        <span className="font-mono text-emerald-600 font-bold">
-                          {availableModels.vertex.models?.filter((m) => m.callable).length ?? 0}
-                        </span>{' '}
-                        fonctionnel(s) / {availableModels.vertex.models?.length ?? 0} détecté(s)
-                      </div>
-                    </div>
+                    {(['openai', 'gemini', 'vertex'] as ProviderId[]).map((provider) => {
+                      const catalog = providerCatalog(provider)!;
+                      const tested = credentials.modelProbes?.filter(
+                        (probe) =>
+                          probe.provider === provider &&
+                          probe.text === 'ok' &&
+                          probe.multimodal !== 'error' &&
+                          probe.structured !== 'error',
+                      ).length ?? 0;
+                      return (
+                        <div key={provider} className="rounded-xl border border-desk-border bg-desk-bg p-3">
+                          <div className="text-xs font-semibold uppercase text-desk-muted">{provider}</div>
+                          <div className="mt-1 text-sm text-desk-text">
+                            {catalog.models.length} détecté(s) · {tested} testé(s) OK
+                          </div>
+                          {catalog.error && <p className="mt-1 text-xs text-red-600">{catalog.error}</p>}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-                {availableModels?.fetchedAt && (
-                  <p className="mt-2 text-xs text-desk-subtle">
-                    Dernière synchronisation :{' '}
-                    {new Date(availableModels.fetchedAt).toLocaleString('fr-FR')}
-                  </p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => void loadCatalog(true)}
                 disabled={catalogLoading}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/20 disabled:opacity-50"
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50"
               >
-                {catalogLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Rechercher les modèles disponibles
+                {catalogLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Actualiser le catalogue
               </button>
             </div>
           </Card>
 
           {AGENTS.map((agent) => {
             const item = modelConfig.agents[agent.key];
-            const effectiveProvider = item.provider;
-            const catalogOptions = modelsForProvider(effectiveProvider, agent.key);
-            const modelOptions = catalogOptions;
-            const isGpt5 = effectiveProvider === 'openai' && item.model.startsWith('gpt-5.');
-            const useTempKnobs = !isGpt5;
-            const catalog =
-              availableModels?.[
-                effectiveProvider === 'openai'
-                  ? 'openai'
-                  : effectiveProvider === 'vertex'
-                    ? 'vertex'
-                    : 'gemini'
-              ];
-            const activeModelObj = catalogOptions.find((opt) => opt.id === item.model);
-            const isInaccessible =
-              activeModelObj?.isInaccessible || (catalog?.configured && !activeModelObj);
-            const requiredCaps = AGENT_REQUIRED_CAPS[agent.key];
+            const visual = agentVisualStatus(agent.key, item);
+            const probe = item.model ? findProbe(item.provider, item.model) : undefined;
+            const options = modelsForProvider(item.provider, agent.key);
+            const isGpt5 = item.provider === 'openai' && item.model.startsWith('gpt-5.');
+            const statusPill =
+              visual === 'disabled' ? (
+                <Pill level="warning">Désactivé — non évalué</Pill>
+              ) : visual === 'functional' ? (
+                <Pill level="pass">Fonctionnel</Pill>
+              ) : visual === 'failed' ? (
+                <Pill level="fail">Inaccessible — test échoué</Pill>
+              ) : visual === 'detected' ? (
+                <Pill level="warning">Détecté — non testé</Pill>
+              ) : (
+                <Pill level="warning">Sélection manuelle requise</Pill>
+              );
 
             return (
               <Card
                 key={agent.key}
-                className={cn('p-5', isInaccessible && 'border-red-500/50 bg-red-500/5')}
+                className={cn('p-5', visual === 'failed' && 'border-red-500/50 bg-red-500/5')}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-semibold text-desk-text">{agent.label}</h2>
-                      <Pill level={item.enabled ? 'pass' : 'warning'}>
-                        {item.enabled ? 'Actif' : 'Désactivé'}
-                      </Pill>
-                      {isInaccessible ? (
-                        <Pill level="fail">Inaccessible — sélection manuelle requise</Pill>
-                      ) : (
-                        <Pill level="pass">Fonctionnel</Pill>
-                      )}
+                      <Pill level={item.enabled ? 'pass' : 'warning'}>{item.enabled ? 'Actif' : 'Désactivé'}</Pill>
+                      {statusPill}
                       <span className="font-mono text-xs text-desk-muted">
-                        {effectiveProvider}/{item.model}
+                        {item.provider}/{item.model || 'aucun modèle'}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-desk-muted">{agent.description}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-desk-muted">
-                      <span>Capacités requises :</span>
-                      {requiredCaps.map((cap) => (
-                        <span
-                          key={cap}
-                          className="rounded-md border border-desk-border bg-desk-surface px-1.5 py-0.5 text-xs font-mono text-desk-text"
-                        >
-                          {cap}
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-desk-muted">
+                      {AGENT_REQUIRED_CAPS[agent.key].map((capability) => (
+                        <span key={capability} className="rounded-md border border-desk-border px-1.5 py-0.5 font-mono">
+                          {capability}
                         </span>
                       ))}
                     </div>
+                    {item.enabled && probe?.lastTestedAt && (
+                      <p className="mt-2 text-xs text-desk-muted">
+                        Dernier test : {new Date(probe.lastTestedAt).toLocaleString('fr-FR')}
+                      </p>
+                    )}
+                    {visual === 'failed' && probe?.lastError && (
+                      <p className="mt-2 rounded-lg bg-red-500/10 p-2 text-sm text-red-600">{probe.lastError}</p>
+                    )}
                   </div>
                   <label className="inline-flex min-h-10 items-center gap-2 text-sm text-desk-muted">
                     <input
                       type="checkbox"
                       checked={item.enabled}
-                      onChange={(event) =>
-                        updateAgent(agent.key, { enabled: event.target.checked })
-                      }
+                      onChange={(event) => updateAgent(agent.key, { enabled: event.target.checked })}
                       className="h-4 w-4 accent-amber-500"
                     />
                     Agent actif
@@ -1528,16 +1224,12 @@ export default function SettingsPage() {
                   <label className="text-sm text-desk-muted">
                     Fournisseur
                     <select
-                      value={effectiveProvider}
-                      onChange={(event) =>
-                        updateAgent(agent.key, { provider: event.target.value as ProviderId })
-                      }
+                      value={item.provider}
+                      onChange={(event) => updateAgent(agent.key, { provider: event.target.value as ProviderId })}
                       className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
                     >
                       {PROVIDER_OPTIONS.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
+                        <option key={option.id} value={option.id}>{option.label}</option>
                       ))}
                     </select>
                   </label>
@@ -1546,31 +1238,28 @@ export default function SettingsPage() {
                     Modèle
                     <select
                       value={item.model}
-                      onChange={(event) => {
-                        const model = event.target.value;
-                        updateAgent(agent.key, {
-                          model,
-                          ...(model.startsWith('gpt-5.')
-                            ? {
-                                reasoningEffort: item.reasoningEffort || 'medium',
-                                verbosity: item.verbosity || 'medium',
-                              }
-                            : {
-                                temperature: item.temperature ?? 0.4,
-                                topP: item.topP ?? 0.9,
-                              }),
-                        });
-                      }}
+                      onChange={(event) => updateAgent(agent.key, { model: event.target.value })}
                       className={cn(
                         'mt-1 w-full rounded-lg border bg-desk-input p-2.5 text-desk-text',
-                        isInaccessible ? 'border-red-500 text-red-600' : 'border-desk-border',
+                        visual === 'failed' ? 'border-red-500' : 'border-desk-border',
                       )}
                     >
-                      {modelOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
+                      <option value="">Sélectionner un modèle</option>
+                      {options.map((option) => {
+                        const optionProbe = findProbe(item.provider, option.id);
+                        const label = probePasses(agent.key, optionProbe)
+                          ? 'Fonctionnel'
+                          : probeFails(agent.key, optionProbe)
+                            ? 'Test échoué'
+                            : option.detected === false
+                              ? 'Actuel — non détecté'
+                              : 'Détecté — non testé';
+                        return (
+                          <option key={option.id} value={option.id}>
+                            {option.displayName || option.id} · {label}
+                          </option>
+                        );
+                      })}
                     </select>
                   </label>
 
@@ -1581,81 +1270,74 @@ export default function SettingsPage() {
                       min={1}
                       max={100000}
                       value={item.maxOutputTokens}
-                      onChange={(event) =>
-                        updateAgent(agent.key, { maxOutputTokens: Number(event.target.value) })
-                      }
+                      onChange={(event) => updateAgent(agent.key, { maxOutputTokens: Number(event.target.value) })}
                       className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
                     />
                   </label>
 
                   {isGpt5 ? (
-                    <>
-                      <label className="text-sm text-desk-muted">
-                        Raisonnement
-                        <select
-                          value={item.reasoningEffort || 'medium'}
-                          onChange={(event) =>
-                            updateAgent(agent.key, {
-                              reasoningEffort: event.target
-                                .value as AgentModelConfig['reasoningEffort'],
-                            })
-                          }
-                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-                        >
-                          <option value="low">low</option>
-                          <option value="medium">medium</option>
-                          <option value="high">high</option>
-                        </select>
-                      </label>
-                      <label className="text-sm text-desk-muted">
-                        Verbosity
-                        <select
-                          value={item.verbosity || 'medium'}
-                          onChange={(event) =>
-                            updateAgent(agent.key, {
-                              verbosity: event.target.value as AgentModelConfig['verbosity'],
-                            })
-                          }
-                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-                        >
-                          <option value="low">low</option>
-                          <option value="medium">medium</option>
-                          <option value="high">high</option>
-                        </select>
-                      </label>
-                    </>
-                  ) : useTempKnobs ? (
-                    <>
-                      <label className="text-sm text-desk-muted">
-                        Température
-                        <input
-                          type="number"
-                          min={0}
-                          max={2}
-                          step={0.05}
-                          value={item.temperature ?? 0.4}
-                          onChange={(event) =>
-                            updateAgent(agent.key, { temperature: Number(event.target.value) })
-                          }
-                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-                        />
-                      </label>
-                      <label className="text-sm text-desk-muted">
-                        Top P
-                        <input
-                          type="number"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={item.topP ?? 0.9}
-                          onChange={(event) =>
-                            updateAgent(agent.key, { topP: Number(event.target.value) })
-                          }
-                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-                        />
-                      </label>
-                    </>
-                  ) : null}
+                    <label className="text-sm text-desk-muted">
+                      Raisonnement
+                      <select
+                        value={item.reasoningEffort || 'medium'}
+                        onChange={(event) =>
+                          updateAgent(agent.key, {
+                            reasoningEffort: event.target.value as AgentModelConfig['reasoningEffort'],
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                      >
+                        <option value="low">low</option>
+                        <option value="medium">medium</option>
+                        <option value="high">high</option>
+                      </select>
+                    </label>
+                  ) : (
+                    <label className="text-sm text-desk-muted">
+                      Température
+                      <input
+                        type="number"
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        value={item.temperature ?? 0.4}
+                        onChange={(event) => updateAgent(agent.key, { temperature: Number(event.target.value) })}
+                        className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                      />
+                    </label>
+                  )}
+
+                  {isGpt5 ? (
+                    <label className="text-sm text-desk-muted">
+                      Verbosité
+                      <select
+                        value={item.verbosity || 'medium'}
+                        onChange={(event) =>
+                          updateAgent(agent.key, {
+                            verbosity: event.target.value as AgentModelConfig['verbosity'],
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                      >
+                        <option value="low">low</option>
+                        <option value="medium">medium</option>
+                        <option value="high">high</option>
+                      </select>
+                    </label>
+                  ) : (
+                    <label className="text-sm text-desk-muted">
+                      Top P
+                      <input
+                        type="number"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={item.topP ?? 0.9}
+                        onChange={(event) => updateAgent(agent.key, { topP: Number(event.target.value) })}
+                        className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                      />
+                    </label>
+                  )}
                 </div>
               </Card>
             );
@@ -1665,14 +1347,10 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => void testAndApplyModels()}
-              disabled={saving}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={saving || !modelDirty}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <TestTube className="h-4 w-4" />
-              )}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
               Tester et appliquer
             </button>
           </div>
