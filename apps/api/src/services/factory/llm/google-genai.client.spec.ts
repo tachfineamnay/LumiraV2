@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import {
+  buildGoogleGenerationConfig,
   createGeminiDeveloperClient,
   createVertexAiClient,
   GOOGLE_GENAI_API_VERSION,
@@ -11,10 +12,23 @@ import {
 } from '../ai-model-config';
 import { DEFAULT_AI_MODEL_CONFIG } from '../ai-model-config';
 import { classifyNormalizedAiError } from './ai-errors';
+import { LlmRequest } from './llm.types';
 
 jest.mock('@google/genai', () => ({
   GoogleGenAI: jest.fn(),
 }));
+
+function request(overrides: Partial<LlmRequest> = {}): LlmRequest {
+  return {
+    model: 'gemini-3.6-flash',
+    systemPrompt: 'system',
+    userContent: 'user',
+    maxTokens: 2000,
+    signal: new AbortController().signal,
+    timeoutMs: 30_000,
+    ...overrides,
+  };
+}
 
 describe('google-genai.client', () => {
   beforeEach(() => {
@@ -51,23 +65,55 @@ describe('google-genai.client', () => {
     expect(options.apiKey).toBeUndefined();
     expect(options.googleAuthOptions).toBeTruthy();
   });
+
+  it.each(['low', 'medium', 'high'] as const)(
+    'maps Gemini 3 thinkingLevel=%s without exposing thoughts',
+    (thinkingLevel) => {
+      const config = buildGoogleGenerationConfig(request({ thinkingLevel }));
+      expect(config.thinkingConfig).toEqual({
+        thinkingLevel: thinkingLevel.toUpperCase(),
+        includeThoughts: false,
+      });
+    },
+  );
+
+  it('does not send thinkingConfig to a normal production request without a selected level', () => {
+    const config = buildGoogleGenerationConfig(request());
+    expect(config.thinkingConfig).toBeUndefined();
+  });
+
+  it('uses low thinking temporarily for short Gemini 3 probes', () => {
+    const config = buildGoogleGenerationConfig(request({ maxTokens: 256 }));
+    expect(config.thinkingConfig).toEqual({
+      thinkingLevel: 'LOW',
+      includeThoughts: false,
+    });
+  });
+
+  it('never sends thinkingConfig to Gemini 2.5', () => {
+    const config = buildGoogleGenerationConfig(
+      request({ model: 'gemini-2.5-flash', thinkingLevel: 'high', maxTokens: 256 }),
+    );
+    expect(config.thinkingConfig).toBeUndefined();
+  });
 });
 
 describe('agent model capabilities', () => {
-  it('SCRIBE rejects models without vision or structured', () => {
+  it('keeps capability checks separate from thinking-level eligibility', () => {
     expect(modelSupportsAgent('gpt-4o-2024-11-20', 'SCRIBE')).toBe(true);
-    expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).not.toThrow();
+    expect(() =>
+      assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20'),
+    ).toThrow(/niveau de réflexion explicite/);
   });
 
-  it('CONFIDANT requires text (fast_text is non-blocking metadata)', () => {
+  it('CONFIDANT accepts a thinking-capable text model', () => {
     expect(modelSupportsAgent('gpt-5.5-2026-04-23', 'CONFIDANT')).toBe(true);
     expect(() =>
-      assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23'),
+      assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23', 'low'),
     ).not.toThrow();
-    expect(modelSupportsAgent('gpt-4o-2024-11-20', 'CONFIDANT')).toBe(true);
   });
 
-  it('EDITOR accepts text-only capable models', () => {
+  it('EDITOR capability checks remain unchanged', () => {
     expect(modelSupportsAgent('gemini-2.5-flash', 'EDITOR')).toBe(true);
   });
 
@@ -79,21 +125,24 @@ describe('agent model capabilities', () => {
         SCRIBE: {
           ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
           provider: 'vertex',
-          model: 'gemini-2.5-pro',
+          model: 'gemini-3.6-flash',
+          thinkingLevel: 'high',
           temperature: 0.7,
           topP: 0.9,
         },
         GUIDE: {
           ...DEFAULT_AI_MODEL_CONFIG.agents.GUIDE,
           provider: 'vertex',
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
+          thinkingLevel: 'medium',
           temperature: 0.5,
           topP: 0.9,
         },
         EDITOR: {
           ...DEFAULT_AI_MODEL_CONFIG.agents.EDITOR,
           provider: 'vertex',
-          model: 'gemini-2.5-pro',
+          model: 'gemini-3.6-flash',
+          thinkingLevel: 'medium',
           temperature: 0.4,
           topP: 0.9,
         },
@@ -103,11 +152,11 @@ describe('agent model capabilities', () => {
       },
     });
     expect(pairs).toHaveLength(2);
-    expect(pairs.find((p) => p.model === 'gemini-2.5-pro')?.agents).toEqual(
+    expect(pairs.find((p) => p.model === 'gemini-3.6-flash')?.agents).toEqual(
       expect.arrayContaining(['SCRIBE', 'EDITOR']),
     );
-    expect(pairs.find((p) => p.model === 'gemini-2.5-pro')?.needsVision).toBe(true);
-    expect(pairs.find((p) => p.model === 'gemini-2.5-flash')?.needsStructured).toBe(true);
+    expect(pairs.find((p) => p.model === 'gemini-3.6-flash')?.needsVision).toBe(true);
+    expect(pairs.find((p) => p.model === 'gemini-3.5-flash')?.needsStructured).toBe(true);
   });
 });
 
