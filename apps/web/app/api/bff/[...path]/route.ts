@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SANCTUAIRE_TOKEN_COOKIE } from '@/lib/auth-cookies';
+import { normalizeLegacyOnboardingPayload } from '@/lib/legacy-onboarding';
 
 const apiUrl =
   process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -48,6 +49,33 @@ function isSameOrigin(request: NextRequest): boolean {
   }
 }
 
+function normalizeUpstreamBody(
+  request: NextRequest,
+  path: string,
+  contentType: string,
+  body: ArrayBuffer,
+): { body: ArrayBuffer; modified: boolean } {
+  if (
+    request.method !== 'GET' ||
+    path !== 'users/onboarding' ||
+    !contentType.includes('application/json')
+  ) {
+    return { body, modified: false };
+  }
+
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(body)) as unknown;
+    const normalized = normalizeLegacyOnboardingPayload(payload);
+    if (normalized === payload) return { body, modified: false };
+
+    const encoded = new TextEncoder().encode(JSON.stringify(normalized));
+    return { body: Uint8Array.from(encoded).buffer, modified: true };
+  } catch {
+    // Preserve the upstream response byte-for-byte if it is not valid JSON.
+    return { body, modified: false };
+  }
+}
+
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join('/');
 
@@ -87,16 +115,22 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   }
 
   const upstream = await fetch(targetUrl, init);
-  const responseBody = await upstream.arrayBuffer();
+  const upstreamContentType = upstream.headers.get('content-type') || 'application/json';
+  const normalizedResponse = normalizeUpstreamBody(
+    request,
+    path,
+    upstreamContentType,
+    await upstream.arrayBuffer(),
+  );
 
   const responseHeaders = new Headers();
-  responseHeaders.set('content-type', upstream.headers.get('content-type') || 'application/json');
+  responseHeaders.set('content-type', upstreamContentType);
   const contentDisposition = upstream.headers.get('content-disposition');
   if (contentDisposition) {
     responseHeaders.set('content-disposition', contentDisposition);
   }
   const contentLength = upstream.headers.get('content-length');
-  if (contentLength) {
+  if (contentLength && !normalizedResponse.modified) {
     responseHeaders.set('content-length', contentLength);
   }
   const cacheControl = upstream.headers.get('cache-control');
@@ -116,7 +150,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
     responseHeaders.set('accept-ranges', acceptRanges);
   }
 
-  const response = new NextResponse(responseBody, {
+  const response = new NextResponse(normalizedResponse.body, {
     status: upstream.status,
     headers: responseHeaders,
   });
