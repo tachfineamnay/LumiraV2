@@ -287,7 +287,7 @@ export function assertSavableAgentModel(
   agent: AgentType,
   provider: AiProvider,
   model: string,
-  thinkingLevel?: AiThinkingLevel,
+  _thinkingLevel?: AiThinkingLevel,
 ): void {
   if (!ALLOWED_PROVIDERS.has(provider)) {
     throw new Error(`${agent} — provider non autorisé: ${provider}`);
@@ -301,9 +301,6 @@ export function assertSavableAgentModel(
   }
   if (!supportsThinkingLevel(provider, model)) {
     throw new Error(`${agent} — ${model} ne supporte pas un niveau de réflexion explicite.`);
-  }
-  if (!thinkingLevel || !THINKING_VALUES.has(thinkingLevel)) {
-    throw new Error(`${agent} — sélectionnez un niveau de réflexion: low, medium ou high.`);
   }
 }
 
@@ -357,8 +354,8 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     maxOutputTokens: normalizedMaxTokens,
   };
 
-  const rawThinkingLevel = value.thinkingLevel ??
-    (provider === 'openai' ? value.reasoningEffort : undefined);
+  const rawThinkingLevel =
+    value.thinkingLevel ?? (provider === 'openai' ? value.reasoningEffort : undefined);
   if (rawThinkingLevel !== undefined && !isThinkingLevel(rawThinkingLevel)) {
     issues.push(`${agent}: thinkingLevel invalide — sélection manuelle requise`);
   }
