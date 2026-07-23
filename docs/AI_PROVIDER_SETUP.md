@@ -63,8 +63,51 @@ Le frontend (`apps/web`) n’a pas besoin de ces variables.
 | -------------------- | ----------------------------------- | ------------------------------------------ |
 | Auth                 | Clé AI Studio                       | Compte de service Google Cloud             |
 | SDK                  | `@google/genai` (`vertexai: false`) | `@google/genai` (`vertexai: true`)         |
+| API                  | `apiVersion: 'v1'` (stable)         | `apiVersion: 'v1'` (stable)                |
 | Identifiants modèles | `gemini-2.5-pro`, etc.              | Mêmes IDs métier, endpoint Cloud différent |
 | Région               | N/A                                 | `VERTEX_LOCATION`                          |
+
+## Clients Google (`@google/genai`)
+
+- Gemini Developer API : `{ apiKey, vertexai: false, apiVersion: 'v1' }`
+- Vertex AI : `{ vertexai: true, project, location, googleAuthOptions, apiVersion: 'v1' }`
+
+## Diagnostic par couple provider/modèle
+
+Les endpoints `openai-test`, `gemini-test`, `vertex-test` testent **tous** les modèles actifs du provider dans `MODEL_CONFIG` (dédupliqués). Un test réussi sur un modèle ne valide jamais un autre.
+
+Réponse étendue (compatible ascendante) :
+
+```json
+{
+  "success": false,
+  "provider": "vertex",
+  "model": "gemini-2.5-pro",
+  "text": "ok",
+  "multimodal": "ok",
+  "structured": "ok",
+  "models": [
+    {
+      "model": "gemini-2.5-pro",
+      "success": true,
+      "text": "ok",
+      "multimodal": "ok",
+      "structured": "ok"
+    },
+    {
+      "model": "gemini-2.5-flash",
+      "success": false,
+      "text": "ok",
+      "structured": "error",
+      "error": "..."
+    }
+  ]
+}
+```
+
+`success` global = true uniquement si tous les modèles actifs nécessaires passent (texte + vision si requise + JSON structuré si requis). Le cache diagnostics est indexé `provider:model`.
+
+Après ajout, remplacement ou suppression des credentials Vertex : invalidation catalogue + diagnostics Vertex + runtime.
 
 ## Catalogues modèles (Desk)
 
@@ -79,9 +122,9 @@ Le frontend (`apps/web`) n’a pas besoin de ces variables.
 
 1. Paramètres IA → Connexion.
 2. Vérifier configuré / source credentials / région Vertex.
-3. Tester : texte, vision, JSON structuré.
-4. Paramètres IA → Modèles : mode `openai_only` ou `per_agent`, provider + modèle par agent.
-5. Préproduction : readiness dynamique selon les providers réellement actifs.
+3. Tester : texte, vision, JSON structuré — pour **chaque** couple provider/modèle actif.
+4. Paramètres IA → Modèles : mode `openai_only` ou `per_agent`, provider + modèle filtré par capacités agent (`verified` prioritaire, `supported` avec avertissement, `unavailable` masqué).
+5. Préproduction : readiness dynamique par agent/provider/modèle (GO / CONDITIONAL_GO / NO_GO).
 
 ## Erreurs fréquentes
 

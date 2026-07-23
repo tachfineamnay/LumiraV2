@@ -6,6 +6,7 @@ import { AiRuntimeCacheService } from '../../services/factory/ai-runtime-cache.s
 import { AiModelConfigSnapshot, AgentType } from '../../services/factory/ai-execution.types';
 import {
   DEFAULT_AI_MODEL_CONFIG,
+  assertSavableAgentModel,
   normalizeAiModelConfig,
 } from '../../services/factory/ai-model-config';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
@@ -157,6 +158,9 @@ export class AdminSettingsService {
       create: { key: VERTEX_CREDENTIALS_KEY, value: encrypted, isEncrypted: true },
     });
     this.logger.log('Vertex credentials stored');
+    this.aiModelCatalog.clearCache();
+    this.aiProviderDiagnostics.clearProviderCache('vertex');
+    this.aiRuntimeCache.invalidateAll('vertex-credentials-set');
     return { success: true, message: 'Identifiants Vertex sauvegardés.' };
   }
 
@@ -209,6 +213,9 @@ export class AdminSettingsService {
 
   async deleteVertexCredentials(): Promise<{ success: boolean; message: string }> {
     await this.prisma.systemSetting.deleteMany({ where: { key: VERTEX_CREDENTIALS_KEY } });
+    this.aiModelCatalog.clearCache();
+    this.aiProviderDiagnostics.clearProviderCache('vertex');
+    this.aiRuntimeCache.invalidateAll('vertex-credentials-delete');
     return { success: true, message: 'Identifiants Vertex supprimés.' };
   }
 
@@ -345,6 +352,7 @@ export class AdminSettingsService {
     this.aiRuntimeCache.invalidateAll(`prompt:${key}`);
     if (key === PROMPT_KEYS.MODEL_CONFIG) {
       this.aiModelCatalog.clearCache();
+      this.aiProviderDiagnostics.clearAllCaches();
     }
     return { success: true, version: result };
   }
@@ -565,6 +573,19 @@ export class AdminSettingsService {
       ...config,
       agents,
     };
+
+    const providerMode = candidate.providerMode ?? current.providerMode;
+    for (const [agent, agentConfig] of Object.entries(candidate.agents) as Array<
+      [AgentType, (typeof candidate.agents)[AgentType]]
+    >) {
+      const provider = providerMode === 'openai_only' ? 'openai' : agentConfig.provider;
+      try {
+        assertSavableAgentModel(agent, provider, agentConfig.model);
+      } catch (error) {
+        throw new BadRequestException(error instanceof Error ? error.message : String(error));
+      }
+    }
+
     const normalized = normalizeAiModelConfig(candidate);
     if (normalized.issues.length > 0) {
       throw new BadRequestException(`Configuration IA invalide: ${normalized.issues.join('; ')}`);

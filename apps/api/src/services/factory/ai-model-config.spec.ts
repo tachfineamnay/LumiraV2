@@ -1,7 +1,10 @@
 import {
   assertOperationalModel,
+  assertSavableAgentModel,
   DEFAULT_AI_MODEL_CONFIG,
   estimateOpenAiCost,
+  missingAgentCapabilities,
+  modelSupportsAgent,
   normalizeAiModelConfig,
   validateAiModelConfig,
 } from './ai-model-config';
@@ -95,6 +98,31 @@ describe('ai-model-config', () => {
       /\[SCRIBE\] modèle non opérationnel: gpt-3\.5-pro/,
     );
     expect(() => assertOperationalModel('openai', 'gpt-5.5-2026-04-23')).not.toThrow();
+  });
+
+  it('enforces agent capabilities for SCRIBE, GUIDE, EDITOR and CONFIDANT', () => {
+    expect(modelSupportsAgent('text-only-unknown', 'SCRIBE')).toBe(false);
+    expect(missingAgentCapabilities('text-only-unknown', 'SCRIBE')).toEqual(
+      expect.arrayContaining(['vision', 'structured']),
+    );
+    expect(modelSupportsAgent('text-only-unknown', 'GUIDE')).toBe(false);
+    expect(missingAgentCapabilities('text-only-unknown', 'GUIDE')).toContain('structured');
+    expect(modelSupportsAgent('text-only-unknown', 'EDITOR')).toBe(true);
+    expect(modelSupportsAgent('gpt-4o-2024-11-20', 'CONFIDANT')).toBe(true);
+    expect(modelSupportsAgent('gpt-5.5-2026-04-23', 'CONFIDANT')).toBe(false);
+  });
+
+  it('assertSavableAgentModel refuses incompatible Desk saves', () => {
+    expect(() => assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23')).toThrow(
+      /CONFIDANT — gpt-5\.5-2026-04-23 ne supporte pas texte rapide/,
+    );
+    expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).not.toThrow();
+  });
+
+  it('assertOperationalModel refuses incompatible historical runtime configs', () => {
+    expect(() => assertOperationalModel('openai', 'gpt-5.5-2026-04-23', 'CONFIDANT')).toThrow(
+      /CONFIDANT — gpt-5\.5-2026-04-23 ne supporte pas texte rapide/,
+    );
   });
 
   it('restores safe defaults for unknown mode and empty models', () => {

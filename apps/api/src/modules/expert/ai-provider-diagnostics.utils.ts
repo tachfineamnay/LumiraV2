@@ -84,20 +84,25 @@ function toLegacyCategory(code: string): AiErrorCategory {
     case 'rate_limit':
       return 'rate_limit';
     case 'invalid_key':
-    case 'credentials_invalid':
       return 'invalid_key';
+    case 'credentials_invalid':
+      return 'credentials_invalid';
     case 'forbidden':
-    case 'api_not_enabled':
       return 'forbidden';
+    case 'api_not_enabled':
+      return 'api_not_enabled';
     case 'model_not_found':
-    case 'region_not_supported':
       return 'model_not_found';
+    case 'region_not_supported':
+      return 'region_not_supported';
     case 'timeout':
       return 'timeout';
     case 'structured_output_unsupported':
+      return 'structured_output_unsupported';
     case 'network':
+      return 'network';
     default:
-      return code === 'timeout' ? 'timeout' : 'unknown';
+      return 'unknown';
   }
 }
 

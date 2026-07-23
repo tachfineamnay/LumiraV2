@@ -14,6 +14,15 @@ describe('ai-provider-diagnostics.utils', () => {
       expect(sanitized).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz');
       expect(sanitized).toContain('[redacted]');
     });
+
+    it('redacts bearer tokens and Vertex private keys', () => {
+      const message =
+        'Bearer eyJhbGciOiJIUzI1NiJ9.abc.def -----BEGIN PRIVATE KEY-----\nSECRET\n-----END PRIVATE KEY-----';
+      const sanitized = sanitizeAiErrorMessage(message);
+      expect(sanitized).not.toContain('eyJhbGciOiJIUzI1NiJ9');
+      expect(sanitized).not.toContain('SECRET');
+      expect(sanitized).toContain('[redacted]');
+    });
   });
 
   describe('classifyAiError', () => {

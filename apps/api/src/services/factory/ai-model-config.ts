@@ -55,8 +55,65 @@ export function modelSupportsAgent(model: string, agent: AgentType): boolean {
   return required.every((cap) => available.has(cap));
 }
 
+export function missingAgentCapabilities(model: string, agent: AgentType): AgentCapability[] {
+  const available = new Set(modelCapabilities(model));
+  return AGENT_REQUIRED_CAPABILITIES[agent].filter((cap) => !available.has(cap));
+}
+
 export function modelsForAgent(provider: AiProvider, agent: AgentType): readonly string[] {
   return modelsForProvider(provider).filter((model) => modelSupportsAgent(model, agent));
+}
+
+export function capabilityLabel(cap: AgentCapability): string {
+  switch (cap) {
+    case 'vision':
+      return 'vision';
+    case 'structured':
+      return 'JSON structuré';
+    case 'long_text':
+      return 'texte long';
+    case 'fast_text':
+      return 'texte rapide';
+    default:
+      return 'texte';
+  }
+}
+
+export interface ActiveProviderModelPair {
+  provider: AiProvider;
+  model: string;
+  agents: AgentType[];
+  needsVision: boolean;
+  needsStructured: boolean;
+}
+
+/** Deduplicated active provider/model pairs from MODEL_CONFIG. */
+export function activeProviderModelPairs(config: AiModelConfigSnapshot): ActiveProviderModelPair[] {
+  const map = new Map<string, ActiveProviderModelPair>();
+  for (const [agent, agentConfig] of Object.entries(config.agents) as Array<
+    [AgentType, AiAgentModelConfig]
+  >) {
+    if (!agentConfig.enabled) continue;
+    const provider = config.providerMode === 'openai_only' ? 'openai' : agentConfig.provider;
+    const model = agentConfig.model;
+    const key = `${provider}:${model}`;
+    const caps = AGENT_REQUIRED_CAPABILITIES[agent];
+    const existing = map.get(key);
+    if (existing) {
+      existing.agents.push(agent);
+      existing.needsVision = existing.needsVision || caps.includes('vision');
+      existing.needsStructured = existing.needsStructured || caps.includes('structured');
+    } else {
+      map.set(key, {
+        provider,
+        model,
+        agents: [agent],
+        needsVision: caps.includes('vision'),
+        needsStructured: caps.includes('structured'),
+      });
+    }
+  }
+  return [...map.values()];
 }
 
 export const OPENAI_MODEL_PRICING_USD_PER_MILLION: Record<string, [number, number]> = {
@@ -168,10 +225,52 @@ function isAllowedModel(provider: AiProvider, model: string): boolean {
   return (modelsForProvider(provider) as readonly string[]).includes(model.trim());
 }
 
-export function assertOperationalModel(provider: AiProvider, model: string, agent?: string): void {
-  if (isAllowedModel(provider, model)) return;
+export function assertOperationalModel(
+  provider: AiProvider,
+  model: string,
+  agent?: AgentType | string,
+): void {
   const prefix = agent ? `[${agent}] ` : '';
-  throw new Error(`${prefix}modèle non opérationnel: ${model || '(vide)'} (provider ${provider})`);
+  if (!isAllowedModel(provider, model)) {
+    throw new Error(
+      `${prefix}modèle non opérationnel: ${model || '(vide)'} (provider ${provider})`,
+    );
+  }
+  if (agent && isAgentType(agent) && !modelSupportsAgent(model, agent)) {
+    const missing = missingAgentCapabilities(model, agent).map(capabilityLabel).join(' + ');
+    throw new Error(`${agent} — ${model} ne supporte pas ${missing}.`);
+  }
+}
+
+function isAgentType(value: string): value is AgentType {
+  return (
+    value === 'SCRIBE' ||
+    value === 'GUIDE' ||
+    value === 'EDITOR' ||
+    value === 'NARRATOR' ||
+    value === 'CONFIDANT' ||
+    value === 'ONIRIQUE'
+  );
+}
+
+/**
+ * Strict Desk save validation: never silently swap an incompatible model.
+ */
+export function assertSavableAgentModel(
+  agent: AgentType,
+  provider: AiProvider,
+  model: string,
+): void {
+  if (!ALLOWED_PROVIDERS.has(provider)) {
+    throw new Error(`${agent} — provider non autorisé: ${provider}`);
+  }
+  if (!isAllowedModel(provider, model)) {
+    throw new Error(`${agent} — modèle ${model || '(vide)'} non autorisé pour ${provider}.`);
+  }
+  if (!modelSupportsAgent(model, agent)) {
+    const missing = missingAgentCapabilities(model, agent).map(capabilityLabel).join(' + ');
+    throw new Error(`${agent} — ${model} ne supporte pas ${missing}.`);
+  }
 }
 
 function normalizeAgent(
@@ -205,8 +304,10 @@ function normalizeAgent(
 
   const requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
   let model = requestedModel;
-  if (!isAllowedModel(provider, model)) {
-    const restored = provider === 'openai' ? fallback.model : modelsForProvider(provider)[0];
+  if (!isAllowedModel(provider, model) || !modelSupportsAgent(model, agent)) {
+    const restored =
+      modelsForAgent(provider, agent)[0] ??
+      (provider === 'openai' ? fallback.model : modelsForProvider(provider)[0]);
     issues.push(
       `${agent}: modèle ${requestedModel || '(vide)'} non opérationnel, ${restored} restauré`,
     );

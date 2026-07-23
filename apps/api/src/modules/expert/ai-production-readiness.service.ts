@@ -4,13 +4,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   activeProvidersInConfig,
   AGENT_REQUIRED_CAPABILITIES,
+  modelSupportsAgent,
   normalizeAiModelConfig,
 } from '../../services/factory/ai-model-config';
-import { AgentType, AiProvider } from '../../services/factory/ai-execution.types';
+import { AgentType, AiProvider, AiProviderMode } from '../../services/factory/ai-execution.types';
 import { resolveVertexLocation } from '../../services/factory/llm';
 import { ConfigService } from '@nestjs/config';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
-import { ProviderCredentialStatus } from './ai-provider-diagnostics.types';
+import {
+  AiCredentialsStatusResponse,
+  ModelProbeSnapshot,
+  ProviderCredentialStatus,
+} from './ai-provider-diagnostics.types';
 
 export type ReadinessLevel = 'pass' | 'warning' | 'fail';
 
@@ -280,7 +285,11 @@ export class AiProductionReadinessService {
           );
         },
       ),
-      ...this.agentCapabilityChecks(normalized.config.agents, providerStatus),
+      ...this.agentCapabilityChecks(
+        normalized.config.agents,
+        providerStatus,
+        normalized.config.providerMode,
+      ),
       {
         id: 'pipeline_assets',
         label: 'Pipeline PDF et audio terminé',
@@ -444,39 +453,55 @@ export class AiProductionReadinessService {
 
   private agentCapabilityChecks(
     agents: ReturnType<typeof normalizeAiModelConfig>['config']['agents'],
-    status: {
-      openai: ProviderCredentialStatus;
-      gemini: ProviderCredentialStatus;
-      vertex: ProviderCredentialStatus;
-    },
+    status: AiCredentialsStatusResponse,
+    providerMode: AiProviderMode,
   ): ReadinessCheck[] {
     const checks: ReadinessCheck[] = [];
+    const probes = status.modelProbes ?? [];
+
     for (const [agent, config] of Object.entries(agents) as Array<
       [AgentType, (typeof agents)[AgentType]]
     >) {
       if (!config.enabled) continue;
+      const provider = providerMode === 'openai_only' ? 'openai' : config.provider;
+      const model = config.model;
       const caps = AGENT_REQUIRED_CAPABILITIES[agent];
       const providerStatus =
-        config.provider === 'openai'
+        provider === 'openai'
           ? status.openai
-          : config.provider === 'gemini'
+          : provider === 'gemini'
             ? status.gemini
             : status.vertex;
+      const probe =
+        probes.find((entry) => entry.provider === provider && entry.model === model) ??
+        ({
+          provider,
+          model,
+          configured: providerStatus.configured,
+          text: 'not_tested',
+          multimodal: 'not_tested',
+          structured: 'not_tested',
+        } satisfies ModelProbeSnapshot);
 
-      const parts: string[] = [`${agent} → ${config.provider} → ${config.model}`];
+      const parts: string[] = [`${agent} → ${provider} → ${model}`];
       let level: ReadinessLevel = 'pass';
       const escalate = (next: ReadinessLevel) => {
         if (next === 'fail' || level === 'fail') level = 'fail';
         else if (next === 'warning') level = 'warning';
       };
 
+      if (!modelSupportsAgent(model, agent)) {
+        escalate('fail');
+        parts.push('modèle incompatible');
+      }
+
       if (!providerStatus.configured) {
         escalate('fail');
         parts.push('credentials absents');
       } else {
         if (caps.includes('text')) {
-          if (providerStatus.text === 'ok') parts.push('texte OK');
-          else if (providerStatus.text === 'not_tested') {
+          if (probe.text === 'ok') parts.push('texte OK');
+          else if (probe.text === 'not_tested') {
             escalate('warning');
             parts.push('texte non testé');
           } else {
@@ -485,8 +510,8 @@ export class AiProductionReadinessService {
           }
         }
         if (caps.includes('vision')) {
-          if (providerStatus.multimodal === 'ok') parts.push('vision OK');
-          else if (providerStatus.multimodal === 'not_tested') {
+          if (probe.multimodal === 'ok') parts.push('vision OK');
+          else if (probe.multimodal === 'not_tested') {
             escalate('warning');
             parts.push('vision non testée');
           } else {
@@ -496,9 +521,7 @@ export class AiProductionReadinessService {
         }
         if (caps.includes('structured')) {
           const structured =
-            config.provider === 'openai'
-              ? providerStatus.text
-              : (providerStatus.structured ?? 'not_tested');
+            provider === 'openai' ? probe.text : (probe.structured ?? 'not_tested');
           if (structured === 'ok') parts.push('JSON OK');
           else if (structured === 'not_tested') {
             escalate('warning');

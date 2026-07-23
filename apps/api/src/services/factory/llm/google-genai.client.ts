@@ -13,10 +13,14 @@ export interface GoogleGenAiCallMeta {
   projectId?: string;
 }
 
+/** Stable Gemini / Vertex API surface for Lumira production calls. */
+export const GOOGLE_GENAI_API_VERSION = 'v1' as const;
+
 export function createGeminiDeveloperClient(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
     vertexai: false,
+    apiVersion: GOOGLE_GENAI_API_VERSION,
   });
 }
 
@@ -25,8 +29,14 @@ export function createVertexAiClient(account: VertexServiceAccount, location: st
     vertexai: true,
     project: account.project_id,
     location,
+    apiVersion: GOOGLE_GENAI_API_VERSION,
     googleAuthOptions: {
-      credentials: account as never,
+      credentials: {
+        client_email: account.client_email,
+        private_key: account.private_key,
+        project_id: account.project_id,
+        type: account.type,
+      },
       scopes: ['https://www.googleapis.com/auth/cloud-platform'],
     },
   });

@@ -178,7 +178,16 @@ interface ConnectionTestResult {
   testedAt: string;
   text: ProbeStatus;
   multimodal?: ProbeStatus;
+  structured?: ProbeStatus;
   error?: string;
+  models?: Array<{
+    model: string;
+    success: boolean;
+    text: ProbeStatus;
+    multimodal?: ProbeStatus;
+    structured?: ProbeStatus;
+    error?: string;
+  }>;
 }
 
 const AGENTS: Array<{ key: AgentKey; label: string; description: string }> = [
@@ -213,6 +222,35 @@ const SEED_GOOGLE_MODELS: CatalogModel[] = [
   { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 ];
 
+const AGENT_REQUIRED_CAPS: Record<
+  AgentKey,
+  Array<'text' | 'vision' | 'structured' | 'long_text' | 'fast_text'>
+> = {
+  SCRIBE: ['text', 'vision', 'structured'],
+  GUIDE: ['text', 'structured'],
+  EDITOR: ['text'],
+  NARRATOR: ['text', 'long_text'],
+  CONFIDANT: ['text', 'fast_text'],
+  ONIRIQUE: ['text', 'structured'],
+};
+
+const MODEL_CAPS: Record<
+  string,
+  Array<'text' | 'vision' | 'structured' | 'long_text' | 'fast_text'>
+> = {
+  'gpt-5.5-2026-04-23': ['text', 'vision', 'structured', 'long_text'],
+  'gpt-5.4-2026-03-05': ['text', 'vision', 'structured', 'long_text'],
+  'gpt-4o-2024-11-20': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-2.5-pro': ['text', 'vision', 'structured', 'long_text'],
+  'gemini-2.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+};
+
+function modelSupportsAgent(modelId: string, agent: AgentKey): boolean {
+  const required = AGENT_REQUIRED_CAPS[agent];
+  const available = new Set(MODEL_CAPS[modelId] ?? ['text']);
+  return required.every((cap) => available.has(cap));
+}
+
 const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
   { id: 'openai', label: 'OpenAI' },
   { id: 'vertex', label: 'Vertex AI — projet Google Cloud' },
@@ -245,15 +283,20 @@ function seedModelsForProvider(provider: ProviderId): CatalogModel[] {
 
 function sanitizeOperationalModels(
   config: ModelConfig,
-  resolveModels: (provider: ProviderId) => CatalogModel[],
+  resolveModels: (provider: ProviderId, agent?: AgentKey) => CatalogModel[],
 ): ModelConfig {
   const agents = { ...config.agents };
   let changed = false;
   for (const key of Object.keys(agents) as AgentKey[]) {
     const agent = agents[key];
     const provider = config.providerMode === 'openai_only' ? 'openai' : agent.provider;
-    const options = resolveModels(provider);
-    const fallback = options[0]?.id || seedModelsForProvider(provider)[0].id;
+    const options = resolveModels(provider, key);
+    const verified = options.find((option) => option.status === 'verified');
+    const fallback =
+      verified?.id ||
+      options[0]?.id ||
+      seedModelsForProvider(provider).find((model) => modelSupportsAgent(model.id, key))?.id ||
+      seedModelsForProvider(provider)[0].id;
     if (!options.some((option) => option.id === agent.model)) {
       agents[key] = { ...agent, model: fallback };
       changed = true;
@@ -524,25 +567,35 @@ export default function SettingsPage() {
   }, []);
 
   const modelsForProvider = useCallback(
-    (provider: ProviderId): CatalogModel[] => {
+    (provider: ProviderId, agent?: AgentKey): CatalogModel[] => {
       const catalog =
         provider === 'openai'
           ? availableModels?.openai
           : provider === 'vertex'
             ? availableModels?.vertex
             : availableModels?.gemini;
-      if (!catalog?.models?.length) {
-        return seedModelsForProvider(provider);
-      }
-      // Prefer verified/live models; keep supported visible but marked.
-      return catalog.models.filter((model) => model.status !== 'unavailable');
+      const base = catalog?.models?.length
+        ? catalog.models.filter((model) => model.status !== 'unavailable')
+        : seedModelsForProvider(provider);
+      if (!agent) return base;
+      return base.filter((model) => modelSupportsAgent(model.id, agent));
     },
     [availableModels],
   );
 
   const defaultModelForProvider = useCallback(
-    (provider: ProviderId): string =>
-      modelsForProvider(provider)[0]?.id || seedModelsForProvider(provider)[0].id,
+    (provider: ProviderId, agent?: AgentKey): string => {
+      const options = modelsForProvider(provider, agent);
+      const verified = options.find((option) => option.status === 'verified');
+      return (
+        verified?.id ||
+        options[0]?.id ||
+        seedModelsForProvider(provider).find((model) =>
+          agent ? modelSupportsAgent(model.id, agent) : true,
+        )?.id ||
+        seedModelsForProvider(provider)[0].id
+      );
+    },
     [modelsForProvider],
   );
 
@@ -691,14 +744,17 @@ export default function SettingsPage() {
       const { data } = await expertApi.post(path);
       setTestResult(data);
       if (data.success) {
+        const modelCount = data.models?.length ?? 1;
         setSuccess(
-          provider === 'openai'
-            ? 'OpenAI Responses + vision validés.'
-            : provider === 'vertex'
-              ? 'Vertex AI texte + vision validés.'
-              : 'Gemini API texte + vision validés.',
+          `${provider} validé (${modelCount} modèle${modelCount > 1 ? 's' : ''} · texte/vision/JSON selon besoins).`,
         );
-      } else setActionError(data.error || `Le test ${provider} a échoué.`);
+      } else {
+        const failed =
+          data.models?.find((entry: { success: boolean }) => !entry.success)?.error ||
+          data.error ||
+          `Le test ${provider} a échoué.`;
+        setActionError(failed);
+      }
       await loadAll();
     } catch (error) {
       setActionError(messageFromError(error));
@@ -728,11 +784,11 @@ export default function SettingsPage() {
       if (!current) return current;
       const nextAgent = { ...current.agents[agent], ...patch };
       if (patch.provider && patch.provider !== current.agents[agent].provider) {
-        const options = modelsForProvider(patch.provider);
+        const options = modelsForProvider(patch.provider, agent);
         const verified = options.find((option) => option.status === 'verified');
         const allowed = options.map((option) => option.id);
         if (!allowed.includes(nextAgent.model)) {
-          nextAgent.model = verified?.id || defaultModelForProvider(patch.provider);
+          nextAgent.model = verified?.id || defaultModelForProvider(patch.provider, agent);
         }
         if (patch.provider === 'openai' && nextAgent.model.startsWith('gpt-5.')) {
           nextAgent.reasoningEffort = nextAgent.reasoningEffort || 'medium';
@@ -1188,10 +1244,33 @@ export default function SettingsPage() {
                 </button>
               </div>
               {(card.status.lastError ||
-                (testResult?.provider === card.id && testResult.error)) && (
-                <p className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
-                  {(testResult?.provider === card.id && testResult.error) || card.status.lastError}
-                </p>
+                (testResult?.provider === card.id &&
+                  (testResult.error || (testResult.models && testResult.models.length > 0)))) && (
+                <div className="mt-3 space-y-2">
+                  {((testResult?.provider === card.id && testResult.error) ||
+                    card.status.lastError) && (
+                    <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-600">
+                      {(testResult?.provider === card.id && testResult.error) ||
+                        card.status.lastError}
+                    </p>
+                  )}
+                  {testResult?.provider === card.id &&
+                    testResult.models?.map((entry) => (
+                      <p
+                        key={entry.model}
+                        className={cn(
+                          'rounded-lg p-3 text-sm',
+                          entry.success
+                            ? 'bg-emerald-500/10 text-emerald-700'
+                            : 'bg-red-500/10 text-red-600',
+                        )}
+                      >
+                        {entry.model}: texte {entry.text} · vision {entry.multimodal || 'n/a'} ·
+                        JSON {entry.structured || 'n/a'}
+                        {entry.error ? ` — ${entry.error}` : ''}
+                      </p>
+                    ))}
+                </div>
               )}
             </Card>
           ))}
@@ -1361,7 +1440,7 @@ export default function SettingsPage() {
             const item = modelConfig.agents[agent.key];
             const providerLocked = modelConfig.providerMode === 'openai_only';
             const effectiveProvider = providerLocked ? 'openai' : item.provider;
-            const catalogOptions = modelsForProvider(effectiveProvider);
+            const catalogOptions = modelsForProvider(effectiveProvider, agent.key);
             const modelOptions = catalogOptions;
             const isGpt5 = effectiveProvider === 'openai' && item.model.startsWith('gpt-5.');
             const useTempKnobs = !isGpt5;

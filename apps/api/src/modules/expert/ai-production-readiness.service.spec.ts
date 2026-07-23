@@ -137,20 +137,24 @@ describe('AiProductionReadinessService', () => {
           ),
       },
     };
+    const text = options?.text ?? 'ok';
+    const multimodal = options?.multimodal ?? 'ok';
     const diagnostics = {
       getCredentialsStatus: jest.fn().mockResolvedValue({
         openai: {
           configured: true,
-          text: options?.text ?? 'ok',
-          multimodal: options?.multimodal ?? 'ok',
+          text,
+          multimodal,
+          structured: text,
           model: 'gpt-5.5-2026-04-23',
-          state: 'connection_ok',
+          state: text === 'ok' && multimodal !== 'error' ? 'connection_ok' : 'test_failed',
           envVar: 'OPENAI_API_KEY',
         },
         gemini: {
           configured: false,
           text: 'not_tested',
           multimodal: 'not_tested',
+          structured: 'not_tested',
           model: 'gemini-2.5-flash',
           state: 'not_configured',
           envVar: 'GEMINI_API_KEY',
@@ -159,10 +163,37 @@ describe('AiProductionReadinessService', () => {
           configured: false,
           text: 'not_tested',
           multimodal: 'not_tested',
+          structured: 'not_tested',
           model: 'gemini-2.5-pro',
           state: 'not_configured',
           envVar: 'VERTEX_CREDENTIALS_JSON',
         },
+        modelProbes: [
+          {
+            provider: 'openai',
+            model: 'gpt-5.5-2026-04-23',
+            configured: true,
+            text,
+            multimodal,
+            structured: text,
+          },
+          {
+            provider: 'openai',
+            model: 'gpt-5.4-2026-03-05',
+            configured: true,
+            text,
+            multimodal: 'not_tested',
+            structured: text,
+          },
+          {
+            provider: 'openai',
+            model: 'gpt-4o-2024-11-20',
+            configured: true,
+            text,
+            multimodal: 'not_tested',
+            structured: text,
+          },
+        ],
       }),
     };
     return new AiProductionReadinessService(
@@ -284,6 +315,24 @@ describe('AiProductionReadinessService', () => {
           envVar: 'VERTEX_CREDENTIALS_JSON',
           location: 'us-central1',
         },
+        modelProbes: [
+          {
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+          },
+          {
+            provider: 'gemini',
+            model: 'gemini-2.5-flash',
+            configured: true,
+            text: 'ok',
+            multimodal: 'not_tested',
+            structured: 'ok',
+          },
+        ],
       }),
     };
     const result = await new AiProductionReadinessService(
@@ -296,6 +345,127 @@ describe('AiProductionReadinessService', () => {
     expect(result.checks.find((check) => check.id === 'gemini_key')?.level).toBe('pass');
     expect(result.checks.find((check) => check.id === 'vertex_key')?.level).toBe('pass');
     expect(result.verdict).toBe('CONDITIONAL_GO');
+  });
+
+  it('returns NO_GO when structured probe fails for an active Google model', async () => {
+    const googleOnly = {
+      providerMode: 'per_agent' as const,
+      agents: {
+        ...modelConfig.agents,
+        SCRIBE: {
+          ...modelConfig.agents.SCRIBE,
+          provider: 'vertex' as const,
+          model: 'gemini-2.5-pro',
+          temperature: 0.7,
+          topP: 0.9,
+        },
+        EDITOR: { ...modelConfig.agents.EDITOR, enabled: false },
+        GUIDE: {
+          ...modelConfig.agents.GUIDE,
+          provider: 'gemini' as const,
+          model: 'gemini-2.5-flash',
+          temperature: 0.5,
+          topP: 0.9,
+        },
+        NARRATOR: { ...modelConfig.agents.NARRATOR, enabled: false },
+        CONFIDANT: { ...modelConfig.agents.CONFIDANT, enabled: false },
+        ONIRIQUE: { ...modelConfig.agents.ONIRIQUE, enabled: false },
+      },
+    };
+    const prisma = {
+      expert: {
+        findUnique: jest.fn().mockResolvedValue({
+          email: 'expert@oraclelumira.com',
+          role: ExpertRole.ADMIN,
+          isActive: true,
+        }),
+        count: jest.fn().mockResolvedValue(1),
+      },
+      promptVersion: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'model-config',
+            key: 'MODEL_CONFIG',
+            version: 1,
+            value: JSON.stringify(googleOnly),
+            changedBy: 'test',
+            comment: 'google',
+            createdAt: new Date('2026-07-20T12:00:00Z'),
+          },
+          {
+            id: 'guide',
+            key: 'GUIDE',
+            version: 2,
+            value: 'Parcours pratique de 30 jours, batch de 10 jours.',
+            changedBy: 'test',
+            comment: 'guide',
+            createdAt: new Date('2026-07-20T12:01:00Z'),
+          },
+        ]),
+      },
+      aiRoutingRule: { findMany: jest.fn().mockResolvedValue([]) },
+      aiRun: { findMany: jest.fn().mockResolvedValue([]) },
+      order: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const diagnostics = {
+      getCredentialsStatus: jest.fn().mockResolvedValue({
+        openai: {
+          configured: false,
+          text: 'not_tested',
+          multimodal: 'not_tested',
+          structured: 'not_tested',
+          model: 'gpt-5.5-2026-04-23',
+          state: 'not_configured',
+          envVar: 'OPENAI_API_KEY',
+        },
+        gemini: {
+          configured: true,
+          text: 'ok',
+          multimodal: 'not_tested',
+          structured: 'error',
+          model: 'gemini-2.5-flash',
+          state: 'test_failed',
+          envVar: 'GEMINI_API_KEY',
+        },
+        vertex: {
+          configured: true,
+          text: 'ok',
+          multimodal: 'ok',
+          structured: 'ok',
+          model: 'gemini-2.5-pro',
+          state: 'connection_ok',
+          envVar: 'VERTEX_CREDENTIALS_JSON',
+          location: 'us-central1',
+        },
+        modelProbes: [
+          {
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+          },
+          {
+            provider: 'gemini',
+            model: 'gemini-2.5-flash',
+            configured: true,
+            text: 'ok',
+            multimodal: 'not_tested',
+            structured: 'error',
+          },
+        ],
+      }),
+    };
+    const result = await new AiProductionReadinessService(
+      prisma as never,
+      diagnostics as never,
+      { get: jest.fn(() => 'us-central1') } as never,
+    ).getReadiness();
+
+    expect(result.verdict).toBe('NO_GO');
+    expect(result.checks.find((check) => check.id === 'agent_guide')?.level).toBe('fail');
+    expect(result.checks.find((check) => check.id === 'agent_scribe')?.level).toBe('pass');
   });
 
   it('returns CONDITIONAL_GO before a tracked complete generation', async () => {

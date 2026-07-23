@@ -730,14 +730,14 @@ export class VertexOracle implements OnModuleInit {
   }
 
   private logResolvedRoute(agent: AgentType, resolved: ResolvedAiExecution): void {
-    const vertexExtra =
+    const authExtra =
       resolved.provider === 'vertex' && this.vertexAdapter
         ? ` auth=service_account location=${this.vertexAdapter.getLocation()}`
-        : resolved.provider === 'gemini'
+        : resolved.provider === 'gemini' || resolved.provider === 'openai'
           ? ' auth=api_key'
           : '';
     this.logger.log(
-      `[${agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}${vertexExtra}`,
+      `[${agent}] ${resolved.routingSource} → ${resolved.provider}/${resolved.model}${authExtra}`,
     );
   }
 

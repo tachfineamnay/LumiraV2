@@ -22,6 +22,10 @@ describe('AdminSettingsService restore latest custom', () => {
 
   const aiRuntimeCache = { invalidateAll: jest.fn() };
   const aiModelCatalog = { clearCache: jest.fn() };
+  const aiProviderDiagnostics = {
+    clearAllCaches: jest.fn(),
+    clearProviderCache: jest.fn(),
+  };
   let service: AdminSettingsService;
 
   beforeEach(() => {
@@ -29,7 +33,7 @@ describe('AdminSettingsService restore latest custom', () => {
     service = new AdminSettingsService(
       prisma as unknown as PrismaService,
       { get: jest.fn() } as unknown as ConfigService,
-      {} as AiProviderDiagnosticsService,
+      aiProviderDiagnostics as unknown as AiProviderDiagnosticsService,
       aiRuntimeCache as unknown as AiRuntimeCacheService,
       aiModelCatalog as never,
     );

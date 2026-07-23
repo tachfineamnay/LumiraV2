@@ -22,7 +22,7 @@ const SECRET_PATTERNS = [
   /\bsk-[A-Za-z0-9_-]{10,}\b/g,
   /\bAIza[A-Za-z0-9_-]{10,}\b/g,
   /Bearer\s+[A-Za-z0-9._-]+/gi,
-  /-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/gi,
+  /-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/gi,
 ];
 
 export function sanitizeAiErrorMessage(message: string): string {
@@ -108,6 +108,8 @@ export function classifyNormalizedAiError(rawMessage: string): AiNormalizedError
     message.includes('response_schema') ||
     message.includes('responsejsonschema') ||
     message.includes('structured output') ||
+    message.includes('json structur') ||
+    message.includes('sortie json') ||
     message.includes('additionalproperties')
   ) {
     return 'structured_output_unsupported';
