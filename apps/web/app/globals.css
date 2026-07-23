@@ -181,112 +181,285 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   L'AUBE DU SANCTUAIRE — Atmosphere & Glassmorphism
-   Scoped: applied only via .sanctuaire-aube wrapper
+   L'AUBE DU SANCTUAIRE v2 — Ciel de 45 min après l'aube
+   Fond CLAIR, lumineux, aérien — texte sombre sur ciel bleu
+   The night is gone. The sky is open, clear, breathing.
    ═══════════════════════════════════════════════════════════ */
 
 @layer components {
-  /* --- Dawn atmosphere (replaces .starfield in the sanctuary) --- */
+  /* --- Atmosphère ciel clair matinal --- */
   .sanctuaire-aube {
-    background-color: #050a18;
+    background-color: #c0d9ee;
     background-image:
-      /* Upper mist — deep blue halo */
-      radial-gradient(ellipse 130% 50% at 50% -10%, rgba(30, 60, 110, 0.18) 0%, transparent 70%),
-      /* Dawn rose whisper — very subtle top-right */
-        radial-gradient(ellipse 55% 35% at 82% 8%, rgba(200, 136, 154, 0.04) 0%, transparent 55%),
-      /* Lavender whisper — touch top-left */
-        radial-gradient(ellipse 45% 30% at 15% 12%, rgba(176, 160, 212, 0.025) 0%, transparent 45%),
-      /* Ivory halo — horizon glow at bottom */
-        radial-gradient(ellipse 100% 28% at 50% 105%, rgba(240, 232, 208, 0.05) 0%, transparent 45%),
-      /* Soft gold — low center warmth */
-        radial-gradient(ellipse 70% 20% at 50% 100%, rgba(244, 185, 66, 0.025) 0%, transparent 35%),
-      /* Central mist — living atmosphere */
-        radial-gradient(circle at 50% 45%, rgba(21, 38, 72, 0.1) 0%, transparent 55%),
-      /* Night-to-mist gradient */
-        linear-gradient(180deg, #050a18 0%, #0a1528 20%, #0f1a35 50%, #142242 100%);
+      /* Profondeur supérieure — bleu ciel plus riche en haut */
+      radial-gradient(ellipse 130% 50% at 50% -5%, rgba(80, 140, 200, 0.22) 0%, transparent 60%),
+      /* Résidu d'aurore — très léger, chaud, haut droite */
+        radial-gradient(ellipse 50% 28% at 80% 8%, rgba(220, 185, 155, 0.07) 0%, transparent 50%),
+      /* Résidu rose d'aurore — haut gauche, invisible presque */
+        radial-gradient(ellipse 40% 22% at 18% 10%, rgba(210, 175, 185, 0.04) 0%, transparent 45%),
+      /* Horizon lumineux — fond très clair */
+        radial-gradient(ellipse 110% 35% at 50% 108%, rgba(240, 250, 255, 0.8) 0%, transparent 40%),
+      /* Dégradé de ciel matinal — du bleu vif en haut au blanc-bleu en bas */
+        linear-gradient(
+          180deg,
+          #98c4e6 0%,
+          #aed0eb 18%,
+          #c0daf2 38%,
+          #d2e6f6 58%,
+          #e2f0fa 76%,
+          #eef6fc 88%,
+          #f5faff 100%
+        );
+    color: #0d1f35;
   }
 
-  /* --- Dawn glassmorphism card --- */
+  /* ─────────────────────────────────────────────────────────
+     LIGHT THEME COLOUR OVERRIDES
+     All dark-mode tokens are overridden inside .sanctuaire-aube.
+     Both self selector (.sanctuaire-aube.class) and child
+     selector (.sanctuaire-aube .class) are used to cover all cases.
+     ───────────────────────────────────────────────────────── */
+
+  /* Text — primary headings → deep navy */
+  .sanctuaire-aube.text-ivoire-100,
+  .sanctuaire-aube .text-ivoire-100 {
+    color: #0d1f35;
+  }
+  .sanctuaire-aube.text-ivoire-200,
+  .sanctuaire-aube .text-ivoire-200 {
+    color: #1a3450;
+  }
+  .sanctuaire-aube.text-ivoire-300,
+  .sanctuaire-aube .text-ivoire-300 {
+    color: #284060;
+  }
+  /* Accent — warm gold of morning light, readable on sky */
+  .sanctuaire-aube.text-ivoire-400,
+  .sanctuaire-aube .text-ivoire-400 {
+    color: #8a6820;
+  }
+  .sanctuaire-aube.text-ivoire-500,
+  .sanctuaire-aube .text-ivoire-500 {
+    color: #a88030;
+  }
+
+  /* Text — secondary (brume) → navy-blue readable on light */
+  .sanctuaire-aube.text-brume-200,
+  .sanctuaire-aube .text-brume-200 {
+    color: #385c7a;
+  }
+  .sanctuaire-aube.text-brume-300,
+  .sanctuaire-aube .text-brume-300 {
+    color: #587898;
+  }
+  .sanctuaire-aube.text-brume-400,
+  .sanctuaire-aube .text-brume-400 {
+    color: #7898b8;
+  }
+
+  /* Backgrounds — surfaces become translucent white/sky */
+  .sanctuaire-aube .bg-brume-800\/95 {
+    background-color: rgba(238, 248, 255, 0.97) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/40 {
+    background-color: rgba(255, 255, 255, 0.62) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/35 {
+    background-color: rgba(255, 255, 255, 0.55) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/30 {
+    background-color: rgba(255, 255, 255, 0.48) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/25 {
+    background-color: rgba(255, 255, 255, 0.42) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/22 {
+    background-color: rgba(255, 255, 255, 0.36) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/20 {
+    background-color: rgba(255, 255, 255, 0.3) !important;
+  }
+  .sanctuaire-aube .bg-brume-800\/15 {
+    background-color: rgba(255, 255, 255, 0.22) !important;
+  }
+  .sanctuaire-aube .bg-brume-700\/50 {
+    background-color: rgba(195, 222, 245, 0.55) !important;
+  }
+  .sanctuaire-aube .bg-brume-700\/40 {
+    background-color: rgba(195, 222, 245, 0.5) !important;
+  }
+  .sanctuaire-aube .bg-brume-700\/30 {
+    background-color: rgba(195, 222, 245, 0.4) !important;
+  }
+  .sanctuaire-aube .bg-brume-700\/25 {
+    background-color: rgba(195, 222, 245, 0.35) !important;
+  }
+  .sanctuaire-aube .bg-brume-700\/20 {
+    background-color: rgba(195, 222, 245, 0.28) !important;
+  }
+  .sanctuaire-aube .bg-brume-600\/40 {
+    background-color: rgba(175, 208, 235, 0.48) !important;
+  }
+  .sanctuaire-aube .bg-brume-600\/30 {
+    background-color: rgba(175, 208, 235, 0.38) !important;
+  }
+  /* Gold accent backgrounds → warm morning gold tint */
+  .sanctuaire-aube .bg-ivoire-400 {
+    background-color: #b08828 !important;
+  }
+  .sanctuaire-aube .bg-ivoire-400\/18 {
+    background-color: rgba(176, 136, 40, 0.18) !important;
+  }
+  .sanctuaire-aube .bg-ivoire-400\/12 {
+    background-color: rgba(176, 136, 40, 0.12) !important;
+  }
+  .sanctuaire-aube .bg-ivoire-400\/10 {
+    background-color: rgba(176, 136, 40, 0.1) !important;
+  }
+  .sanctuaire-aube .bg-ivoire-400\/8 {
+    background-color: rgba(176, 136, 40, 0.08) !important;
+  }
+  .sanctuaire-aube .bg-ivoire-400\/6 {
+    background-color: rgba(176, 136, 40, 0.06) !important;
+  }
+  .sanctuaire-aube .bg-ivoire-400\/5 {
+    background-color: rgba(176, 136, 40, 0.05) !important;
+  }
+  /* Lavande on light */
+  .sanctuaire-aube .bg-lavande-400\/5 {
+    background-color: rgba(120, 100, 175, 0.06) !important;
+  }
+
+  /* Borders → light blue sky borders */
+  .sanctuaire-aube .border-ivoire-500\/\[0\.06\] {
+    border-color: rgba(90, 145, 200, 0.22) !important;
+  }
+  .sanctuaire-aube .border-ivoire-500\/\[0\.05\] {
+    border-color: rgba(90, 145, 200, 0.18) !important;
+  }
+  .sanctuaire-aube .border-ivoire-500\/\[0\.04\] {
+    border-color: rgba(90, 145, 200, 0.14) !important;
+  }
+  .sanctuaire-aube .border-ivoire-500\/\[0\.03\] {
+    border-color: rgba(90, 145, 200, 0.1) !important;
+  }
+  .sanctuaire-aube .border-ivoire-500\/8 {
+    border-color: rgba(90, 145, 200, 0.2) !important;
+  }
+  .sanctuaire-aube .border-ivoire-500\/15 {
+    border-color: rgba(90, 145, 200, 0.28) !important;
+  }
+  .sanctuaire-aube .border-ivoire-400\/30 {
+    border-color: rgba(160, 128, 50, 0.35) !important;
+  }
+  .sanctuaire-aube .border-ivoire-400\/25 {
+    border-color: rgba(160, 128, 50, 0.3) !important;
+  }
+  .sanctuaire-aube .border-ivoire-400\/20 {
+    border-color: rgba(160, 128, 50, 0.25) !important;
+  }
+  .sanctuaire-aube .border-ivoire-400\/18 {
+    border-color: rgba(160, 128, 50, 0.22) !important;
+  }
+  .sanctuaire-aube .border-ivoire-400\/15 {
+    border-color: rgba(160, 128, 50, 0.18) !important;
+  }
+  .sanctuaire-aube .border-ivoire-400\/12 {
+    border-color: rgba(160, 128, 50, 0.15) !important;
+  }
+  .sanctuaire-aube .border-ivoire-400\/10 {
+    border-color: rgba(160, 128, 50, 0.12) !important;
+  }
+
+  /* Hover states */
+  .sanctuaire-aube .hover\:bg-brume-700\/25:hover {
+    background-color: rgba(195, 222, 245, 0.4) !important;
+  }
+  .sanctuaire-aube .hover\:bg-brume-700\/20:hover {
+    background-color: rgba(195, 222, 245, 0.32) !important;
+  }
+  .sanctuaire-aube .hover\:bg-brume-700\/30:hover {
+    background-color: rgba(195, 222, 245, 0.45) !important;
+  }
+  .sanctuaire-aube .hover\:bg-brume-600\/40:hover {
+    background-color: rgba(175, 208, 235, 0.52) !important;
+  }
+  .sanctuaire-aube .group:hover .group-hover\:bg-brume-700\/25 {
+    background-color: rgba(195, 222, 245, 0.4) !important;
+  }
+
+  /* Placeholder text */
+  .sanctuaire-aube .placeholder-brume-300::placeholder {
+    color: #7898b8 !important;
+  }
+
+  /* ── GLASS SURFACES — frosted white on morning sky ── */
+
   .glass-aube {
-    backdrop-filter: blur(24px) saturate(1.15);
-    -webkit-backdrop-filter: blur(24px) saturate(1.15);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.035) 0%,
-      rgba(240, 232, 208, 0.012) 100%
-    );
-    border: 1px solid rgba(240, 232, 208, 0.07);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(90, 148, 205, 0.2);
     box-shadow:
-      0 8px 32px rgba(5, 10, 24, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      0 4px 24px rgba(70, 125, 185, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85);
     border-radius: 1.25rem;
     transition: all 500ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .glass-aube:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(240, 232, 208, 0.02) 100%
-    );
-    border-color: rgba(240, 232, 208, 0.12);
-    box-shadow:
-      0 12px 40px rgba(5, 10, 24, 0.35),
-      0 0 30px rgba(240, 232, 208, 0.04);
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(90, 148, 205, 0.3);
+    box-shadow: 0 8px 32px rgba(70, 125, 185, 0.14);
   }
 
-  /* --- Sidebar dawn glass --- */
+  /* Sidebar — translucent white-blue */
   .glass-sidebar-aube {
     background: linear-gradient(
       180deg,
-      rgba(10, 21, 40, 0.96) 0%,
-      rgba(15, 26, 53, 0.98) 50%,
-      rgba(20, 34, 66, 0.96) 100%
+      rgba(240, 250, 255, 0.96) 0%,
+      rgba(234, 246, 255, 0.97) 50%,
+      rgba(228, 242, 255, 0.96) 100%
     );
-    backdrop-filter: blur(24px) saturate(1.1);
-    -webkit-backdrop-filter: blur(24px) saturate(1.1);
-    border-right: 1px solid rgba(240, 232, 208, 0.05);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    border-right: 1px solid rgba(90, 148, 205, 0.14);
   }
 
-  /* --- Header dawn glass --- */
+  /* Header — translucent white */
   .glass-header-aube {
-    background: rgba(10, 21, 40, 0.88);
-    backdrop-filter: blur(20px) saturate(1.1);
-    -webkit-backdrop-filter: blur(20px) saturate(1.1);
-    border-bottom: 1px solid rgba(240, 232, 208, 0.04);
+    background: rgba(246, 252, 255, 0.92);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border-bottom: 1px solid rgba(90, 148, 205, 0.12);
   }
 
-  /* --- Dawn premium card --- */
+  /* Premium card — light frosted glass */
   .card-aube {
-    backdrop-filter: blur(20px) saturate(1.1);
-    -webkit-backdrop-filter: blur(20px) saturate(1.1);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.04) 0%,
-      rgba(240, 232, 208, 0.01) 100%
-    );
-    border: 1px solid rgba(240, 232, 208, 0.06);
+    backdrop-filter: blur(16px) saturate(1.5);
+    -webkit-backdrop-filter: blur(16px) saturate(1.5);
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(90, 148, 205, 0.18);
     box-shadow:
-      0 8px 32px rgba(5, 10, 24, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      0 4px 20px rgba(70, 125, 185, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
     border-radius: 1rem;
     transition: all 500ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .card-aube:hover {
-    border-color: rgba(244, 185, 66, 0.1);
-    box-shadow:
-      0 16px 48px rgba(5, 10, 24, 0.4),
-      0 0 35px rgba(244, 185, 66, 0.04);
+    background: rgba(255, 255, 255, 0.8);
+    border-color: rgba(160, 128, 50, 0.18);
+    box-shadow: 0 8px 32px rgba(70, 125, 185, 0.12);
     transform: translateY(-1px);
   }
 }
 
 @layer utilities {
-  /* --- Dawn scrollbar --- */
+  /* Dawn scrollbar — light blue */
   .scrollbar-aube {
     scrollbar-width: thin;
-    scrollbar-color: rgba(212, 178, 120, 0.2) transparent;
+    scrollbar-color: rgba(90, 148, 205, 0.3) transparent;
   }
 
   .scrollbar-aube::-webkit-scrollbar {
@@ -299,34 +472,32 @@
   }
 
   .scrollbar-aube::-webkit-scrollbar-thumb {
-    background: rgba(212, 178, 120, 0.2);
+    background: rgba(90, 148, 205, 0.28);
     border-radius: 9999px;
   }
 
   .scrollbar-aube::-webkit-scrollbar-thumb:hover {
-    background: rgba(212, 178, 120, 0.35);
+    background: rgba(90, 148, 205, 0.45);
   }
 
-  /* --- Dawn text glow --- */
+  /* Text glows — suppressed on light background */
   .text-glow-ivoire {
-    text-shadow: 0 0 20px rgba(240, 232, 208, 0.2);
+    text-shadow: none;
   }
 
   .text-glow-aube {
-    text-shadow:
-      0 0 25px rgba(212, 178, 120, 0.12),
-      0 0 50px rgba(212, 178, 120, 0.04);
+    text-shadow: none;
   }
 
-  /* --- Dawn gradient text --- */
+  /* Gradient text — warm morning gold */
   .text-gradient-aube {
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    background-image: linear-gradient(135deg, #e8d8b8, #f0e8d0, #fffcf5);
+    background-image: linear-gradient(135deg, #7a5810, #9a7228, #b88a40);
   }
 
-  /* --- Dawn entry animation --- */
+  /* Entry animation */
   .animate-aube-enter {
     animation: light-reveal 0.8s ease-out both;
   }

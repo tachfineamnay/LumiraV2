@@ -60,39 +60,39 @@ export const OnboardingForm = ({ isOpen, onClose, onComplete }: OnboardingFormPr
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-2xl mx-4 bg-brume-800/95 backdrop-blur-xl border border-ivoire-500/8 rounded-2xl shadow-aube-glow overflow-hidden"
+        className="relative mx-4 w-full max-w-2xl overflow-hidden rounded-2xl border border-[rgba(90,148,205,0.20)] bg-white/90 shadow-[0_20px_60px_rgba(70,125,185,0.18)] backdrop-blur-2xl"
       >
         {/* Header */}
-        <div className="p-6 border-b border-ivoire-500/[0.04] flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-[rgba(90,148,205,0.12)] p-6">
           <div>
-            <h2 className="text-xl font-playfair italic text-ivoire-100">Compléter votre profil</h2>
-            <p className="text-xs text-brume-300 mt-1">Étape {currentStep} sur 3</p>
+            <h2 className="font-playfair text-xl italic text-[#0d1f35]">Compléter votre profil</h2>
+            <p className="mt-1 text-xs text-[#587898]">Étape {currentStep} sur 3</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-brume-800/25 text-brume-300 hover:text-ivoire-100 transition-colors"
+            className="rounded-lg p-2 text-[#587898] transition-colors hover:bg-[rgba(90,148,205,0.10)] hover:text-[#0d1f35]"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Progress */}
-        <div className="px-6 py-4 flex items-center gap-2">
+        <div className="flex items-center gap-2 px-6 py-4">
           {STEPS.map((step, i) => (
             <React.Fragment key={step.id}>
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-colors ${
                   currentStep >= step.id
-                    ? 'bg-ivoire-400 text-abyss-900'
-                    : 'bg-brume-700/30 text-brume-300'
+                    ? 'bg-[#b08828] text-white'
+                    : 'bg-[rgba(90,148,205,0.12)] text-[#587898]'
                 }`}
               >
-                {currentStep > step.id ? <Check className="w-4 h-4" /> : step.id}
+                {currentStep > step.id ? <Check className="h-4 w-4" /> : step.id}
               </div>
               {i < STEPS.length - 1 && (
                 <div
-                  className={`flex-1 h-0.5 transition-colors ${
-                    currentStep > step.id ? 'bg-ivoire-400' : 'bg-brume-700/30'
+                  className={`h-0.5 flex-1 transition-colors ${
+                    currentStep > step.id ? 'bg-[#b08828]' : 'bg-[rgba(90,148,205,0.15)]'
                   }`}
                 />
               )}
@@ -113,52 +113,58 @@ export const OnboardingForm = ({ isOpen, onClose, onComplete }: OnboardingFormPr
               >
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-ivoire-200 mb-2">Prénom</label>
+                    <label className="mb-2 block text-xs font-medium text-[#384060]">Prénom</label>
                     <input
                       type="text"
                       value={formData.firstName}
                       onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                      className="w-full px-4 py-3 bg-brume-800/25 border border-ivoire-500/8 rounded-xl text-ivoire-100 placeholder-brume-300 focus:border-ivoire-400 focus:ring-2 focus:ring-ivoire-400/20"
+                      className="w-full rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/60 px-4 py-3 text-[#0d1f35] placeholder-[#7898b8] backdrop-blur-sm transition-colors focus:border-[#5a94cd] focus:outline-none focus:ring-2 focus:ring-[rgba(90,148,205,0.20)]"
                       placeholder="Votre prénom"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-ivoire-200 mb-2">Nom</label>
+                    <label className="mb-2 block text-xs font-medium text-[#384060]">Nom</label>
                     <input
                       type="text"
                       value={formData.lastName}
                       onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                      className="w-full px-4 py-3 bg-brume-800/25 border border-ivoire-500/8 rounded-xl text-ivoire-100 placeholder-brume-300 focus:border-ivoire-400 focus:ring-2 focus:ring-ivoire-400/20"
+                      className="w-full rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/60 px-4 py-3 text-[#0d1f35] placeholder-[#7898b8] backdrop-blur-sm transition-colors focus:border-[#5a94cd] focus:outline-none focus:ring-2 focus:ring-[rgba(90,148,205,0.20)]"
                       placeholder="Votre nom"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-ivoire-200 mb-2">Date de naissance</label>
+                  <label className="mb-2 block text-xs font-medium text-[#384060]">
+                    Date de naissance
+                  </label>
                   <input
                     type="date"
                     value={formData.birthDate}
                     onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                    className="w-full px-4 py-3 bg-brume-800/25 border border-ivoire-500/8 rounded-xl text-ivoire-100 focus:border-ivoire-400 focus:ring-2 focus:ring-ivoire-400/20"
+                    className="w-full rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/60 px-4 py-3 text-[#0d1f35] backdrop-blur-sm transition-colors focus:border-[#5a94cd] focus:outline-none focus:ring-2 focus:ring-[rgba(90,148,205,0.20)]"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-ivoire-200 mb-2">Heure de naissance</label>
+                    <label className="mb-2 block text-xs font-medium text-[#384060]">
+                      Heure de naissance
+                    </label>
                     <input
                       type="time"
                       value={formData.birthTime}
                       onChange={(e) => setFormData({ ...formData, birthTime: e.target.value })}
-                      className="w-full px-4 py-3 bg-brume-800/25 border border-ivoire-500/8 rounded-xl text-ivoire-100 focus:border-ivoire-400 focus:ring-2 focus:ring-ivoire-400/20"
+                      className="w-full rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/60 px-4 py-3 text-[#0d1f35] backdrop-blur-sm transition-colors focus:border-[#5a94cd] focus:outline-none focus:ring-2 focus:ring-[rgba(90,148,205,0.20)]"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-ivoire-200 mb-2">Lieu de naissance</label>
+                    <label className="mb-2 block text-xs font-medium text-[#384060]">
+                      Lieu de naissance
+                    </label>
                     <input
                       type="text"
                       value={formData.birthPlace}
                       onChange={(e) => setFormData({ ...formData, birthPlace: e.target.value })}
-                      className="w-full px-4 py-3 bg-brume-800/25 border border-ivoire-500/8 rounded-xl text-ivoire-100 placeholder-brume-300 focus:border-ivoire-400 focus:ring-2 focus:ring-ivoire-400/20"
+                      className="w-full rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/60 px-4 py-3 text-[#0d1f35] placeholder-[#7898b8] backdrop-blur-sm transition-colors focus:border-[#5a94cd] focus:outline-none focus:ring-2 focus:ring-[rgba(90,148,205,0.20)]"
                       placeholder="Ville, Pays"
                     />
                   </div>
@@ -175,7 +181,7 @@ export const OnboardingForm = ({ isOpen, onClose, onComplete }: OnboardingFormPr
                 className="space-y-4"
               >
                 <div>
-                  <label className="block text-xs text-ivoire-200 mb-2">
+                  <label className="mb-2 block text-xs font-medium text-[#384060]">
                     Quelle est votre question spirituelle principale ?
                   </label>
                   <textarea
@@ -184,7 +190,7 @@ export const OnboardingForm = ({ isOpen, onClose, onComplete }: OnboardingFormPr
                       setFormData({ ...formData, spiritualQuestion: e.target.value })
                     }
                     rows={6}
-                    className="w-full px-4 py-3 bg-brume-800/25 border border-ivoire-500/8 rounded-xl text-ivoire-100 placeholder-brume-300 focus:border-ivoire-400 focus:ring-2 focus:ring-ivoire-400/20 resize-none"
+                    className="w-full resize-none rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/60 px-4 py-3 text-[#0d1f35] placeholder-[#7898b8] backdrop-blur-sm transition-colors focus:border-[#5a94cd] focus:outline-none focus:ring-2 focus:ring-[rgba(90,148,205,0.20)]"
                     placeholder="Décrivez ce que vous souhaitez explorer lors de cette lecture..."
                   />
                 </div>
@@ -199,12 +205,12 @@ export const OnboardingForm = ({ isOpen, onClose, onComplete }: OnboardingFormPr
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-4"
               >
-                <p className="text-sm text-ivoire-200">
+                <p className="text-sm text-[#385c7a]">
                   Vous pouvez ajouter des photos pour enrichir votre lecture (optionnel).
                 </p>
-                <div className="border-2 border-dashed border-ivoire-500/15 rounded-xl p-8 text-center hover:border-ivoire-400/40 transition-colors cursor-pointer">
-                  <Camera className="w-12 h-12 text-brume-300 mx-auto mb-4" />
-                  <p className="text-sm text-brume-300">
+                <div className="cursor-pointer rounded-xl border-2 border-dashed border-[rgba(90,148,205,0.25)] p-8 text-center transition-colors hover:border-[rgba(90,148,205,0.45)] hover:bg-[rgba(90,148,205,0.04)]">
+                  <Camera className="mx-auto mb-4 h-12 w-12 text-[#7898b8]" />
+                  <p className="text-sm text-[#587898]">
                     Glissez-déposez vos photos ici ou cliquez pour sélectionner
                   </p>
                 </div>
@@ -214,13 +220,13 @@ export const OnboardingForm = ({ isOpen, onClose, onComplete }: OnboardingFormPr
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-ivoire-500/[0.04] flex items-center justify-between">
+        <div className="flex items-center justify-between border-t border-[rgba(90,148,205,0.10)] p-6">
           <button
             onClick={handleBack}
             disabled={currentStep === 1}
-            className="flex items-center gap-2 px-4 py-2 text-brume-300 hover:text-ivoire-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-[#587898] transition-colors hover:text-[#0d1f35] disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
             Retour
           </button>
 
@@ -228,10 +234,10 @@ export const OnboardingForm = ({ isOpen, onClose, onComplete }: OnboardingFormPr
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleNext}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-ivoire-400 text-abyss-900 font-medium"
+            className="flex items-center gap-2 rounded-xl bg-[#b08828] px-6 py-3 font-medium text-white shadow-[0_4px_16px_rgba(176,136,40,0.25)] transition-colors hover:bg-[#c89830]"
           >
             {currentStep === 3 ? 'Terminer' : 'Continuer'}
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="h-4 w-4" />
           </motion.button>
         </div>
       </motion.div>

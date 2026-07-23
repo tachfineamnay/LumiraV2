@@ -13,7 +13,7 @@ export function MobileBottomNav() {
       className="fixed bottom-0 left-0 right-0 z-50 lg:hidden"
       aria-label="Navigation principale du Sanctuaire"
     >
-      <div className="absolute inset-0 border-t border-ivoire-500/[0.04] bg-[#0A1528]/95 shadow-[0_-12px_30px_rgba(4,6,16,0.32)] backdrop-blur-xl" />
+      <div className="absolute inset-0 border-t border-[rgba(90,148,205,0.14)] bg-[#EBF3FC]/92 shadow-[0_-8px_24px_rgba(70,125,185,0.10)] backdrop-blur-xl" />
       <div className="relative grid grid-cols-4 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
         {MOBILE_NAV.map((item) => {
           const Icon = item.icon;
