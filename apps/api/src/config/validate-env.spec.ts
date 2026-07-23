@@ -78,6 +78,11 @@ describe('validateEnvironment', () => {
     expect(() => validateEnvironment(config)).toThrow('MAIL_FROM');
   });
 
+  it('does not require OPENAI_API_KEY at production startup', () => {
+    const { OPENAI_API_KEY, ...configWithoutOpenAi } = validProductionConfig;
+    expect(validateEnvironment(configWithoutOpenAi)).toEqual(configWithoutOpenAi);
+  });
+
   it('does not require production secrets during tests', () => {
     expect(validateEnvironment({ NODE_ENV: 'test' })).toEqual({ NODE_ENV: 'test' });
   });

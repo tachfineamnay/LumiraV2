@@ -6,6 +6,7 @@ import { AiRuntimeCacheService } from '../../services/factory/ai-runtime-cache.s
 import { AiModelConfigSnapshot, AgentType } from '../../services/factory/ai-execution.types';
 import {
   DEFAULT_AI_MODEL_CONFIG,
+  activeProviderModelPairs,
   assertSavableAgentModel,
   normalizeAiModelConfig,
 } from '../../services/factory/ai-model-config';
@@ -511,26 +512,6 @@ export class AdminSettingsService {
 
     try {
       const normalized = normalizeAiModelConfig(JSON.parse(active.value));
-      if (normalized.issues.length > 0) {
-        this.logger.warn(`Stored MODEL_CONFIG was normalized: ${normalized.issues.join(' | ')}`);
-        const healedValue = JSON.stringify(normalized.config, null, 2);
-        const activePretty = (() => {
-          try {
-            return JSON.stringify(JSON.parse(active.value), null, 2);
-          } catch {
-            return active.value;
-          }
-        })();
-        if (healedValue !== activePretty) {
-          await this.persistPromptVersion(
-            PROMPT_KEYS.MODEL_CONFIG,
-            healedValue,
-            'system-heal',
-            `Auto-healed non-operational MODEL_CONFIG: ${normalized.issues.join(' | ')}`,
-          );
-          this.logger.warn('Stored MODEL_CONFIG auto-healed to operational models only');
-        }
-      }
       return {
         config: normalized.config,
         meta: {
@@ -554,50 +535,97 @@ export class AdminSettingsService {
     }
   }
 
-  async saveModelConfig(
-    config: Partial<ModelConfig>,
+  async testAndApplyModelConfig(
+    input: unknown,
     changedBy?: string,
-  ): Promise<{ success: boolean }> {
-    const current = await this.getModelConfig();
-    const agents = { ...current.agents };
-    if (config.agents) {
-      for (const [agent, patch] of Object.entries(config.agents)) {
-        const key = agent as AgentType;
-        if (!agents[key]) throw new BadRequestException(`Agent inconnu: ${agent}`);
-        agents[key] = { ...agents[key], ...patch };
-      }
-    }
-
+  ): Promise<{ success: boolean; message: string; config: ModelConfig }> {
+    const root =
+      typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
     const candidate = {
-      ...current,
-      ...config,
-      agents,
+      providerMode: 'per_agent' as const,
+      agents: root.agents ?? {},
     };
 
-    const providerMode = candidate.providerMode ?? current.providerMode;
-    for (const [agent, agentConfig] of Object.entries(candidate.agents) as Array<
-      [AgentType, (typeof candidate.agents)[AgentType]]
+    const normalized = normalizeAiModelConfig(candidate);
+    const candidateConfig = normalized.config;
+    candidateConfig.providerMode = 'per_agent';
+
+    for (const [agent, agentConfig] of Object.entries(candidateConfig.agents) as Array<
+      [AgentType, (typeof candidateConfig.agents)[AgentType]]
     >) {
-      const provider = providerMode === 'openai_only' ? 'openai' : agentConfig.provider;
-      try {
-        assertSavableAgentModel(agent, provider, agentConfig.model);
-      } catch (error) {
-        throw new BadRequestException(error instanceof Error ? error.message : String(error));
+      if (agentConfig.enabled) {
+        assertSavableAgentModel(agent, agentConfig.provider, agentConfig.model);
       }
     }
 
-    const normalized = normalizeAiModelConfig(candidate);
-    if (normalized.issues.length > 0) {
-      throw new BadRequestException(`Configuration IA invalide: ${normalized.issues.join('; ')}`);
+    const pairs = activeProviderModelPairs(candidateConfig);
+    if (pairs.length === 0) {
+      throw new BadRequestException('Au moins un agent actif doit être configuré.');
+    }
+
+    const probeErrors: string[] = [];
+    const queue = [...pairs];
+    const concurrency = 2;
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const pair = queue.shift();
+        if (!pair) break;
+        try {
+          const res = await this.aiProviderDiagnostics.testProviderModelPair(
+            pair.provider,
+            pair.model,
+            pair.needsVision,
+            pair.needsStructured,
+            30_000,
+          );
+          if (!res.success) {
+            const err = res.error || 'Test de connexion / probe échoué';
+            probeErrors.push(
+              `[${pair.provider}:${pair.model}] (${pair.agents.join(', ')}) — ${err}`,
+            );
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          probeErrors.push(
+            `[${pair.provider}:${pair.model}] (${pair.agents.join(', ')}) — ${errMsg}`,
+          );
+        }
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(concurrency, pairs.length) }, () => worker());
+    await Promise.all(workers);
+
+    if (probeErrors.length > 0) {
+      throw new BadRequestException(
+        `Le test de configuration a échoué. L'ancienne configuration a été conservée. Erreurs: ${probeErrors.join(' ; ')}`,
+      );
     }
 
     await this.persistPromptVersion(
       PROMPT_KEYS.MODEL_CONFIG,
-      JSON.stringify(normalized.config, null, 2),
+      JSON.stringify(candidateConfig, null, 2),
       changedBy,
-      'Model config updated from Desk',
+      'MODEL_CONFIG testé et appliqué depuis le Desk',
     );
-    return { success: true };
+
+    this.aiRuntimeCache.invalidateAll('MODEL_CONFIG testé et appliqué depuis le Desk');
+    this.aiModelCatalog.clearCache();
+    this.aiProviderDiagnostics.clearAllCaches();
+
+    return {
+      success: true,
+      message: 'Configuration IA testée, validée et appliquée avec succès.',
+      config: candidateConfig,
+    };
+  }
+
+  async saveModelConfig(
+    config: Partial<ModelConfig>,
+    changedBy?: string,
+  ): Promise<{ success: boolean; message: string; config: ModelConfig }> {
+    return this.testAndApplyModelConfig(config, changedBy);
   }
 
   private assertPromptKey(key: string): asserts key is PromptKey {

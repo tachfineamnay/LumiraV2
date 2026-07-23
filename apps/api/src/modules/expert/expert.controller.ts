@@ -613,6 +613,15 @@ export class ExpertController {
     return this.adminSettingsService.getModelConfigForDesk();
   }
 
+  @Post('settings/model-config/test-and-apply')
+  @Roles('ADMIN')
+  async testAndApplyModelConfig(
+    @Body() config: Record<string, unknown>,
+    @CurrentExpert() expert?: { email?: string },
+  ) {
+    return this.adminSettingsService.testAndApplyModelConfig(config, expert?.email);
+  }
+
   @Put('settings/model-config')
   @Roles('ADMIN')
   async saveModelConfig(

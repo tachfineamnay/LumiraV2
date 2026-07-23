@@ -25,6 +25,9 @@ describe('AdminSettingsService restore latest custom', () => {
   const aiProviderDiagnostics = {
     clearAllCaches: jest.fn(),
     clearProviderCache: jest.fn(),
+    testProviderModelPair: jest
+      .fn()
+      .mockResolvedValue({ success: true, text: 'ok', multimodal: 'ok', structured: 'ok' }),
   };
   let service: AdminSettingsService;
 
@@ -135,7 +138,7 @@ describe('AdminSettingsService restore latest custom', () => {
       version: 5,
       value: JSON.stringify(DEFAULT_AI_MODEL_CONFIG),
       changedBy: 'production-migration',
-      comment: 'OpenAI-only V1 production baseline',
+      comment: 'V1 production baseline',
       isActive: true,
       createdAt: new Date(),
     });
@@ -146,7 +149,7 @@ describe('AdminSettingsService restore latest custom', () => {
         version: 5,
         value: JSON.stringify(DEFAULT_AI_MODEL_CONFIG),
         changedBy: 'production-migration',
-        comment: 'OpenAI-only V1 production baseline',
+        comment: 'V1 production baseline',
         isActive: true,
         createdAt: new Date(),
       },
@@ -168,60 +171,39 @@ describe('AdminSettingsService restore latest custom', () => {
     const desk = await service.getModelConfigForDesk();
     expect(desk.meta.isCustom).toBe(false);
     expect(desk.meta.hasRestorableCustom).toBe(true);
-    expect(desk.config.providerMode).toBe('openai_only');
+    expect(desk.config.providerMode).toBe('per_agent');
   });
 
-  it('auto-heals stored MODEL_CONFIG with non-operational models', async () => {
-    const broken = {
+  it('never performs Prisma writes during GET getModelConfigForDesk (strict read-only)', async () => {
+    const invalidConfig = {
       ...DEFAULT_AI_MODEL_CONFIG,
       agents: {
         ...DEFAULT_AI_MODEL_CONFIG.agents,
         SCRIBE: {
           ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
-          model: 'gpt-3.5-pro',
+          model: 'custom-unverified-model',
         },
       },
     };
     promptVersion.findFirst.mockResolvedValue({
-      id: 'mc-broken',
+      id: 'mc-custom',
       key: 'MODEL_CONFIG',
       version: 7,
-      value: JSON.stringify(broken),
+      value: JSON.stringify(invalidConfig),
       changedBy: 'founder',
       comment: 'Desk',
       isActive: true,
       createdAt: new Date(),
     });
-    promptVersion.findMany.mockResolvedValue([
-      {
-        id: 'mc-broken',
-        key: 'MODEL_CONFIG',
-        version: 7,
-        value: JSON.stringify(broken),
-        changedBy: 'founder',
-        comment: 'Desk',
-        isActive: true,
-        createdAt: new Date(),
-      },
-    ]);
-    promptVersion.updateMany.mockResolvedValue({ count: 1 });
-    promptVersion.create.mockResolvedValue({ version: 8 });
+    promptVersion.findMany.mockResolvedValue([]);
 
     const desk = await service.getModelConfigForDesk();
-    expect(desk.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
-    expect(promptVersion.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          key: 'MODEL_CONFIG',
-          changedBy: 'system-heal',
-          isActive: true,
-        }),
-      }),
-    );
-    expect(aiRuntimeCache.invalidateAll).toHaveBeenCalled();
+    expect(desk.config.agents.SCRIBE.model).toBe('custom-unverified-model');
+    expect(promptVersion.create).not.toHaveBeenCalled();
+    expect(promptVersion.updateMany).not.toHaveBeenCalled();
   });
 
-  it('rejects saveModelConfig when requesting a non-operational model', async () => {
+  it('rejects testAndApplyModelConfig when probe fails and preserves existing DB config', async () => {
     promptVersion.findFirst.mockResolvedValue({
       id: 'mc',
       key: 'MODEL_CONFIG',
@@ -234,14 +216,20 @@ describe('AdminSettingsService restore latest custom', () => {
     });
     promptVersion.findMany.mockResolvedValue([]);
 
+    (aiProviderDiagnostics.testProviderModelPair as jest.Mock) = jest.fn().mockResolvedValue({
+      success: false,
+      error: 'Model probe failed (404 Not Found)',
+    });
+
     await expect(
-      service.saveModelConfig(
+      service.testAndApplyModelConfig(
         {
+          providerMode: 'per_agent',
           agents: {
             ...DEFAULT_AI_MODEL_CONFIG.agents,
             SCRIBE: {
               ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
-              model: 'gpt-3.5-pro',
+              model: 'non-existent-model',
             },
           },
         },

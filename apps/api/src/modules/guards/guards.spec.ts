@@ -31,6 +31,7 @@ describe('SubscriptionGuard', () => {
     prisma = {
       order: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
       },
     };
 
@@ -43,7 +44,9 @@ describe('SubscriptionGuard', () => {
 
   it('should allow access for a paid order', async () => {
     const context = createMockExecutionContext({ userId: 'user-1' });
-    prisma.order.findFirst.mockResolvedValue({ id: 'order-1' });
+    prisma.order.findMany.mockResolvedValue([
+      { id: 'order-1', status: 'PAID', paidAt: new Date() },
+    ]);
 
     const result = await guard.canActivate(context);
 
@@ -52,14 +55,14 @@ describe('SubscriptionGuard', () => {
 
   it('should throw ForbiddenException for no paid order', async () => {
     const context = createMockExecutionContext({ id: 'user-1' });
-    prisma.order.findFirst.mockResolvedValue(null);
+    prisma.order.findMany.mockResolvedValue([]);
 
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
   it('does not authorize a user merely because of a legacy subscription record', async () => {
     const context = createMockExecutionContext({ id: 'user-1' });
-    prisma.order.findFirst.mockResolvedValue(null);
+    prisma.order.findMany.mockResolvedValue([]);
 
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });

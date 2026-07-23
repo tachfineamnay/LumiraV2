@@ -76,9 +76,14 @@ interface ModelConfig {
 interface CatalogModel {
   id: string;
   label: string;
+  displayName?: string;
   ownedBy?: string;
   createdAt?: number;
   status?: 'verified' | 'supported' | 'unavailable' | 'unknown';
+  callable?: boolean;
+  detected?: boolean;
+  error?: string;
+  isInaccessible?: boolean;
 }
 
 interface ProviderCatalog {
@@ -283,26 +288,10 @@ function seedModelsForProvider(provider: ProviderId): CatalogModel[] {
 
 function sanitizeOperationalModels(
   config: ModelConfig,
-  resolveModels: (provider: ProviderId, agent?: AgentKey) => CatalogModel[],
+  _resolveModels: (provider: ProviderId, agent?: AgentKey) => CatalogModel[],
 ): ModelConfig {
-  const agents = { ...config.agents };
-  let changed = false;
-  for (const key of Object.keys(agents) as AgentKey[]) {
-    const agent = agents[key];
-    const provider = config.providerMode === 'openai_only' ? 'openai' : agent.provider;
-    const options = resolveModels(provider, key);
-    const verified = options.find((option) => option.status === 'verified');
-    const fallback =
-      verified?.id ||
-      options[0]?.id ||
-      seedModelsForProvider(provider).find((model) => modelSupportsAgent(model.id, key))?.id ||
-      seedModelsForProvider(provider)[0].id;
-    if (!options.some((option) => option.id === agent.model)) {
-      agents[key] = { ...agent, model: fallback };
-      changed = true;
-    }
-  }
-  return changed ? { ...config, agents } : config;
+  // Règle produit : Ne jamais changer automatiquement les modèles actifs en production
+  return config;
 }
 
 function messageFromError(error: unknown): string {
@@ -574,13 +563,50 @@ export default function SettingsPage() {
           : provider === 'vertex'
             ? availableModels?.vertex
             : availableModels?.gemini;
-      const base = catalog?.models?.length
-        ? catalog.models.filter((model) => model.status !== 'unavailable')
-        : seedModelsForProvider(provider);
-      if (!agent) return base;
-      return base.filter((model) => modelSupportsAgent(model.id, agent));
+
+      let base: CatalogModel[] = [];
+      if (catalog?.models?.length) {
+        base = catalog.models
+          .filter((m) => m.callable === true || m.status === 'verified')
+          .map((m) => ({
+            id: m.id,
+            label: `${m.displayName || m.id} · Fonctionnel`,
+            displayName: m.displayName || m.id,
+            callable: true,
+            status: 'verified' as const,
+          }));
+      } else {
+        base = seedModelsForProvider(provider).map((m) => ({
+          ...m,
+          label: `${m.label || m.id} · Non vérifié`,
+        }));
+      }
+
+      if (agent) {
+        base = base.filter((model) => modelSupportsAgent(model.id, agent));
+      }
+
+      if (agent && modelConfig?.agents?.[agent]) {
+        const activeModelId = modelConfig.agents[agent].model;
+        const activeProvider =
+          modelConfig.providerMode === 'openai_only'
+            ? 'openai'
+            : modelConfig.agents[agent].provider;
+
+        if (activeProvider === provider && !base.some((m) => m.id === activeModelId)) {
+          base.unshift({
+            id: activeModelId,
+            label: `⚠️ ${activeModelId} (Inaccessible avec les credentials actuels)`,
+            displayName: activeModelId,
+            callable: false,
+            isInaccessible: true,
+          });
+        }
+      }
+
+      return base;
     },
-    [availableModels],
+    [availableModels, modelConfig],
   );
 
   const defaultModelForProvider = useCallback(
@@ -637,10 +663,6 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
-
-  useEffect(() => {
-    setModelConfig((prev) => (prev ? sanitizeOperationalModels(prev, modelsForProvider) : prev));
-  }, [availableModels, modelsForProvider]);
 
   const modelDirty =
     modelConfig && savedModelConfig
@@ -764,13 +786,22 @@ export default function SettingsPage() {
     }
   };
 
-  const saveModels = async () => {
+  const testAndApplyModels = async () => {
     if (!modelConfig) return;
     clearFeedback();
     setSaving(true);
     try {
-      await expertApi.put('/expert/settings/model-config', modelConfig);
-      setSuccess('Configuration des modèles enregistrée et cache runtime invalidé.');
+      const payload = {
+        providerMode: 'per_agent',
+        agents: modelConfig.agents,
+      };
+      const { data } = await expertApi.post(
+        '/expert/settings/model-config/test-and-apply',
+        payload,
+      );
+      setSuccess(
+        data.message || 'Configuration des modèles testée et appliquée au runtime avec succès.',
+      );
       await loadAll();
     } catch (error) {
       setActionError(messageFromError(error));
@@ -1358,20 +1389,55 @@ export default function SettingsPage() {
           <Card className="border-blue-500/30 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-desk-text">Catalogues modèles</h2>
+                <h2 className="font-semibold text-desk-text">
+                  Découverte & Probing des modèles IA
+                </h2>
                 <p className="mt-1 text-sm text-desk-muted">
-                  Live vérifié = listé par le provider et dans l’allowlist Lumira. Supporté non
-                  vérifié = allowlist produit uniquement (jamais présenté comme catalogue live).
+                  Découverte automatique fondée sur vos credentials réellement configurés. Seuls les
+                  modèles validés par un probe minimal sont affichés comme fonctionnels dans les
+                  sélecteurs.
                 </p>
                 {availableModels && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border border-desk-border bg-desk-bg p-3">
+                      <div className="text-xs font-semibold text-desk-muted">OpenAI</div>
+                      <div className="mt-1 text-sm text-desk-text">
+                        <span className="font-mono text-emerald-600 font-bold">
+                          {availableModels.openai.models?.filter((m) => m.callable).length ?? 0}
+                        </span>{' '}
+                        fonctionnel(s) / {availableModels.openai.models?.length ?? 0} détecté(s)
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-desk-border bg-desk-bg p-3">
+                      <div className="text-xs font-semibold text-desk-muted">
+                        Gemini Developer API
+                      </div>
+                      <div className="mt-1 text-sm text-desk-text">
+                        <span className="font-mono text-emerald-600 font-bold">
+                          {availableModels.gemini.models?.filter((m) => m.callable).length ?? 0}
+                        </span>{' '}
+                        fonctionnel(s) / {availableModels.gemini.models?.length ?? 0} détecté(s)
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-desk-border bg-desk-bg p-3">
+                      <div className="text-xs font-semibold text-desk-muted">
+                        Vertex AI ({availableModels.vertex.location ?? 'us-central1'})
+                      </div>
+                      <div className="mt-1 text-sm text-desk-text">
+                        <span className="font-mono text-emerald-600 font-bold">
+                          {availableModels.vertex.models?.filter((m) => m.callable).length ?? 0}
+                        </span>{' '}
+                        fonctionnel(s) / {availableModels.vertex.models?.length ?? 0} détecté(s)
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {availableModels?.fetchedAt && (
                   <p className="mt-2 text-xs text-desk-subtle">
-                    Dernière synchro : {new Date(availableModels.fetchedAt).toLocaleString('fr-FR')}{' '}
-                    · OpenAI {catalogSourceLabel(availableModels.openai.source)} · Vertex{' '}
-                    {catalogSourceLabel(availableModels.vertex.source)}
-                    {availableModels.vertex.location
-                      ? ` (${availableModels.vertex.location})`
-                      : ''}{' '}
-                    · Gemini {catalogSourceLabel(availableModels.gemini.source)}
+                    Dernière synchronisation :{' '}
+                    {new Date(availableModels.fetchedAt).toLocaleString('fr-FR')}
                   </p>
                 )}
               </div>
@@ -1379,67 +1445,21 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => void loadCatalog(true)}
                 disabled={catalogLoading}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-desk-border px-3 py-2 text-sm text-desk-muted hover:bg-desk-hover disabled:opacity-50"
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/20 disabled:opacity-50"
               >
                 {catalogLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}
-                Actualiser les listes
+                Rechercher les modèles disponibles
               </button>
             </div>
           </Card>
 
-          <Card className="border-blue-500/30 p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="font-semibold text-desk-text">Mode de routage</h2>
-                <p className="mt-1 text-sm text-desk-muted">
-                  `openai_only` force OpenAI. `per_agent` laisse chaque agent choisir OpenAI, Vertex
-                  ou Gemini. Les prompts restent partagés. Source de vérité : `MODEL_CONFIG` en base
-                  (pas AiRoutingRule).
-                </p>
-                {modelConfigMeta && (
-                  <p className="mt-2 text-xs text-desk-subtle">
-                    {modelConfigMeta.isCustom
-                      ? `Config modèles personnalisée v${modelConfigMeta.version}`
-                      : modelConfigMeta.version > 0
-                        ? `Baseline système v${modelConfigMeta.version}`
-                        : 'Défaut code (aucune version active)'}
-                    {modelConfigMeta.changedBy ? ` · ${modelConfigMeta.changedBy}` : ''}
-                  </p>
-                )}
-              </div>
-              {modelConfigMeta?.hasRestorableCustom && (
-                <button
-                  type="button"
-                  onClick={() => void restoreLatestCustom('MODEL_CONFIG')}
-                  disabled={saving}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50"
-                >
-                  <History className="h-4 w-4" />
-                  Réactiver dernière perso
-                </button>
-              )}
-            </div>
-            <label className="mt-4 block text-sm text-desk-muted">
-              Provider mode
-              <select
-                value={modelConfig.providerMode}
-                onChange={(event) => updateProviderMode(event.target.value as ProviderMode)}
-                className="mt-1 w-full max-w-sm rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-              >
-                <option value="openai_only">openai_only</option>
-                <option value="per_agent">per_agent</option>
-              </select>
-            </label>
-          </Card>
-
           {AGENTS.map((agent) => {
             const item = modelConfig.agents[agent.key];
-            const providerLocked = modelConfig.providerMode === 'openai_only';
-            const effectiveProvider = providerLocked ? 'openai' : item.provider;
+            const effectiveProvider = item.provider;
             const catalogOptions = modelsForProvider(effectiveProvider, agent.key);
             const modelOptions = catalogOptions;
             const isGpt5 = effectiveProvider === 'openai' && item.model.startsWith('gpt-5.');
@@ -1452,15 +1472,16 @@ export default function SettingsPage() {
                     ? 'vertex'
                     : 'gemini'
               ];
-            const selectedStatus = modelOptions.find((option) => option.id === item.model)?.status;
-            const price = catalogSourceLabel(catalog?.source);
-            const unverifiedWarning =
-              selectedStatus === 'supported' ||
-              catalog?.source === 'supported' ||
-              catalog?.source === 'error' ||
-              catalog?.source === 'seed';
+            const activeModelObj = catalogOptions.find((opt) => opt.id === item.model);
+            const isInaccessible =
+              activeModelObj?.isInaccessible || (catalog?.configured && !activeModelObj);
+            const requiredCaps = AGENT_REQUIRED_CAPS[agent.key];
+
             return (
-              <Card key={agent.key} className="p-5">
+              <Card
+                key={agent.key}
+                className={cn('p-5', isInaccessible && 'border-red-500/50 bg-red-500/5')}
+              >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1468,18 +1489,27 @@ export default function SettingsPage() {
                       <Pill level={item.enabled ? 'pass' : 'warning'}>
                         {item.enabled ? 'Actif' : 'Désactivé'}
                       </Pill>
+                      {isInaccessible ? (
+                        <Pill level="fail">Inaccessible — sélection manuelle requise</Pill>
+                      ) : (
+                        <Pill level="pass">Fonctionnel</Pill>
+                      )}
                       <span className="font-mono text-xs text-desk-muted">
                         {effectiveProvider}/{item.model}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-desk-muted">{agent.description}</p>
-                    <p className="mt-1 text-xs text-desk-muted">{price}</p>
-                    {unverifiedWarning && (
-                      <p className="mt-1 text-xs text-amber-600">
-                        Modèle non vérifié par un test réel — lancez un test Credentials avant
-                        production.
-                      </p>
-                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-desk-muted">
+                      <span>Capacités requises :</span>
+                      {requiredCaps.map((cap) => (
+                        <span
+                          key={cap}
+                          className="rounded-md border border-desk-border bg-desk-surface px-1.5 py-0.5 text-xs font-mono text-desk-text"
+                        >
+                          {cap}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <label className="inline-flex min-h-10 items-center gap-2 text-sm text-desk-muted">
                     <input
@@ -1496,14 +1526,13 @@ export default function SettingsPage() {
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="text-sm text-desk-muted">
-                    Provider
+                    Fournisseur
                     <select
                       value={effectiveProvider}
-                      disabled={providerLocked}
                       onChange={(event) =>
                         updateAgent(agent.key, { provider: event.target.value as ProviderId })
                       }
-                      className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text disabled:opacity-60"
+                      className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
                     >
                       {PROVIDER_OPTIONS.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -1532,16 +1561,14 @@ export default function SettingsPage() {
                               }),
                         });
                       }}
-                      className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                      className={cn(
+                        'mt-1 w-full rounded-lg border bg-desk-input p-2.5 text-desk-text',
+                        isInaccessible ? 'border-red-500 text-red-600' : 'border-desk-border',
+                      )}
                     >
                       {modelOptions.map((option) => (
                         <option key={option.id} value={option.id}>
                           {option.label}
-                          {option.status === 'verified'
-                            ? ' · vérifié'
-                            : option.status === 'supported'
-                              ? ' · supporté non vérifié'
-                              : ''}
                         </option>
                       ))}
                     </select>
@@ -1637,12 +1664,16 @@ export default function SettingsPage() {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => void saveModels()}
-              disabled={saving || !modelDirty}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-5 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => void testAndApplyModels()}
+              disabled={saving}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Enregistrer la configuration
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <TestTube className="h-4 w-4" />
+              )}
+              Tester et appliquer
             </button>
           </div>
         </div>

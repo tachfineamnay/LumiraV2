@@ -76,7 +76,7 @@ describe('reading version canonicalization', () => {
     expect(version.pdf_content.sections[0]).toEqual({
       domain: 'Guidance',
       title: 'Votre lecture',
-      content: 'Premier axe\n\nDeuxième axe',
+      content: '# Votre lecture\n\nPremier axe\nDeuxième axe',
     });
   });
 });

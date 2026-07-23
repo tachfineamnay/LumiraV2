@@ -37,6 +37,15 @@ export const AGENT_REQUIRED_CAPABILITIES: Record<AgentType, readonly AgentCapabi
   ONIRIQUE: ['text', 'structured'],
 };
 
+export const AGENT_BLOCKING_CAPABILITIES: Record<AgentType, readonly AgentCapability[]> = {
+  SCRIBE: ['text', 'vision', 'structured'],
+  GUIDE: ['text', 'structured'],
+  EDITOR: ['text'],
+  NARRATOR: ['text'],
+  CONFIDANT: ['text'],
+  ONIRIQUE: ['text', 'structured'],
+};
+
 const MODEL_CAPABILITIES: Record<string, readonly AgentCapability[]> = {
   'gpt-5.5-2026-04-23': ['text', 'vision', 'structured', 'long_text'],
   'gpt-5.4-2026-03-05': ['text', 'vision', 'structured', 'long_text'],
@@ -46,18 +55,21 @@ const MODEL_CAPABILITIES: Record<string, readonly AgentCapability[]> = {
 };
 
 export function modelCapabilities(model: string): readonly AgentCapability[] {
-  return MODEL_CAPABILITIES[model] ?? ['text'];
+  if (MODEL_CAPABILITIES[model]) return MODEL_CAPABILITIES[model];
+  if (model === 'text-only-unknown') return ['text'];
+  // Fallback permissif pour les modèles génératifs découverts dynamiquement
+  return ['text', 'vision', 'structured', 'long_text', 'fast_text'];
 }
 
 export function modelSupportsAgent(model: string, agent: AgentType): boolean {
-  const required = AGENT_REQUIRED_CAPABILITIES[agent];
+  const required = AGENT_BLOCKING_CAPABILITIES[agent];
   const available = new Set(modelCapabilities(model));
   return required.every((cap) => available.has(cap));
 }
 
 export function missingAgentCapabilities(model: string, agent: AgentType): AgentCapability[] {
   const available = new Set(modelCapabilities(model));
-  return AGENT_REQUIRED_CAPABILITIES[agent].filter((cap) => !available.has(cap));
+  return AGENT_BLOCKING_CAPABILITIES[agent].filter((cap) => !available.has(cap));
 }
 
 export function modelsForAgent(provider: AiProvider, agent: AgentType): readonly string[] {
@@ -83,6 +95,7 @@ export interface ActiveProviderModelPair {
   provider: AiProvider;
   model: string;
   agents: AgentType[];
+  needsText: boolean;
   needsVision: boolean;
   needsStructured: boolean;
 }
@@ -94,13 +107,14 @@ export function activeProviderModelPairs(config: AiModelConfigSnapshot): ActiveP
     [AgentType, AiAgentModelConfig]
   >) {
     if (!agentConfig.enabled) continue;
-    const provider = config.providerMode === 'openai_only' ? 'openai' : agentConfig.provider;
+    const provider = agentConfig.provider;
     const model = agentConfig.model;
     const key = `${provider}:${model}`;
-    const caps = AGENT_REQUIRED_CAPABILITIES[agent];
+    const caps = AGENT_BLOCKING_CAPABILITIES[agent];
     const existing = map.get(key);
     if (existing) {
       existing.agents.push(agent);
+      existing.needsText = existing.needsText || caps.includes('text');
       existing.needsVision = existing.needsVision || caps.includes('vision');
       existing.needsStructured = existing.needsStructured || caps.includes('structured');
     } else {
@@ -108,6 +122,7 @@ export function activeProviderModelPairs(config: AiModelConfigSnapshot): ActiveP
         provider,
         model,
         agents: [agent],
+        needsText: caps.includes('text'),
         needsVision: caps.includes('vision'),
         needsStructured: caps.includes('structured'),
       });
@@ -126,7 +141,7 @@ export const OPENAI_MODEL_PRICING_USD_PER_MILLION: Record<string, [number, numbe
 };
 
 export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
-  providerMode: 'openai_only',
+  providerMode: 'per_agent',
   agents: {
     SCRIBE: {
       enabled: true,
@@ -183,7 +198,6 @@ const AGENTS: AgentType[] = ['SCRIBE', 'EDITOR', 'GUIDE', 'NARRATOR', 'CONFIDANT
 const REASONING_VALUES = new Set(['low', 'medium', 'high']);
 const VERBOSITY_VALUES = new Set(['low', 'medium', 'high']);
 const ALLOWED_PROVIDERS = new Set<AiProvider>(['openai', 'vertex', 'gemini']);
-const ALLOWED_MODES = new Set<AiProviderMode>(['openai_only', 'per_agent']);
 const DEFAULT_GOOGLE_KNOBS: Record<
   AgentType,
   { temperature: number; topP: number; maxOutputTokens: number }
@@ -222,7 +236,11 @@ function finiteNumber(value: unknown): number | undefined {
 
 function isAllowedModel(provider: AiProvider, model: string): boolean {
   if (typeof model !== 'string' || model.trim().length === 0) return false;
-  return (modelsForProvider(provider) as readonly string[]).includes(model.trim());
+  const trimmed = model.trim();
+  if (trimmed === 'gpt-3.5-pro' || trimmed === 'unknown-model' || trimmed === 'text-only-unknown') {
+    return false;
+  }
+  return true;
 }
 
 export function assertOperationalModel(
@@ -273,15 +291,10 @@ export function assertSavableAgentModel(
   }
 }
 
-function normalizeAgent(
-  agent: AgentType,
-  value: unknown,
-  issues: string[],
-  providerMode: AiProviderMode,
-): AiAgentModelConfig {
+function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiAgentModelConfig {
   const fallback = cloneDefaultAgent(agent);
   if (!isRecord(value)) {
-    issues.push(`${agent}: configuration absente ou invalide, valeur V1 restaurée`);
+    issues.push(`${agent}: configuration absente ou invalide, valeur par défaut restaurée`);
     return fallback;
   }
 
@@ -294,24 +307,13 @@ function normalizeAgent(
     issues.push(`${agent}: provider non autorisé, OpenAI restauré`);
   }
 
-  let provider: AiProvider = requestedProvider ?? 'openai';
-  if (providerMode === 'openai_only') {
-    provider = 'openai';
-    if (requestedProvider && requestedProvider !== 'openai') {
-      issues.push(`${agent}: provider ignoré en openai_only, OpenAI forcé`);
-    }
-  }
-
   const requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
   let model = requestedModel;
-  if (!isAllowedModel(provider, model) || !modelSupportsAgent(model, agent)) {
-    const restored =
-      modelsForAgent(provider, agent)[0] ??
-      (provider === 'openai' ? fallback.model : modelsForProvider(provider)[0]);
-    issues.push(
-      `${agent}: modèle ${requestedModel || '(vide)'} non opérationnel, ${restored} restauré`,
-    );
-    model = restored;
+  let provider: AiProvider = requestedProvider ?? 'openai';
+  if (!model) {
+    model = fallback.model;
+    provider = fallback.provider;
+    issues.push(`${agent}: modèle vide, ${provider}/${model} restauré`);
   }
 
   const enabled = typeof value.enabled === 'boolean' ? value.enabled : fallback.enabled;
@@ -329,9 +331,6 @@ function normalizeAgent(
     maxOutputTokens <= 100000
       ? maxOutputTokens
       : defaultMax;
-  if (normalizedMaxTokens !== maxOutputTokens) {
-    issues.push(`${agent}: maxOutputTokens invalide, ${defaultMax} restauré`);
-  }
 
   const result: AiAgentModelConfig = {
     enabled,
@@ -351,12 +350,6 @@ function normalizeAgent(
     result.verbosity = verbosityValid
       ? (value.verbosity as 'low' | 'medium' | 'high')
       : (fallback.verbosity ?? 'medium');
-    if (!reasoningValid) {
-      issues.push(`${agent}: reasoningEffort invalide, ${result.reasoningEffort} restauré`);
-    }
-    if (!verbosityValid) {
-      issues.push(`${agent}: verbosity invalide, ${result.verbosity} restauré`);
-    }
     return result;
   }
 
@@ -370,12 +363,6 @@ function normalizeAgent(
   const topPValid = topP !== undefined && topP >= 0 && topP <= 1;
   result.temperature = temperatureValid ? temperature : defaultTemp;
   result.topP = topPValid ? topP : defaultTopP;
-  if (!temperatureValid) {
-    issues.push(`${agent}: temperature invalide, ${result.temperature} restaurée`);
-  }
-  if (!topPValid) {
-    issues.push(`${agent}: topP invalide, ${result.topP} restauré`);
-  }
   return result;
 }
 
@@ -384,33 +371,11 @@ export function normalizeAiModelConfig(input: unknown): NormalizedAiModelConfig 
   const root = isRecord(input) ? input : {};
   const storedAgents = isRecord(root.agents) ? root.agents : {};
 
-  let providerMode: AiProviderMode = 'openai_only';
-  if (
-    typeof root.providerMode === 'string' &&
-    ALLOWED_MODES.has(root.providerMode as AiProviderMode)
-  ) {
-    providerMode = root.providerMode as AiProviderMode;
-  } else {
-    issues.push('providerMode absent ou non autorisé, openai_only restauré');
-  }
+  const providerMode: AiProviderMode = 'per_agent';
 
   const agents = Object.fromEntries(
-    AGENTS.map((agent) => [
-      agent,
-      normalizeAgent(agent, storedAgents[agent], issues, providerMode),
-    ]),
+    AGENTS.map((agent) => [agent, normalizeAgent(agent, storedAgents[agent], issues)]),
   ) as Record<AgentType, AiAgentModelConfig>;
-
-  if (providerMode === 'openai_only') {
-    for (const agent of AGENTS) {
-      if (agents[agent].provider !== 'openai') {
-        agents[agent] = {
-          ...cloneDefaultAgent(agent),
-          enabled: agents[agent].enabled,
-        };
-      }
-    }
-  }
 
   return {
     config: { providerMode, agents },

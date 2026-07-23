@@ -59,11 +59,11 @@ describe('agent model capabilities', () => {
     expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).not.toThrow();
   });
 
-  it('CONFIDANT requires fast_text', () => {
-    expect(modelSupportsAgent('gpt-5.5-2026-04-23', 'CONFIDANT')).toBe(false);
-    expect(() => assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23')).toThrow(
-      /fast_text|texte rapide/,
-    );
+  it('CONFIDANT requires text (fast_text is non-blocking metadata)', () => {
+    expect(modelSupportsAgent('gpt-5.5-2026-04-23', 'CONFIDANT')).toBe(true);
+    expect(() =>
+      assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23'),
+    ).not.toThrow();
     expect(modelSupportsAgent('gpt-4o-2024-11-20', 'CONFIDANT')).toBe(true);
   });
 

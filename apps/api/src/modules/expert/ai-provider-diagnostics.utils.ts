@@ -124,9 +124,13 @@ export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: st
   });
 }
 
-/** 1×1 PNG — minimal controlled multimodal payload (no external fetch). */
+/** 1×1 PNG — minimal controlled multimodal payload. */
 export const MINIMAL_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/** 100x100 PNG containing red circle, blue square, and number 27 for vision validation. */
+export const IDENTIFIABLE_VISION_PROBE_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAABg0lEQVR4nO3a0YrCMBRAwf7/T3eRBWFRXKNNe6pzwLea5mYQRLusSrUcvQH9DUgsILGAxAISC0gsILGAxAIS62mQZVn+fb1zvX7b7FRGDxjI/YDEAhILSCwgsaZ9y3pmPd02BLLpjYHcDUgsILGAxAISy7esWE4lFpBYQGIBiQUkFpBYQGIBiQUkFpBYQGIBibUPyA4/JF5uscdr+hzbr3jMdEBuVjp2SiDXFRrTAlknnUJoK+cCiU393SDByYHEJv9ekL0mH5w+uKWXAnJqkD0xBk8gtp2XAwIEyMM5xq4GMjsgpwU5AmPgFEJbeSufECBAHs4xdjWQ2QEBAuThHOPv6GHsua3ZATk9yOr/kJkB+QiQ1X/qs/LUyUeBrJ7L2jpPLn4syHXFY6YDMnQXT78/Pcf8W2gkILGAxAISC0gsILGAxAISC0gsILGAxAISC0gsILGAxAISC0gsILGAxAISC0gsILGAxAISC0gsILGAxAISC0gsILGAxAISC0gsILF+APo0NKbMje+dAAAAAElFTkSuQmCC';
 
 export const DEFAULT_AI_TEST_TIMEOUT_MS = 20_000;
 export const AI_HEALTH_CACHE_TTL_MS = 5 * 60 * 1000;

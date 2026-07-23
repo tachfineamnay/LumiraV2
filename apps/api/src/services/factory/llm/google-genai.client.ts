@@ -24,6 +24,14 @@ export function createGeminiDeveloperClient(apiKey: string): GoogleGenAI {
   });
 }
 
+export function createGeminiDiscoveryClient(apiKey: string): GoogleGenAI {
+  return new GoogleGenAI({
+    apiKey,
+    vertexai: false,
+    apiVersion: 'v1beta',
+  });
+}
+
 export function createVertexAiClient(account: VertexServiceAccount, location: string): GoogleGenAI {
   return new GoogleGenAI({
     vertexai: true,

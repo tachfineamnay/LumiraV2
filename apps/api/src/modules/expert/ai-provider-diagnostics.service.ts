@@ -34,7 +34,7 @@ import {
   AI_HEALTH_CACHE_TTL_MS,
   classifyAiError,
   DEFAULT_AI_TEST_TIMEOUT_MS,
-  MINIMAL_PNG_BASE64,
+  IDENTIFIABLE_VISION_PROBE_BASE64,
   sanitizeAiErrorMessage,
   withTimeout,
 } from './ai-provider-diagnostics.utils';
@@ -249,6 +249,20 @@ export class AiProviderDiagnosticsService {
     timeoutMs?: number;
   }): Promise<ProviderConnectionTestResult> {
     return this.testProviderConnection('vertex', options);
+  }
+
+  async testProviderModelPair(
+    provider: DiagnosticsProvider,
+    model: string,
+    needsVision: boolean,
+    needsStructured: boolean,
+    timeoutMs = 30_000,
+  ): Promise<ModelConnectionTestResult> {
+    const location = provider === 'vertex' ? this.getVertexLocation() : undefined;
+    return this.testSingleModel(
+      { provider, model, needsVision, needsStructured },
+      { force: true, timeoutMs, location },
+    );
   }
 
   clearCacheForTests(): void {
@@ -823,21 +837,22 @@ export class AiProviderDiagnosticsService {
     try {
       const adapter = this.createGeminiAdapter();
       const controller = new AbortController();
-      await withTimeout(
+      const res = await withTimeout(
         adapter.complete({
           model,
           systemPrompt: 'Réponds brièvement.',
-          userContent: 'Décris cette image en un mot.',
-          images: [{ mimeType: 'image/png', base64: MINIMAL_PNG_BASE64 }],
-          maxTokens: 8,
-          temperature: 0,
-          topP: 1,
+          userContent: 'Quelles formes et couleurs vois-tu sur cette image ?',
+          images: [{ mimeType: 'image/png', base64: IDENTIFIABLE_VISION_PROBE_BASE64 }],
+          maxTokens: 128,
           signal: controller.signal,
           timeoutMs,
         }),
         timeoutMs,
         'Gemini multimodal probe',
       );
+      if (!res.text || res.text.trim().length === 0) {
+        throw new Error('Réponse vision vide reçue du modèle Gemini.');
+      }
       return { status: 'ok', model, testedAt };
     } catch (error) {
       return this.probeFromError(model, testedAt, error, 'Gemini multimodal probe', 'gemini');
@@ -916,21 +931,22 @@ export class AiProviderDiagnosticsService {
     try {
       const adapter = this.createVertexAdapter();
       const controller = new AbortController();
-      await withTimeout(
+      const res = await withTimeout(
         adapter.complete({
           model,
           systemPrompt: 'Réponds brièvement.',
-          userContent: 'Décris cette image en un mot.',
-          images: [{ mimeType: 'image/png', base64: MINIMAL_PNG_BASE64 }],
-          maxTokens: 8,
-          temperature: 0,
-          topP: 1,
+          userContent: 'Quelles formes et couleurs vois-tu sur cette image ?',
+          images: [{ mimeType: 'image/png', base64: IDENTIFIABLE_VISION_PROBE_BASE64 }],
+          maxTokens: 128,
           signal: controller.signal,
           timeoutMs,
         }),
         timeoutMs,
         'Vertex multimodal probe',
       );
+      if (!res.text || res.text.trim().length === 0) {
+        throw new Error('Réponse vision vide reçue du modèle Vertex AI.');
+      }
       return { status: 'ok', model, testedAt };
     } catch (error) {
       return this.probeFromError(model, testedAt, error, 'Vertex multimodal probe', 'vertex');
@@ -1048,7 +1064,7 @@ export class AiProviderDiagnosticsService {
             { type: 'input_text', text: 'Observe cette image puis réponds avec ok=true.' },
             {
               type: 'input_image',
-              image_url: `data:image/png;base64,${MINIMAL_PNG_BASE64}`,
+              image_url: `data:image/png;base64,${IDENTIFIABLE_VISION_PROBE_BASE64}`,
               detail: 'high',
             },
           ],

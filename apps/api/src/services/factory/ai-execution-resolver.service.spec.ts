@@ -103,7 +103,7 @@ describe('AiExecutionResolverService', () => {
     expect(resolved.routingSource).toBe('global:SCRIBE');
   });
 
-  it('normalizes an invalid persisted model config before execution', async () => {
+  it('rejects an invalid persisted model config before execution', async () => {
     const snapshot = {
       ...baseSnapshot,
       modelConfig: {
@@ -120,17 +120,12 @@ describe('AiExecutionResolverService', () => {
       },
     } as unknown as AiPromptSnapshot;
 
-    const resolved = await service.resolve(
-      buildAiContext('SCRIBE', AiMission.READING_GENERATION),
-      snapshot,
-    );
-
-    expect(resolved.provider).toBe('openai');
-    expect(resolved.model).toBe('gpt-5.5-2026-04-23');
-    expect(resolved.maxTokens).toBe(24000);
+    await expect(
+      service.resolve(buildAiContext('SCRIBE', AiMission.READING_GENERATION), snapshot),
+    ).rejects.toThrow('modèle non opérationnel');
   });
 
-  it('heals gpt-3.5-pro to an operational SCRIBE model before provider call', async () => {
+  it('rejects gpt-3.5-pro as non-operational model before provider call', async () => {
     const snapshot = {
       ...baseSnapshot,
       modelConfig: {
@@ -138,8 +133,7 @@ describe('AiExecutionResolverService', () => {
         agents: {
           ...baseSnapshot.modelConfig.agents,
           SCRIBE: {
-            enabled: true,
-            provider: 'openai',
+            ...baseSnapshot.modelConfig.agents.SCRIBE,
             model: 'gpt-3.5-pro',
             maxOutputTokens: 8000,
           },
@@ -147,12 +141,9 @@ describe('AiExecutionResolverService', () => {
       },
     } as unknown as AiPromptSnapshot;
 
-    const resolved = await service.resolve(
-      buildAiContext('SCRIBE', AiMission.READING_GENERATION),
-      snapshot,
-    );
-
-    expect(resolved.model).toBe('gpt-5.5-2026-04-23');
+    await expect(
+      service.resolve(buildAiContext('SCRIBE', AiMission.READING_GENERATION), snapshot),
+    ).rejects.toThrow('modèle non opérationnel');
   });
 
   it('uses per-agent provider and model without reading AiRoutingRule', async () => {

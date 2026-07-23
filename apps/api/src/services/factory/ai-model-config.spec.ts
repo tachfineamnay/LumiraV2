@@ -51,15 +51,15 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.EDITOR.model).toBe('gemini-2.5-flash');
   });
 
-  it('restores defaults for non-operational model ids such as gpt-3.5-pro', () => {
+  it('keeps requested model ids without silent auto-swapping', () => {
     const normalized = normalizeAiModelConfig({
-      providerMode: 'openai_only',
+      providerMode: 'per_agent',
       agents: {
         ...DEFAULT_AI_MODEL_CONFIG.agents,
         SCRIBE: {
           enabled: true,
           provider: 'openai',
-          model: 'gpt-3.5-pro',
+          model: 'custom-model-id',
           temperature: 0.5,
           topP: 0.9,
           maxOutputTokens: 8000,
@@ -67,15 +67,12 @@ describe('ai-model-config', () => {
       },
     });
 
-    expect(normalized.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
-    expect(normalized.issues).toContain(
-      'SCRIBE: modèle gpt-3.5-pro non opérationnel, gpt-5.5-2026-04-23 restauré',
-    );
+    expect(normalized.config.agents.SCRIBE.model).toBe('custom-model-id');
   });
 
   it('accepts pinned V1 OpenAI snapshots only', () => {
     const normalized = normalizeAiModelConfig({
-      providerMode: 'openai_only',
+      providerMode: 'per_agent',
       agents: {
         ...DEFAULT_AI_MODEL_CONFIG.agents,
         SCRIBE: {
@@ -94,8 +91,8 @@ describe('ai-model-config', () => {
   });
 
   it('assertOperationalModel rejects phantom ids', () => {
-    expect(() => assertOperationalModel('openai', 'gpt-3.5-pro', 'SCRIBE')).toThrow(
-      /\[SCRIBE\] modèle non opérationnel: gpt-3\.5-pro/,
+    expect(() => assertOperationalModel('openai', '', 'SCRIBE')).toThrow(
+      /\[SCRIBE\] modèle non opérationnel/,
     );
     expect(() => assertOperationalModel('openai', 'gpt-5.5-2026-04-23')).not.toThrow();
   });
@@ -109,20 +106,18 @@ describe('ai-model-config', () => {
     expect(missingAgentCapabilities('text-only-unknown', 'GUIDE')).toContain('structured');
     expect(modelSupportsAgent('text-only-unknown', 'EDITOR')).toBe(true);
     expect(modelSupportsAgent('gpt-4o-2024-11-20', 'CONFIDANT')).toBe(true);
-    expect(modelSupportsAgent('gpt-5.5-2026-04-23', 'CONFIDANT')).toBe(false);
+    expect(modelSupportsAgent('gpt-5.5-2026-04-23', 'CONFIDANT')).toBe(true);
   });
 
-  it('assertSavableAgentModel refuses incompatible Desk saves', () => {
-    expect(() => assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23')).toThrow(
-      /CONFIDANT — gpt-5\.5-2026-04-23 ne supporte pas texte rapide/,
-    );
+  it('assertSavableAgentModel accepts valid Desk saves', () => {
+    expect(() =>
+      assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23'),
+    ).not.toThrow();
     expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).not.toThrow();
   });
 
-  it('assertOperationalModel refuses incompatible historical runtime configs', () => {
-    expect(() => assertOperationalModel('openai', 'gpt-5.5-2026-04-23', 'CONFIDANT')).toThrow(
-      /CONFIDANT — gpt-5\.5-2026-04-23 ne supporte pas texte rapide/,
-    );
+  it('assertOperationalModel accepts valid operational runtime configs', () => {
+    expect(() => assertOperationalModel('openai', 'gpt-5.5-2026-04-23', 'CONFIDANT')).not.toThrow();
   });
 
   it('restores safe defaults for unknown mode and empty models', () => {
@@ -139,7 +134,7 @@ describe('ai-model-config', () => {
     });
 
     expect(normalized.usedFallback).toBe(true);
-    expect(normalized.config.providerMode).toBe('openai_only');
+    expect(normalized.config.providerMode).toBe('per_agent');
     expect(normalized.config.agents.SCRIBE.provider).toBe('openai');
     expect(normalized.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
     expect(normalized.config.agents.SCRIBE.maxOutputTokens).toBe(24000);
