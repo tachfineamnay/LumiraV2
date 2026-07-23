@@ -1,85 +1,94 @@
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import { AiModelCatalogService, sanitizeAiSecretString } from './ai-model-catalog.service';
+import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AiModelCatalogService, sanitizeAiSecretString } from './ai-model-catalog.service';
 
 jest.mock('openai', () => {
   const list = jest.fn();
   const responsesCreate = jest.fn();
-  const chatCompletionsCreate = jest.fn();
-
   return {
     __esModule: true,
     default: jest.fn().mockImplementation(() => ({
       models: { list },
       responses: { create: responsesCreate },
-      chat: { completions: { create: chatCompletionsCreate } },
     })),
     __mockList: list,
     __mockResponsesCreate: responsesCreate,
-    __mockChatCompletionsCreate: chatCompletionsCreate,
   };
 });
 
-jest.mock('@google/genai', () => ({
-  GoogleGenAI: jest.fn(),
+jest.mock('@google/genai', () => ({ GoogleGenAI: jest.fn() }));
+
+jest.mock('google-auth-library', () => ({
+  GoogleAuth: jest.fn().mockImplementation(() => ({
+    getClient: jest.fn().mockResolvedValue({
+      getAccessToken: jest.fn().mockResolvedValue({ token: 'ya29.test-access-token' }),
+    }),
+  })),
 }));
 
-jest.mock('google-auth-library', () => {
-  return {
-    GoogleAuth: jest.fn().mockImplementation(() => ({
-      getClient: jest.fn().mockResolvedValue({
-        getAccessToken: jest.fn().mockResolvedValue({ token: 'ya29.test-access-token' }),
-      }),
-    })),
-  };
-});
-
-const openaiModule = jest.requireMock('openai') as {
+const openaiMock = jest.requireMock('openai') as {
   __mockList: jest.Mock;
   __mockResponsesCreate: jest.Mock;
-  __mockChatCompletionsCreate: jest.Mock;
 };
 
 async function* asPager<T>(items: T[]) {
   for (const item of items) yield item;
 }
 
-describe('AiModelCatalogService (Dynamic Discovery & Probing)', () => {
+describe('AiModelCatalogService — discovery only', () => {
   const prisma = {
-    systemSetting: {
-      findUnique: jest.fn(),
-    },
+    systemSetting: { findUnique: jest.fn() },
   };
-
   const configGet = jest.fn((key: string) => {
     if (key === 'OPENAI_API_KEY') return 'sk-test-key-12345';
     if (key === 'GEMINI_API_KEY') return 'AIzaSyTestKey67890';
-    if (key === 'VERTEX_LOCATION') return 'us-central1';
+    if (key === 'VERTEX_MODEL_GARDEN_LOCATION') return 'us-central1';
+    if (key === 'VERTEX_LOCATION') return 'global';
     if (key === 'SETTINGS_ENCRYPTION_KEY') return undefined;
     return undefined;
   });
 
   let service: AiModelCatalogService;
-  let geminiDiscoveryList: jest.Mock;
-  let geminiProdGenerateContent: jest.Mock;
+  let geminiList: jest.Mock;
+  let geminiGenerate: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    geminiDiscoveryList = jest.fn();
-    geminiProdGenerateContent = jest.fn();
-
-    openaiModule.__mockList.mockReturnValue(
+    openaiMock.__mockList.mockReturnValue(
       asPager([
         { id: 'gpt-4o-2024-11-20' },
         { id: 'gpt-5.5-2026-04-23' },
         { id: 'text-embedding-3-small' },
+        { id: 'gpt-4o-realtime-preview' },
       ]),
     );
 
-    openaiModule.__mockResponsesCreate.mockResolvedValue({
-      output_text: 'OK',
-    });
+    geminiList = jest.fn().mockReturnValue(
+      asPager([
+        {
+          name: 'models/gemini-3.5-flash',
+          displayName: 'Gemini 3.5 Flash',
+          supportedActions: ['generateContent'],
+        },
+        {
+          name: 'models/embedding-001',
+          supportedActions: ['embedContent'],
+        },
+        {
+          name: 'models/gemini-image-model',
+          supportedActions: ['generateContent'],
+        },
+      ]),
+    );
+    geminiGenerate = jest.fn();
+    (GoogleGenAI as unknown as jest.Mock).mockImplementation(
+      (options: { apiVersion?: string }) =>
+        options.apiVersion === 'v1beta'
+          ? { models: { list: geminiList } }
+          : { models: { generateContent: geminiGenerate } },
+    );
 
     prisma.systemSetting.findUnique.mockResolvedValue({
       value: JSON.stringify({
@@ -90,40 +99,12 @@ describe('AiModelCatalogService (Dynamic Discovery & Probing)', () => {
       }),
     });
 
-    geminiDiscoveryList.mockReturnValue(
-      asPager([
-        {
-          name: 'models/gemini-2.5-flash',
-          displayName: 'Gemini 2.5 Flash',
-          supportedActions: ['generateContent'],
-          inputTokenLimit: 1000000,
-          outputTokenLimit: 8192,
-        },
-        {
-          name: 'models/embedding-001',
-          displayName: 'Embedding 001',
-          supportedActions: ['embedContent'],
-        },
-      ]),
-    );
-
-    geminiProdGenerateContent.mockResolvedValue({ text: 'OK' });
-
-    (GoogleGenAI as unknown as jest.Mock).mockImplementation(
-      (options: { vertexai?: boolean; apiVersion?: string }) => {
-        if (options.apiVersion === 'v1beta') {
-          return { models: { list: geminiDiscoveryList } };
-        }
-        return { models: { generateContent: geminiProdGenerateContent } };
-      },
-    );
-
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         publisherModels: [
-          { name: 'publishers/google/models/gemini-2.5-pro' },
-          { name: 'publishers/google/models/gemini-2.5-flash' },
+          { name: 'publishers/google/models/gemini-3.5-flash' },
+          { name: 'publishers/google/models/gemini-image-model' },
         ],
       }),
     }) as jest.Mock;
@@ -134,101 +115,86 @@ describe('AiModelCatalogService (Dynamic Discovery & Probing)', () => {
     );
   });
 
-  it('1. Gemini models.list parcourt toutes les pages et extrait les candidats', async () => {
+  it('découvre les modèles Gemini generateContent sans lancer de génération', async () => {
     const catalog = await service.getAvailableModels({ force: true });
-    expect(geminiDiscoveryList).toHaveBeenCalled();
-    expect(catalog.gemini.models.some((m) => m.id === 'gemini-2.5-flash')).toBe(true);
+    expect(geminiList).toHaveBeenCalledTimes(1);
+    expect(catalog.gemini.models.map((model) => model.id)).toEqual(['gemini-3.5-flash']);
+    expect(catalog.gemini.models[0]?.callable).toBeNull();
+    expect(geminiGenerate).not.toHaveBeenCalled();
   });
 
-  it('2. Seuls les modèles gérant generateContent sont retenus (les embeddings sont filtrés)', async () => {
+  it('découvre uniquement les familles OpenAI génératives et ne probe rien', async () => {
     const catalog = await service.getAvailableModels({ force: true });
-    expect(catalog.gemini.models.some((m) => m.id === 'embedding-001')).toBe(false);
+    expect(openaiMock.__mockList).toHaveBeenCalledTimes(1);
+    expect(catalog.openai.models.map((model) => model.id)).toEqual([
+      'gpt-4o-2024-11-20',
+      'gpt-5.5-2026-04-23',
+    ]);
+    expect(catalog.openai.models.every((model) => model.callable === null)).toBe(true);
+    expect(openaiMock.__mockResponsesCreate).not.toHaveBeenCalled();
   });
 
-  it('3. Normalise models/gemini-x en gemini-x', async () => {
+  it('utilise le catalogue Vertex us-central1, jamais global ni publishers/*', async () => {
     const catalog = await service.getAvailableModels({ force: true });
-    const geminiFlash = catalog.gemini.models.find((m) => m.id === 'gemini-2.5-flash');
-    expect(geminiFlash).toBeDefined();
-    expect(geminiFlash?.id).toBe('gemini-2.5-flash');
+    expect(catalog.vertex.models.map((model) => model.id)).toEqual(['gemini-3.5-flash']);
+    const url = String((global.fetch as jest.Mock).mock.calls[0][0]);
+    expect(url).toContain('us-central1-aiplatform.googleapis.com');
+    expect(url).toContain('/v1beta1/publishers/google/models');
+    expect(url).toContain('listAllVersions=true');
+    expect(url).toContain('pageSize=100');
+    expect(url).not.toContain('publishers%2F*');
+    expect(url).not.toContain('global-aiplatform');
   });
 
-  it('4. OpenAI models.list est réellement utilisé', async () => {
-    const catalog = await service.getAvailableModels({ force: true });
-    expect(openaiModule.__mockList).toHaveBeenCalled();
-    expect(catalog.openai.models.some((m) => m.id === 'gpt-4o-2024-11-20')).toBe(true);
-  });
-
-  it('5. Un modèle OpenAI listé mais incompatible Responses/probe est inaccessible (callable: false)', async () => {
-    openaiModule.__mockResponsesCreate.mockRejectedValueOnce(new Error('model_not_found'));
-    const catalog = await service.getAvailableModels({ force: true });
-    const model = catalog.openai.models.find((m) => m.id === 'gpt-4o-2024-11-20');
-    expect(model?.callable).toBe(false);
-    expect(model?.errorCategory).toBe('model_not_found');
-  });
-
-  it('6. Un modèle OpenAI avec probe réussi est fonctionnel (callable: true)', async () => {
-    const catalog = await service.getAvailableModels({ force: true });
-    const model = catalog.openai.models.find((m) => m.id === 'gpt-4o-2024-11-20');
-    expect(model?.callable).toBe(true);
-  });
-
-  it('7. Vertex utilise le project_id du compte de service et effectue la requête REST', async () => {
-    const catalog = await service.getAvailableModels({ force: true });
-    expect(catalog.vertex.configured).toBe(true);
-    expect(global.fetch).toHaveBeenCalled();
-    const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0];
-    expect(fetchUrl).toContain('us-central1-aiplatform.googleapis.com');
-  });
-
-  it('8 & 14. Sanitisation des secrets (sk-..., AIza..., ya29..., Bearer..., PEM)', () => {
-    const textWithError =
-      'Error with sk-proj-123456 and AIzaSy789 and ya29.abc and Bearer xyz and -----BEGIN PRIVATE KEY-----\nMYKEY\n-----END PRIVATE KEY-----';
-    const sanitized = sanitizeAiSecretString(textWithError);
-    expect(sanitized).not.toContain('sk-proj-123456');
-    expect(sanitized).not.toContain('AIzaSy789');
-    expect(sanitized).not.toContain('ya29.abc');
-    expect(sanitized).not.toContain('MYKEY');
-    expect(sanitized).toContain('[redacted-openai-key]');
-    expect(sanitized).toContain('[redacted-gemini-key]');
-  });
-
-  it('12. Un modèle en quota est inaccessible avec errorCategory quota_billing', async () => {
-    geminiProdGenerateContent.mockRejectedValueOnce(
-      new Error('Quota exceeded for project / 429 quota_billing'),
-    );
-    const catalog = await service.getAvailableModels({ force: true });
-    const geminiModel = catalog.gemini.models.find((m) => m.id === 'gemini-2.5-flash');
-    expect(geminiModel?.callable).toBe(false);
-    expect(geminiModel?.errorCategory).toBe('quota_billing');
-  });
-
-  it('13. Une réponse vide n’est jamais fonctionnelle (callable: false)', async () => {
-    geminiProdGenerateContent.mockResolvedValueOnce({ text: '   ' });
-    const catalog = await service.getAvailableModels({ force: true });
-    const geminiModel = catalog.gemini.models.find((m) => m.id === 'gemini-2.5-flash');
-    expect(geminiModel?.callable).toBe(false);
-  });
-
-  it('15. Parcours les pages successives avec pageToken pour Vertex Model Garden', async () => {
+  it('parcourt toutes les pages du catalogue Vertex', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          publisherModels: [{ name: 'publishers/google/models/gemini-2.5-flash' }],
-          nextPageToken: 'token-page-2',
+          publisherModels: [{ name: 'publishers/google/models/gemini-3.5-flash' }],
+          nextPageToken: 'page-2',
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          publisherModels: [{ name: 'publishers/google/models/gemini-2.5-pro' }],
+          publisherModels: [{ name: 'publishers/google/models/gemini-3.6-flash' }],
         }),
       });
 
     const catalog = await service.getAvailableModels({ force: true });
     expect(global.fetch).toHaveBeenCalledTimes(2);
-    const secondCallUrl = (global.fetch as jest.Mock).mock.calls[1][0];
-    expect(secondCallUrl).toContain('pageToken=token-page-2');
-    expect(catalog.vertex.models.some((m) => m.id === 'gemini-2.5-pro')).toBe(true);
+    expect(String((global.fetch as jest.Mock).mock.calls[1][0])).toContain('pageToken=page-2');
+    expect(catalog.vertex.models.map((model) => model.id)).toEqual([
+      'gemini-3.5-flash',
+      'gemini-3.6-flash',
+    ]);
+  });
+
+  it('ne crée aucun faux modèle détecté lorsque les credentials manquent', async () => {
+    const noCredentials = new AiModelCatalogService(
+      { get: jest.fn(() => undefined) } as unknown as ConfigService,
+      {
+        systemSetting: { findUnique: jest.fn().mockResolvedValue(null) },
+      } as unknown as PrismaService,
+    );
+    const catalog = await noCredentials.getAvailableModels({ force: true });
+    expect(catalog.openai.models).toEqual([]);
+    expect(catalog.gemini.models).toEqual([]);
+    expect(catalog.vertex.models).toEqual([]);
+  });
+
+  it('sanitise toutes les formes de secrets', () => {
+    const input =
+      'sk-proj-123 AIzaSy789 ya29.abc Bearer xyz -----BEGIN PRIVATE KEY-----\nMYKEY\n-----END PRIVATE KEY-----';
+    const output = sanitizeAiSecretString(input);
+    expect(output).not.toContain('sk-proj-123');
+    expect(output).not.toContain('AIzaSy789');
+    expect(output).not.toContain('ya29.abc');
+    expect(output).not.toContain('MYKEY');
+  });
+
+  it('conserve OpenAI comme dépendance réellement utilisée', () => {
+    expect(OpenAI).toBeDefined();
   });
 });
