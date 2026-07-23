@@ -166,40 +166,42 @@ export class AiProductionReadinessService {
       expectedModel: string,
     ): ReadinessCheck => {
       const relevant = orderRuns.filter((run) => run.agent === agent && run.mission === mission);
-      const success = relevant.find((run) => {
-        if (run.status !== 'SUCCESS') return false;
-        if (run.provider !== expectedProvider) return false;
-        if (run.model !== expectedModel) return false;
-        if ((run.inputTokens ?? 0) <= 0 || (run.outputTokens ?? 0) <= 0) return false;
-        // OpenAI cost is expected; Google providers may not have estimatedCost.
-        if (expectedProvider === 'openai' && run.estimatedCost == null) return false;
-        return true;
-      });
-      const error = relevant.find((run) => run.status === 'ERROR');
+      // recentRuns are ordered startedAt desc — first match is the latest active pair run.
+      const matchingRuns = relevant.filter(
+        (run) => run.provider === expectedProvider && run.model === expectedModel,
+      );
+      const latestMatchingRun = matchingRuns[0];
       const label = `${agent} → ${expectedProvider}/${expectedModel}`;
 
-      if (success) {
-        const costPart =
-          success.estimatedCost != null
-            ? ` · $${success.estimatedCost.toFixed(4)}`
-            : expectedProvider === 'openai'
-              ? ''
-              : ' · coût N/A (Google)';
-        return {
-          id: `run_${agent.toLowerCase()}`,
-          label: `${agent} exécuté en préproduction`,
-          level: 'pass',
-          detail: `${label} · ${(success.durationMs ?? 0) / 1000}s${costPart}.`,
-        };
+      if (latestMatchingRun?.status === 'SUCCESS') {
+        const tokensOk =
+          (latestMatchingRun.inputTokens ?? 0) > 0 && (latestMatchingRun.outputTokens ?? 0) > 0;
+        const costOk = expectedProvider !== 'openai' || latestMatchingRun.estimatedCost != null;
+        if (tokensOk && costOk) {
+          const costPart =
+            latestMatchingRun.estimatedCost != null
+              ? ` · $${latestMatchingRun.estimatedCost.toFixed(4)}`
+              : expectedProvider === 'openai'
+                ? ''
+                : ' · coût N/A (Google)';
+          return {
+            id: `run_${agent.toLowerCase()}`,
+            label: `${agent} exécuté en préproduction`,
+            level: 'pass',
+            detail: `${label} · ${(latestMatchingRun.durationMs ?? 0) / 1000}s${costPart}.`,
+          };
+        }
       }
-      if (error) {
+
+      if (latestMatchingRun?.status === 'ERROR') {
         return {
           id: `run_${agent.toLowerCase()}`,
           label: `${agent} exécuté en préproduction`,
           level: 'fail',
-          detail: error.errorCode || `Le dernier appel ${agent} a échoué (${label}).`,
+          detail: latestMatchingRun.errorCode || `Le dernier appel ${agent} a échoué (${label}).`,
         };
       }
+
       return {
         id: `run_${agent.toLowerCase()}`,
         label: `${agent} exécuté en préproduction`,
@@ -277,10 +279,12 @@ export class AiProductionReadinessService {
       ...TRACKED_AGENTS.filter(({ agent }) => normalized.config.agents[agent].enabled).map(
         ({ agent, mission }) => {
           const cfg = normalized.config.agents[agent];
+          const expectedProvider =
+            normalized.config.providerMode === 'openai_only' ? 'openai' : cfg.provider;
           return executionCheck(
             agent as 'SCRIBE' | 'GUIDE' | 'NARRATOR',
             mission,
-            cfg.provider,
+            expectedProvider,
             cfg.model,
           );
         },

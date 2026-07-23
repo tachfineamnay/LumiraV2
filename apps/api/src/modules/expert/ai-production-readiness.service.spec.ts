@@ -511,4 +511,402 @@ describe('AiProductionReadinessService', () => {
     expect(result.verdict).toBe('NO_GO');
     expect(result.checks.find((check) => check.id === 'routing_rules')?.level).toBe('fail');
   });
+
+  describe('AiRun matching by active provider/model pair', () => {
+    function createPairService(options: {
+      config: typeof modelConfig;
+      runs: RunFixture[];
+      modelProbes: Array<{
+        provider: string;
+        model: string;
+        configured: boolean;
+        text: 'ok' | 'error' | 'not_tested';
+        multimodal: 'ok' | 'error' | 'not_tested';
+        structured: 'ok' | 'error' | 'not_tested';
+      }>;
+      providers: {
+        openai?: Partial<{
+          configured: boolean;
+          text: string;
+          multimodal: string;
+          structured: string;
+          state: string;
+        }>;
+        gemini?: Partial<{
+          configured: boolean;
+          text: string;
+          multimodal: string;
+          structured: string;
+          state: string;
+        }>;
+        vertex?: Partial<{
+          configured: boolean;
+          text: string;
+          multimodal: string;
+          structured: string;
+          state: string;
+          location: string;
+        }>;
+      };
+    }) {
+      const prisma = {
+        expert: {
+          findUnique: jest.fn().mockResolvedValue({
+            email: 'expert@oraclelumira.com',
+            role: ExpertRole.ADMIN,
+            isActive: true,
+          }),
+          count: jest.fn().mockResolvedValue(1),
+        },
+        promptVersion: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'model-config',
+              key: 'MODEL_CONFIG',
+              version: 1,
+              value: JSON.stringify(options.config),
+              changedBy: 'test',
+              comment: 'pair',
+              createdAt: new Date('2026-07-20T12:00:00Z'),
+            },
+            {
+              id: 'guide',
+              key: 'GUIDE',
+              version: 2,
+              value: 'Parcours pratique de 30 jours, batch de 10 jours.',
+              changedBy: 'test',
+              comment: 'guide',
+              createdAt: new Date('2026-07-20T12:01:00Z'),
+            },
+          ]),
+        },
+        aiRoutingRule: { findMany: jest.fn().mockResolvedValue([]) },
+        aiRun: { findMany: jest.fn().mockResolvedValue(options.runs) },
+        order: { findFirst: jest.fn().mockResolvedValue(completedOrder) },
+      };
+      const diagnostics = {
+        getCredentialsStatus: jest.fn().mockResolvedValue({
+          openai: {
+            configured: false,
+            text: 'not_tested',
+            multimodal: 'not_tested',
+            structured: 'not_tested',
+            model: 'gpt-5.5-2026-04-23',
+            state: 'not_configured',
+            envVar: 'OPENAI_API_KEY',
+            ...options.providers.openai,
+          },
+          gemini: {
+            configured: false,
+            text: 'not_tested',
+            multimodal: 'not_tested',
+            structured: 'not_tested',
+            model: 'gemini-2.5-flash',
+            state: 'not_configured',
+            envVar: 'GEMINI_API_KEY',
+            ...options.providers.gemini,
+          },
+          vertex: {
+            configured: false,
+            text: 'not_tested',
+            multimodal: 'not_tested',
+            structured: 'not_tested',
+            model: 'gemini-2.5-pro',
+            state: 'not_configured',
+            envVar: 'VERTEX_CREDENTIALS_JSON',
+            ...options.providers.vertex,
+          },
+          modelProbes: options.modelProbes,
+        }),
+      };
+      return new AiProductionReadinessService(
+        prisma as never,
+        diagnostics as never,
+        { get: jest.fn(() => 'us-central1') } as never,
+      );
+    }
+
+    const vertexScribeConfig = {
+      providerMode: 'per_agent' as const,
+      agents: {
+        ...modelConfig.agents,
+        SCRIBE: {
+          ...modelConfig.agents.SCRIBE,
+          provider: 'vertex' as const,
+          model: 'gemini-2.5-pro',
+          temperature: 0.7,
+          topP: 0.9,
+        },
+        EDITOR: { ...modelConfig.agents.EDITOR, enabled: false },
+        GUIDE: { ...modelConfig.agents.GUIDE, enabled: false },
+        NARRATOR: { ...modelConfig.agents.NARRATOR, enabled: false },
+        CONFIDANT: { ...modelConfig.agents.CONFIDANT, enabled: false },
+        ONIRIQUE: { ...modelConfig.agents.ONIRIQUE, enabled: false },
+      },
+    };
+
+    it('does not fail SCRIBE on an old OpenAI error when Vertex is active', async () => {
+      const result = await createPairService({
+        config: vertexScribeConfig,
+        runs: [
+          {
+            id: 'old-openai-error',
+            orderId: 'order-1',
+            agent: 'SCRIBE',
+            mission: 'READING_GENERATION',
+            provider: 'openai',
+            model: 'gpt-5.5-2026-04-23',
+            routingSource: 'global:SCRIBE',
+            status: 'ERROR',
+            inputTokens: null,
+            outputTokens: null,
+            estimatedCost: null,
+            durationMs: 100,
+            errorCode: 'quota',
+            startedAt: new Date('2026-07-20T12:02:00Z'),
+          },
+        ],
+        modelProbes: [
+          {
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+          },
+        ],
+        providers: {
+          vertex: {
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+            state: 'connection_ok',
+            location: 'us-central1',
+          },
+        },
+      }).getReadiness();
+
+      expect(result.checks.find((check) => check.id === 'run_scribe')?.level).toBe('warning');
+      expect(result.checks.find((check) => check.id === 'run_scribe')?.level).not.toBe('fail');
+    });
+
+    it('does not fail GUIDE on an error from another Gemini model', async () => {
+      const guideFlashConfig = {
+        providerMode: 'per_agent' as const,
+        agents: {
+          ...modelConfig.agents,
+          SCRIBE: { ...modelConfig.agents.SCRIBE, enabled: false },
+          EDITOR: { ...modelConfig.agents.EDITOR, enabled: false },
+          GUIDE: {
+            ...modelConfig.agents.GUIDE,
+            provider: 'gemini' as const,
+            model: 'gemini-2.5-flash',
+            temperature: 0.5,
+            topP: 0.9,
+          },
+          NARRATOR: { ...modelConfig.agents.NARRATOR, enabled: false },
+          CONFIDANT: { ...modelConfig.agents.CONFIDANT, enabled: false },
+          ONIRIQUE: { ...modelConfig.agents.ONIRIQUE, enabled: false },
+        },
+      };
+      const result = await createPairService({
+        config: guideFlashConfig,
+        runs: [
+          {
+            id: 'old-pro-error',
+            orderId: 'order-1',
+            agent: 'GUIDE',
+            mission: 'TIMELINE_BATCH',
+            provider: 'gemini',
+            model: 'gemini-2.5-pro',
+            routingSource: 'global:GUIDE',
+            status: 'ERROR',
+            inputTokens: null,
+            outputTokens: null,
+            estimatedCost: null,
+            durationMs: 100,
+            errorCode: 'model error',
+            startedAt: new Date('2026-07-20T12:03:00Z'),
+          },
+        ],
+        modelProbes: [
+          {
+            provider: 'gemini',
+            model: 'gemini-2.5-flash',
+            configured: true,
+            text: 'ok',
+            multimodal: 'not_tested',
+            structured: 'ok',
+          },
+        ],
+        providers: {
+          gemini: {
+            configured: true,
+            text: 'ok',
+            multimodal: 'not_tested',
+            structured: 'ok',
+            state: 'connection_ok',
+          },
+        },
+      }).getReadiness();
+
+      expect(result.checks.find((check) => check.id === 'run_guide')?.level).toBe('warning');
+    });
+
+    it('fails SCRIBE when the active Vertex pair errored', async () => {
+      const result = await createPairService({
+        config: vertexScribeConfig,
+        runs: [
+          {
+            id: 'vertex-error',
+            orderId: 'order-1',
+            agent: 'SCRIBE',
+            mission: 'READING_GENERATION',
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            routingSource: 'global:SCRIBE',
+            status: 'ERROR',
+            inputTokens: null,
+            outputTokens: null,
+            estimatedCost: null,
+            durationMs: 100,
+            errorCode: 'Vertex timeout',
+            startedAt: new Date('2026-07-20T12:02:00Z'),
+          },
+        ],
+        modelProbes: [
+          {
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+          },
+        ],
+        providers: {
+          vertex: {
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+            state: 'connection_ok',
+            location: 'us-central1',
+          },
+        },
+      }).getReadiness();
+
+      expect(result.checks.find((check) => check.id === 'run_scribe')?.level).toBe('fail');
+    });
+
+    it('passes SCRIBE when the active Vertex pair succeeded', async () => {
+      const result = await createPairService({
+        config: vertexScribeConfig,
+        runs: [
+          {
+            id: 'vertex-ok',
+            orderId: 'order-1',
+            agent: 'SCRIBE',
+            mission: 'READING_GENERATION',
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            routingSource: 'global:SCRIBE',
+            status: 'SUCCESS',
+            inputTokens: 100,
+            outputTokens: 200,
+            estimatedCost: null,
+            durationMs: 1000,
+            errorCode: null,
+            startedAt: new Date('2026-07-20T12:02:00Z'),
+          },
+        ],
+        modelProbes: [
+          {
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+          },
+        ],
+        providers: {
+          vertex: {
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+            state: 'connection_ok',
+            location: 'us-central1',
+          },
+        },
+      }).getReadiness();
+
+      expect(result.checks.find((check) => check.id === 'run_scribe')?.level).toBe('pass');
+    });
+
+    it('passes when a newer SUCCESS supersedes an older ERROR for the same pair', async () => {
+      const result = await createPairService({
+        config: vertexScribeConfig,
+        runs: [
+          {
+            id: 'vertex-ok-recent',
+            orderId: 'order-1',
+            agent: 'SCRIBE',
+            mission: 'READING_GENERATION',
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            routingSource: 'global:SCRIBE',
+            status: 'SUCCESS',
+            inputTokens: 100,
+            outputTokens: 200,
+            estimatedCost: null,
+            durationMs: 1000,
+            errorCode: null,
+            startedAt: new Date('2026-07-20T12:10:00Z'),
+          },
+          {
+            id: 'vertex-error-old',
+            orderId: 'order-1',
+            agent: 'SCRIBE',
+            mission: 'READING_GENERATION',
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            routingSource: 'global:SCRIBE',
+            status: 'ERROR',
+            inputTokens: null,
+            outputTokens: null,
+            estimatedCost: null,
+            durationMs: 100,
+            errorCode: 'old error',
+            startedAt: new Date('2026-07-20T12:01:00Z'),
+          },
+        ],
+        modelProbes: [
+          {
+            provider: 'vertex',
+            model: 'gemini-2.5-pro',
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+          },
+        ],
+        providers: {
+          vertex: {
+            configured: true,
+            text: 'ok',
+            multimodal: 'ok',
+            structured: 'ok',
+            state: 'connection_ok',
+            location: 'us-central1',
+          },
+        },
+      }).getReadiness();
+
+      expect(result.checks.find((check) => check.id === 'run_scribe')?.level).toBe('pass');
+    });
+  });
 });

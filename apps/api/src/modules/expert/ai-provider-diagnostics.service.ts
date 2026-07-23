@@ -732,6 +732,19 @@ export class AiProviderDiagnosticsService {
     needsStructured = true,
   ): ProviderCredentialState {
     if (!configured) return 'not_configured';
+    if (errorCategory === 'quota' || errorCategory === 'quota_billing') {
+      return 'quota_billing';
+    }
+    if (errorCategory === 'model_not_found' || errorCategory === 'region_not_supported') {
+      return 'model_inaccessible';
+    }
+    if (
+      text === 'error' ||
+      (needsVision && multimodal === 'error') ||
+      (needsStructured && structured === 'error')
+    ) {
+      return 'test_failed';
+    }
     if (
       text === 'not_tested' ||
       (needsVision && (multimodal ?? 'not_tested') === 'not_tested') ||
@@ -739,12 +752,12 @@ export class AiProviderDiagnosticsService {
     ) {
       return 'not_tested';
     }
-    if (text === 'ok' && multimodal !== 'error' && structured !== 'error') {
+    if (
+      text === 'ok' &&
+      (!needsVision || multimodal === 'ok') &&
+      (!needsStructured || structured === 'ok')
+    ) {
       return 'connection_ok';
-    }
-    if (errorCategory === 'quota') return 'quota_billing';
-    if (errorCategory === 'model_not_found' || errorCategory === 'region_not_supported') {
-      return 'model_inaccessible';
     }
     return 'test_failed';
   }

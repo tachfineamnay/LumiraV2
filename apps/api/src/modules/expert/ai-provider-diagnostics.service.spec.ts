@@ -234,4 +234,93 @@ describe('AiProviderDiagnosticsService', () => {
     await service.testGeminiConnection({ force: true });
     expect(mockGenerateContent.mock.calls.length).toBeGreaterThan(firstCalls);
   });
+
+  describe('resolveCredentialState priority', () => {
+    type ResolveArgs = [
+      boolean,
+      'ok' | 'error' | 'not_tested',
+      'ok' | 'error' | 'not_tested' | undefined,
+      'ok' | 'error' | 'not_tested' | undefined,
+      string | undefined,
+      boolean?,
+      boolean?,
+    ];
+
+    function resolveState(...args: ResolveArgs) {
+      return (
+        service as unknown as {
+          resolveCredentialState: (...inner: ResolveArgs) => string;
+        }
+      ).resolveCredentialState(...args);
+    }
+
+    it('returns quota_billing even when vision/structured are not_tested', () => {
+      expect(resolveState(true, 'error', 'not_tested', 'not_tested', 'quota')).toBe(
+        'quota_billing',
+      );
+    });
+
+    it('returns model_inaccessible for model_not_found', () => {
+      expect(resolveState(true, 'error', 'not_tested', 'not_tested', 'model_not_found')).toBe(
+        'model_inaccessible',
+      );
+    });
+
+    it('returns model_inaccessible for region_not_supported', () => {
+      expect(resolveState(true, 'error', 'not_tested', 'not_tested', 'region_not_supported')).toBe(
+        'model_inaccessible',
+      );
+    });
+
+    it('returns test_failed for a plain text error', () => {
+      expect(resolveState(true, 'error', 'not_tested', 'not_tested', 'unknown')).toBe(
+        'test_failed',
+      );
+    });
+
+    it('returns test_failed when required vision errored', () => {
+      expect(resolveState(true, 'ok', 'error', 'ok', undefined, true, true)).toBe('test_failed');
+    });
+
+    it('returns test_failed when required structured errored', () => {
+      expect(resolveState(true, 'ok', 'ok', 'error', undefined, true, true)).toBe('test_failed');
+    });
+
+    it('returns not_tested when required vision was not executed', () => {
+      expect(resolveState(true, 'ok', 'not_tested', 'ok', undefined, true, true)).toBe(
+        'not_tested',
+      );
+    });
+
+    it('returns not_tested when required structured was not executed', () => {
+      expect(resolveState(true, 'ok', 'ok', 'not_tested', undefined, true, true)).toBe(
+        'not_tested',
+      );
+    });
+
+    it('returns connection_ok when unused vision/structured stay not_tested', () => {
+      expect(resolveState(true, 'ok', 'not_tested', 'not_tested', undefined, false, false)).toBe(
+        'connection_ok',
+      );
+    });
+
+    it('returns connection_ok when all required probes passed', () => {
+      expect(resolveState(true, 'ok', 'ok', 'ok', undefined, true, true)).toBe('connection_ok');
+    });
+
+    it('surfaces quota_billing via getCredentialsStatus after a text probe failure', async () => {
+      configGet.mockImplementation((key: string) =>
+        key === 'GEMINI_API_KEY' ? 'test-gemini-key' : undefined,
+      );
+      mockGenerateContent.mockRejectedValueOnce(
+        new Error('RESOURCE_EXHAUSTED insufficient_quota billing'),
+      );
+
+      await service.testGeminiConnection({ force: true });
+      const status = await service.getCredentialsStatus();
+      expect(status.gemini.state).toBe('quota_billing');
+      expect(status.gemini.text).toBe('error');
+      expect(status.gemini.multimodal ?? 'not_tested').toBe('not_tested');
+    });
+  });
 });
