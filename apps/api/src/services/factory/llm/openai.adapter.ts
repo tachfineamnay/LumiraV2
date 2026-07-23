@@ -44,8 +44,13 @@ export class OpenAiAdapter implements LlmAdapter {
     }
   }
 
+  private isThinkingModel(model: string): boolean {
+    const normalized = model.trim().toLowerCase();
+    return /^gpt-5(?:[.-]|$)/.test(normalized) && !/(?:^|[.-])pro(?:[.-]|$)/.test(normalized);
+  }
+
   private openAIParameters(req: LlmRequest): Record<string, unknown> {
-    if (req.model.startsWith('gpt-5.')) {
+    if (this.isThinkingModel(req.model)) {
       return {
         reasoning: { effort: req.thinkingLevel ?? req.reasoningEffort ?? 'medium' },
         max_output_tokens: req.maxTokens,
@@ -60,7 +65,7 @@ export class OpenAiAdapter implements LlmAdapter {
 
   private textFormat(req: LlmRequest): Record<string, unknown> {
     return {
-      ...(req.model.startsWith('gpt-5.') ? { verbosity: req.verbosity ?? 'medium' } : {}),
+      ...(this.isThinkingModel(req.model) ? { verbosity: req.verbosity ?? 'medium' } : {}),
       ...(req.jsonSchema
         ? {
             format: {
