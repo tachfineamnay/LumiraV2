@@ -8,9 +8,10 @@
 4. SCRIBE generates the structured reading and EDITOR performs the configured quality pass.
 5. The expert reviews canonical JSON blocks rather than a global HTML document.
 6. Every block update uses an optimistic `readingRevision` guard.
-7. Quality issues remain visible beside the reading and block delivery when structural defects remain.
-8. PDF preview compiles the real template without S3 upload, email or delivery record.
-9. Seal uses the structured reading, creates the immutable ReadingVersion, then delivers PDF, email and audio.
+7. Each edited block keeps up to five short previous versions for targeted restoration.
+8. Quality issues remain visible beside the reading and block delivery when structural defects remain.
+9. PDF preview compiles the real template without S3 upload, email or delivery record.
+10. Seal uses the structured reading, creates the immutable ReadingVersion, then delivers PDF, email and audio.
 
 ## Canonical API
 
@@ -19,6 +20,7 @@
 - `PATCH /expert/orders/:id/reading/draft`
 - `PATCH /expert/orders/:id/reading/blocks/:blockId`
 - `POST /expert/orders/:id/reading/blocks/:blockId/revise`
+- `POST /expert/orders/:id/reading/blocks/:blockId/restore`
 - `POST /expert/orders/:id/reading/quality/repair`
 - `POST /expert/orders/:id/reading/preview`
 - `POST /expert/orders/:id/reading/seal`
@@ -32,6 +34,20 @@
 - `PASS`: preview and seal are available.
 
 The same canonical validator is used by the workspace and by immutable ReadingVersion sealing.
+
+## PDF and audio identity
+
+Every structured expert modification rebuilds the canonical `lecture` narration from the same blocks used by the PDF:
+
+- introduction;
+- archetype;
+- eight domains;
+- four insights;
+- life mission;
+- ritual names, descriptions and instructions;
+- conclusion.
+
+The audio worker therefore narrates the same immutable version that the client receives as PDF.
 
 ## Removed UI residue
 
@@ -58,9 +74,19 @@ No Prisma migration is required. Existing ReadingVersion, DeliveryRecord, S3 obj
 
 The frontend does not write order status directly.
 
-## Verification gate
+## Verification commands
 
-The branch must pass API typecheck/build and Web typecheck/build before it can replace `main`. Browser smoke tests remain required after the build gate succeeds.
+Run before declaring the deployment healthy:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm db:generate`
+- `pnpm --filter api typecheck`
+- `pnpm --filter api test -- --runInBand reading-workspace.service.spec.ts`
+- `pnpm --filter api build`
+- `pnpm --filter web typecheck`
+- `pnpm --filter web build`
+
+A browser smoke test must then cover preparation, production resume, block editing, restoration, quality repair, PDF preview, seal and reopen.
 
 ## Rollback
 
