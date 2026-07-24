@@ -21,6 +21,7 @@ import { useSocket } from '../hooks/useSocket';
 import { ReadingDossierDrawer } from './ReadingDossierDrawer';
 import { ReadingHistoryPanel } from './ReadingHistoryPanel';
 import { ReadingQualityPanel } from './ReadingQualityPanel';
+import { SealReadingModal } from './SealReadingModal';
 import { StructuredReadingEditor } from './StructuredReadingEditor';
 import type { ReadingWorkspacePayload } from './reading-workspace.types';
 
@@ -37,6 +38,11 @@ const TONES = [
 
 type Tone = (typeof TONES)[number]['value'];
 
+type BlockMutationResponse = Pick<
+  ReadingWorkspacePayload,
+  'reading' | 'revision' | 'quality' | 'restorableBlocks'
+>;
+
 export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const router = useRouter();
   const [workspace, setWorkspace] = useState<ReadingWorkspacePayload | null>(null);
@@ -47,9 +53,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const [tone, setTone] = useState<Tone>('DOUX_ET_CLAIR');
   const [dossierOpen, setDossierOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sealModalOpen, setSealModalOpen] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [savingBlockId, setSavingBlockId] = useState<string | null>(null);
   const [revisingBlockId, setRevisingBlockId] = useState<string | null>(null);
+  const [restoringBlockId, setRestoringBlockId] = useState<string | null>(null);
   const [repairing, setRepairing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [sealing, setSealing] = useState(false);
@@ -115,6 +123,20 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     };
   }, [processing]);
 
+  const applyMutation = (data: BlockMutationResponse) => {
+    setWorkspace((current) =>
+      current
+        ? {
+            ...current,
+            reading: data.reading,
+            revision: data.revision,
+            quality: data.quality,
+            restorableBlocks: data.restorableBlocks,
+          }
+        : current,
+    );
+  };
+
   const launch = async () => {
     if (orientation.trim().length < 3) {
       toast.error('Ajoutez une orientation experte, même courte.');
@@ -144,15 +166,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     if (!workspace) return;
     setSavingBlockId(blockId);
     try {
-      const { data } = await expertApi.patch(
+      const { data } = await expertApi.patch<BlockMutationResponse>(
         `/expert/orders/${orderId}/reading/blocks/${encodeURIComponent(blockId)}`,
         { value, expectedRevision: workspace.revision },
       );
-      setWorkspace((current) =>
-        current
-          ? { ...current, reading: data.reading, revision: data.revision, quality: data.quality }
-          : current,
-      );
+      applyMutation(data);
       toast.success('Bloc enregistré');
     } catch (requestError: unknown) {
       const status = (requestError as { response?: { status?: number } })?.response?.status;
@@ -170,15 +188,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     if (!workspace) return;
     setRevisingBlockId(blockId);
     try {
-      const { data } = await expertApi.post(
+      const { data } = await expertApi.post<BlockMutationResponse>(
         `/expert/orders/${orderId}/reading/blocks/${encodeURIComponent(blockId)}/revise`,
         { instruction, expectedRevision: workspace.revision },
       );
-      setWorkspace((current) =>
-        current
-          ? { ...current, reading: data.reading, revision: data.revision, quality: data.quality }
-          : current,
-      );
+      applyMutation(data);
       toast.success('Bloc corrigé par EDITOR');
     } catch (requestError) {
       toast.error('La correction ciblée a échoué');
@@ -188,18 +202,32 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     }
   };
 
+  const restoreBlock = async (blockId: string) => {
+    if (!workspace) return;
+    setRestoringBlockId(blockId);
+    try {
+      const { data } = await expertApi.post<BlockMutationResponse>(
+        `/expert/orders/${orderId}/reading/blocks/${encodeURIComponent(blockId)}/restore`,
+        { expectedRevision: workspace.revision },
+      );
+      applyMutation(data);
+      toast.success('Version précédente restaurée');
+    } catch (requestError) {
+      toast.error('La restauration a échoué');
+      throw requestError;
+    } finally {
+      setRestoringBlockId(null);
+    }
+  };
+
   const repairSafeIssues = async () => {
     setRepairing(true);
     try {
-      const { data } = await expertApi.post(
+      const { data } = await expertApi.post<BlockMutationResponse>(
         `/expert/orders/${orderId}/reading/quality/repair`,
         {},
       );
-      setWorkspace((current) =>
-        current
-          ? { ...current, reading: data.reading, revision: data.revision, quality: data.quality }
-          : current,
-      );
+      applyMutation(data);
       toast.success('Défauts de formatage nettoyés');
     } catch {
       toast.error('Le nettoyage automatique a échoué');
@@ -228,15 +256,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 
   const seal = async () => {
     if (!workspace?.quality) return;
-    const hasWarnings = workspace.quality.status === 'WARNING';
-    if (hasWarnings && !window.confirm('Des avertissements subsistent. Continuer ?')) return;
-    if (!window.confirm('Sceller et envoyer cette version au client ?')) return;
-
     setSealing(true);
     try {
       await expertApi.post(`/expert/orders/${orderId}/reading/seal`, {
-        acknowledgeWarnings: hasWarnings,
+        acknowledgeWarnings: workspace.quality.status === 'WARNING',
       });
+      setSealModalOpen(false);
       toast.success('Lecture scellée et envoyée');
       await loadWorkspace();
     } catch (requestError: unknown) {
@@ -276,7 +301,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     );
   }
 
-  const { order, reading, quality, history } = workspace;
+  const { order, reading, quality, history, restorableBlocks } = workspace;
   const readOnly = order.status === 'COMPLETED';
   const canSeal = order.status === 'AWAITING_VALIDATION' && quality?.status !== 'BLOCKED';
 
@@ -306,8 +331,16 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <HeaderButton onClick={() => setDossierOpen(true)} icon={<FolderOpen className="h-4 w-4" />} label="Dossier" />
-            <HeaderButton onClick={() => setHistoryOpen(true)} icon={<History className="h-4 w-4" />} label="Historique" />
+            <HeaderButton
+              onClick={() => setDossierOpen(true)}
+              icon={<FolderOpen className="h-4 w-4" />}
+              label="Dossier"
+            />
+            <HeaderButton
+              onClick={() => setHistoryOpen(true)}
+              icon={<History className="h-4 w-4" />}
+              label="Historique"
+            />
             <button
               type="button"
               onClick={() => void loadWorkspace()}
@@ -348,8 +381,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               readOnly={readOnly}
               savingBlockId={savingBlockId}
               revisingBlockId={revisingBlockId}
+              restoringBlockId={restoringBlockId}
+              restorableBlocks={restorableBlocks}
               onSaveBlock={saveBlock}
               onReviseBlock={reviseBlock}
+              onRestoreBlock={restoreBlock}
             />
             <div className="xl:sticky xl:top-4 xl:self-start">
               <ReadingQualityPanel
@@ -366,7 +402,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         <footer className="flex-shrink-0 border-t border-desk-border bg-desk-surface px-3 py-3 sm:px-5">
           <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-2">
             <div className="text-xs text-desk-muted">
-              Révision {workspace.revision} · sauvegarde par bloc
+              Révision {workspace.revision} · sauvegarde et restauration par bloc
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -399,16 +435,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
               ) : (
                 <button
                   type="button"
-                  onClick={() => void seal()}
+                  onClick={() => setSealModalOpen(true)}
                   disabled={!canSeal || sealing}
                   className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white disabled:opacity-40"
                 >
-                  {sealing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                  Sceller et envoyer
+                  <Send className="h-4 w-4" /> Sceller et envoyer
                 </button>
               )}
             </div>
@@ -426,6 +457,17 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       />
+      {quality && (
+        <SealReadingModal
+          open={sealModalOpen}
+          clientName={`${order.user.firstName} ${order.user.lastName}`.trim()}
+          orderNumber={order.orderNumber}
+          quality={quality}
+          isSealing={sealing}
+          onCancel={() => setSealModalOpen(false)}
+          onConfirm={() => void seal()}
+        />
+      )}
     </div>
   );
 }
@@ -588,16 +630,30 @@ function ProcessingPanel({ onReturn }: { onReturn: () => void }) {
 }
 
 function StatusBadge({ status, quality }: { status: string; quality?: string }) {
-  if (status === 'COMPLETED') return <Badge className="bg-emerald-500/15 text-emerald-700" label="Livrée" />;
-  if (status === 'PROCESSING') return <Badge className="bg-blue-500/15 text-blue-700" label="Production" />;
-  if (quality === 'BLOCKED') return <Badge className="bg-red-500/15 text-red-700" label="Bloquée" />;
-  if (quality === 'WARNING') return <Badge className="bg-amber-500/15 text-amber-700" label="À examiner" />;
-  if (quality === 'PASS') return <Badge className="bg-emerald-500/15 text-emerald-700" label="Prête" />;
+  if (status === 'COMPLETED') {
+    return <Badge className="bg-emerald-500/15 text-emerald-700" label="Livrée" />;
+  }
+  if (status === 'PROCESSING') {
+    return <Badge className="bg-blue-500/15 text-blue-700" label="Production" />;
+  }
+  if (quality === 'BLOCKED') {
+    return <Badge className="bg-red-500/15 text-red-700" label="Bloquée" />;
+  }
+  if (quality === 'WARNING') {
+    return <Badge className="bg-amber-500/15 text-amber-700" label="À examiner" />;
+  }
+  if (quality === 'PASS') {
+    return <Badge className="bg-emerald-500/15 text-emerald-700" label="Prête" />;
+  }
   return <Badge className="bg-desk-hover text-desk-muted" label={status} />;
 }
 
 function Badge({ className, label }: { className: string; label: string }) {
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${className}`}>{label}</span>;
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${className}`}>
+      {label}
+    </span>
+  );
 }
 
 function CenteredState({ icon, text }: { icon: ReactNode; text: string }) {
