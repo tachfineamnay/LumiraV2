@@ -104,14 +104,14 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       const { data } = await expertApi.get(`/expert/orders/${orderId}`);
       setOrder(data);
 
-          if (data.generatedContent) {
-            const initialHtml =
-              typeof data.generatedContent.studioDraftHtml === 'string' &&
-              data.generatedContent.studioDraftHtml.trim().length > 0
-                ? data.generatedContent.studioDraftHtml
-                : oracleResponseToHtml(data.generatedContent);
-            setEditorContent(initialHtml);
-          }
+      if (data.generatedContent) {
+        const initialHtml =
+          typeof data.generatedContent.studioDraftHtml === 'string' &&
+          data.generatedContent.studioDraftHtml.trim().length > 0
+            ? data.generatedContent.studioDraftHtml
+            : oracleResponseToHtml(data.generatedContent);
+        setEditorContent(initialHtml);
+      }
 
       setError(null);
       return data;
@@ -954,7 +954,9 @@ function oracleResponseToHtml(response: OracleResponse): string {
     if (pdf_content.introduction)
       parts.push(`<h1>Introduction</h1>\n<p>${escapeHtml(pdf_content.introduction)}</p>`);
     if (pdf_content.archetype_reveal)
-      parts.push(`<h2>Révélation de l'Archétype</h2>\n<p>${escapeHtml(pdf_content.archetype_reveal)}</p>`);
+      parts.push(
+        `<h2>Révélation de l'Archétype</h2>\n<p>${escapeHtml(pdf_content.archetype_reveal)}</p>`,
+      );
     if (pdf_content.sections) {
       pdf_content.sections.forEach((s) =>
         parts.push(`<h2>${escapeHtml(s.title)}</h2>\n<p>${escapeHtml(s.content)}</p>`),

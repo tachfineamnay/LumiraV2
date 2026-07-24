@@ -25,6 +25,8 @@ import { DeliveryRecoveryInterceptor } from './delivery-recovery.interceptor';
 import { ProductionPaidRecoveryService } from './production-paid-recovery.service';
 import { ClientControlService } from './client-control.service';
 
+import { ReadingCalculationsService } from './reading-calculations.service';
+
 @Module({
   imports: [
     ConfigModule,
@@ -62,6 +64,7 @@ import { ClientControlService } from './client-control.service';
     ProductionControlService,
     ProductionPaidRecoveryService,
     ClientControlService,
+    ReadingCalculationsService,
     {
       provide: APP_INTERCEPTOR,
       useClass: ProductionQueueInterceptor,
@@ -85,6 +88,7 @@ import { ClientControlService } from './client-control.service';
     ClientControlService,
     AiProviderDiagnosticsService,
     AiProductionReadinessService,
+    ReadingCalculationsService,
     JwtModule,
   ],
 })

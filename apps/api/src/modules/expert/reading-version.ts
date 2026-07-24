@@ -87,7 +87,10 @@ function parseTimeline(input: unknown): CanonicalReadingTimelineItem[] {
     title: asString(t.title),
     action: asString(t.action),
     mantra: typeof t.mantra === 'string' ? t.mantra : undefined,
-    actionType: typeof t.actionType === 'string' ? (t.actionType as CanonicalReadingTimelineItem['actionType']) : undefined,
+    actionType:
+      typeof t.actionType === 'string'
+        ? (t.actionType as CanonicalReadingTimelineItem['actionType'])
+        : undefined,
   }));
 }
 
@@ -224,7 +227,10 @@ export function splitStudioContent(content: string): {
         parsed.introduction = currentLines.join('\n\n');
       }
     } else if (currentHeading) {
-      const headingNorm = currentHeading.toLowerCase().replace(/^#+\s*/, '').trim();
+      const headingNorm = currentHeading
+        .toLowerCase()
+        .replace(/^#+\s*/, '')
+        .trim();
       const text = currentLines.join('\n\n').trim();
 
       if (/\bintroduction\b/i.test(headingNorm)) {
@@ -277,7 +283,10 @@ export function buildStudioReadingVersion(
 ): CanonicalReadingContent {
   const source = isRecord(currentGenerated) ? currentGenerated : {};
 
-  if ((finalContent === asString(source.lecture) || !finalContent.trim()) && isRecord(source.pdf_content)) {
+  if (
+    (finalContent === asString(source.lecture) || !finalContent.trim()) &&
+    isRecord(source.pdf_content)
+  ) {
     return buildGeneratedReadingVersion(currentGenerated);
   }
 
@@ -313,12 +322,9 @@ export function buildStudioReadingVersion(
   for (let i = 0; i < REQUIRED_DOMAINS.length; i++) {
     const reqDomain = REQUIRED_DOMAINS[i];
 
-    const parsedSec = parsed.sections.find(
-      (s) => s.domain.toLowerCase().trim() === reqDomain,
-    );
+    const parsedSec = parsed.sections.find((s) => s.domain.toLowerCase().trim() === reqDomain);
 
-    const existingSec =
-      existingSections.find((s) => s.domain === reqDomain) || existingSections[i];
+    const existingSec = existingSections.find((s) => s.domain === reqDomain) || existingSections[i];
 
     if (parsedSec && parsedSec.content.trim()) {
       mergedSections.push({

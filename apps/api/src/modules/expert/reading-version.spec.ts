@@ -118,7 +118,9 @@ describe('reading version & studio edits preservation', () => {
 
     const version = buildStudioReadingVersion(generated, studioHtml);
 
-    expect(version.pdf_content.introduction).toBe('Nouvelle introduction rédigée par l\'expert pour le consultant.');
+    expect(version.pdf_content.introduction).toBe(
+      "Nouvelle introduction rédigée par l'expert pour le consultant.",
+    );
     expect(version.pdf_content.sections).toHaveLength(8);
     expect(version.pdf_content.karmic_insights).toHaveLength(4);
     expect(version.pdf_content.rituals).toHaveLength(2);
@@ -126,14 +128,20 @@ describe('reading version & studio edits preservation', () => {
 
   it('4. préserve les rituels lorsqu’ils ne sont pas modifiés', () => {
     const generated = createFullGeneratedReading();
-    const version = buildStudioReadingVersion(generated, '<h1>Introduction</h1><p>Texte court.</p>');
+    const version = buildStudioReadingVersion(
+      generated,
+      '<h1>Introduction</h1><p>Texte court.</p>',
+    );
 
     expect(version.pdf_content.rituals).toEqual(generated.pdf_content.rituals);
   });
 
   it('5. préserve les instructions des rituels', () => {
     const generated = createFullGeneratedReading();
-    const version = buildStudioReadingVersion(generated, '<h2>Grand axe : Sante</h2><p>Exégèse santé</p>');
+    const version = buildStudioReadingVersion(
+      generated,
+      '<h2>Grand axe : Sante</h2><p>Exégèse santé</p>',
+    );
 
     expect(version.pdf_content.rituals[0].instructions).toEqual([
       'Installez-vous dans un endroit calme et fermez les yeux.',
@@ -152,21 +160,27 @@ describe('reading version & studio edits preservation', () => {
 
   it('7. préserve la mission de vie lorsqu’elle n’est pas modifiée', () => {
     const generated = createFullGeneratedReading();
-    const version = buildStudioReadingVersion(generated, '<h2>Conclusion</h2><p>Conclusion révisée.</p>');
+    const version = buildStudioReadingVersion(
+      generated,
+      '<h2>Conclusion</h2><p>Conclusion révisée.</p>',
+    );
 
     expect(version.pdf_content.life_mission).toBe(generated.pdf_content.life_mission);
   });
 
   it('8. ne vide aucun bloc même en présence de HTML sans titres/intertitres', () => {
     const generated = createFullGeneratedReading();
-    const studioHtmlWithoutHeadings = '<p>Texte brut saisi par l’expert sans aucune balise H1 ou H2.</p>';
+    const studioHtmlWithoutHeadings =
+      '<p>Texte brut saisi par l’expert sans aucune balise H1 ou H2.</p>';
 
     const version = buildStudioReadingVersion(generated, studioHtmlWithoutHeadings);
 
     expect(version.pdf_content.sections).toHaveLength(8);
     expect(version.pdf_content.karmic_insights).toHaveLength(4);
     expect(version.pdf_content.rituals).toHaveLength(2);
-    expect(version.pdf_content.introduction).toBe('Texte brut saisi par l’expert sans aucune balise H1 ou H2.');
+    expect(version.pdf_content.introduction).toBe(
+      'Texte brut saisi par l’expert sans aucune balise H1 ou H2.',
+    );
     expect(version.pdf_content.conclusion).toBe(generated.pdf_content.conclusion);
   });
 
@@ -186,7 +200,10 @@ describe('reading version & studio edits preservation', () => {
 
   it('10. garantit qu’aucun bloc n’est vidé silencieusement (compatibilité avec ReadingQualityValidator)', () => {
     const generated = createFullGeneratedReading();
-    const version = buildStudioReadingVersion(generated, '<h2>Grand axe : Spirituel</h2><p>Seule modif</p>');
+    const version = buildStudioReadingVersion(
+      generated,
+      '<h2>Grand axe : Spirituel</h2><p>Seule modif</p>',
+    );
 
     // Les 8 sections doivent être remplies, 4 insights, 2 rituels
     expect(version.pdf_content.sections).toHaveLength(8);
