@@ -1,0 +1,190 @@
+name: Expert reading refactor - foundation repair
+
+on:
+  push:
+    branches:
+      - work/expert-reading-refactor-orfevre
+    paths:
+      - .github/workflows/expert-refactor-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-foundation:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/expert-reading-refactor-orfevre
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Apply surgical foundation corrections
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"Pattern not found in {path}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # 1. Strict SCRIBE schema and real Nest injection.
+          path = 'apps/api/src/services/factory/VertexOracle.ts'
+          replace_exact(path,
+          "import {\n  ReadingQualityValidator,\n  QualityIssue,\n} from '../../modules/expert/reading-quality.validator';",
+          "import {\n  ReadingQualityValidator,\n  QualityIssue,\n  QualityMetrics,\n} from '../../modules/expert/reading-quality.validator';")
+
+          replace_exact(path,
+          "  models: Record<string, string>;\n}",
+          "  models: Record<string, string>;\n  metrics: QualityMetrics;\n}")
+
+          replace_exact(path,
+          "        karmic_insights: {\n          type: 'array',\n          minItems: 1,\n          maxItems: 8,\n          items: STRING_SCHEMA,\n        },",
+          "        karmic_insights: {\n          type: 'array',\n          minItems: 4,\n          maxItems: 4,\n          items: { type: 'string', minLength: 80 },\n        },")
+
+          replace_exact(path,
+          "        rituals: {\n          type: 'array',\n          minItems: 1,\n          maxItems: 6,",
+          "        rituals: {\n          type: 'array',\n          minItems: 2,\n          maxItems: 2,")
+
+          replace_exact(path,
+          "              name: STRING_SCHEMA,\n              description: STRING_SCHEMA,\n              instructions: {\n                type: 'array',\n                minItems: 1,\n                maxItems: 10,\n                items: STRING_SCHEMA,\n              },",
+          "              name: { type: 'string', minLength: 5 },\n              description: { type: 'string', minLength: 40 },\n              instructions: {\n                type: 'array',\n                minItems: 4,\n                maxItems: 6,\n                items: { type: 'string', minLength: 12 },\n              },")
+
+          replace_exact(path,
+          "  private readonly calculationsService = new ReadingCalculationsService();\n  private readonly onboardingS3Client: S3Client;",
+          "  private readonly onboardingS3Client: S3Client;")
+
+          replace_exact(path,
+          "    private readonly aiRunService: AiRunService,\n    private readonly aiRuntimeCache: AiRuntimeCacheService,\n  ) {",
+          "    private readonly aiRunService: AiRunService,\n    private readonly aiRuntimeCache: AiRuntimeCacheService,\n    private readonly calculationsService: ReadingCalculationsService,\n  ) {")
+
+          replace_exact(path,
+          "    const scribeStartTime = new Date().toISOString();",
+          "    const scribeStartedAt = new Date().toISOString();")
+
+          replace_exact(path,
+          "          scribeCompletedAt: scribeStartTime,",
+          "          scribeCompletedAt: new Date().toISOString(),")
+
+          replace_exact(path,
+          "          models: {\n            SCRIBE: scribeModelName,\n          },\n        },",
+          "          models: {\n            SCRIBE: scribeModelName,\n          },\n          metrics: initialReport.metrics,\n        },")
+
+          replace_exact(path,
+          "    const editorStartTime = new Date().toISOString();",
+          "    const editorStartedAt = new Date().toISOString();")
+
+          replace_exact(path,
+          "      '6. Ne crée AUCUNE nouvelle interprétation et conserve scrupuleusement les faits et prédictions existants.',",
+          "      '6. Ne crée AUCUNE nouvelle interprétation. Préserve les faits déclarés et les hypothèses symboliques existantes sans les renforcer.',")
+
+          replace_exact(path,
+          "        scribeCompletedAt: scribeStartTime,\n        editorCompletedAt: editorStartTime,",
+          "        scribeCompletedAt: new Date().toISOString(),\n        editorCompletedAt: new Date().toISOString(),")
+
+          replace_exact(path,
+          "        models: {\n          SCRIBE: scribeModelName,\n          EDITOR: editorModelName,\n        },\n      },",
+          "        models: {\n          SCRIBE: scribeModelName,\n          EDITOR: editorModelName,\n        },\n        metrics: finalReport.metrics,\n      },")
+
+          replace_exact(path,
+          "    const calcs = (this.calculationsService ?? new ReadingCalculationsService()).calculate(\n      profile.birthDate,\n    );",
+          "    const calcs = this.calculationsService.calculate(profile.birthDate);")
+
+          # Remove intentionally unused timestamp variables after preserving audit semantics in pipeline metadata.
+          p = Path(path)
+          text = p.read_text().replace("    const scribeStartedAt = new Date().toISOString();\n", "")
+          text = text.replace("    const editorStartedAt = new Date().toISOString();\n", "")
+          p.write_text(text)
+
+          # 2. Register the calculations service where VertexOracle is actually provided.
+          path = 'apps/api/src/services/services.module.ts'
+          replace_exact(path,
+          "import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';",
+          "import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';\nimport { ReadingCalculationsService } from '../modules/expert/reading-calculations.service';")
+          replace_exact(path,
+          "    AiRunService,\n    VertexOracle,",
+          "    AiRunService,\n    ReadingCalculationsService,\n    VertexOracle,")
+          replace_exact(path,
+          "    AiRunService,\n    VertexOracle,\n    PdfFactory,",
+          "    AiRunService,\n    ReadingCalculationsService,\n    VertexOracle,\n    PdfFactory,")
+
+          # Remove duplicate provider from ExpertModule to keep a single instance.
+          path = 'apps/api/src/modules/expert/expert.module.ts'
+          p = Path(path)
+          text = p.read_text()
+          text = text.replace("\nimport { ReadingCalculationsService } from './reading-calculations.service';\n", "\n")
+          text = text.replace("    ReadingCalculationsService,\n", "")
+          text = text.replace("    ReadingCalculationsService,\n", "")
+          p.write_text(text)
+
+          # 3. Never fabricate missing structured sections during Studio merge.
+          path = 'apps/api/src/modules/expert/reading-version.ts'
+          replace_exact(path,
+          "    } else {\n      mergedSections.push({\n        domain: reqDomain,\n        title: `Grand axe : ${reqDomain}`,\n        content: parsed.introduction || 'Contenu de la section.',\n      });\n    }",
+          "    }\n    // Missing sections remain missing on purpose: the quality validator must block\n    // delivery instead of fabricating customer-facing prose.")
+
+          replace_exact(path,
+          "    (finalContent === asString(source.lecture) || !finalContent.trim()) &&\n    isRecord(source.pdf_content)",
+          "    (finalContent === asString(source.studioDraftHtml) ||\n      finalContent === asString(source.lecture) ||\n      !finalContent.trim()) &&\n    isRecord(source.pdf_content)")
+
+          # 4. PDF preflight also validates the exact sealed payload immediately before rendering.
+          path = 'apps/api/src/services/factory/DigitalSoulService.ts'
+          replace_exact(path,
+          "import { isCanonicalReadingContent } from '../../modules/expert/reading-version';",
+          "import { isCanonicalReadingContent } from '../../modules/expert/reading-version';\nimport { assertReadingDeliverable } from '../../modules/expert/reading-quality.validator';")
+          replace_exact(path,
+          "    const aiResponse = sealedReading.content as unknown as OracleResponse;",
+          "    assertReadingDeliverable(sealedReading.content);\n    const aiResponse = sealedReading.content as unknown as OracleResponse;")
+
+          # 5. Frontend pipeline typing for the upcoming quality workspace.
+          path = 'apps/web/components/desk-v2/types.ts'
+          replace_exact(path,
+          "  studioDraftHtml?: string;\n}",
+          "  studioDraftHtml?: string;\n  pipeline?: {\n    scribeCompletedAt: string;\n    editorCompletedAt: string | null;\n    qualityStatus: 'PASS' | 'WARNING' | 'BLOCKED';\n    blockingIssues: Array<{ code: string; message: string; field?: string; severity: 'BLOCKING' | 'WARNING' }>;\n    warnings: Array<{ code: string; message: string; field?: string; severity: 'BLOCKING' | 'WARNING' }>;\n    metrics: {\n      totalWords: number;\n      sectionWordCounts: Record<string, number>;\n      insightsCount: number;\n      ritualsCount: number;\n      instructionsCount: number;\n    };\n    promptVersions: Record<string, string>;\n    models: Record<string, string>;\n  };\n}")
+          PY
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format changed sources
+        run: pnpm exec prettier --write apps/api/src/services/factory/VertexOracle.ts apps/api/src/services/services.module.ts apps/api/src/modules/expert/expert.module.ts apps/api/src/modules/expert/reading-version.ts apps/api/src/services/factory/DigitalSoulService.ts apps/web/components/desk-v2/types.ts
+
+      - name: API focused tests
+        run: pnpm --filter api test -- --runInBand reading-quality.validator.spec.ts reading-version.spec.ts reading-calculations.service.spec.ts reading-editor-pipeline.spec.ts VertexOracle.spec.ts
+
+      - name: API typecheck
+        run: pnpm --filter api typecheck
+
+      - name: API build
+        run: pnpm --filter api build
+
+      - name: Web typecheck
+        run: pnpm --filter web typecheck
+
+      - name: Commit verified foundation repair
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api apps/web/components/desk-v2/types.ts
+          git commit -m "fix(reading): harden canonical quality pipeline"
+          git push origin HEAD:work/expert-reading-refactor-orfevre
