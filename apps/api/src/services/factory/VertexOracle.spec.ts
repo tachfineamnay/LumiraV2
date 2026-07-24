@@ -37,6 +37,101 @@ describe('VertexOracle OpenAI-only runtime', () => {
     productLevel: ProductLevel.INITIE,
   };
 
+  const domainTexts: Record<string, string> = {
+    spirituel:
+      "Dans la dimension spirituelle, votre parcours d'âme s'illumine par une quête sincère de sagesse. " +
+      "Les symboles perçus témoignent d'une intuition profonde qui cherche à se manifester dans la sérénité du quotidien. " +
+      'Prenez le temps de méditer chaque jour pour écouter les messages subtils qui vous parviennent. ' +
+      'Cette pratique régulière clarifiera vos doutes et fortifiera votre ancrage intérieur. ',
+    relations:
+      'Sur le plan relationnel, la sincérité et le respect mutuel occupent une place centrale dans vos échanges. ' +
+      "Vous aspirez à des liens authentiques débarrassés des jeux de pouvoir ou d'illusion. " +
+      "Offrez-vous la liberté d'exprimer vos sentiments les plus profonds sans crainte du jugement. ",
+    mission:
+      "Votre mission de vie réside dans la transmission d'une présence apaisante et clarifiante pour autrui. " +
+      'En accordant vos actions à vos convictions éthiques, vous devenez un repère pour votre entourage. ' +
+      'Suivez la voix de votre conscience pour orienter vos engagements futurs avec conviction. ',
+    creativite:
+      "L'élan créatif représente un canal privilégié pour extérioriser votre richesse émotionnelle. " +
+      "Que vous écriviez, dessiniez ou conçouriez de nouveaux projets, votre imagination fait preuve d'une belle vitalité. " +
+      "La création pure régénère votre énergie vitale et apporte un sentiment d'accomplissement. ",
+    emotions:
+      'Le paysage émotionnel traversé ces derniers mois montre une maturité croissante et une sensibilité accueillie. ' +
+      "Apprendre à observer vos états d'âme sans les juger favorise une paix durable. " +
+      'En accueillant toutes vos facettes, vous gagnez une solidité remarquable. ',
+    travail:
+      'Dans la sphère professionnelle, la recherche de sens prévaut sur la simple exécution de tâches. ' +
+      "Votre rigueur et votre capacité d'organisation suscitent l'estime de vos partenaires. " +
+      'Gardez le cap sur vos véritables ambitions à long terme. ',
+    sante:
+      'La santé et la vitalité globale nécessitent un équilibre harmonieux entre repos, alimentation et mouvement. ' +
+      "Écouter les signaux du corps permet d'anticiper la fatigue avant qu'elle ne s'installe. " +
+      'Prenez soin de votre temple physique avec régularité. ',
+    finance:
+      'La dimension financière appelle une vision claire et une gestion mesurée de vos avoirs. ' +
+      'En canalisant vos dépenses vers ce qui compte vraiment, vous consolidez votre sécurité matérielle. ' +
+      "Structurez vos projets d'investissement avec méthode pour assurer un avenir serein. ",
+  };
+
+  const domainSuffixes: Record<string, string[]> = {
+    spirituel: [
+      'Progression 1.',
+      'Progression 2.',
+      'Progression 3.',
+      'Progression 4.',
+      'Progression 5.',
+      'Progression 6.',
+      'Progression 7.',
+    ],
+    relations: [
+      'Chemin 1.',
+      'Chemin 2.',
+      'Chemin 3.',
+      'Chemin 4.',
+      'Chemin 5.',
+      'Chemin 6.',
+      'Chemin 7.',
+    ],
+    mission: ['Voie 1.', 'Voie 2.', 'Voie 3.', 'Voie 4.', 'Voie 5.', 'Voie 6.', 'Voie 7.'],
+    creativite: ['Élan 1.', 'Élan 2.', 'Élan 3.', 'Élan 4.', 'Élan 5.', 'Élan 6.', 'Élan 7.'],
+    emotions: [
+      'Accueil 1.',
+      'Accueil 2.',
+      'Accueil 3.',
+      'Accueil 4.',
+      'Accueil 5.',
+      'Accueil 6.',
+      'Accueil 7.',
+    ],
+    travail: [
+      'Alignement 1.',
+      'Alignement 2.',
+      'Alignement 3.',
+      'Alignement 4.',
+      'Alignement 5.',
+      'Alignement 6.',
+      'Alignement 7.',
+    ],
+    sante: [
+      'Vitalité 1.',
+      'Vitalité 2.',
+      'Vitalité 3.',
+      'Vitalité 4.',
+      'Vitalité 5.',
+      'Vitalité 6.',
+      'Vitalité 7.',
+    ],
+    finance: [
+      'Gestion 1.',
+      'Gestion 2.',
+      'Gestion 3.',
+      'Gestion 4.',
+      'Gestion 5.',
+      'Gestion 6.',
+      'Gestion 7.',
+    ],
+  };
+
   const sections = [
     'spirituel',
     'relations',
@@ -46,20 +141,46 @@ describe('VertexOracle OpenAI-only runtime', () => {
     'travail',
     'sante',
     'finance',
-  ].map((domain) => ({ domain, title: `Titre ${domain}`, content: `Contenu ${domain}` }));
+  ].map((domain) => ({
+    domain,
+    title: `Titre ${domain}`,
+    content: (domainSuffixes[domain] || [])
+      .map((suffix) => `${domainTexts[domain] || ''}${suffix}`)
+      .join(' '),
+  }));
 
   const coreResponse = {
     pdf_content: {
       introduction: 'Introduction personnalisée',
       archetype_reveal: 'Le Sage se manifeste par une recherche de cohérence.',
       sections,
-      karmic_insights: ['Comprendre avant d’agir'],
+      karmic_insights: [
+        'Comprendre avant d’agir pour éviter la précipitation inutile.',
+        'La patience active dénoue les blocages les plus anciens avec douceur.',
+        'Accueillir les imprévus comme des opportunités d’apprentissage conscient.',
+        'Exprimer sa vérité intérieure sans crainte du jugement d’autrui.',
+      ],
       life_mission: 'Transformer la compréhension en décisions concrètes.',
       rituals: [
         {
-          name: 'Écriture claire',
-          description: 'Un temps court de clarification.',
-          instructions: ['Écrire la décision', 'Nommer la peur', 'Choisir une action'],
+          name: 'Rituel d’Ancrage du Matin',
+          description: 'Un temps court de clarification et de récente respiration.',
+          instructions: [
+            'Écrire la décision',
+            'Nommer la peur',
+            'Choisir une action',
+            'Respirer profondément',
+          ],
+        },
+        {
+          name: 'Rituel d’Alignement du Soir',
+          description: 'Bilan calme des actions menées et gratitude sincère.',
+          instructions: [
+            'Passer en revue la journée',
+            'Noter 3 gratitudes',
+            'Libérer les tensions',
+            'Poser une intention',
+          ],
         },
       ],
       conclusion: 'Avance avec précision et souplesse.',
@@ -156,7 +277,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
 
     const result = await service.generateFullReading(userProfile, orderContext);
 
-    expect(result).toEqual({ ...coreResponse, timeline });
+    expect(result).toEqual({ ...coreResponse, timeline, pipeline: expect.any(Object) });
     expect(responsesCreate).toHaveBeenCalledTimes(2);
     expect(responsesCreate.mock.calls[0][0]).toEqual(
       expect.objectContaining({
@@ -247,9 +368,9 @@ describe('VertexOracle OpenAI-only runtime', () => {
       }),
     });
 
-    await expect(service.generateCoreReading(userProfile, orderContext)).rejects.toThrow(
-      'huit domaines uniques',
-    );
+    const result = await service.generateCoreReading(userProfile, orderContext);
+    expect(result.pipeline?.qualityStatus).toBe('BLOCKED');
+    expect(result.pipeline?.blockingIssues.some((i) => i.code === 'DOMAINS_NOT_UNIQUE')).toBe(true);
   });
 
   it('rejects invalid GUIDE day numbering', async () => {
