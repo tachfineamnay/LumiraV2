@@ -1,4 +1,5 @@
 import {
+  Allow,
   IsArray,
   IsBoolean,
   IsIn,
@@ -39,6 +40,7 @@ export class SaveStructuredReadingDto {
 }
 
 export class PatchReadingBlockDto {
+  @Allow()
   value: unknown;
 
   @IsOptional()
