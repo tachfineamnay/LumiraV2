@@ -1,5 +1,10 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Expert } from '@prisma/client';
+import type { PrismaService } from '../../prisma/prisma.service';
+import type { PdfFactory } from '../../services/factory/PdfFactory';
+import type { VertexOracle } from '../../services/factory/VertexOracle';
+import type { ExpertService } from './expert.service';
+import type { ProductionControlService } from './production-control.service';
 import { ReadingWorkspaceService } from './reading-workspace.service';
 import type { CanonicalReadingContent } from './reading-version';
 
@@ -100,11 +105,11 @@ function createHarness(generatedContent: Record<string, unknown>) {
   const pdfFactory = { generatePdf: jest.fn() };
 
   const service = new ReadingWorkspaceService(
-    prisma as never,
-    expertService as never,
-    production as never,
-    vertexOracle as never,
-    pdfFactory as never,
+    prisma as unknown as PrismaService,
+    expertService as unknown as ExpertService,
+    production as unknown as ProductionControlService,
+    vertexOracle as unknown as VertexOracle,
+    pdfFactory as unknown as PdfFactory,
   );
 
   return { service, prisma, expertService, vertexOracle };
