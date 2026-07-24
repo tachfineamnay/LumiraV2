@@ -1,991 +1,441 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { StepDossier } from './StepDossier';
-import { StepBriefing } from './StepBriefing';
-import { StepRevision } from './StepRevision';
-import { useSocket } from '../hooks/useSocket';
-import { Order, OracleResponse, LEVEL_CONFIG } from '../types';
-import expertApi from '@/lib/expertApi';
-import { toast } from 'sonner';
 import {
-  ArrowLeft,
-  Loader2,
   AlertCircle,
-  Send,
-  FileCheck,
-  X,
+  ArrowLeft,
+  Clock3,
+  Eye,
+  FileCheck2,
+  FolderOpen,
   History,
+  Loader2,
+  Play,
+  RefreshCw,
   RotateCcw,
-  Trash2,
-  Unlock,
-  FileText,
-  Download,
+  Send,
 } from 'lucide-react';
-import { ConfirmModal } from '../shared/ConfirmModal';
-
-// =============================================================================
-// TYPES
-// =============================================================================
-
-type StudioStep = 'dossier' | 'briefing' | 'revision';
-
-type DeliveryRow = {
-  id: string;
-  readingVersionId: string;
-  version: number;
-  sealedAt: string | null;
-  contentHash: string;
-  pdfKey: string;
-  emailStatus: string;
-  createdAt: string;
-  isCurrent: boolean;
-};
+import { toast } from 'sonner';
+import expertApi from '@/lib/expertApi';
+import { useSocket } from '../hooks/useSocket';
+import { ReadingDossierDrawer } from './ReadingDossierDrawer';
+import { ReadingHistoryPanel } from './ReadingHistoryPanel';
+import { ReadingQualityPanel } from './ReadingQualityPanel';
+import { StructuredReadingEditor } from './StructuredReadingEditor';
+import type {
+  ReadingWorkspacePayload,
+  StructuredReading,
+} from './reading-workspace.types';
 
 interface OrderWorkflowProps {
   orderId: string;
 }
 
-const STEP_META: Record<StudioStep, { num: number; label: string }> = {
-  dossier: { num: 1, label: 'Dossier' },
-  briefing: { num: 2, label: 'Briefing' },
-  revision: { num: 3, label: 'Révision' },
-};
-
-function computeInitialStep(order: Order): StudioStep {
-  if (order.status === 'COMPLETED' || order.status === 'AWAITING_VALIDATION') return 'revision';
-  if (order.generatedContent?.pdf_content) return 'revision';
-  if (order.status === 'PROCESSING') return 'briefing';
-  return 'dossier';
-}
-
-// =============================================================================
-// MAIN COMPONENT
-// =============================================================================
+const PRIORITIES = ['Mission', 'Relations', 'Travail', 'Énergie', 'Créativité', 'Finance'];
+const TONES = [
+  { value: 'DOUX_ET_CLAIR', label: 'Doux et clair' },
+  { value: 'DIRECT_ET_CONCRET', label: 'Direct et concret' },
+  { value: 'SYMBOLIQUE_ET_PROFOND', label: 'Symbolique et profond' },
+] as const;
 
 export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const router = useRouter();
-
-  // Core state
-  const [order, setOrder] = useState<Order | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [workspace, setWorkspace] = useState<ReadingWorkspacePayload | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editorContent, setEditorContent] = useState('');
-  const [step, setStep] = useState<StudioStep>('dossier');
+  const [orientation, setOrientation] = useState('');
+  const [priorities, setPriorities] = useState<string[]>([]);
+  const [tone, setTone] = useState<(typeof TONES)[number]['value']>('DOUX_ET_CLAIR');
+  const [dossierOpen, setDossierOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [savingBlockId, setSavingBlockId] = useState<string | null>(null);
+  const [revisingBlockId, setRevisingBlockId] = useState<string | null>(null);
+  const [repairing, setRepairing] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [sealing, setSealing] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // UI state
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSealing, setIsSealing] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
-
-  // Version history
-  const [showVersions, setShowVersions] = useState(false);
-  const [versions, setVersions] = useState<
-    Array<{ content: string; timestamp: string; action: string }>
-  >([]);
-
-  // PDF delivery history (Desk only)
-  const [showDeliveries, setShowDeliveries] = useState(false);
-  const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
-  const [isLoadingDeliveries, setIsLoadingDeliveries] = useState(false);
-  const [isReopening, setIsReopening] = useState(false);
-
-  // Seal confirmation modal
-  const [showSealConfirm, setShowSealConfirm] = useState(false);
-
-  // Delete confirmation
-  const [showDeleteOrder, setShowDeleteOrder] = useState(false);
-  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
-
-  const fetchOrder = useCallback(async () => {
+  const loadWorkspace = useCallback(async () => {
     try {
-      const { data } = await expertApi.get(`/expert/orders/${orderId}`);
-      setOrder(data);
-
-      if (data.generatedContent) {
-        const initialHtml =
-          typeof data.generatedContent.studioDraftHtml === 'string' &&
-          data.generatedContent.studioDraftHtml.trim().length > 0
-            ? data.generatedContent.studioDraftHtml
-            : oracleResponseToHtml(data.generatedContent);
-        setEditorContent(initialHtml);
-      }
-
+      const { data } = await expertApi.get(`/expert/orders/${orderId}/reading`);
+      setWorkspace(data);
+      setOrientation((current) => current || data.order.expertPrompt || '');
       setError(null);
-      return data;
-    } catch (err) {
-      setError('Erreur de chargement de la commande');
-      console.error(err);
+      return data as ReadingWorkspacePayload;
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Impossible de charger l’espace de lecture.');
+      return null;
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }, [orderId]);
 
-  const fetchOrderRef = useRef(fetchOrder);
+  const loadWorkspaceRef = useRef(loadWorkspace);
   useEffect(() => {
-    fetchOrderRef.current = fetchOrder;
-  }, [fetchOrder]);
+    loadWorkspaceRef.current = loadWorkspace;
+  }, [loadWorkspace]);
 
-  // Socket — completion is the primary signal (works even after leaving the spinner)
-  const { focusOrder, blurOrder } = useSocket({
-    onGenerationComplete: (data) => {
-      if (data.orderId !== orderId) return;
-      if (data.success) {
-        toast.success(`Lecture prête — ${data.orderNumber}`, {
-          description: 'Ouvrir l’étape Révision',
-          action: {
-            label: 'Révision',
-            onClick: () => {
-              void fetchOrderRef.current().then(() => setStep('revision'));
-            },
-          },
-        });
-        void fetchOrderRef.current().then(() => setStep('revision'));
+  useSocket({
+    onGenerationComplete: (event) => {
+      if (event.orderId !== orderId) return;
+      if (event.success) {
+        toast.success('Lecture prête pour révision');
+        void loadWorkspaceRef.current();
       } else {
-        toast.error(`Échec génération — ${data.orderNumber}`, {
-          description: data.error || 'Relancez depuis le bandeau Production',
-          action: {
-            label: 'Production',
-            onClick: () => router.push('/admin/production'),
-          },
-        });
-        void fetchOrderRef.current();
+        toast.error('La production a échoué', { description: event.error });
+        void loadWorkspaceRef.current();
       }
-      setIsGenerating(false);
-      setIsRegenerating(false);
     },
   });
 
-  // Soft poll while PROCESSING (fallback if socket misses the event)
-  const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollErrorCountRef = useRef(0);
-  const isProductionActive = order?.status === 'PROCESSING' || isGenerating || isRegenerating;
-
   useEffect(() => {
-    if (!isProductionActive) {
-      if (pollIntervalRef.current) {
-        clearTimeout(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-      pollErrorCountRef.current = 0;
+    void loadWorkspace();
+  }, [loadWorkspace]);
+
+  const processing = workspace?.order.status === 'PROCESSING';
+  useEffect(() => {
+    if (!processing) {
+      if (pollingRef.current) clearTimeout(pollingRef.current);
+      pollingRef.current = null;
       return;
     }
 
-    const getPollingInterval = () => {
-      const baseInterval = 5000;
-      const maxInterval = 30000;
-      const backoffMultiplier = Math.min(Math.pow(2, pollErrorCountRef.current), 6);
-      return Math.min(baseInterval * backoffMultiplier, maxInterval);
-    };
-
     const poll = async () => {
-      try {
-        const { data } = await expertApi.get(`/expert/orders/${orderId}`);
-        pollErrorCountRef.current = 0;
-
-        const hasNewContent = data.generatedContent && !order?.generatedContent;
-        const contentChanged =
-          data.generatedContent?.pdf_content && !order?.generatedContent?.pdf_content;
-        const statusChanged = data.status !== order?.status;
-
-        if (hasNewContent || contentChanged || statusChanged) {
-          setOrder(data);
-          if (data.generatedContent) {
-            setEditorContent(oracleResponseToHtml(data.generatedContent));
-          }
-
-          if (
-            data.generatedContent?.pdf_content ||
-            data.status === 'COMPLETED' ||
-            data.status === 'AWAITING_VALIDATION'
-          ) {
-            toast.success(`Lecture prête — ${data.orderNumber || order?.orderNumber || ''}`, {
-              description: 'La lecture est prête pour révision',
-            });
-            setIsGenerating(false);
-            setIsRegenerating(false);
-            setStep('revision');
-            return;
-          }
-
-          if (data.status === 'FAILED') {
-            setIsGenerating(false);
-            setIsRegenerating(false);
-            toast.error('Production en échec', {
-              description: 'Consultez le bandeau Production pour relancer.',
-            });
-            return;
-          }
-        }
-
-        pollIntervalRef.current = setTimeout(poll, getPollingInterval());
-      } catch (err: unknown) {
-        pollErrorCountRef.current++;
-        const pollError = err as { response?: { status?: number } };
-        console.warn(
-          `Polling error (attempt ${pollErrorCountRef.current}):`,
-          pollError?.response?.status || err,
-        );
-
-        if (pollErrorCountRef.current >= 5) {
-          console.error('Too many polling errors, stopping');
-          toast.error('Erreur de synchronisation', {
-            description: "Rechargez la page pour voir l'état actuel",
-          });
-          setIsGenerating(false);
-          setIsRegenerating(false);
-          return;
-        }
-
-        pollIntervalRef.current = setTimeout(poll, getPollingInterval());
+      const next = await loadWorkspaceRef.current();
+      if (next?.order.status === 'PROCESSING') {
+        pollingRef.current = setTimeout(poll, 5000);
       }
     };
-
-    pollIntervalRef.current = setTimeout(poll, getPollingInterval());
-
+    pollingRef.current = setTimeout(poll, 5000);
     return () => {
-      if (pollIntervalRef.current) {
-        clearTimeout(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
+      if (pollingRef.current) clearTimeout(pollingRef.current);
     };
-  }, [isProductionActive, orderId, order?.generatedContent, order?.status, order?.orderNumber]);
+  }, [processing]);
 
-  const loadVersions = useCallback(async () => {
-    try {
-      const { data } = await expertApi.get(`/expert/orders/${orderId}/versions`);
-      setVersions(data.versions || []);
-    } catch (err) {
-      console.error('Failed to load versions:', err);
+  const launch = async () => {
+    if (orientation.trim().length < 3) {
+      toast.error('Ajoutez une orientation experte, même courte.');
+      return;
     }
-  }, [orderId]);
-
-  // Resume without loss: PROCESSING stays on briefing; bandeau shows production; leave never aborts
-  useEffect(() => {
-    fetchOrder().then((data) => {
-      if (data) {
-        setStep(computeInitialStep(data));
-      }
-    });
-    loadVersions();
-    focusOrder(orderId);
-    return () => blurOrder(orderId);
-  }, [orderId, fetchOrder, loadVersions, focusOrder, blurOrder]);
-
-  // ========= ACTIONS =========
-
-  const handleLaunch = async (expertPrompt: string, expertInstructions?: string) => {
-    setIsGenerating(true);
+    setLaunching(true);
     try {
-      await expertApi.post('/expert/process-order', {
-        orderId,
-        expertPrompt,
-        expertInstructions,
+      await expertApi.post(`/expert/orders/${orderId}/reading/generate`, {
+        orientation: orientation.trim(),
+        priorities,
+        tone,
       });
-      await fetchOrder();
-      setIsGenerating(false);
-      toast.success('Lecture lancée — vous pouvez quitter', {
-        description: 'Le traitement continue côté serveur (environ 2 à 5 minutes).',
-        action: {
-          label: 'Retour au board',
-          onClick: () => router.push('/admin/board'),
-        },
-        duration: 8000,
+      toast.success('Production lancée', {
+        description: 'Vous pouvez quitter : le traitement continue côté serveur.',
       });
-    } catch (err: unknown) {
-      const launchError = err as {
-        code?: string;
-        message?: string;
-        response?: { data?: { message?: string } };
-      };
-      if (launchError?.code === 'ECONNABORTED' || launchError?.message?.includes('timeout')) {
-        await fetchOrder();
-        setIsGenerating(false);
-        toast.info('Lecture probablement en file', {
-          description: 'Vous pouvez retourner au board ; le job continue côté serveur.',
-          action: {
-            label: 'Retour au board',
-            onClick: () => router.push('/admin/board'),
-          },
-        });
-      } else {
-        toast.error('Erreur lors du lancement', {
-          description: launchError?.response?.data?.message || launchError?.message,
-        });
-        setIsGenerating(false);
-      }
-    }
-  };
-
-  const handleRegenerate = async () => {
-    setIsRegenerating(true);
-    try {
-      await expertApi.post(`/expert/orders/${orderId}/regenerate`);
-      await fetchOrder();
-      setIsRegenerating(false);
-      setStep('briefing');
-      toast.success('Régénération lancée — vous pouvez quitter', {
-        description: 'Le traitement continue côté serveur.',
-        action: {
-          label: 'Retour au board',
-          onClick: () => router.push('/admin/board'),
-        },
-        duration: 8000,
-      });
-    } catch {
-      toast.error('Erreur lors de la régénération');
-      setIsRegenerating(false);
-    }
-  };
-
-  const handleSeal = async () => {
-    setIsSealing(true);
-    try {
-      await expertApi.post(`/expert/orders/${orderId}/finalize`, { finalContent: editorContent });
-      toast.success('Lecture scellée — PDF envoyé, audio en file', {
-        description:
-          'Le client reçoit le PDF immédiatement. La narration TTS suit en arrière-plan.',
-        duration: 6000,
-      });
-      router.push('/admin/board');
-    } catch {
-      toast.error('Erreur lors du scellement');
+      await loadWorkspace();
+    } catch (requestError: unknown) {
+      const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
+      toast.error('Impossible de lancer la lecture', { description: message });
     } finally {
-      setIsSealing(false);
+      setLaunching(false);
     }
   };
 
-  const handleRestoreVersion = async (index: number) => {
+  const saveBlock = async (blockId: string, value: unknown) => {
+    if (!workspace) return;
+    setSavingBlockId(blockId);
     try {
-      await expertApi.post(`/expert/orders/${orderId}/versions/${index}/restore`);
-      toast.success('Version restaurée');
-      fetchOrder();
-      setShowVersions(false);
-    } catch {
-      toast.error('Erreur lors de la restauration');
-    }
-  };
-
-  const handleReopen = async () => {
-    setIsReopening(true);
-    try {
-      await expertApi.post(`/expert/orders/${orderId}/reopen`, {});
-      toast.success('Lecture réouverte pour révision', {
-        description: 'Éditez ou régénérez, puis re-scellez pour renvoyer au client.',
-      });
-      await fetchOrder();
-      setStep('revision');
-    } catch {
-      toast.error('Impossible de réouvrir cette lecture');
+      const { data } = await expertApi.patch(
+        `/expert/orders/${orderId}/reading/blocks/${encodeURIComponent(blockId)}`,
+        { value, expectedRevision: workspace.revision },
+      );
+      setWorkspace((current) =>
+        current
+          ? { ...current, reading: data.reading, revision: data.revision, quality: data.quality }
+          : current,
+      );
+      toast.success('Bloc enregistré');
+    } catch (requestError: unknown) {
+      const status = (requestError as { response?: { status?: number } })?.response?.status;
+      toast.error(status === 409 ? 'La lecture a changé : rechargement nécessaire.' : 'Échec de sauvegarde');
+      if (status === 409) await loadWorkspace();
+      throw requestError;
     } finally {
-      setIsReopening(false);
+      setSavingBlockId(null);
     }
   };
 
-  const fetchDeliveries = useCallback(async () => {
-    setIsLoadingDeliveries(true);
+  const reviseBlock = async (blockId: string, instruction: string) => {
+    if (!workspace) return;
+    setRevisingBlockId(blockId);
     try {
-      const { data } = await expertApi.get(`/expert/orders/${orderId}/deliveries`);
-      setDeliveries(data.deliveries || []);
-    } catch {
-      toast.error('Historique PDF indisponible');
+      const { data } = await expertApi.post(
+        `/expert/orders/${orderId}/reading/blocks/${encodeURIComponent(blockId)}/revise`,
+        { instruction, expectedRevision: workspace.revision },
+      );
+      setWorkspace((current) =>
+        current
+          ? { ...current, reading: data.reading, revision: data.revision, quality: data.quality }
+          : current,
+      );
+      toast.success('Bloc corrigé par EDITOR');
+    } catch (requestError) {
+      toast.error('La correction ciblée a échoué');
+      throw requestError;
     } finally {
-      setIsLoadingDeliveries(false);
+      setRevisingBlockId(null);
     }
-  }, [orderId]);
+  };
 
-  const openDeliveryPdf = async (deliveryId: string) => {
+  const repairSafeIssues = async () => {
+    setRepairing(true);
     try {
-      const { data } = await expertApi.get(
-        `/expert/orders/${orderId}/deliveries/${deliveryId}/pdf`,
+      const { data } = await expertApi.post(`/expert/orders/${orderId}/reading/quality/repair`, {});
+      setWorkspace((current) =>
+        current
+          ? { ...current, reading: data.reading, revision: data.revision, quality: data.quality }
+          : current,
+      );
+      toast.success('Défauts de formatage nettoyés');
+    } catch {
+      toast.error('Le nettoyage automatique a échoué');
+    } finally {
+      setRepairing(false);
+    }
+  };
+
+  const previewPdf = async () => {
+    setPreviewing(true);
+    try {
+      const { data } = await expertApi.post(
+        `/expert/orders/${orderId}/reading/preview`,
+        {},
         { responseType: 'blob' },
       );
       const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
       window.open(url, '_blank', 'noopener,noreferrer');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch {
-      toast.error('Impossible d’ouvrir ce PDF');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (requestError: unknown) {
+      const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
+      toast.error('Aperçu PDF indisponible', { description: message });
+    } finally {
+      setPreviewing(false);
     }
   };
 
-  const handleInsertText = (text: string) => {
-    setEditorContent((prev) => prev + '\n\n' + text);
-    toast.success('Texte inséré');
+  const seal = async () => {
+    if (!workspace?.quality) return;
+    const warning = workspace.quality.status === 'WARNING';
+    if (warning && !window.confirm('Des avertissements subsistent. Confirmer le scellement ?')) return;
+    if (!window.confirm('Sceller et envoyer cette version au client ?')) return;
+
+    setSealing(true);
+    try {
+      await expertApi.post(`/expert/orders/${orderId}/reading/seal`, {
+        acknowledgeWarnings: warning,
+      });
+      toast.success('Lecture scellée et envoyée');
+      await loadWorkspace();
+    } catch (requestError: unknown) {
+      const message = (requestError as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
+      toast.error('Scellement impossible', { description: message });
+    } finally {
+      setSealing(false);
+    }
   };
 
-  // Derived state
-  const isReadOnly = order?.status === 'COMPLETED';
-  const isPostDeliveryRevision =
-    order?.status === 'AWAITING_VALIDATION' && Boolean(order.deliveredAt);
-  const levelConfig = order
-    ? LEVEL_CONFIG[order.level as keyof typeof LEVEL_CONFIG] || LEVEL_CONFIG[1]
-    : LEVEL_CONFIG[1];
+  const reopen = async () => {
+    setReopening(true);
+    try {
+      await expertApi.post(`/expert/orders/${orderId}/reading/reopen`, {});
+      toast.success('Lecture réouverte');
+      await loadWorkspace();
+    } catch {
+      toast.error('Réouverture impossible');
+    } finally {
+      setReopening(false);
+    }
+  };
 
-  // ========= LOADING / ERROR =========
+  if (loading) return <CenteredState icon={<Loader2 className="h-8 w-8 animate-spin" />} text="Chargement de la lecture…" />;
+  if (error || !workspace) return <CenteredState icon={<AlertCircle className="h-10 w-10 text-red-500" />} text={error ?? 'Lecture introuvable'} />;
 
-  if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center bg-desk-bg">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
-          <p className="text-desk-muted">Chargement de la commande...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !order) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 bg-desk-bg">
-        <AlertCircle className="w-16 h-16 text-red-600" />
-        <p className="text-desk-muted text-lg">{error || 'Commande introuvable'}</p>
-        <button
-          onClick={() => router.push('/admin/board')}
-          className="px-6 py-3 rounded-xl bg-desk-card text-desk-text hover:bg-desk-hover transition-colors"
-        >
-          Retour au board
-        </button>
-      </div>
-    );
-  }
-
-  // ========= RENDER =========
+  const { order, reading, quality, history } = workspace;
+  const readOnly = order.status === 'COMPLETED';
+  const canSeal = order.status === 'AWAITING_VALIDATION' && quality?.status !== 'BLOCKED';
 
   return (
-    <div className="h-full flex flex-col bg-desk-bg">
-      {/* ═══════════════ TOP BAR ═══════════════ */}
-      <div className="flex-shrink-0 px-3 sm:px-4 py-2.5 sm:py-3 bg-desk-surface border-b border-desk-border">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 md:gap-3">
-          {/* Row 1: back + client info + actions */}
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <button
-                onClick={() => router.push('/admin/board')}
-                title="Retour au board"
-                aria-label="Retour au board"
-                className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors flex items-center justify-center flex-shrink-0"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                  {order.user.firstName?.[0]}
-                  {order.user.lastName?.[0]}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-semibold text-desk-text text-sm sm:text-base truncate">
-                      {order.user.firstName} {order.user.lastName}
-                    </span>
-                    <span className="text-base sm:text-lg flex-shrink-0">{levelConfig.icon}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs sm:text-sm min-w-0">
-                    <span className="font-mono text-amber-600 truncate">{order.orderNumber}</span>
-                    <span className="text-desk-subtle hidden sm:inline">•</span>
-                    <span className="text-desk-muted truncate hidden sm:inline">
-                      {levelConfig.name}
-                    </span>
-                  </div>
-                </div>
+    <div className="flex h-full flex-col overflow-hidden bg-desk-bg">
+      <header className="flex-shrink-0 border-b border-desk-border bg-desk-surface px-3 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <button type="button" onClick={() => router.push('/admin/board')} aria-label="Retour au board" className="rounded-lg p-2 text-desk-muted hover:bg-desk-hover hover:text-desk-text"><ArrowLeft className="h-5 w-5" /></button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="truncate font-semibold text-desk-text">{order.user.firstName} {order.user.lastName}</h1>
+                <StatusBadge status={order.status} quality={quality?.status} />
               </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {isReadOnly && (
-                <span className="hidden sm:inline px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-600 border border-emerald-500/30">
-                  Livrée
-                </span>
-              )}
-              {isPostDeliveryRevision && (
-                <span className="hidden sm:inline px-3 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-700 border border-amber-500/30">
-                  Révision post-livraison
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDeliveries(true);
-                  void fetchDeliveries();
-                }}
-                title="Historique PDF livrés"
-                aria-label="Historique PDF livrés"
-                className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-desk-hover text-desk-muted hover:text-desk-text transition-colors flex items-center justify-center"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-              {isReadOnly && (
-                <button
-                  type="button"
-                  onClick={() => void handleReopen()}
-                  disabled={isReopening}
-                  title="Réouvrir pour révision"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-2 min-h-[40px] rounded-lg bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 text-xs font-medium transition-colors disabled:opacity-50"
-                >
-                  {isReopening ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Unlock className="w-4 h-4" />
-                  )}
-                  <span className="hidden sm:inline">Réouvrir</span>
-                </button>
-              )}
-              <button
-                onClick={() => setShowDeleteOrder(true)}
-                title="Supprimer la commande"
-                aria-label="Supprimer la commande"
-                className="p-2 min-w-[40px] min-h-[40px] rounded-lg hover:bg-red-500/10 text-desk-muted hover:text-red-600 transition-colors flex items-center justify-center"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <p className="truncate text-xs text-desk-muted">{order.orderNumber} · espace de supervision</p>
             </div>
           </div>
-
-          {/* Row 2 (mobile) / center (desktop): Stepper */}
-          <div className="flex items-center justify-center gap-1 overflow-x-auto">
-            {(['dossier', 'briefing', 'revision'] as StudioStep[]).map((s, i) => {
-              const meta = STEP_META[s];
-              const isCurrent = step === s;
-              const isPast = STEP_META[step].num > meta.num;
-
-              return (
-                <div key={s} className="flex items-center gap-1 flex-shrink-0">
-                  {i > 0 && (
-                    <div
-                      className={`w-4 sm:w-8 h-px ${isPast ? 'bg-amber-500/60' : 'bg-desk-border'}`}
-                    />
-                  )}
-                  <button
-                    onClick={() => {
-                      if (isPast || isCurrent) setStep(s);
-                    }}
-                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-full text-xs font-medium transition-all ${
-                      isCurrent
-                        ? 'bg-amber-500/20 text-amber-600 border border-amber-500/40'
-                        : isPast
-                          ? 'bg-desk-card text-desk-muted hover:bg-desk-hover cursor-pointer'
-                          : 'bg-transparent text-desk-subtle cursor-default'
-                    }`}
-                  >
-                    <span
-                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                        isCurrent
-                          ? 'bg-amber-500 text-slate-900'
-                          : isPast
-                            ? 'bg-desk-hover text-desk-muted'
-                            : 'bg-desk-card text-desk-subtle'
-                      }`}
-                    >
-                      {meta.num}
-                    </span>
-                    <span className="hidden sm:inline">{meta.label}</span>
-                  </button>
-                </div>
-              );
-            })}
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={() => setDossierOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-desk-border px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"><FolderOpen className="h-4 w-4" /><span className="hidden sm:inline">Dossier</span></button>
+            <button type="button" onClick={() => setHistoryOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-desk-border px-3 text-sm text-desk-muted hover:bg-desk-hover hover:text-desk-text"><History className="h-4 w-4" /><span className="hidden sm:inline">Historique</span></button>
+            <button type="button" onClick={() => void loadWorkspace()} aria-label="Actualiser" className="rounded-lg p-2.5 text-desk-muted hover:bg-desk-hover hover:text-desk-text"><RefreshCw className="h-4 w-4" /></button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {isPostDeliveryRevision && (
-        <div className="flex-shrink-0 px-3 sm:px-4 py-2 bg-amber-500/10 border-b border-amber-500/20">
-          <p className="text-xs sm:text-sm text-amber-800 text-center">
-            Révision post-livraison — le client verra uniquement la prochaine version scellée. Les
-            PDF précédents restent dans l’historique Desk ; l’audio sera remplacé.
-          </p>
-        </div>
+      <main className="flex-1 overflow-y-auto">
+        {!reading && order.status !== 'PROCESSING' ? (
+          <PreparationPanel
+            orientation={orientation}
+            priorities={priorities}
+            tone={tone}
+            launching={launching}
+            onOrientationChange={setOrientation}
+            onTogglePriority={(priority) => setPriorities((current) => current.includes(priority) ? current.filter((item) => item !== priority) : [...current, priority])}
+            onToneChange={setTone}
+            onLaunch={() => void launch()}
+            onOpenDossier={() => setDossierOpen(true)}
+          />
+        ) : order.status === 'PROCESSING' ? (
+          <ProcessingPanel onReturn={() => router.push('/admin/board')} />
+        ) : reading ? (
+          <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-4 p-3 sm:p-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <StructuredReadingEditor
+              reading={reading}
+              readOnly={readOnly}
+              savingBlockId={savingBlockId}
+              revisingBlockId={revisingBlockId}
+              onSaveBlock={saveBlock}
+              onReviseBlock={reviseBlock}
+            />
+            <div className="xl:sticky xl:top-4 xl:self-start">
+              <ReadingQualityPanel quality={quality} isRepairing={repairing} onRepair={() => void repairSafeIssues()} />
+            </div>
+          </div>
+        ) : null}
+      </main>
+
+      {reading && (
+        <footer className="flex-shrink-0 border-t border-desk-border bg-desk-surface px-3 py-3 sm:px-5">
+          <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-2">
+            <div className="text-xs text-desk-muted">Révision {workspace.revision} · sauvegarde par bloc</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => void previewPdf()} disabled={previewing || quality?.status === 'BLOCKED'} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-desk-border px-3 text-sm text-desk-muted hover:bg-desk-hover disabled:opacity-50">{previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}Aperçu PDF</button>
+              {readOnly ? (
+                <button type="button" onClick={() => void reopen()} disabled={reopening} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 disabled:opacity-50">{reopening ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}Réouvrir</button>
+              ) : (
+                <button type="button" onClick={() => void seal()} disabled={!canSeal || sealing} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white disabled:opacity-40">{sealing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Sceller et envoyer</button>
+              )}
+            </div>
+          </div>
+        </footer>
       )}
 
-      {/* ═══════════════ STEP CONTENT ═══════════════ */}
-      <div className="flex-1 overflow-hidden">
-        {step === 'dossier' && <StepDossier order={order} onContinue={() => setStep('briefing')} />}
-
-        {step === 'briefing' && (
-          <StepBriefing
-            order={order}
-            isGenerating={isGenerating || isRegenerating || order.status === 'PROCESSING'}
-            onLaunch={handleLaunch}
-            onBack={() => setStep('dossier')}
-            onGoToBoard={() => router.push('/admin/board')}
-          />
-        )}
-
-        {step === 'revision' && (
-          <StepRevision
-            order={order}
-            orderId={orderId}
-            editorContent={editorContent}
-            onContentChange={setEditorContent}
-            onInsertText={handleInsertText}
-            onSeal={() => setShowSealConfirm(true)}
-            onRegenerate={handleRegenerate}
-            onBackToBriefing={() => setStep('briefing')}
-            isReadOnly={isReadOnly}
-            isRegenerating={isRegenerating}
-            isSealing={isSealing}
-            versions={versions}
-            onShowVersions={() => setShowVersions(true)}
-          />
-        )}
-      </div>
-
-      {/* ═══════════════ VERSION HISTORY DRAWER ═══════════════ */}
-      <AnimatePresence>
-        {showVersions && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            onClick={() => setShowVersions(false)}
-          >
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25 }}
-              className="absolute right-0 top-0 h-full w-full max-w-md bg-desk-surface border-l border-desk-border"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between px-4 py-4 border-b border-desk-border">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                    <History className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-desk-text">Historique</h2>
-                    <p className="text-xs text-desk-subtle">{versions.length} versions</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowVersions(false)}
-                  title="Fermer l'historique"
-                  className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4">
-                {versions.length === 0 ? (
-                  <div className="text-center py-12">
-                    <History className="w-12 h-12 text-desk-subtle mx-auto mb-3" />
-                    <p className="text-desk-muted">Aucune version précédente</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {versions.map((version, index) => (
-                      <div
-                        key={index}
-                        className="bg-desk-card border border-desk-border rounded-xl p-4"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-desk-subtle">
-                            {new Date(version.timestamp).toLocaleString('fr-FR')}
-                          </span>
-                          <span className="text-xs px-2 py-0.5 rounded bg-desk-hover text-desk-muted">
-                            {version.action}
-                          </span>
-                        </div>
-                        <p className="text-sm text-desk-muted line-clamp-2 mb-3">
-                          {version.content.replace(/<[^>]*>/g, '').substring(0, 100)}...
-                        </p>
-                        <button
-                          onClick={() => handleRestoreVersion(index)}
-                          className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-500"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Restaurer cette version</span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ═══════════════ PDF DELIVERY HISTORY DRAWER ═══════════════ */}
-      <AnimatePresence>
-        {showDeliveries && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            onClick={() => setShowDeliveries(false)}
-          >
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25 }}
-              className="absolute right-0 top-0 h-full w-full max-w-md bg-desk-surface border-l border-desk-border flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between px-4 py-4 border-b border-desk-border">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-desk-text">Historique PDF</h2>
-                    <p className="text-xs text-desk-subtle">
-                      {deliveries.length} livraison{deliveries.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowDeliveries(false)}
-                  title="Fermer"
-                  className="p-2 rounded-lg hover:bg-desk-hover text-desk-muted"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4">
-                {isLoadingDeliveries ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-                  </div>
-                ) : deliveries.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="w-12 h-12 text-desk-subtle mx-auto mb-3" />
-                    <p className="text-desk-muted">Aucun PDF livré pour le moment</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {deliveries.map((delivery) => (
-                      <div
-                        key={delivery.id}
-                        className="bg-desk-card border border-desk-border rounded-xl p-4"
-                      >
-                        <div className="flex items-center justify-between mb-2 gap-2">
-                          <span className="text-sm font-medium text-desk-text">
-                            Version {delivery.version}
-                          </span>
-                          {delivery.isCurrent && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/25">
-                              Courante
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-desk-subtle mb-3">
-                          {delivery.sealedAt
-                            ? new Date(delivery.sealedAt).toLocaleString('fr-FR')
-                            : new Date(delivery.createdAt).toLocaleString('fr-FR')}
-                          {' · '}
-                          Email {delivery.emailStatus.toLowerCase()}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void openDeliveryPdf(delivery.id)}
-                          className="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-500"
-                        >
-                          <Download className="w-3 h-3" />
-                          Ouvrir le PDF
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ═══════════════ DELETE ORDER CONFIRMATION ═══════════════ */}
-      <ConfirmModal
-        isOpen={showDeleteOrder}
-        onClose={() => !isDeletingOrder && setShowDeleteOrder(false)}
-        onConfirm={async () => {
-          try {
-            setIsDeletingOrder(true);
-            await expertApi.delete(`/expert/orders/${orderId}`);
-            toast.success('Commande supprimée');
-            router.push('/admin/board');
-          } catch (err) {
-            toast.error('Erreur lors de la suppression');
-            console.error(err);
-            setIsDeletingOrder(false);
-          }
-        }}
-        title="Supprimer la commande"
-        description={`Supprimer définitivement la commande ${order?.orderNumber || ''} ? Tous les fichiers et contenus générés seront perdus. Cette action est irréversible.`}
-        confirmLabel="Supprimer"
-        variant="danger"
-        isLoading={isDeletingOrder}
-      />
-
-      {/* ═══════════════ SEAL CONFIRMATION MODAL ═══════════════ */}
-      <AnimatePresence>
-        {showSealConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => !isSealing && setShowSealConfirm(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-lg bg-desk-surface border border-desk-border rounded-2xl overflow-hidden shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="relative bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 px-6 py-5 border-b border-desk-border">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                    <FileCheck className="w-7 h-7 text-emerald-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-desk-text">Confirmer l&apos;envoi</h2>
-                    <p className="text-sm text-desk-muted">Cette action est irréversible</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-sm text-amber-700">
-                      Sera immédiatement envoyée au client par email et ne pourra plus être
-                      modifiée.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-desk-card border border-desk-border rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-desk-text mb-3">Récapitulatif</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-desk-muted">Destinataire</span>
-                      <span className="text-desk-text font-medium">
-                        {order.user.firstName} {order.user.lastName}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-desk-muted">Email</span>
-                      <span className="text-desk-text">{order.user.email}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-desk-muted">Commande</span>
-                      <span className="font-mono text-amber-600">{order.orderNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-desk-muted">Contenu</span>
-                      <span className="text-emerald-600">
-                        {editorContent.length > 0 ? '✓ Prêt' : '⚠ Vide'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 px-6 py-4 bg-desk-card border-t border-desk-border">
-                <button
-                  onClick={() => setShowSealConfirm(false)}
-                  disabled={isSealing}
-                  className="flex-1 px-4 py-3 rounded-xl border border-desk-border text-desk-muted
-                             hover:bg-desk-hover hover:text-desk-text transition-colors disabled:opacity-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={() => {
-                    setShowSealConfirm(false);
-                    handleSeal();
-                  }}
-                  disabled={isSealing || editorContent.length === 0}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl
-                             bg-gradient-to-r from-emerald-500 to-emerald-600
-                             text-white font-semibold
-                             hover:from-emerald-400 hover:to-emerald-500
-                             transition-all disabled:opacity-50"
-                >
-                  {isSealing ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Envoi...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-5 h-5" />
-                      <span>Confirmer et envoyer</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ReadingDossierDrawer order={order} open={dossierOpen} onClose={() => setDossierOpen(false)} />
+      <ReadingHistoryPanel events={history} open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
   );
 }
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
+function PreparationPanel({
+  orientation,
+  priorities,
+  tone,
+  launching,
+  onOrientationChange,
+  onTogglePriority,
+  onToneChange,
+  onLaunch,
+  onOpenDossier,
+}: {
+  orientation: string;
+  priorities: string[];
+  tone: (typeof TONES)[number]['value'];
+  launching: boolean;
+  onOrientationChange: (value: string) => void;
+  onTogglePriority: (value: string) => void;
+  onToneChange: (value: (typeof TONES)[number]['value']) => void;
+  onLaunch: () => void;
+  onOpenDossier: () => void;
+}) {
+  return (
+    <div className="mx-auto max-w-4xl p-4 sm:p-8">
+      <div className="rounded-3xl border border-desk-border bg-desk-surface p-5 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Préparation</p>
+            <h2 className="mt-2 text-2xl font-semibold text-desk-text">Orientez la lecture, puis lancez.</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-desk-muted">Le dossier complet reste accessible sans imposer une étape supplémentaire.</p>
+          </div>
+          <button type="button" onClick={onOpenDossier} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-desk-border px-3 text-sm text-desk-muted hover:bg-desk-hover"><FolderOpen className="h-4 w-4" />Voir le dossier</button>
+        </div>
 
-function escapeHtml(str: string): string {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+        <div className="mt-7 space-y-6">
+          <div>
+            <label className="text-sm font-medium text-desk-text">Orientation de l’expert</label>
+            <textarea value={orientation} onChange={(event) => onOrientationChange(event.target.value)} rows={6} placeholder="Ex. Approfondir la transition professionnelle et la question de la juste place. Rester direct, concret et humain." className="mt-2 w-full resize-y rounded-2xl border border-desk-border bg-desk-input px-4 py-3 text-sm leading-6 text-desk-text outline-none focus:border-amber-500/50" />
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-desk-text">Priorités</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PRIORITIES.map((priority) => (
+                <button key={priority} type="button" onClick={() => onTogglePriority(priority)} className={`rounded-full border px-3 py-2 text-sm transition-colors ${priorities.includes(priority) ? 'border-amber-500/40 bg-amber-500/15 text-amber-700' : 'border-desk-border bg-desk-card text-desk-muted hover:bg-desk-hover'}`}>{priority}</button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-desk-text">Ton</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {TONES.map((item) => (
+                <button key={item.value} type="button" onClick={() => onToneChange(item.value)} className={`rounded-xl border px-3 py-3 text-left text-sm transition-colors ${tone === item.value ? 'border-amber-500/40 bg-amber-500/15 text-amber-700' : 'border-desk-border bg-desk-card text-desk-muted hover:bg-desk-hover'}`}>{item.label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 flex justify-end">
+          <button type="button" onClick={onLaunch} disabled={launching || orientation.trim().length < 3} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-amber-500 px-6 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-40">{launching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}Lancer la lecture</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function oracleResponseToHtml(response: OracleResponse): string {
-  const parts: string[] = [];
+function ProcessingPanel({ onReturn }: { onReturn: () => void }) {
+  return (
+    <div className="flex min-h-full items-center justify-center p-6">
+      <div className="w-full max-w-xl rounded-3xl border border-blue-500/20 bg-desk-surface p-8 text-center shadow-sm">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><Loader2 className="h-8 w-8 animate-spin" /></div>
+        <h2 className="mt-5 text-xl font-semibold text-desk-text">Lecture en production</h2>
+        <p className="mt-2 text-sm leading-6 text-desk-muted">SCRIBE analyse et rédige, puis EDITOR contrôle la structure et la qualité. Le traitement continue côté serveur.</p>
+        <div className="mt-5 flex items-center justify-center gap-2 text-sm text-blue-600"><Clock3 className="h-4 w-4" />Vous pouvez quitter cet écran.</div>
+        <button type="button" onClick={onReturn} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-5 text-sm font-semibold text-slate-950"><ArrowLeft className="h-4 w-4" />Retour au Board</button>
+      </div>
+    </div>
+  );
+}
 
-  if (response.pdf_content) {
-    const { pdf_content } = response;
-    if (pdf_content.introduction)
-      parts.push(`<h1>Introduction</h1>\n<p>${escapeHtml(pdf_content.introduction)}</p>`);
-    if (pdf_content.archetype_reveal)
-      parts.push(
-        `<h2>Révélation de l'Archétype</h2>\n<p>${escapeHtml(pdf_content.archetype_reveal)}</p>`,
-      );
-    if (pdf_content.sections) {
-      pdf_content.sections.forEach((s) =>
-        parts.push(`<h2>${escapeHtml(s.title)}</h2>\n<p>${escapeHtml(s.content)}</p>`),
-      );
-    }
-    if (pdf_content.karmic_insights?.length) {
-      parts.push(
-        `<h2>Insights Karmiques</h2>\n<ul>${pdf_content.karmic_insights.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`,
-      );
-    }
-    if (pdf_content.life_mission)
-      parts.push(`<h2>Mission de Vie</h2>\n<p>${escapeHtml(pdf_content.life_mission)}</p>`);
-    if (pdf_content.rituals?.length) {
-      parts.push(`<h2>Rituels Recommandés</h2>`);
-      pdf_content.rituals.forEach((r) => {
-        let ritHtml = `<h3>${escapeHtml(r.name)}</h3>\n<p>${escapeHtml(r.description)}</p>`;
-        if (r.instructions?.length) {
-          ritHtml += `\n<ol>${r.instructions.map((inst) => `<li>${escapeHtml(inst)}</li>`).join('')}</ol>`;
-        }
-        parts.push(ritHtml);
-      });
-    }
-    if (pdf_content.conclusion)
-      parts.push(`<h2>Conclusion</h2>\n<p>${escapeHtml(pdf_content.conclusion)}</p>`);
-  }
+function StatusBadge({ status, quality }: { status: string; quality?: string }) {
+  if (status === 'COMPLETED') return <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Livrée</span>;
+  if (status === 'PROCESSING') return <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-700">Production</span>;
+  if (quality === 'BLOCKED') return <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-700">Bloquée</span>;
+  if (quality === 'WARNING') return <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700">À examiner</span>;
+  if (quality === 'PASS') return <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Prête</span>;
+  return <span className="rounded-full bg-desk-hover px-2 py-0.5 text-[10px] font-semibold text-desk-muted">{status}</span>;
+}
 
-  if (parts.length === 0 && response.lecture) {
-    return `<p>${escapeHtml(response.lecture)}</p>`;
-  }
-
-  return parts.join('\n\n');
+function CenteredState({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-4 bg-desk-bg p-6 text-center text-desk-muted">
+      {icon}
+      <p>{text}</p>
+    </div>
+  );
 }
