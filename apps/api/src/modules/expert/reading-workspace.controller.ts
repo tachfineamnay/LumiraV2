@@ -18,6 +18,7 @@ import {
   GenerateWorkspaceReadingDto,
   PatchReadingBlockDto,
   ReopenStructuredReadingDto,
+  RestoreReadingBlockDto,
   ReviseReadingBlockDto,
   SaveStructuredReadingDto,
   SealStructuredReadingDto,
@@ -72,6 +73,16 @@ export class ReadingWorkspaceController {
     @CurrentExpert() expert: Expert,
   ) {
     return this.workspace.reviseBlock(orderId, blockId, dto, expert);
+  }
+
+  @Post('blocks/:blockId/restore')
+  async restoreBlock(
+    @Param('id') orderId: string,
+    @Param('blockId') blockId: string,
+    @Body() dto: RestoreReadingBlockDto,
+    @CurrentExpert() expert: Expert,
+  ) {
+    return this.workspace.restoreBlock(orderId, blockId, dto, expert);
   }
 
   @Post('quality/repair')
