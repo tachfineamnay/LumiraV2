@@ -47,6 +47,8 @@ export interface ReadingPipelineMetadata {
   models: Record<string, string>;
 }
 
+export type LifeAreasMap = Record<string, { state: string; note?: string }>;
+
 export interface UserProfile {
   userId: string;
   firstName: string;
@@ -61,9 +63,18 @@ export interface UserProfile {
   highs?: string;
   lows?: string;
   lifeEvents?: string;
-  lifeAreas?: LifeAreasMap;
+  lifeAreas?: LifeAreasMap | null;
   facePhotoUrl?: string;
   palmPhotoUrl?: string;
+  strongSide?: string;
+  weakSide?: string;
+  strongZone?: string;
+  weakZone?: string;
+  ailments?: string;
+  fears?: string;
+  rituals?: string;
+  deliveryStyle?: string;
+  pace?: number;
 }
 
 export interface OrderContext {
@@ -368,8 +379,7 @@ const GUIDE_SCHEMA: JsonSchema = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- schema reserved for dream interpretation feature
-const _DREAM_SCHEMA: JsonSchema = {
+const DREAM_SCHEMA: JsonSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['symbols', 'interpretation', 'linkToReading', 'linkToToday', 'advice', 'pattern'],
@@ -1044,6 +1054,28 @@ ${JSON.stringify(scribeResult, null, 2)}`;
     };
   }
 
+  async refineContent(
+    content: string,
+    instruction: string,
+    options?: {
+      preserveStructure?: boolean;
+      maxTokens?: number;
+      temperature?: number;
+      routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>;
+    },
+  ): Promise<string> {
+    await this.ensureInitialized();
+    const ctx = buildAiContext('EDITOR', AiMission.CONTENT_REFINEMENT, options?.routing);
+    const systemPrompt = `Tu es l'agent EDITOR d'Oracle Lumira. Ta mission est d'affiner, corriger ou adapter le texte fourni selon les instructions précises. Conserve le ton et l'interprétation originale sans inventer de faits non demandés.`;
+    const userPrompt = `CONTENU À REVOIR:\n"${content}"\n\nINSTRUCTION:\n${instruction}`;
+    return this.callText(
+      ctx,
+      `${systemPrompt}\n\n---\n\n${userPrompt}`,
+      120_000,
+      options?.maxTokens || 4096,
+    );
+  }
+
   async refineText(
     userPrompt: string,
     options?: { systemPrompt?: string; maxTokens?: number; temperature?: number },
@@ -1051,7 +1083,44 @@ ${JSON.stringify(scribeResult, null, 2)}`;
     return this.refineContent(
       userPrompt,
       options?.systemPrompt || 'Affine ce contenu sans en changer le sens.',
-      { maxTokens: options?.maxTokens },
+      { maxTokens: options?.maxTokens, temperature: options?.temperature },
+    );
+  }
+
+  async chatWithUser(
+    message: string,
+    context?: ChatContext,
+    conversationHistory?: Array<{ role: string; content: string }>,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
+  ): Promise<string> {
+    await this.ensureInitialized();
+    const ctx = buildAiContext('CONFIDANT', AiMission.CHAT_SESSION, routing);
+    const basePrompt = `${this.lumiraDna}\n\n---\n\n${this.agentContexts.CONFIDANT}`;
+    const systemPrompt = context
+      ? this.buildConfidantSystemPrompt(context, basePrompt)
+      : basePrompt;
+    const historyText =
+      conversationHistory && conversationHistory.length > 0
+        ? `\n\nHISTORIQUE DE CONVERSATION:\n` +
+          conversationHistory.map((h) => `${h.role.toUpperCase()}: ${h.content}`).join('\n')
+        : '';
+    const fullPrompt = `${systemPrompt}${historyText}\n\n---\n\nMESSAGE UTILISATEUR: ${message}`;
+    return this.callText(ctx, fullPrompt, 60_000, 2048);
+  }
+
+  async generateDreamInterpretation(
+    dreamCtx: DreamContext,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
+  ): Promise<DreamInterpretation> {
+    await this.ensureInitialized();
+    const executionCtx = buildAiContext('ONIRIQUE', AiMission.DREAM_INTERPRETATION, routing);
+    const prompt = this.buildOniriquePrompt(dreamCtx);
+    return this.callJson<DreamInterpretation>(
+      executionCtx,
+      prompt,
+      'lumira_dream_interpretation',
+      DREAM_SCHEMA,
+      120_000,
     );
   }
 

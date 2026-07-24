@@ -21,7 +21,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VertexOracle, OracleResponse, UserProfile, OrderContext } from './VertexOracle';
-import { productLevelFromAmountCents } from './product-level.util';
+import { productLevelFromAmountCents, productLevelFromNumericLevel } from './product-level.util';
 import { PdfFactory, ReadingPdfData } from './PdfFactory';
 import {
   OrderForReadingSource,
@@ -154,7 +154,7 @@ export class DigitalSoulService {
       const orderContext: OrderContext = {
         orderId: order.id,
         orderNumber: order.orderNumber,
-        level: orderLevel,
+        level: productLevelFromNumericLevel(orderLevel),
         productLevel: productLevelFromAmountCents(order.amount),
         productName: orderProductName,
         expertPrompt: order.expertPrompt ?? undefined,
@@ -561,7 +561,7 @@ export class DigitalSoulService {
       const orderContext: OrderContext = {
         orderId: order.id,
         orderNumber: order.orderNumber,
-        level: orderLevel,
+        level: productLevelFromNumericLevel(orderLevel),
         productLevel: productLevelFromAmountCents(order.amount),
         productName: orderProductName,
         expertPrompt: order.expertPrompt ?? undefined,

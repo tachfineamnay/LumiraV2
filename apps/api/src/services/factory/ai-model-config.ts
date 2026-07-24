@@ -72,9 +72,7 @@ export function modelSupportsAgent(model: string, agent: AgentType): boolean {
 
 export function missingAgentCapabilities(model: string, agent: AgentType): AgentCapability[] {
   const available = new Set(modelCapabilities(model));
-  return AGENT_BLOCKING_CAPABILITIES[agent].filter(
-    (capability) => !available.has(capability),
-  );
+  return AGENT_BLOCKING_CAPABILITIES[agent].filter((capability) => !available.has(capability));
 }
 
 export function modelsForAgent(provider: AiProvider, agent: AgentType): readonly string[] {
@@ -271,7 +269,9 @@ export function assertOperationalModel(
 ): void {
   const prefix = agent ? `[${agent}] ` : '';
   if (!isAllowedModel(provider, model)) {
-    throw new Error(`${prefix}modèle non opérationnel: ${model || '(vide)'} (provider ${provider})`);
+    throw new Error(
+      `${prefix}modèle non opérationnel: ${model || '(vide)'} (provider ${provider})`,
+    );
   }
   if (agent && isAgentType(agent) && !modelSupportsAgent(model, agent)) {
     const missing = missingAgentCapabilities(model, agent).map(capabilityLabel).join(' + ');
@@ -287,6 +287,7 @@ export function assertSavableAgentModel(
   agent: AgentType,
   provider: AiProvider,
   model: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _thinkingLevel?: AiThinkingLevel,
 ): void {
   if (!ALLOWED_PROVIDERS.has(provider)) {
@@ -378,7 +379,8 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
       result.reasoningEffort = effectiveThinking;
     }
     const verbosityValid =
-      typeof value.verbosity === 'string' && VERBOSITY_VALUES.has(value.verbosity as AiThinkingLevel);
+      typeof value.verbosity === 'string' &&
+      VERBOSITY_VALUES.has(value.verbosity as AiThinkingLevel);
     result.verbosity = verbosityValid
       ? (value.verbosity as AiThinkingLevel)
       : (fallback.verbosity ?? 'medium');

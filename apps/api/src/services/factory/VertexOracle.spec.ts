@@ -32,7 +32,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
   const orderContext: OrderContext = {
     orderId: 'order-123',
     orderNumber: 'ORD-001',
-    level: 1,
+    level: ProductLevel.INITIE,
     productName: 'Accès Lumira',
     productLevel: ProductLevel.INITIE,
   };

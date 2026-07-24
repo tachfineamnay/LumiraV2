@@ -13,6 +13,21 @@ const SLUG_TO_LEVEL: Record<string, ProductLevel> = {
   '4': ProductLevel.INTEGRALE,
 };
 
+export function productLevelFromNumericLevel(numericLevel: number): ProductLevel {
+  switch (numericLevel) {
+    case 1:
+      return ProductLevel.INITIE;
+    case 2:
+      return ProductLevel.MYSTIQUE;
+    case 3:
+      return ProductLevel.PROFOND;
+    case 4:
+      return ProductLevel.INTEGRALE;
+    default:
+      return ProductLevel.INITIE;
+  }
+}
+
 export function productLevelFromAmountCents(amountCents: number): ProductLevel {
   if (amountCents <= 2900) return ProductLevel.INITIE;
   if (amountCents <= 5900) return ProductLevel.MYSTIQUE;

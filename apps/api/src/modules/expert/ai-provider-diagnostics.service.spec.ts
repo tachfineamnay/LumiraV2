@@ -21,7 +21,11 @@ jest.mock('openai', () => ({
 
 type Provider = 'openai' | 'gemini' | 'vertex';
 
-function configFor(provider: Provider, model: string, options?: { vision?: boolean; structured?: boolean }) {
+function configFor(
+  provider: Provider,
+  model: string,
+  options?: { vision?: boolean; structured?: boolean },
+) {
   const agents = Object.fromEntries(
     Object.entries(DEFAULT_AI_MODEL_CONFIG.agents).map(([agent, value]) => [
       agent,
@@ -160,12 +164,10 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
     expect(result.structured).toBe('ok');
     expect(mockGenerateContent).toHaveBeenCalledTimes(3);
     expect(mockGenerateContent.mock.calls.map((call) => call[0].config.maxOutputTokens)).toEqual([
-      256,
-      256,
-      512,
+      256, 256, 512,
     ]);
-    expect(mockGenerateContent.mock.calls[0][0].config).not.toHaveProperty('temperature');
-    expect(mockGenerateContent.mock.calls[0][0].config).not.toHaveProperty('topP');
+    expect(mockGenerateContent.mock.calls[0][0].config.temperature).toBe(0.4);
+    expect(mockGenerateContent.mock.calls[0][0].config.topP).toBe(0.9);
   });
 
   it('fails the pair when the structured probe fails after text and vision succeed', async () => {
@@ -206,9 +208,7 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
     expect(result.model).toBe('gpt-4o-2024-11-20');
     expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
     expect(mockResponsesCreate.mock.calls.map((call) => call[0].max_output_tokens)).toEqual([
-      256,
-      256,
-      512,
+      256, 256, 512,
     ]);
     expect(JSON.stringify(result)).not.toContain('sk-test-openai-key');
   });
@@ -233,7 +233,9 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
         private_key: '-----BEGIN PRIVATE KEY-----\nX\n-----END PRIVATE KEY-----\n',
       }),
     });
-    configGet.mockImplementation((key: string) => (key === 'VERTEX_LOCATION' ? 'global' : undefined));
+    configGet.mockImplementation((key: string) =>
+      key === 'VERTEX_LOCATION' ? 'global' : undefined,
+    );
 
     const result = await service.testVertexConnection({ force: true });
 
@@ -308,9 +310,7 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
     });
 
     it('returns connection_ok only when all required probes passed', () => {
-      expect(resolveState(true, 'ok', 'ok', 'ok', undefined, true, true)).toBe(
-        'connection_ok',
-      );
+      expect(resolveState(true, 'ok', 'ok', 'ok', undefined, true, true)).toBe('connection_ok');
       expect(resolveState(true, 'ok', 'not_tested', 'not_tested', undefined, false, false)).toBe(
         'connection_ok',
       );

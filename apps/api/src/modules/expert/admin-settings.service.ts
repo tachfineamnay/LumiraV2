@@ -554,7 +554,11 @@ export class AdminSettingsService {
       [AgentType, (typeof candidateConfig.agents)[AgentType]]
     >) {
       if (agentConfig.enabled) {
-        assertSavableAgentModel(agent, agentConfig.provider, agentConfig.model);
+        try {
+          assertSavableAgentModel(agent, agentConfig.provider, agentConfig.model);
+        } catch (err) {
+          throw new BadRequestException(err instanceof Error ? err.message : String(err));
+        }
       }
     }
 
