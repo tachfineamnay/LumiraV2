@@ -6,6 +6,7 @@ import { ExpertController } from './expert.controller';
 import { ProductionControlController } from './production-control.controller';
 import { ClientControlController } from './client-control.controller';
 import { AiProductionReadinessController } from './ai-production-readiness.controller';
+import { ReadingWorkspaceController } from './reading-workspace.controller';
 import { ExpertService } from './expert.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
@@ -24,8 +25,8 @@ import { ProductionCancelInterceptor } from './production-cancel.interceptor';
 import { DeliveryRecoveryInterceptor } from './delivery-recovery.interceptor';
 import { ProductionPaidRecoveryService } from './production-paid-recovery.service';
 import { ClientControlService } from './client-control.service';
-
 import { ReadingCalculationsService } from './reading-calculations.service';
+import { ReadingWorkspaceService } from './reading-workspace.service';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ReadingCalculationsService } from './reading-calculations.service';
     ProductionControlController,
     ClientControlController,
     AiProductionReadinessController,
+    ReadingWorkspaceController,
   ],
   providers: [
     ExpertService,
@@ -65,6 +67,7 @@ import { ReadingCalculationsService } from './reading-calculations.service';
     ProductionPaidRecoveryService,
     ClientControlService,
     ReadingCalculationsService,
+    ReadingWorkspaceService,
     {
       provide: APP_INTERCEPTOR,
       useClass: ProductionQueueInterceptor,
@@ -89,6 +92,7 @@ import { ReadingCalculationsService } from './reading-calculations.service';
     AiProviderDiagnosticsService,
     AiProductionReadinessService,
     ReadingCalculationsService,
+    ReadingWorkspaceService,
     JwtModule,
   ],
 })
