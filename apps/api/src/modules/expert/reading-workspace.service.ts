@@ -267,6 +267,7 @@ export class ReadingWorkspaceService {
     expertId: string,
     action: string,
   ) {
+    reading.lecture = this.buildCanonicalLecture(reading);
     const quality = this.quality.validate(reading);
     const nextRevision = revision + 1;
     const priorHistory = Array.isArray(generated.expertEditHistory)
@@ -423,6 +424,26 @@ export class ReadingWorkspaceService {
     return value;
   }
 
+  private buildCanonicalLecture(reading: CanonicalReadingContent): string {
+    const pdf = reading.pdf_content;
+    const rituals = pdf.rituals.flatMap((ritual) => [
+      ritual.name,
+      ritual.description,
+      ...ritual.instructions.map((instruction, index) => `${index + 1}. ${instruction}`),
+    ]);
+    return [
+      pdf.introduction,
+      pdf.archetype_reveal,
+      ...pdf.sections.flatMap((section) => [section.title, section.content]),
+      ...pdf.karmic_insights,
+      pdf.life_mission,
+      ...rituals,
+      pdf.conclusion,
+    ]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .join('\n\n');
+  }
+
   private clean<T>(value: T): T {
     if (typeof value === 'string') {
       return value
@@ -508,10 +529,6 @@ export class ReadingWorkspaceService {
     });
 
     return events.sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime());
-  }
-
-  private readRevisionEntry(value: unknown): JsonRecord {
-    return this.toRecord(value);
   }
 
   private clone<T>(value: T): T {
