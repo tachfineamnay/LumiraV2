@@ -104,9 +104,14 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       const { data } = await expertApi.get(`/expert/orders/${orderId}`);
       setOrder(data);
 
-      if (data.generatedContent) {
-        setEditorContent(oracleResponseToHtml(data.generatedContent));
-      }
+          if (data.generatedContent) {
+            const initialHtml =
+              typeof data.generatedContent.studioDraftHtml === 'string' &&
+              data.generatedContent.studioDraftHtml.trim().length > 0
+                ? data.generatedContent.studioDraftHtml
+                : oracleResponseToHtml(data.generatedContent);
+            setEditorContent(initialHtml);
+          }
 
       setError(null);
       return data;
@@ -931,34 +936,53 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
 // HELPER FUNCTIONS
 // =============================================================================
 
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function oracleResponseToHtml(response: OracleResponse): string {
   const parts: string[] = [];
 
   if (response.pdf_content) {
     const { pdf_content } = response;
     if (pdf_content.introduction)
-      parts.push(`<h1>Introduction</h1>\n<p>${pdf_content.introduction}</p>`);
+      parts.push(`<h1>Introduction</h1>\n<p>${escapeHtml(pdf_content.introduction)}</p>`);
     if (pdf_content.archetype_reveal)
-      parts.push(`<h2>Révélation de l'Archétype</h2>\n<p>${pdf_content.archetype_reveal}</p>`);
+      parts.push(`<h2>Révélation de l'Archétype</h2>\n<p>${escapeHtml(pdf_content.archetype_reveal)}</p>`);
     if (pdf_content.sections) {
-      pdf_content.sections.forEach((s) => parts.push(`<h2>${s.title}</h2>\n<p>${s.content}</p>`));
+      pdf_content.sections.forEach((s) =>
+        parts.push(`<h2>${escapeHtml(s.title)}</h2>\n<p>${escapeHtml(s.content)}</p>`),
+      );
     }
     if (pdf_content.karmic_insights?.length) {
       parts.push(
-        `<h2>Insights Karmiques</h2>\n<ul>${pdf_content.karmic_insights.map((i) => `<li>${i}</li>`).join('')}</ul>`,
+        `<h2>Insights Karmiques</h2>\n<ul>${pdf_content.karmic_insights.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`,
       );
     }
     if (pdf_content.life_mission)
-      parts.push(`<h2>Mission de Vie</h2>\n<p>${pdf_content.life_mission}</p>`);
+      parts.push(`<h2>Mission de Vie</h2>\n<p>${escapeHtml(pdf_content.life_mission)}</p>`);
     if (pdf_content.rituals?.length) {
       parts.push(`<h2>Rituels Recommandés</h2>`);
-      pdf_content.rituals.forEach((r) => parts.push(`<h3>${r.name}</h3>\n<p>${r.description}</p>`));
+      pdf_content.rituals.forEach((r) => {
+        let ritHtml = `<h3>${escapeHtml(r.name)}</h3>\n<p>${escapeHtml(r.description)}</p>`;
+        if (r.instructions?.length) {
+          ritHtml += `\n<ol>${r.instructions.map((inst) => `<li>${escapeHtml(inst)}</li>`).join('')}</ol>`;
+        }
+        parts.push(ritHtml);
+      });
     }
-    if (pdf_content.conclusion) parts.push(`<h2>Conclusion</h2>\n<p>${pdf_content.conclusion}</p>`);
+    if (pdf_content.conclusion)
+      parts.push(`<h2>Conclusion</h2>\n<p>${escapeHtml(pdf_content.conclusion)}</p>`);
   }
 
   if (parts.length === 0 && response.lecture) {
-    return `<p>${response.lecture}</p>`;
+    return `<p>${escapeHtml(response.lecture)}</p>`;
   }
 
   return parts.join('\n\n');

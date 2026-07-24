@@ -922,7 +922,7 @@ export class ExpertService {
       data: {
         generatedContent: {
           ...existing,
-          lecture: content,
+          studioDraftHtml: content,
           draftSavedAt: new Date().toISOString(),
           draftSavedBy: expertId,
         },

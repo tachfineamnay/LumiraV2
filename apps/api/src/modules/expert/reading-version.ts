@@ -46,6 +46,17 @@ export interface CanonicalReadingContent {
   lecture: string;
 }
 
+export const REQUIRED_DOMAINS = [
+  'spirituel',
+  'relations',
+  'mission',
+  'creativite',
+  'emotions',
+  'travail',
+  'sante',
+  'finance',
+] as const;
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -76,10 +87,7 @@ function parseTimeline(input: unknown): CanonicalReadingTimelineItem[] {
     title: asString(t.title),
     action: asString(t.action),
     mantra: typeof t.mantra === 'string' ? t.mantra : undefined,
-    actionType:
-      typeof t.actionType === 'string'
-        ? (t.actionType as CanonicalReadingTimelineItem['actionType'])
-        : undefined,
+    actionType: typeof t.actionType === 'string' ? (t.actionType as CanonicalReadingTimelineItem['actionType']) : undefined,
   }));
 }
 
@@ -107,10 +115,6 @@ function decodeHtmlEntities(value: string): string {
   });
 }
 
-/**
- * Tiptap sends HTML to the API. Convert its safe document subset into plain,
- * structured lines before the canonical reading is sealed.
- */
 export function studioHtmlToText(content: string): string {
   if (!/<\/?(?:h[1-6]|p|div|li|ul|ol|br|blockquote)\b/i.test(content)) {
     return content;
@@ -135,94 +139,217 @@ export function studioHtmlToText(content: string): string {
     .trim();
 }
 
-/**
- * Converts the Studio's text into the document body rendered in the PDF.
- */
+function matchDomain(heading: string): string {
+  const norm = heading.toLowerCase();
+  if (/spirituel|esprit|[âa]me|guidance|essence/i.test(norm)) return 'spirituel';
+  if (/relation|amour|couple|lien|famille/i.test(norm)) return 'relations';
+  if (/mission|vocation|destin/i.test(norm)) return 'mission';
+  if (/cr[éa]tiv|expression|art/i.test(norm)) return 'creativite';
+  if (/[ée]motion|sentiment|ressenti|blocage/i.test(norm)) return 'emotions';
+  if (/travail|profession|carri[èe]re|action/i.test(norm)) return 'travail';
+  if (/sant[ée]|corps|vitalit[ée]|physiqu/i.test(norm)) return 'sante';
+  if (/finance|mat[ée]riel|abondance|argent/i.test(norm)) return 'finance';
+
+  for (const d of REQUIRED_DOMAINS) {
+    if (norm.includes(d)) return d;
+  }
+  return 'spirituel';
+}
+
 export function splitStudioContent(content: string): {
   introduction: string;
-  sections: CanonicalPdfSection[];
+  archetype_reveal: string;
+  sections: CanonicalReadingSection[];
+  karmic_insights: string[];
+  life_mission: string;
+  rituals: CanonicalReadingRitual[];
   conclusion: string;
 } {
-  const normalizedContent = studioHtmlToText(content);
-  const lines = normalizedContent
+  const normalizedText = studioHtmlToText(content);
+
+  const parsed = {
+    introduction: '',
+    archetype_reveal: '',
+    sections: [] as CanonicalReadingSection[],
+    karmic_insights: [] as string[],
+    life_mission: '',
+    rituals: [] as CanonicalReadingRitual[],
+    conclusion: '',
+  };
+
+  const insightsMatch = content.match(
+    /<h[1-6][^>]*>\s*Insights\s*Karmiques\s*<\/h[1-6]>([\s\S]*?)(?=<h[1-6]|$)/i,
+  );
+  if (insightsMatch) {
+    const listItems = insightsMatch[1].match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+    if (listItems) {
+      parsed.karmic_insights = listItems
+        .map((item) => item.replace(/<[^>]+>/g, '').trim())
+        .filter(Boolean);
+    }
+  }
+
+  const ritualsMatch = content.match(
+    /<h[1-6][^>]*>\s*Rituels\s*(?:Recommand[ée]s)?\s*<\/h[1-6]>([\s\S]*?)(?=<h[1-2]|$)/i,
+  );
+  if (ritualsMatch) {
+    const ritualBlocks = ritualsMatch[1].split(/(?=<h3[^>]*>)/i).filter(Boolean);
+    for (const block of ritualBlocks) {
+      const titleMatch = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
+      const name = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+      const pMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+      const description = pMatch ? pMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+      const instMatches = block.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+      const instructions = instMatches
+        ? instMatches.map((i) => i.replace(/<[^>]+>/g, '').trim()).filter(Boolean)
+        : [];
+      if (name || description || instructions.length > 0) {
+        parsed.rituals.push({ name, description, instructions });
+      }
+    }
+  }
+
+  const lines = normalizedText
     .trim()
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const sections: CanonicalPdfSection[] = [];
-  const introduction: string[] = [];
-  let current: { title: string; content: string[] } | null = null;
 
-  const isHeading = (line: string) =>
-    line.startsWith('#') ||
-    (line.length > 3 && line.length < 80 && line === line.toUpperCase()) ||
-    /^[A-ZÀ-Ü][^.!?]{0,76}:?$/.test(line);
+  let currentHeading = '';
+  let currentLines: string[] = [];
 
-  const pushCurrent = () => {
-    if (current?.content.length) {
-      sections.push({
-        domain: 'Guidance',
-        title: current.title.replace(/^#+\s*/, ''),
-        content: current.content.join('\n\n'),
-      });
+  const flush = () => {
+    if (!currentHeading && currentLines.length > 0) {
+      if (!parsed.introduction) {
+        parsed.introduction = currentLines.join('\n\n');
+      }
+    } else if (currentHeading) {
+      const headingNorm = currentHeading.toLowerCase().replace(/^#+\s*/, '').trim();
+      const text = currentLines.join('\n\n').trim();
+
+      if (/\bintroduction\b/i.test(headingNorm)) {
+        if (!parsed.introduction) parsed.introduction = text;
+      } else if (/r[év]v[év]lation.*arch[ée]type|\barch[ée]type\b/i.test(headingNorm)) {
+        if (!parsed.archetype_reveal) parsed.archetype_reveal = text;
+      } else if (/\binsights?\s*karmiques?\b/i.test(headingNorm)) {
+        if (parsed.karmic_insights.length === 0 && text) {
+          parsed.karmic_insights = text
+            .split('\n')
+            .map((l) => l.replace(/^[-*•\d.]+\s*/, '').trim())
+            .filter(Boolean);
+        }
+      } else if (/\bmission\s*de\s*vie\b/i.test(headingNorm)) {
+        if (!parsed.life_mission) parsed.life_mission = text;
+      } else if (/\brituels?\b/i.test(headingNorm)) {
+        // Handled via HTML parser or fallback
+      } else if (/\bconclusion\b|\bint[ée]gration\b/i.test(headingNorm)) {
+        if (!parsed.conclusion) parsed.conclusion = text;
+      } else {
+        const domain = matchDomain(headingNorm);
+        parsed.sections.push({
+          domain,
+          title: currentHeading.replace(/^#+\s*/, ''),
+          content: text,
+        });
+      }
     }
   };
 
+  const isHeadingLine = (line: string) => /^#+\s*/.test(line);
+
   for (const line of lines) {
-    if (isHeading(line)) {
-      pushCurrent();
-      current = { title: line, content: [] };
-    } else if (current) {
-      current.content.push(line);
+    if (isHeadingLine(line)) {
+      flush();
+      currentHeading = line;
+      currentLines = [];
     } else {
-      introduction.push(line);
+      currentLines.push(line);
     }
   }
-  pushCurrent();
+  flush();
 
-  let conclusion = '';
-  const lastSection = sections.at(-1);
-  if (lastSection && /conclusion|fin|int[ée]gration/i.test(lastSection.title)) {
-    conclusion = lastSection.content;
-    sections.pop();
-  }
-
-  if (sections.length === 0 && introduction.length === 0) {
-    sections.push({
-      domain: 'Guidance',
-      title: 'Votre lecture',
-      content: normalizedContent.trim(),
-    });
-  }
-
-  return { introduction: introduction.join('\n\n'), sections, conclusion };
+  return parsed;
 }
 
-/** Builds the exact customer-facing document persisted when an expert seals it. */
 export function buildStudioReadingVersion(
   currentGenerated: unknown,
   finalContent: string,
 ): CanonicalReadingContent {
   const source = isRecord(currentGenerated) ? currentGenerated : {};
+
+  if ((finalContent === asString(source.lecture) || !finalContent.trim()) && isRecord(source.pdf_content)) {
+    return buildGeneratedReadingVersion(currentGenerated);
+  }
+
   const pdfSource = isRecord(source.pdf_content) ? source.pdf_content : {};
   const synthesisSource = isRecord(source.synthesis) ? source.synthesis : {};
   const parsed = splitStudioContent(finalContent);
 
-  const karmic_insights = asStringArray(pdfSource.karmic_insights);
-  const archetype_reveal = asString(pdfSource.archetype_reveal);
-  const life_mission = asString(pdfSource.life_mission);
-  const rituals = parseRituals(pdfSource.rituals);
-  const timeline = parseTimeline(source.timeline);
+  const introduction = parsed.introduction.trim() || asString(pdfSource.introduction);
+  const archetype_reveal = parsed.archetype_reveal.trim() || asString(pdfSource.archetype_reveal);
+  const life_mission = parsed.life_mission.trim() || asString(pdfSource.life_mission);
+  const conclusion = parsed.conclusion.trim() || asString(pdfSource.conclusion);
+
+  const karmic_insights =
+    parsed.karmic_insights.length === 4
+      ? parsed.karmic_insights
+      : asStringArray(pdfSource.karmic_insights);
+
+  const rituals =
+    parsed.rituals.length === 2 && parsed.rituals.every((r) => r.instructions?.length >= 4)
+      ? parsed.rituals
+      : parseRituals(pdfSource.rituals);
+
+  const existingSections = Array.isArray(pdfSource.sections)
+    ? pdfSource.sections.filter(isRecord).map((s) => ({
+        domain: asString(s.domain, 'spirituel').toLowerCase().trim(),
+        title: asString(s.title),
+        content: asString(s.content),
+      }))
+    : [];
+
+  const mergedSections: CanonicalReadingSection[] = [];
+
+  for (let i = 0; i < REQUIRED_DOMAINS.length; i++) {
+    const reqDomain = REQUIRED_DOMAINS[i];
+
+    const parsedSec = parsed.sections.find(
+      (s) => s.domain.toLowerCase().trim() === reqDomain,
+    );
+
+    const existingSec =
+      existingSections.find((s) => s.domain === reqDomain) || existingSections[i];
+
+    if (parsedSec && parsedSec.content.trim()) {
+      mergedSections.push({
+        domain: reqDomain,
+        title: parsedSec.title || existingSec?.title || `Grand axe : ${reqDomain}`,
+        content: parsedSec.content.trim(),
+      });
+    } else if (existingSec && existingSec.content.trim()) {
+      mergedSections.push({
+        domain: reqDomain,
+        title: existingSec.title || `Grand axe : ${reqDomain}`,
+        content: existingSec.content.trim(),
+      });
+    } else {
+      mergedSections.push({
+        domain: reqDomain,
+        title: `Grand axe : ${reqDomain}`,
+        content: parsed.introduction || 'Contenu de la section.',
+      });
+    }
+  }
 
   return {
     pdf_content: {
-      introduction: parsed.introduction,
+      introduction,
       archetype_reveal,
-      sections: parsed.sections.length > 0 ? parsed.sections : [],
+      sections: mergedSections,
       karmic_insights,
       life_mission,
       rituals,
-      conclusion: parsed.conclusion,
+      conclusion,
     },
     synthesis: {
       archetype: asString(synthesisSource.archetype, 'Le Guérisseur'),
@@ -230,12 +357,11 @@ export function buildStudioReadingVersion(
       emotional_state: asString(synthesisSource.emotional_state),
       key_blockage: asString(synthesisSource.key_blockage),
     },
-    timeline,
+    timeline: parseTimeline(source.timeline),
     lecture: studioHtmlToText(finalContent).trim(),
   };
 }
 
-/** Preserves an already structured AI reading when an expert approves it without editing it. */
 export function buildGeneratedReadingVersion(currentGenerated: unknown): CanonicalReadingContent {
   if (!isRecord(currentGenerated) || !isRecord(currentGenerated.pdf_content)) {
     throw new Error('La lecture générée ne contient pas de document PDF structuré');
@@ -279,7 +405,6 @@ export function buildGeneratedReadingVersion(currentGenerated: unknown): Canonic
   };
 }
 
-/** Runtime guard for JSON read back from PostgreSQL before it reaches the PDF renderer. */
 export function isCanonicalReadingContent(value: unknown): value is CanonicalReadingContent {
   if (!isRecord(value) || !isRecord(value.pdf_content) || !isRecord(value.synthesis)) {
     return false;

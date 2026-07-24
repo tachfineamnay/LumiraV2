@@ -83,7 +83,8 @@ export interface OracleResponse {
     rituals?: Array<{
       name: string;
       description: string;
-      frequency: string;
+      instructions?: string[];
+      frequency?: string;
     }>;
     conclusion: string;
   };
@@ -100,6 +101,7 @@ export interface OracleResponse {
     actionType?: 'MANTRA' | 'RITUAL' | 'JOURNALING' | 'MEDITATION' | 'REFLECTION';
   }>;
   lecture?: string;
+  studioDraftHtml?: string;
 }
 
 export interface Order {
