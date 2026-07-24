@@ -2,29 +2,47 @@ import { createHash } from 'crypto';
 
 type JsonRecord = Record<string, unknown>;
 
-export interface CanonicalPdfSection {
+export interface CanonicalReadingSection {
   domain: string;
   title: string;
   content: string;
+}
+
+export type CanonicalPdfSection = CanonicalReadingSection;
+
+export interface CanonicalReadingRitual {
+  name: string;
+  description: string;
+  instructions: string[];
+}
+
+export interface CanonicalReadingSynthesis {
+  archetype: string;
+  keywords: string[];
+  emotional_state: string;
+  key_blockage: string;
+}
+
+export interface CanonicalReadingTimelineItem {
+  day: number;
+  title: string;
+  action: string;
+  mantra?: string;
+  actionType?: 'MANTRA' | 'RITUAL' | 'JOURNALING' | 'MEDITATION' | 'REFLECTION';
 }
 
 export interface CanonicalReadingContent {
   pdf_content: {
     introduction: string;
     archetype_reveal: string;
-    sections: CanonicalPdfSection[];
+    sections: CanonicalReadingSection[];
     karmic_insights: string[];
     life_mission: string;
-    rituals: unknown[];
+    rituals: CanonicalReadingRitual[];
     conclusion: string;
   };
-  synthesis: {
-    archetype: string;
-    keywords: string[];
-    emotional_state: string;
-    key_blockage: string;
-  };
-  timeline: unknown[];
+  synthesis: CanonicalReadingSynthesis;
+  timeline: CanonicalReadingTimelineItem[];
   lecture: string;
 }
 
@@ -40,6 +58,29 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : [];
+}
+
+function parseRituals(input: unknown): CanonicalReadingRitual[] {
+  if (!Array.isArray(input)) return [];
+  return input.filter(isRecord).map((r) => ({
+    name: asString(r.name),
+    description: asString(r.description),
+    instructions: asStringArray(r.instructions),
+  }));
+}
+
+function parseTimeline(input: unknown): CanonicalReadingTimelineItem[] {
+  if (!Array.isArray(input)) return [];
+  return input.filter(isRecord).map((t) => ({
+    day: typeof t.day === 'number' ? t.day : 1,
+    title: asString(t.title),
+    action: asString(t.action),
+    mantra: typeof t.mantra === 'string' ? t.mantra : undefined,
+    actionType:
+      typeof t.actionType === 'string'
+        ? (t.actionType as CanonicalReadingTimelineItem['actionType'])
+        : undefined,
+  }));
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -68,10 +109,9 @@ function decodeHtmlEntities(value: string): string {
 
 /**
  * Tiptap sends HTML to the API. Convert its safe document subset into plain,
- * structured lines before the canonical reading is sealed. Without this step,
- * literal <h1>/<p> tags were escaped and printed inside the customer PDF.
+ * structured lines before the canonical reading is sealed.
  */
-function studioHtmlToText(content: string): string {
+export function studioHtmlToText(content: string): string {
   if (!/<\/?(?:h[1-6]|p|div|li|ul|ol|br|blockquote)\b/i.test(content)) {
     return content;
   }
@@ -96,9 +136,7 @@ function studioHtmlToText(content: string): string {
 }
 
 /**
- * Converts the Studio's text into the document body rendered in the PDF. This
- * deliberately does not reuse the generated draft body: after an expert edit,
- * the Studio input is the sole source of customer-facing prose.
+ * Converts the Studio's text into the document body rendered in the PDF.
  */
 export function splitStudioContent(content: string): {
   introduction: string;
@@ -149,8 +187,6 @@ export function splitStudioContent(content: string): {
     sections.pop();
   }
 
-  // A heading-less Studio document is still rendered in full, rather than
-  // silently preserving any AI draft text.
   if (sections.length === 0 && introduction.length === 0) {
     sections.push({
       domain: 'Guidance',
@@ -168,26 +204,33 @@ export function buildStudioReadingVersion(
   finalContent: string,
 ): CanonicalReadingContent {
   const source = isRecord(currentGenerated) ? currentGenerated : {};
-  const synthesis = isRecord(source.synthesis) ? source.synthesis : {};
+  const pdfSource = isRecord(source.pdf_content) ? source.pdf_content : {};
+  const synthesisSource = isRecord(source.synthesis) ? source.synthesis : {};
   const parsed = splitStudioContent(finalContent);
+
+  const karmic_insights = asStringArray(pdfSource.karmic_insights);
+  const archetype_reveal = asString(pdfSource.archetype_reveal);
+  const life_mission = asString(pdfSource.life_mission);
+  const rituals = parseRituals(pdfSource.rituals);
+  const timeline = parseTimeline(source.timeline);
 
   return {
     pdf_content: {
       introduction: parsed.introduction,
-      archetype_reveal: '',
+      archetype_reveal,
       sections: parsed.sections.length > 0 ? parsed.sections : [],
-      karmic_insights: [],
-      life_mission: '',
-      rituals: [],
+      karmic_insights,
+      life_mission,
+      rituals,
       conclusion: parsed.conclusion,
     },
     synthesis: {
-      archetype: asString(synthesis.archetype, 'Guidance personnalisée'),
-      keywords: asStringArray(synthesis.keywords),
-      emotional_state: asString(synthesis.emotional_state),
-      key_blockage: asString(synthesis.key_blockage),
+      archetype: asString(synthesisSource.archetype, 'Le Guérisseur'),
+      keywords: asStringArray(synthesisSource.keywords),
+      emotional_state: asString(synthesisSource.emotional_state),
+      key_blockage: asString(synthesisSource.key_blockage),
     },
-    timeline: Array.isArray(source.timeline) ? source.timeline : [],
+    timeline,
     lecture: studioHtmlToText(finalContent).trim(),
   };
 }
@@ -204,7 +247,7 @@ export function buildGeneratedReadingVersion(currentGenerated: unknown): Canonic
     ? pdf.sections
         .filter(isRecord)
         .map((section) => ({
-          domain: asString(section.domain, 'Guidance'),
+          domain: asString(section.domain, 'spirituel'),
           title: asString(section.title, 'Votre lecture'),
           content: asString(section.content),
         }))
@@ -222,16 +265,16 @@ export function buildGeneratedReadingVersion(currentGenerated: unknown): Canonic
       sections,
       karmic_insights: asStringArray(pdf.karmic_insights),
       life_mission: asString(pdf.life_mission),
-      rituals: Array.isArray(pdf.rituals) ? pdf.rituals : [],
+      rituals: parseRituals(pdf.rituals),
       conclusion: asString(pdf.conclusion),
     },
     synthesis: {
-      archetype: asString(synthesis.archetype, 'Guidance personnalisée'),
+      archetype: asString(synthesis.archetype, 'Le Guérisseur'),
       keywords: asStringArray(synthesis.keywords),
       emotional_state: asString(synthesis.emotional_state),
       key_blockage: asString(synthesis.key_blockage),
     },
-    timeline: Array.isArray(currentGenerated.timeline) ? currentGenerated.timeline : [],
+    timeline: parseTimeline(currentGenerated.timeline),
     lecture: asString(currentGenerated.lecture),
   };
 }
@@ -256,7 +299,9 @@ export function isCanonicalReadingContent(value: unknown): value is CanonicalRea
         typeof section.domain === 'string' &&
         typeof section.title === 'string' &&
         typeof section.content === 'string',
-    )
+    ) &&
+    Array.isArray(pdf.karmic_insights) &&
+    Array.isArray(pdf.rituals)
   );
 }
 

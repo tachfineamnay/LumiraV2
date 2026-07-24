@@ -34,6 +34,7 @@ import {
   hashReadingContent,
 } from './reading-version';
 import { assertOrderIntakeReady } from './reading-intake-readiness';
+import { assertReadingDeliverable } from './reading-quality.validator';
 
 type ExpertWithoutPassword = Omit<Expert, 'password'>;
 
@@ -1675,6 +1676,7 @@ MESSAGE DE L'EXPERT:`;
     expert: ExpertEntity,
     source: string,
   ) {
+    assertReadingDeliverable(content);
     const sealedAt = new Date();
     const currentGenerated = (order.generatedContent as Record<string, unknown>) || {};
 
