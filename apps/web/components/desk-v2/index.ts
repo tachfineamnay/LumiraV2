@@ -14,9 +14,6 @@ export { OrderCard } from './kanban/OrderCard';
 
 // Studio Editor
 export { OrderWorkflow } from './studio/OrderWorkflow';
-export { TiptapEditor } from './studio/TiptapEditor';
-export { AIAssistant } from './studio/AIAssistant';
-export { ClientPanel } from './studio/ClientPanel';
 
 // Dashboard
 export { StatsGrid } from './dashboard/StatsGrid';
