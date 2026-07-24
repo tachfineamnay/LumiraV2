@@ -1,7 +1,15 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { Calendar, Clock, Image as ImageIcon, MapPin, MessageSquare, Target, X } from 'lucide-react';
+import {
+  Calendar,
+  Clock,
+  Image as ImageIcon,
+  MapPin,
+  MessageSquare,
+  Target,
+  X,
+} from 'lucide-react';
 import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 import { resolveDeskReadingSource } from '@/lib/desk-reading-source';
 import type { Order } from '../types';
@@ -53,56 +61,89 @@ export function ReadingDossierDrawer({ order, open, onClose }: ReadingDossierDra
 
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
               <section className="rounded-2xl border border-desk-border bg-desk-card p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-desk-subtle">Identité</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-desk-subtle">
+                  Identité
+                </p>
                 <p className="mt-2 text-lg font-semibold text-desk-text">
                   {order.user.firstName} {order.user.lastName}
                 </p>
                 {profile?.usageName && (
-                  <p className="mt-1 text-sm text-amber-600">Prénom d’usage : {profile.usageName}</p>
+                  <p className="mt-1 text-sm text-amber-600">
+                    Prénom d’usage : {profile.usageName}
+                  </p>
                 )}
                 <div className="mt-4 space-y-2 text-sm text-desk-muted">
                   {profile?.birthDate && (
-                    <p className="flex items-center gap-2"><Calendar className="h-4 w-4" />{new Date(profile.birthDate).toLocaleDateString('fr-FR')}</p>
+                    <p className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {new Date(profile.birthDate).toLocaleDateString('fr-FR')}
+                    </p>
                   )}
                   {profile?.birthTime && (
-                    <p className="flex items-center gap-2"><Clock className="h-4 w-4" />{profile.birthTime}</p>
+                    <p className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      {profile.birthTime}
+                    </p>
                   )}
                   {profile?.birthPlace && (
-                    <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{profile.birthPlace}</p>
+                    <p className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      {profile.birthPlace}
+                    </p>
                   )}
                 </div>
               </section>
 
               {profile?.specificQuestion && (
                 <section className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4">
-                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-purple-600"><MessageSquare className="h-4 w-4" />Question</p>
-                  <p className="mt-2 text-sm leading-relaxed text-desk-text">{profile.specificQuestion}</p>
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-purple-600">
+                    <MessageSquare className="h-4 w-4" /> Question
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-desk-text">
+                    {profile.specificQuestion}
+                  </p>
                 </section>
               )}
 
               {profile?.objective && (
                 <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
-                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-600"><Target className="h-4 w-4" />Objectif</p>
-                  <p className="mt-2 text-sm leading-relaxed text-desk-text">{profile.objective}</p>
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-600">
+                    <Target className="h-4 w-4" /> Objectif
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-desk-text">
+                    {profile.objective}
+                  </p>
                 </section>
               )}
 
               {(profile?.highs || profile?.lows || profile?.fears || profile?.lifeEvents) && (
                 <section className="space-y-3 rounded-2xl border border-desk-border bg-desk-card p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-desk-subtle">Contexte de vie</p>
-                  {profile.highs && <Field label="Ce qui porte" value={profile.highs} />}
-                  {profile.lows && <Field label="Ce qui freine" value={profile.lows} />}
-                  {profile.fears && <Field label="Peurs et blocages" value={profile.fears} />}
-                  {profile.lifeEvents && <Field label="Période marquante" value={profile.lifeEvents} />}
+                  <p className="text-xs font-semibold uppercase tracking-wide text-desk-subtle">
+                    Contexte de vie
+                  </p>
+                  {profile?.highs && <Field label="Ce qui porte" value={profile.highs} />}
+                  {profile?.lows && <Field label="Ce qui freine" value={profile.lows} />}
+                  {profile?.fears && (
+                    <Field label="Peurs et blocages" value={profile.fears} />
+                  )}
+                  {profile?.lifeEvents && (
+                    <Field label="Période marquante" value={profile.lifeEvents} />
+                  )}
                 </section>
               )}
 
               {(profile?.facePhotoUrl || profile?.palmPhotoUrl) && (
                 <section className="rounded-2xl border border-desk-border bg-desk-card p-4">
-                  <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-desk-subtle"><ImageIcon className="h-4 w-4" />Photos</p>
+                  <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-desk-subtle">
+                    <ImageIcon className="h-4 w-4" /> Photos
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
-                    {profile.facePhotoUrl && <ExpertPrivatePhoto clientId={order.user.id} kind="face" alt="Visage" />}
-                    {profile.palmPhotoUrl && <ExpertPrivatePhoto clientId={order.user.id} kind="palm" alt="Paume" />}
+                    {profile?.facePhotoUrl && (
+                      <ExpertPrivatePhoto clientId={order.user.id} kind="face" alt="Visage" />
+                    )}
+                    {profile?.palmPhotoUrl && (
+                      <ExpertPrivatePhoto clientId={order.user.id} kind="palm" alt="Paume" />
+                    )}
                   </div>
                 </section>
               )}
