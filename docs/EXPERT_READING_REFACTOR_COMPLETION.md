@@ -25,6 +25,14 @@
 - `POST /expert/orders/:id/reading/reopen`
 - `GET /expert/orders/:id/reading/history`
 
+## Delivery gate
+
+- `BLOCKED`: preview and seal are refused.
+- `WARNING`: preview is available and seal requires explicit acknowledgement.
+- `PASS`: preview and seal are available.
+
+The same canonical validator is used by the workspace and by immutable ReadingVersion sealing.
+
 ## Removed UI residue
 
 - three-step Dossier / Briefing / Revision wizard;
