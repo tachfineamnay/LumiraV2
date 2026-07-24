@@ -58,6 +58,10 @@ No Prisma migration is required. Existing ReadingVersion, DeliveryRecord, S3 obj
 
 The frontend does not write order status directly.
 
+## Verification gate
+
+The branch must pass API typecheck/build and Web typecheck/build before it can replace `main`. Browser smoke tests remain required after the build gate succeeds.
+
 ## Rollback
 
 The pre-refactor application state is preserved on:
