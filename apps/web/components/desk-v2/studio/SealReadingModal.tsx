@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -152,7 +153,7 @@ export function SealReadingModal({
   );
 }
 
-function DeliveryItem({ icon, label, detail }: { icon: React.ReactNode; label: string; detail: string }) {
+function DeliveryItem({ icon, label, detail }: { icon: ReactNode; label: string; detail: string }) {
   return (
     <div className="rounded-xl border border-desk-border bg-desk-card p-3">
       <div className="flex items-center gap-2 text-emerald-600">
