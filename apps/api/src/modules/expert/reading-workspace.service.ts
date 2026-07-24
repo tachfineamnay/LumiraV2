@@ -14,6 +14,7 @@ import {
   GenerateWorkspaceReadingDto,
   PatchReadingBlockDto,
   ReopenStructuredReadingDto,
+  RestoreReadingBlockDto,
   ReviseReadingBlockDto,
   SaveStructuredReadingDto,
   SealStructuredReadingDto,
@@ -42,6 +43,14 @@ type WorkspaceHistoryEvent = {
   status?: string;
 };
 
+type BlockSnapshot = {
+  at: string;
+  expertId: string;
+  value: unknown;
+};
+
+type BlockVersions = Record<string, BlockSnapshot[]>;
+
 @Injectable()
 export class ReadingWorkspaceService {
   private readonly quality = new ReadingQualityValidator();
@@ -58,12 +67,16 @@ export class ReadingWorkspaceService {
     const order = await this.expertService.getOrderById(orderId);
     const generated = this.toRecord(order.generatedContent);
     const reading = this.readCanonical(generated);
+    const blockVersions = this.readBlockVersions(generated);
 
     return {
       order,
       reading,
       revision: this.readRevision(generated),
       quality: reading ? this.quality.validate(reading) : null,
+      restorableBlocks: Object.entries(blockVersions)
+        .filter(([, versions]) => versions.length > 0)
+        .map(([blockId]) => blockId),
       history: await this.buildHistory(orderId, generated),
     };
   }
@@ -108,6 +121,7 @@ export class ReadingWorkspaceService {
   ) {
     const state = await this.loadEditable(orderId);
     this.assertRevision(dto.expectedRevision, state.revision);
+    const previousValue = this.getBlockValue(state.reading, blockId);
     const next = this.clone(state.reading);
     this.setBlock(next, blockId, dto.value);
     return this.persist(
@@ -117,6 +131,7 @@ export class ReadingWorkspaceService {
       state.revision,
       expert.id,
       `block:${blockId}`,
+      { blockId, value: previousValue },
     );
   }
 
@@ -156,6 +171,39 @@ export class ReadingWorkspaceService {
       state.revision,
       expert.id,
       `editor:${blockId}`,
+      { blockId, value: this.getBlockValue(state.reading, blockId) },
+    );
+  }
+
+  async restoreBlock(
+    orderId: string,
+    blockId: string,
+    dto: RestoreReadingBlockDto,
+    expert: Expert,
+  ) {
+    const state = await this.loadEditable(orderId);
+    this.assertRevision(dto.expectedRevision, state.revision);
+    const versions = this.readBlockVersions(state.generated);
+    const history = versions[blockId] ?? [];
+    const snapshot = history.at(-1);
+    if (!snapshot) {
+      throw new BadRequestException('Aucune version précédente disponible pour ce bloc');
+    }
+
+    const next = this.clone(state.reading);
+    this.setBlock(next, blockId, this.clone(snapshot.value));
+    const remaining = history.slice(0, -1);
+    const nextBlockVersions: BlockVersions = { ...versions };
+    if (remaining.length > 0) nextBlockVersions[blockId] = remaining;
+    else delete nextBlockVersions[blockId];
+
+    return this.persist(
+      orderId,
+      { ...state.generated, blockVersions: nextBlockVersions },
+      next,
+      state.revision,
+      expert.id,
+      `restore:${blockId}`,
     );
   }
 
@@ -266,6 +314,7 @@ export class ReadingWorkspaceService {
     revision: number,
     expertId: string,
     action: string,
+    snapshot?: { blockId: string; value: unknown },
   ) {
     reading.lecture = this.buildCanonicalLecture(reading);
     const quality = this.quality.validate(reading);
@@ -284,11 +333,24 @@ export class ReadingWorkspaceService {
       },
     ];
     const pipeline = this.toRecord(generated.pipeline);
+    const blockVersions = this.readBlockVersions(generated);
+    if (snapshot) {
+      const priorVersions = blockVersions[snapshot.blockId] ?? [];
+      blockVersions[snapshot.blockId] = [
+        ...priorVersions,
+        {
+          at: new Date().toISOString(),
+          expertId,
+          value: this.clone(snapshot.value),
+        },
+      ].slice(-5);
+    }
 
     const payload: JsonRecord = {
       ...generated,
       ...reading,
       readingRevision: nextRevision,
+      blockVersions,
       lastExpertEditAt: new Date().toISOString(),
       lastExpertEditBy: expertId,
       expertEditHistory,
@@ -306,7 +368,14 @@ export class ReadingWorkspaceService {
       data: { generatedContent: payload as Prisma.InputJsonValue },
     });
 
-    return { reading, revision: nextRevision, quality };
+    return {
+      reading,
+      revision: nextRevision,
+      quality,
+      restorableBlocks: Object.entries(blockVersions)
+        .filter(([, versions]) => versions.length > 0)
+        .map(([blockId]) => blockId),
+    };
   }
 
   private readCanonical(generated: JsonRecord): CanonicalReadingContent | null {
@@ -320,6 +389,26 @@ export class ReadingWorkspaceService {
 
   private readRevision(generated: JsonRecord): number {
     return typeof generated.readingRevision === 'number' ? generated.readingRevision : 0;
+  }
+
+  private readBlockVersions(generated: JsonRecord): BlockVersions {
+    if (!this.isRecord(generated.blockVersions)) return {};
+    const result: BlockVersions = {};
+    for (const [blockId, rawVersions] of Object.entries(generated.blockVersions)) {
+      if (!Array.isArray(rawVersions)) continue;
+      const versions = rawVersions
+        .filter((entry): entry is JsonRecord => this.isRecord(entry))
+        .filter(
+          (entry) => typeof entry.at === 'string' && typeof entry.expertId === 'string',
+        )
+        .map((entry) => ({
+          at: entry.at as string,
+          expertId: entry.expertId as string,
+          value: entry.value,
+        }));
+      if (versions.length > 0) result[blockId] = versions.slice(-5);
+    }
+    return result;
   }
 
   private assertRevision(expected: number | undefined, current: number) {
@@ -390,22 +479,33 @@ export class ReadingWorkspaceService {
     throw new BadRequestException(`Bloc inconnu : ${blockId}`);
   }
 
-  private getTextBlock(reading: CanonicalReadingContent, blockId: string): string | null {
+  private getBlockValue(reading: CanonicalReadingContent, blockId: string): unknown {
     if (blockId === 'introduction') return reading.pdf_content.introduction;
     if (blockId === 'archetype_reveal') return reading.pdf_content.archetype_reveal;
     if (blockId === 'life_mission') return reading.pdf_content.life_mission;
     if (blockId === 'conclusion') return reading.pdf_content.conclusion;
     if (blockId.startsWith('section.')) {
-      return (
-        reading.pdf_content.sections.find(
-          (section) => section.domain === blockId.slice('section.'.length),
-        )?.content ?? null
+      const section = reading.pdf_content.sections.find(
+        (candidate) => candidate.domain === blockId.slice('section.'.length),
       );
+      if (!section) throw new BadRequestException(`Bloc inconnu : ${blockId}`);
+      return this.clone(section);
     }
     if (blockId.startsWith('insight.')) {
-      const index = this.indexFromBlock(blockId, 'insight.', 4);
-      return reading.pdf_content.karmic_insights[index] ?? null;
+      return reading.pdf_content.karmic_insights[this.indexFromBlock(blockId, 'insight.', 4)];
     }
+    if (blockId.startsWith('ritual.')) {
+      return this.clone(
+        reading.pdf_content.rituals[this.indexFromBlock(blockId, 'ritual.', 2)],
+      );
+    }
+    throw new BadRequestException(`Bloc inconnu : ${blockId}`);
+  }
+
+  private getTextBlock(reading: CanonicalReadingContent, blockId: string): string | null {
+    const value = this.getBlockValue(reading, blockId);
+    if (typeof value === 'string') return value;
+    if (this.isRecord(value) && typeof value.content === 'string') return value.content;
     return null;
   }
 
