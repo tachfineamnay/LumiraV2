@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Pencil, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Check, History, Loader2, Pencil, RotateCcw, Sparkles, X } from 'lucide-react';
 import type {
   StructuredReading,
   StructuredRitual,
@@ -13,8 +13,11 @@ interface StructuredReadingEditorProps {
   readOnly: boolean;
   savingBlockId: string | null;
   revisingBlockId: string | null;
+  restoringBlockId: string | null;
+  restorableBlocks: string[];
   onSaveBlock: (blockId: string, value: unknown) => Promise<void>;
   onReviseBlock: (blockId: string, instruction: string) => Promise<void>;
+  onRestoreBlock: (blockId: string) => Promise<void>;
 }
 
 const DOMAIN_LABELS: Record<string, string> = {
@@ -33,8 +36,11 @@ export function StructuredReadingEditor({
   readOnly,
   savingBlockId,
   revisingBlockId,
+  restoringBlockId,
+  restorableBlocks,
   onSaveBlock,
   onReviseBlock,
+  onRestoreBlock,
 }: StructuredReadingEditorProps) {
   const blocks = useMemo(
     () => [
@@ -76,8 +82,11 @@ export function StructuredReadingEditor({
           readOnly={readOnly}
           isSaving={savingBlockId === block.id}
           isRevising={revisingBlockId === block.id}
+          isRestoring={restoringBlockId === block.id}
+          canRestore={restorableBlocks.includes(block.id)}
           onSave={(value) => onSaveBlock(block.id, value)}
           onRevise={(instruction) => onReviseBlock(block.id, instruction)}
+          onRestore={() => onRestoreBlock(block.id)}
         />
       ))}
     </div>
@@ -91,19 +100,24 @@ interface ReadingBlockCardProps {
   readOnly: boolean;
   isSaving: boolean;
   isRevising: boolean;
+  isRestoring: boolean;
+  canRestore: boolean;
   onSave: (value: unknown) => Promise<void>;
   onRevise: (instruction: string) => Promise<void>;
+  onRestore: () => Promise<void>;
 }
 
 function ReadingBlockCard({
-  blockId,
   label,
   value,
   readOnly,
   isSaving,
   isRevising,
+  isRestoring,
+  canRestore,
   onSave,
   onRevise,
+  onRestore,
 }: ReadingBlockCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -122,7 +136,6 @@ function ReadingBlockCard({
       : isSection
         ? value.content
         : `${value.description}\n\n${value.instructions.map((item, index) => `${index + 1}. ${item}`).join('\n')}`;
-
   const canRevise = !isRitual;
 
   const save = async () => {
@@ -137,15 +150,39 @@ function ReadingBlockCard({
     setShowRevision(false);
   };
 
+  const restore = async () => {
+    if (!window.confirm('Restaurer la version précédente de ce bloc ?')) return;
+    await onRestore();
+    setEditing(false);
+    setShowRevision(false);
+  };
+
   return (
     <article className="overflow-hidden rounded-2xl border border-desk-border bg-desk-surface">
       <header className="flex items-center justify-between gap-3 border-b border-desk-border bg-desk-card/60 px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-desk-text">{label}</p>
-          <p className="mt-0.5 text-[11px] text-desk-subtle">{countWords(textForDisplay)} mots</p>
+          <p className="mt-0.5 text-[11px] text-desk-subtle">
+            {countWords(textForDisplay)} mots
+          </p>
         </div>
         {!readOnly && (
           <div className="flex items-center gap-1">
+            {canRestore && (
+              <button
+                type="button"
+                onClick={() => void restore()}
+                disabled={isRestoring}
+                title="Restaurer la version précédente"
+                className="rounded-lg p-2 text-desk-muted hover:bg-desk-hover hover:text-desk-text disabled:opacity-50"
+              >
+                {isRestoring ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <History className="h-4 w-4" />
+                )}
+              </button>
+            )}
             {canRevise && (
               <button
                 type="button"
@@ -154,7 +191,11 @@ function ReadingBlockCard({
                 title="Corriger ce bloc avec EDITOR"
                 className="rounded-lg p-2 text-amber-600 hover:bg-amber-500/10 disabled:opacity-50"
               >
-                {isRevising ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {isRevising ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
               </button>
             )}
             <button
@@ -174,7 +215,9 @@ function ReadingBlockCard({
 
       {showRevision && !readOnly && (
         <div className="border-b border-amber-500/20 bg-amber-500/5 p-3">
-          <label className="text-xs font-medium text-amber-700">Instruction ciblée pour EDITOR</label>
+          <label className="text-xs font-medium text-amber-700">
+            Instruction ciblée pour EDITOR
+          </label>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <input
               value={instruction}
@@ -198,7 +241,9 @@ function ReadingBlockCard({
         {editing && !readOnly ? (
           <BlockEditor value={draft} onChange={setDraft} />
         ) : (
-          <div className="whitespace-pre-wrap text-[15px] leading-7 text-desk-text">{textForDisplay}</div>
+          <div className="whitespace-pre-wrap text-[15px] leading-7 text-desk-text">
+            {textForDisplay}
+          </div>
         )}
       </div>
 
@@ -220,7 +265,11 @@ function ReadingBlockCard({
             disabled={isSaving}
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
             Enregistrer
           </button>
         </footer>
@@ -283,7 +332,9 @@ function BlockEditor({
       <div className="space-y-2">
         {value.instructions.map((instruction, index) => (
           <div key={index} className="flex items-start gap-2">
-            <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-xs font-semibold text-amber-700">{index + 1}</span>
+            <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-xs font-semibold text-amber-700">
+              {index + 1}
+            </span>
             <textarea
               value={instruction}
               onChange={(event) => {
