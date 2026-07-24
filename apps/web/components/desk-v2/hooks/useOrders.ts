@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import expertApi from '@/lib/expertApi';
-import type { Order, OrderStatus, KanbanColumnId } from '../types';
+import type { KanbanColumnId, Order, OrderStatus } from '../types';
 
 interface UseOrdersOptions {
   autoFetch?: boolean;
@@ -18,7 +18,6 @@ interface OrdersState {
 
 export function useOrders(options: UseOrdersOptions = {}) {
   const { autoFetch = true, pollInterval = 30_000 } = options;
-
   const [orders, setOrders] = useState<OrdersState>({
     paid: [],
     processing: [],
@@ -30,32 +29,37 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
   const fetchOrders = useCallback(async () => {
     try {
-      // Fetch all order types - use Promise.allSettled to handle partial failures
       const results = await Promise.allSettled([
         expertApi.get('/expert/orders/paid'),
         expertApi.get('/expert/orders/processing'),
         expertApi.get('/expert/orders/validation'),
-        expertApi.get('/expert/orders/history?limit=20'),
+        expertApi.get('/expert/orders/history?limit=50'),
       ]);
 
-      // Extract data safely, fallback to empty array if endpoint fails (e.g., 404)
       const extractData = (result: PromiseSettledResult<{ data: { data?: Order[] } }>) => {
-        if (result.status === 'fulfilled') {
-          return result.value.data.data || [];
-        }
+        if (result.status === 'fulfilled') return result.value.data.data || [];
         console.warn('[useOrders] Endpoint failed:', result.reason);
         return [];
       };
 
+      const paid = extractData(results[0] as PromiseSettledResult<{ data: { data?: Order[] } }>);
+      const running = extractData(results[1] as PromiseSettledResult<{ data: { data?: Order[] } }>);
+      const validation = extractData(results[2] as PromiseSettledResult<{ data: { data?: Order[] } }>);
+      const history = extractData(results[3] as PromiseSettledResult<{ data: { data?: Order[] } }>);
+      const failed = history.filter((order) => order.status === 'FAILED');
+      const completed = history.filter((order) =>
+        ['COMPLETED', 'REFUNDED'].includes(order.status),
+      );
+
       setOrders({
-        paid: extractData(results[0] as PromiseSettledResult<{ data: { data?: Order[] } }>),
-        processing: extractData(results[1] as PromiseSettledResult<{ data: { data?: Order[] } }>),
-        validation: extractData(results[2] as PromiseSettledResult<{ data: { data?: Order[] } }>),
-        completed: extractData(results[3] as PromiseSettledResult<{ data: { data?: Order[] } }>),
+        paid,
+        processing: [...running, ...failed],
+        validation,
+        completed,
       });
       setError(null);
-    } catch (err) {
-      console.error('[useOrders] Fetch error:', err);
+    } catch (requestError) {
+      console.error('[useOrders] Fetch error:', requestError);
       setError('Erreur de chargement des commandes');
     } finally {
       setIsLoading(false);
@@ -64,14 +68,13 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
   const moveOrder = useCallback(
     (orderId: string, fromColumn: KanbanColumnId, toColumn: KanbanColumnId) => {
-      setOrders((prev) => {
-        const order = prev[fromColumn].find((o) => o.id === orderId);
-        if (!order) return prev;
-
+      setOrders((previous) => {
+        const order = previous[fromColumn].find((candidate) => candidate.id === orderId);
+        if (!order) return previous;
         return {
-          ...prev,
-          [fromColumn]: prev[fromColumn].filter((o) => o.id !== orderId),
-          [toColumn]: [order, ...prev[toColumn]],
+          ...previous,
+          [fromColumn]: previous[fromColumn].filter((candidate) => candidate.id !== orderId),
+          [toColumn]: [order, ...previous[toColumn]],
         };
       });
     },
@@ -79,8 +82,8 @@ export function useOrders(options: UseOrdersOptions = {}) {
   );
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
-    setOrders((prev) => {
-      const result = { ...prev };
+    setOrders((previous) => {
+      const result = { ...previous };
       for (const column of Object.keys(result) as KanbanColumnId[]) {
         result[column] = result[column].map((order) =>
           order.id === orderId ? { ...order, ...updates } : order,
@@ -92,37 +95,28 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
   const addOrder = useCallback((order: Order) => {
     const column = getColumnForStatus(order.status);
-    if (column) {
-      setOrders((prev) => ({
-        ...prev,
-        [column]: [order, ...prev[column]],
-      }));
-    }
+    if (!column) return;
+    setOrders((previous) => ({ ...previous, [column]: [order, ...previous[column]] }));
   }, []);
 
   const removeOrder = useCallback((orderId: string) => {
-    setOrders((prev) => {
-      const result = { ...prev };
+    setOrders((previous) => {
+      const result = { ...previous };
       for (const column of Object.keys(result) as KanbanColumnId[]) {
-        result[column] = result[column].filter((o) => o.id !== orderId);
+        result[column] = result[column].filter((order) => order.id !== orderId);
       }
       return result;
     });
   }, []);
 
-  // Auto fetch on mount
   useEffect(() => {
-    if (autoFetch) {
-      fetchOrders();
-    }
+    if (autoFetch) void fetchOrders();
   }, [autoFetch, fetchOrders]);
 
-  // Polling
   useEffect(() => {
-    if (pollInterval && pollInterval > 0) {
-      const interval = setInterval(fetchOrders, pollInterval);
-      return () => clearInterval(interval);
-    }
+    if (!pollInterval || pollInterval <= 0) return;
+    const interval = window.setInterval(() => void fetchOrders(), pollInterval);
+    return () => window.clearInterval(interval);
   }, [pollInterval, fetchOrders]);
 
   const totalCount = orders.paid.length + orders.processing.length + orders.validation.length;
@@ -145,10 +139,12 @@ function getColumnForStatus(status: OrderStatus): KanbanColumnId | null {
     case 'PAID':
       return 'paid';
     case 'PROCESSING':
+    case 'FAILED':
       return 'processing';
     case 'AWAITING_VALIDATION':
       return 'validation';
     case 'COMPLETED':
+    case 'REFUNDED':
       return 'completed';
     default:
       return null;
