@@ -9,19 +9,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PdfFactory, ReadingPdfData } from '../../services/factory/PdfFactory';
 import { VertexOracle } from '../../services/factory/VertexOracle';
 import { productLevelFromAmountCents } from '../../services/factory/product-level.util';
-import { ExpertService } from './expert.service';
-import { ProductionControlService } from './production-control.service';
-import {
-  assertReadingDeliverable,
-  ReadingQualityReport,
-  ReadingQualityValidator,
-} from './reading-quality.validator';
-import {
-  buildGeneratedReadingVersion,
-  CanonicalReadingContent,
-  CanonicalReadingRitual,
-  CanonicalReadingSection,
-} from './reading-version';
 import { ValidateContentDto } from './dto/validate-content.dto';
 import {
   GenerateWorkspaceReadingDto,
@@ -31,6 +18,17 @@ import {
   SaveStructuredReadingDto,
   SealStructuredReadingDto,
 } from './dto/reading-workspace.dto';
+import { ExpertService } from './expert.service';
+import { ProductionControlService } from './production-control.service';
+import {
+  assertReadingDeliverable,
+  ReadingQualityValidator,
+} from './reading-quality.validator';
+import {
+  buildGeneratedReadingVersion,
+  CanonicalReadingContent,
+  CanonicalReadingRitual,
+} from './reading-version';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -58,32 +56,30 @@ export class ReadingWorkspaceService {
 
   async getWorkspace(orderId: string) {
     const order = await this.expertService.getOrderById(orderId);
-    const generated = this.asRecord(order.generatedContent);
+    const generated = this.toRecord(order.generatedContent);
     const reading = this.readCanonical(generated);
-    const revision = this.readRevision(generated);
-    const quality = reading ? this.quality.validate(reading) : null;
-    const history = await this.buildHistory(orderId, generated);
 
     return {
       order,
       reading,
-      revision,
-      quality,
-      history,
+      revision: this.readRevision(generated),
+      quality: reading ? this.quality.validate(reading) : null,
+      history: await this.buildHistory(orderId, generated),
     };
   }
 
   async generate(orderId: string, dto: GenerateWorkspaceReadingDto, expert: Expert) {
     const priorities = dto.priorities?.filter(Boolean) ?? [];
-    const tone = dto.tone ? `Style de restitution : ${dto.tone}` : '';
-    const priorityText = priorities.length
-      ? `Domaines prioritaires : ${priorities.join(', ')}`
-      : '';
-    const expertInstructions = [priorityText, tone].filter(Boolean).join('\n');
+    const instructions = [
+      priorities.length ? `Domaines prioritaires : ${priorities.join(', ')}` : '',
+      dto.tone ? `Style de restitution : ${dto.tone}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     return this.production.enqueueReading(orderId, expert, {
       expertPrompt: dto.orientation.trim(),
-      expertInstructions: expertInstructions || undefined,
+      expertInstructions: instructions || undefined,
     });
   }
 
@@ -92,7 +88,16 @@ export class ReadingWorkspaceService {
     dto: SaveStructuredReadingDto,
     expert: Expert,
   ) {
-    return this.persistReading(orderId, dto.content, dto.expectedRevision, expert.id, 'draft');
+    const state = await this.loadEditable(orderId);
+    this.assertRevision(dto.expectedRevision, state.revision);
+    return this.persist(
+      orderId,
+      state.generated,
+      dto.content,
+      state.revision,
+      expert.id,
+      'draft',
+    );
   }
 
   async patchBlock(
@@ -101,16 +106,15 @@ export class ReadingWorkspaceService {
     dto: PatchReadingBlockDto,
     expert: Expert,
   ) {
-    const { generated, reading, revision } = await this.loadEditableReading(orderId);
-    this.assertRevision(dto.expectedRevision, revision);
-
-    const next = this.clone(reading);
-    this.setBlockValue(next, blockId, dto.value);
-    return this.persistReadingFromLoaded(
+    const state = await this.loadEditable(orderId);
+    this.assertRevision(dto.expectedRevision, state.revision);
+    const next = this.clone(state.reading);
+    this.setBlock(next, blockId, dto.value);
+    return this.persist(
       orderId,
-      generated,
+      state.generated,
       next,
-      revision,
+      state.revision,
       expert.id,
       `block:${blockId}`,
     );
@@ -125,9 +129,9 @@ export class ReadingWorkspaceService {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Commande non trouvée');
 
-    const { generated, reading, revision } = await this.loadEditableReading(orderId);
-    this.assertRevision(dto.expectedRevision, revision);
-    const current = this.getTextBlockValue(reading, blockId);
+    const state = await this.loadEditable(orderId);
+    this.assertRevision(dto.expectedRevision, state.revision);
+    const current = this.getTextBlock(state.reading, blockId);
     if (!current) {
       throw new BadRequestException(
         'La correction assistée est disponible uniquement pour les blocs textuels.',
@@ -143,26 +147,25 @@ export class ReadingWorkspaceService {
       },
     });
 
-    const next = this.clone(reading);
-    this.setBlockValue(next, blockId, refined.trim());
-    return this.persistReadingFromLoaded(
+    const next = this.clone(state.reading);
+    this.setBlock(next, blockId, refined.trim());
+    return this.persist(
       orderId,
-      generated,
+      state.generated,
       next,
-      revision,
+      state.revision,
       expert.id,
       `editor:${blockId}`,
     );
   }
 
   async repairSafeIssues(orderId: string, expert: Expert) {
-    const { generated, reading, revision } = await this.loadEditableReading(orderId);
-    const next = this.cleanDeterministically(reading);
-    return this.persistReadingFromLoaded(
+    const state = await this.loadEditable(orderId);
+    return this.persist(
       orderId,
-      generated,
-      next,
-      revision,
+      state.generated,
+      this.clean(state.reading),
+      state.revision,
       expert.id,
       'safe-repair',
     );
@@ -170,7 +173,7 @@ export class ReadingWorkspaceService {
 
   async previewPdf(orderId: string): Promise<{ buffer: Buffer; filename: string }> {
     const order = await this.expertService.getOrderById(orderId);
-    const reading = this.readCanonical(this.asRecord(order.generatedContent));
+    const reading = this.readCanonical(this.toRecord(order.generatedContent));
     if (!reading) throw new BadRequestException('Aucune lecture structurée à prévisualiser');
     assertReadingDeliverable(reading);
 
@@ -194,14 +197,17 @@ export class ReadingWorkspaceService {
       generatedAt: new Date().toISOString(),
     };
 
-    const buffer = await this.pdfFactory.generatePdf('reading', data);
-    return { buffer, filename: `${order.orderNumber}-apercu.pdf` };
+    return {
+      buffer: await this.pdfFactory.generatePdf('reading', data),
+      filename: `${order.orderNumber}-apercu.pdf`,
+    };
   }
 
   async seal(orderId: string, dto: SealStructuredReadingDto, expert: Expert) {
     const order = await this.expertService.getOrderById(orderId);
-    const reading = this.readCanonical(this.asRecord(order.generatedContent));
+    const reading = this.readCanonical(this.toRecord(order.generatedContent));
     if (!reading) throw new BadRequestException('Aucune lecture structurée à sceller');
+
     const report = this.quality.validate(reading);
     if (report.status === 'BLOCKED') {
       throw new BadRequestException({
@@ -231,33 +237,29 @@ export class ReadingWorkspaceService {
   async getHistory(orderId: string) {
     const order = await this.expertService.getOrderById(orderId);
     return {
-      history: await this.buildHistory(orderId, this.asRecord(order.generatedContent)),
+      history: await this.buildHistory(orderId, this.toRecord(order.generatedContent)),
     };
   }
 
-  private async persistReading(
-    orderId: string,
-    reading: CanonicalReadingContent,
-    expectedRevision: number | undefined,
-    expertId: string,
-    action: string,
-  ) {
+  private async loadEditable(orderId: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Commande non trouvée');
-    const generated = this.asRecord(order.generatedContent);
-    const revision = this.readRevision(generated);
-    this.assertRevision(expectedRevision, revision);
-    return this.persistReadingFromLoaded(
-      orderId,
+    if (!['AWAITING_VALIDATION', 'FAILED'].includes(order.status)) {
+      throw new BadRequestException(`Lecture non modifiable dans l’état ${order.status}`);
+    }
+
+    const generated = this.toRecord(order.generatedContent);
+    const reading = this.readCanonical(generated);
+    if (!reading) throw new BadRequestException('Lecture structurée absente');
+
+    return {
       generated,
       reading,
-      revision,
-      expertId,
-      action,
-    );
+      revision: this.readRevision(generated),
+    };
   }
 
-  private async persistReadingFromLoaded(
+  private async persist(
     orderId: string,
     generated: JsonRecord,
     reading: CanonicalReadingContent,
@@ -267,17 +269,20 @@ export class ReadingWorkspaceService {
   ) {
     const quality = this.quality.validate(reading);
     const nextRevision = revision + 1;
-    const existingPipeline = this.asRecord(generated.pipeline);
-    const history = Array.isArray(generated.expertEditHistory)
+    const priorHistory = Array.isArray(generated.expertEditHistory)
       ? generated.expertEditHistory.slice(-49)
       : [];
-    history.push({
-      at: new Date().toISOString(),
-      action,
-      expertId,
-      revision: nextRevision,
-      qualityStatus: quality.status,
-    });
+    const expertEditHistory = [
+      ...priorHistory,
+      {
+        at: new Date().toISOString(),
+        action,
+        expertId,
+        revision: nextRevision,
+        qualityStatus: quality.status,
+      },
+    ];
+    const pipeline = this.toRecord(generated.pipeline);
 
     const payload: JsonRecord = {
       ...generated,
@@ -285,9 +290,9 @@ export class ReadingWorkspaceService {
       readingRevision: nextRevision,
       lastExpertEditAt: new Date().toISOString(),
       lastExpertEditBy: expertId,
-      expertEditHistory: history,
+      expertEditHistory,
       pipeline: {
-        ...existingPipeline,
+        ...pipeline,
         qualityStatus: quality.status,
         blockingIssues: quality.blockingIssues,
         warnings: quality.warnings,
@@ -301,18 +306,6 @@ export class ReadingWorkspaceService {
     });
 
     return { reading, revision: nextRevision, quality };
-  }
-
-  private async loadEditableReading(orderId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Commande non trouvée');
-    if (!['AWAITING_VALIDATION', 'FAILED'].includes(order.status)) {
-      throw new BadRequestException(`Lecture non modifiable dans l’état ${order.status}`);
-    }
-    const generated = this.asRecord(order.generatedContent);
-    const reading = this.readCanonical(generated);
-    if (!reading) throw new BadRequestException('Lecture structurée absente');
-    return { generated, reading, revision: this.readRevision(generated) };
   }
 
   private readCanonical(generated: JsonRecord): CanonicalReadingContent | null {
@@ -329,56 +322,59 @@ export class ReadingWorkspaceService {
   }
 
   private assertRevision(expected: number | undefined, current: number) {
-    if (expected !== undefined && expected !== current) {
-      throw new ConflictException({
-        message: 'La lecture a été modifiée ailleurs. Rechargez avant de poursuivre.',
-        expectedRevision: expected,
-        currentRevision: current,
-      });
-    }
+    if (expected === undefined || expected === current) return;
+    throw new ConflictException({
+      message: 'La lecture a été modifiée ailleurs. Rechargez avant de poursuivre.',
+      expectedRevision: expected,
+      currentRevision: current,
+    });
   }
 
-  private setBlockValue(reading: CanonicalReadingContent, blockId: string, value: unknown) {
-    if (blockId === 'introduction') return this.assignString(reading.pdf_content, 'introduction', value);
-    if (blockId === 'archetype_reveal') {
-      return this.assignString(reading.pdf_content, 'archetype_reveal', value);
+  private setBlock(reading: CanonicalReadingContent, blockId: string, value: unknown) {
+    if (blockId === 'introduction') {
+      reading.pdf_content.introduction = this.requireString(value, blockId);
+      return;
     }
-    if (blockId === 'life_mission') return this.assignString(reading.pdf_content, 'life_mission', value);
-    if (blockId === 'conclusion') return this.assignString(reading.pdf_content, 'conclusion', value);
+    if (blockId === 'archetype_reveal') {
+      reading.pdf_content.archetype_reveal = this.requireString(value, blockId);
+      return;
+    }
+    if (blockId === 'life_mission') {
+      reading.pdf_content.life_mission = this.requireString(value, blockId);
+      return;
+    }
+    if (blockId === 'conclusion') {
+      reading.pdf_content.conclusion = this.requireString(value, blockId);
+      return;
+    }
 
     if (blockId.startsWith('section.')) {
       const domain = blockId.slice('section.'.length);
       const index = reading.pdf_content.sections.findIndex((section) => section.domain === domain);
       if (index < 0) throw new BadRequestException(`Section inconnue : ${domain}`);
+      const current = reading.pdf_content.sections[index];
       if (typeof value === 'string') {
-        reading.pdf_content.sections[index].content = value;
-      } else if (this.isRecord(value)) {
-        const current = reading.pdf_content.sections[index];
-        reading.pdf_content.sections[index] = {
-          domain: current.domain,
-          title: typeof value.title === 'string' ? value.title : current.title,
-          content: typeof value.content === 'string' ? value.content : current.content,
-        };
-      } else {
-        throw new BadRequestException('Valeur de section invalide');
+        current.content = value;
+        return;
       }
+      if (!this.isRecord(value)) throw new BadRequestException('Valeur de section invalide');
+      reading.pdf_content.sections[index] = {
+        domain: current.domain,
+        title: typeof value.title === 'string' ? value.title : current.title,
+        content: typeof value.content === 'string' ? value.content : current.content,
+      };
       return;
     }
 
     if (blockId.startsWith('insight.')) {
-      const index = Number.parseInt(blockId.slice('insight.'.length), 10);
-      if (!Number.isInteger(index) || index < 0 || index >= 4 || typeof value !== 'string') {
-        throw new BadRequestException('Insight invalide');
-      }
-      reading.pdf_content.karmic_insights[index] = value;
+      const index = this.indexFromBlock(blockId, 'insight.', 4);
+      reading.pdf_content.karmic_insights[index] = this.requireString(value, blockId);
       return;
     }
 
     if (blockId.startsWith('ritual.')) {
-      const index = Number.parseInt(blockId.slice('ritual.'.length), 10);
-      if (!Number.isInteger(index) || index < 0 || index >= 2 || !this.isRecord(value)) {
-        throw new BadRequestException('Rituel invalide');
-      }
+      const index = this.indexFromBlock(blockId, 'ritual.', 2);
+      if (!this.isRecord(value)) throw new BadRequestException('Rituel invalide');
       const ritual: CanonicalReadingRitual = {
         name: typeof value.name === 'string' ? value.name : '',
         description: typeof value.description === 'string' ? value.description : '',
@@ -393,7 +389,7 @@ export class ReadingWorkspaceService {
     throw new BadRequestException(`Bloc inconnu : ${blockId}`);
   }
 
-  private getTextBlockValue(reading: CanonicalReadingContent, blockId: string): string | null {
+  private getTextBlock(reading: CanonicalReadingContent, blockId: string): string | null {
     if (blockId === 'introduction') return reading.pdf_content.introduction;
     if (blockId === 'archetype_reveal') return reading.pdf_content.archetype_reveal;
     if (blockId === 'life_mission') return reading.pdf_content.life_mission;
@@ -406,20 +402,30 @@ export class ReadingWorkspaceService {
       );
     }
     if (blockId.startsWith('insight.')) {
-      const index = Number.parseInt(blockId.slice('insight.'.length), 10);
+      const index = this.indexFromBlock(blockId, 'insight.', 4);
       return reading.pdf_content.karmic_insights[index] ?? null;
     }
     return null;
   }
 
-  private assignString(target: Record<string, unknown>, key: string, value: unknown) {
-    if (typeof value !== 'string') throw new BadRequestException(`Le bloc ${key} doit être un texte`);
-    target[key] = value;
+  private indexFromBlock(blockId: string, prefix: string, max: number): number {
+    const index = Number.parseInt(blockId.slice(prefix.length), 10);
+    if (!Number.isInteger(index) || index < 0 || index >= max) {
+      throw new BadRequestException(`Index de bloc invalide : ${blockId}`);
+    }
+    return index;
   }
 
-  private cleanDeterministically<T>(input: T): T {
-    if (typeof input === 'string') {
-      return input
+  private requireString(value: unknown, blockId: string): string {
+    if (typeof value !== 'string') {
+      throw new BadRequestException(`Le bloc ${blockId} doit être un texte`);
+    }
+    return value;
+  }
+
+  private clean<T>(value: T): T {
+    if (typeof value === 'string') {
+      return value
         .replace(/```/g, '')
         .replace(/\*\*/g, '')
         .replace(/__/g, '')
@@ -428,18 +434,22 @@ export class ReadingWorkspaceService {
         .replace(/\n{3,}/g, '\n\n')
         .trim() as T;
     }
-    if (Array.isArray(input)) return input.map((item) => this.cleanDeterministically(item)) as T;
-    if (this.isRecord(input)) {
+    if (Array.isArray(value)) return value.map((item) => this.clean(item)) as T;
+    if (this.isRecord(value)) {
       return Object.fromEntries(
-        Object.entries(input).map(([key, value]) => [key, this.cleanDeterministically(value)]),
+        Object.entries(value).map(([key, item]) => [key, this.clean(item)]),
       ) as T;
     }
-    return input;
+    return value;
   }
 
-  private async buildHistory(orderId: string, generated: JsonRecord): Promise<WorkspaceHistoryEvent[]> {
+  private async buildHistory(
+    orderId: string,
+    generated: JsonRecord,
+  ): Promise<WorkspaceHistoryEvent[]> {
     const events: WorkspaceHistoryEvent[] = [];
-    const pipeline = this.asRecord(generated.pipeline);
+    const pipeline = this.toRecord(generated.pipeline);
+
     if (typeof pipeline.scribeCompletedAt === 'string') {
       events.push({
         id: 'pipeline-scribe',
@@ -474,45 +484,41 @@ export class ReadingWorkspaceService {
       });
     }
 
-    try {
-      const versions = await this.expertService.getContentVersions(orderId);
-      for (const [index, version] of (versions.versions ?? []).entries()) {
-        events.push({
-          id: `legacy-version-${index}`,
-          at: version.timestamp,
-          type: 'DRAFT_VERSION',
-          label: 'Version de travail enregistrée',
-          detail: version.action,
-        });
-      }
-    } catch {
-      // Legacy history is best-effort only.
-    }
+    const versions = await this.expertService.getContentVersions(orderId);
+    versions.versions.forEach((version, index) => {
+      events.push({
+        id: `draft-${index}-${version.timestamp}`,
+        at: version.timestamp,
+        type: 'DRAFT_VERSION',
+        label: 'Version de travail enregistrée',
+        detail: version.action,
+      });
+    });
 
-    try {
-      const deliveries = await this.expertService.listOrderDeliveries(orderId);
-      for (const delivery of deliveries.deliveries ?? []) {
-        events.push({
-          id: `delivery-${delivery.id}`,
-          at: delivery.sealedAt ?? delivery.createdAt,
-          type: 'DELIVERY',
-          label: `PDF version ${delivery.version} livré`,
-          version: delivery.version,
-          status: delivery.emailStatus,
-        });
-      }
-    } catch {
-      // Delivery history may not exist before the first seal.
-    }
+    const deliveries = await this.expertService.listOrderDeliveries(orderId);
+    deliveries.deliveries.forEach((delivery) => {
+      events.push({
+        id: `delivery-${delivery.id}`,
+        at: delivery.sealedAt ?? delivery.createdAt,
+        type: 'DELIVERY',
+        label: `PDF version ${delivery.version} livré`,
+        version: delivery.version,
+        status: delivery.emailStatus,
+      });
+    });
 
-    return events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return events.sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime());
+  }
+
+  private readRevisionEntry(value: unknown): JsonRecord {
+    return this.toRecord(value);
   }
 
   private clone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T;
   }
 
-  private asRecord(value: unknown): JsonRecord {
+  private toRecord(value: unknown): JsonRecord {
     return this.isRecord(value) ? value : {};
   }
 
