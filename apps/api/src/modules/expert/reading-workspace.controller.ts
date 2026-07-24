@@ -26,6 +26,8 @@ import {
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { ReadingWorkspaceService } from './reading-workspace.service';
 
+type JsonRecord = Record<string, unknown>;
+
 @Controller('expert/orders/:id/reading')
 @UseGuards(ExpertAuthGuard, RolesGuard)
 export class ReadingWorkspaceController {
@@ -33,7 +35,21 @@ export class ReadingWorkspaceController {
 
   @Get()
   async getWorkspace(@Param('id') orderId: string) {
-    return this.workspace.getWorkspace(orderId);
+    const result = await this.workspace.getWorkspace(orderId);
+    const review = isRecord(result.order.expertReview) ? result.order.expertReview : {};
+    const production = isRecord(review.production) ? review.production : {};
+    const productionActive = production.status === 'QUEUED' || production.status === 'RUNNING';
+
+    if (productionActive && result.order.status !== 'COMPLETED') {
+      return {
+        ...result,
+        order: {
+          ...result.order,
+          status: 'PROCESSING' as const,
+        },
+      };
+    }
+    return result;
   }
 
   @Post('generate')
@@ -123,4 +139,8 @@ export class ReadingWorkspaceController {
   async getHistory(@Param('id') orderId: string) {
     return this.workspace.getHistory(orderId);
   }
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
