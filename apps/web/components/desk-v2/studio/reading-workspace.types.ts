@@ -75,5 +75,6 @@ export interface ReadingWorkspacePayload {
   reading: StructuredReading | null;
   revision: number;
   quality: QualityReport | null;
+  restorableBlocks: string[];
   history: WorkspaceHistoryEvent[];
 }
