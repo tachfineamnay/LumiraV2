@@ -1,10 +1,8 @@
 'use client';
 
-import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion } from 'framer-motion';
 import { OrderCard } from './OrderCard';
-import { KanbanColumn as KanbanColumnType, Order } from '../types';
+import type { KanbanColumn as KanbanColumnType, Order } from '../types';
 import type { OrderViewer } from '../hooks/useSocket';
 
 interface KanbanColumnProps {
@@ -14,35 +12,13 @@ interface KanbanColumnProps {
   currentExpertId?: string;
   orderViewers?: Record<string, OrderViewer[]>;
   onClaim?: (orderId: string) => void;
-  onGenerate?: (orderId: string) => void;
-  generatingOrderId?: string | null;
 }
 
 const COLUMN_COLORS = {
-  amber: {
-    header: 'from-amber-500/20 to-amber-600/5',
-    border: 'border-amber-500/20',
-    badge: 'bg-amber-500/20 text-amber-600',
-    dot: 'bg-amber-500',
-  },
-  blue: {
-    header: 'from-blue-500/20 to-blue-600/5',
-    border: 'border-blue-500/20',
-    badge: 'bg-blue-500/20 text-blue-600',
-    dot: 'bg-blue-500',
-  },
-  rose: {
-    header: 'from-rose-500/20 to-rose-600/5',
-    border: 'border-rose-500/20',
-    badge: 'bg-rose-500/20 text-rose-600',
-    dot: 'bg-rose-500',
-  },
-  green: {
-    header: 'from-emerald-500/20 to-emerald-600/5',
-    border: 'border-emerald-500/20',
-    badge: 'bg-emerald-500/20 text-emerald-600',
-    dot: 'bg-emerald-500',
-  },
+  amber: { header: 'from-amber-500/20 to-amber-600/5', badge: 'bg-amber-500/20 text-amber-700' },
+  blue: { header: 'from-blue-500/20 to-blue-600/5', badge: 'bg-blue-500/20 text-blue-700' },
+  rose: { header: 'from-rose-500/20 to-rose-600/5', badge: 'bg-rose-500/20 text-rose-700' },
+  green: { header: 'from-emerald-500/20 to-emerald-600/5', badge: 'bg-emerald-500/20 text-emerald-700' },
 };
 
 export function KanbanColumn({
@@ -52,92 +28,47 @@ export function KanbanColumn({
   currentExpertId,
   orderViewers = {},
   onClaim,
-  onGenerate,
-  generatingOrderId,
 }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: column.id,
-  });
-
-  const colors = COLUMN_COLORS[column.color as keyof typeof COLUMN_COLORS] || COLUMN_COLORS.amber;
-  const isValidationColumn = column.id === 'validation';
-  const hasUrgentOrders = isValidationColumn && orders.length > 0;
-
+  const colors = COLUMN_COLORS[column.color as keyof typeof COLUMN_COLORS] ?? COLUMN_COLORS.amber;
   const myOrdersCount = currentExpertId
-    ? orders.filter(
-        (order) =>
-          (order.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId,
-      ).length
+    ? orders.filter((order) => (order.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId).length
     : 0;
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`
-        w-[85vw] max-w-80 sm:w-80 flex-shrink-0 flex flex-col rounded-xl snap-center
-        bg-desk-surface border transition-colors duration-200
-        ${hasUrgentOrders ? 'border-amber-500/60 shadow-lg shadow-amber-500/10' : isOver ? `${colors.border} bg-desk-card` : 'border-desk-border'}
-      `}
-    >
-      <div className={`p-4 rounded-t-xl bg-gradient-to-b ${colors.header}`}>
-        <div className="flex items-center justify-between">
+    <section className="flex w-[85vw] max-w-80 shrink-0 snap-center flex-col rounded-xl border border-desk-border bg-desk-surface sm:w-80">
+      <header className={`rounded-t-xl bg-gradient-to-b p-4 ${colors.header}`}>
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-lg">{column.icon}</span>
-            <h3 className="font-semibold text-desk-text">{column.title}</h3>
-            {hasUrgentOrders && (
-              <span className="text-xs font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                À valider
-              </span>
-            )}
+            <h2 className="font-semibold text-desk-text">{column.title}</h2>
           </div>
-          <span
-            className={`px-2 py-0.5 rounded-full text-sm font-medium ${colors.badge} ${hasUrgentOrders ? 'animate-pulse' : ''}`}
-          >
-            {orders.length}
-          </span>
+          <span className={`rounded-full px-2 py-0.5 text-sm font-medium ${colors.badge}`}>{orders.length}</span>
         </div>
-        {myOrdersCount > 0 && (
-          <div className="text-[11px] text-emerald-600 font-medium mt-1">
-            dont {myOrdersCount} à moi
+        {myOrdersCount > 0 && <p className="mt-1 text-[11px] font-medium text-emerald-700">{myOrdersCount} à moi</p>}
+      </header>
+
+      <div className="flex-1 space-y-2 overflow-y-auto p-2">
+        {isLoading ? (
+          [1, 2, 3].map((index) => <div key={index} className="h-36 animate-pulse rounded-xl bg-desk-card" />)
+        ) : orders.length === 0 ? (
+          <div className="flex h-32 flex-col items-center justify-center text-desk-muted">
+            <span className="text-2xl">📭</span>
+            <span className="mt-2 text-sm">Aucune lecture</span>
           </div>
+        ) : (
+          orders.map((order, index) => (
+            <motion.div key={order.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}>
+              <OrderCard
+                order={order}
+                columnId={column.id}
+                currentExpertId={currentExpertId}
+                viewers={orderViewers[order.id]}
+                onClaim={onClaim}
+              />
+            </motion.div>
+          ))
         )}
       </div>
-
-      <SortableContext items={orders.map((order) => order.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px]">
-          {isLoading ? (
-            <>
-              {[1, 2, 3].map((index) => (
-                <div key={index} className="h-32 rounded-lg bg-desk-card animate-pulse" />
-              ))}
-            </>
-          ) : orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-desk-muted">
-              <span className="text-2xl mb-2">📭</span>
-              <span className="text-sm">Aucune commande</span>
-            </div>
-          ) : (
-            orders.map((order, index) => (
-              <motion.div
-                key={order.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <OrderCard
-                  order={order}
-                  columnId={column.id}
-                  currentExpertId={currentExpertId}
-                  viewers={orderViewers[order.id]}
-                  onClaim={onClaim}
-                  onGenerate={onGenerate}
-                  generatingOrderId={generatingOrderId}
-                />
-              </motion.div>
-            ))
-          )}
-        </div>
-      </SortableContext>
-    </div>
+    </section>
   );
 }
