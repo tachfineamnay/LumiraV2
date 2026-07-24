@@ -61,6 +61,13 @@ export class ReviseReadingBlockDto {
   expectedRevision?: number;
 }
 
+export class RestoreReadingBlockDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  expectedRevision?: number;
+}
+
 export class SealStructuredReadingDto {
   @IsOptional()
   @IsBoolean()
