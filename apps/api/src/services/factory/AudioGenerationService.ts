@@ -1,5 +1,5 @@
 /**
- * Google Cloud TTS orchestration for private Lumira reading audio.
+ * Multi-provider TTS orchestration for private Lumira reading audio.
  *
  * The full audio is generated from the immutable SEALED ReadingVersion. The
  * Desk production worker must own a RUNNING AUDIO_GENERATION job, unless the
@@ -9,7 +9,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AudioVoice, Prisma } from '@prisma/client';
-import { TextToSpeechClient, protos } from '@google-cloud/text-to-speech';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -17,16 +16,12 @@ import {
   isCanonicalReadingContent,
 } from '../../modules/expert/reading-version';
 import { AudioScriptService } from './AudioScriptService';
+import { GeminiTtsProvider } from './tts/GeminiTtsProvider';
+import { GoogleCloudTtsProvider } from './tts/GoogleCloudTtsProvider';
+import { AudioProviderResult, AudioTtsProvider } from './tts/audio-tts.provider.interface';
 
-const VOICE_MAP: Record<AudioVoice, string> = {
-  FEMININE: 'fr-FR-Neural2-A',
-  MASCULINE: 'fr-FR-Neural2-D',
-};
-
-const JOURNEY_VOICE_MAP: Record<AudioVoice, string> = {
-  FEMININE: 'fr-FR-Journey-F',
-  MASCULINE: 'fr-FR-Journey-D',
-};
+const ALLOWED_PROVIDERS = ['gemini', 'google_cloud'] as const;
+type TtsProviderType = (typeof ALLOWED_PROVIDERS)[number];
 
 interface ManagedProductionState {
   type?: string;
@@ -40,32 +35,35 @@ export interface AudioGenerationResult {
   readingVersionId: string;
   contentHash: string;
   size: number;
+  provider: string;
+  model: string;
+  voice: string;
 }
 
 @Injectable()
 export class AudioGenerationService {
   private readonly logger = new Logger(AudioGenerationService.name);
-  private readonly ttsClient: TextToSpeechClient;
   private readonly s3Client: S3Client;
   private readonly s3Bucket: string;
-  private readonly useJourneyVoices: boolean;
   private readonly allowLegacyFireAndForget: boolean;
   private readonly generateInsightAudio: boolean;
-  private readonly maxChunkCharacters: number;
+
+  private readonly primaryProviderName: TtsProviderType;
+  private readonly fallbackProviderName: TtsProviderType;
+  private readonly fallbackEnabled: boolean;
+  private readonly allowMixedProviders: boolean;
+  private readonly keepExistingOnFailure: boolean;
+
+  private readonly geminiProvider: GeminiTtsProvider;
+  private readonly googleCloudProvider: GoogleCloudTtsProvider;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     @Optional() private readonly audioScriptService?: AudioScriptService,
+    @Optional() geminiTtsProvider?: GeminiTtsProvider,
+    @Optional() googleCloudTtsProvider?: GoogleCloudTtsProvider,
   ) {
-    const keyJson = this.configService.get<string>('GOOGLE_CLOUD_TTS_KEY_JSON');
-    if (keyJson) {
-      const credentials = JSON.parse(Buffer.from(keyJson, 'base64').toString('utf-8'));
-      this.ttsClient = new TextToSpeechClient({ credentials });
-    } else {
-      this.ttsClient = new TextToSpeechClient();
-    }
-
     const s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
     this.s3Bucket = this.configService.get<string>(
       'AWS_S3_BUCKET_NAME',
@@ -79,13 +77,27 @@ export class AudioGenerationService {
       },
     });
 
-    this.useJourneyVoices =
-      this.configService.get<string>('TTS_USE_JOURNEY_VOICES', 'false') === 'true';
     this.allowLegacyFireAndForget =
       this.configService.get<string>('AUDIO_ALLOW_LEGACY_FIRE_AND_FORGET', 'false') === 'true';
     this.generateInsightAudio =
       this.configService.get<string>('AUDIO_GENERATE_INSIGHTS', 'false') === 'true';
-    this.maxChunkCharacters = this.readPositiveInt('AUDIO_TTS_CHUNK_CHARACTERS', 3500);
+
+    this.primaryProviderName = this.parseProviderConfig('AUDIO_TTS_PROVIDER', 'gemini');
+    this.fallbackProviderName = this.parseProviderConfig(
+      'AUDIO_TTS_FALLBACK_PROVIDER',
+      'google_cloud',
+    );
+
+    this.fallbackEnabled =
+      this.configService.get<string>('AUDIO_TTS_FALLBACK_ENABLED', 'true') === 'true';
+    this.allowMixedProviders =
+      this.configService.get<string>('AUDIO_TTS_ALLOW_MIXED_PROVIDERS', 'false') === 'true';
+    this.keepExistingOnFailure =
+      this.configService.get<string>('AUDIO_TTS_KEEP_EXISTING_ON_FAILURE', 'true') === 'true';
+
+    this.geminiProvider = geminiTtsProvider || new GeminiTtsProvider(this.configService);
+    this.googleCloudProvider =
+      googleCloudTtsProvider || new GoogleCloudTtsProvider(this.configService);
   }
 
   async generateAllAudio(orderId: string): Promise<AudioGenerationResult | null> {
@@ -125,9 +137,6 @@ export class AudioGenerationService {
       throw new Error('Le contenu scellé est trop court pour produire une narration');
     }
 
-    // NARRATOR adapts only the expert-sealed text. AudioScriptService safely falls
-    // back to the original narration if OpenAI is unavailable or returns a result
-    // that is suspiciously short, so TTS delivery remains resilient.
     const narration = this.audioScriptService
       ? await this.audioScriptService.reformulate({
           text: sourceNarration,
@@ -136,21 +145,75 @@ export class AudioGenerationService {
         })
       : sourceNarration;
 
-    this.logger.log(
-      `🎙️ Generating sealed reading audio for ${order.orderNumber} ` +
-        `(version=${sealedVersion.version}, voice=${voice})`,
-    );
+    const primaryProvider = this.getProviderInstance(this.primaryProviderName);
+    let synthResult: AudioProviderResult | null = null;
 
-    const audioBuffer = await this.synthesizeLongText(narration, voice);
+    try {
+      this.logger.log(
+        `🎙️ Generating sealed reading audio for ${order.orderNumber} ` +
+          `(version=${sealedVersion.version}, voice=${voice}, provider=${this.primaryProviderName})`,
+      );
+
+      synthResult = await primaryProvider.synthesizeNarration({
+        text: narration,
+        voice,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+      });
+    } catch (primaryError) {
+      const errorMsg = primaryError instanceof Error ? primaryError.message : String(primaryError);
+      this.logger.warn(
+        `Primary provider failed: orderNumber=${order.orderNumber}, provider=${this.primaryProviderName}, error=${errorMsg}`,
+      );
+
+      if (!this.fallbackEnabled) {
+        this.logger.error(`Fallback disabled. Audio generation failed for ${order.orderNumber}`);
+        throw primaryError;
+      }
+
+      this.logger.log(
+        `Fallback started: orderNumber=${order.orderNumber}, fallbackProvider=${this.fallbackProviderName}`,
+      );
+
+      try {
+        const fallbackProvider = this.getProviderInstance(this.fallbackProviderName);
+        synthResult = await fallbackProvider.synthesizeNarration({
+          text: narration,
+          voice,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+        });
+      } catch (fallbackError) {
+        this.logger.error(
+          `Fallback provider failed for ${order.orderNumber}: ${
+            fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+          }`,
+        );
+        throw fallbackError;
+      }
+    }
+
+    if (!synthResult || synthResult.buffer.length === 0) {
+      throw new Error('Résultat audio final vide ou invalide');
+    }
+
     const hashPrefix = sealedVersion.contentHash.slice(0, 16);
+    const normalizedModel = synthResult.model.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedVoice = synthResult.voice.toLowerCase().replace(/[^a-z0-9]/g, '');
     const storageKey =
       `audio/readings/${order.orderNumber}/` +
-      `v${sealedVersion.version}-${hashPrefix}-lecture-complete.mp3`;
-    const audioUrl = await this.uploadAudio(audioBuffer, storageKey, {
+      `v${sealedVersion.version}-${hashPrefix}-${synthResult.provider}-${normalizedModel}-${normalizedVoice}-lecture-complete.mp3`;
+
+    const audioUrl = await this.uploadAudio(synthResult.buffer, storageKey, {
       orderId: order.id,
       orderNumber: order.orderNumber,
       readingVersionId: sealedVersion.id,
       contentHash: sealedVersion.contentHash,
+      ttsProvider: synthResult.provider,
+      ttsModel: synthResult.model,
+      ttsVoice: synthResult.voice,
+      chunkCount: String(synthResult.chunkCount),
+      generatedAt: new Date().toISOString(),
     });
 
     const file = await this.prisma.$transaction(async (tx) => {
@@ -163,8 +226,8 @@ export class AudioGenerationService {
           name: `Lecture audio complète - ${order.orderNumber}`,
           url: audioUrl,
           key: storageKey,
-          contentType: 'audio/mpeg',
-          size: audioBuffer.length,
+          contentType: synthResult.contentType,
+          size: synthResult.buffer.length,
           type: 'AUDIO_READING',
         },
       });
@@ -176,7 +239,7 @@ export class AudioGenerationService {
 
     this.logger.log(
       `🎙️ Sealed reading audio ready for ${order.orderNumber} ` +
-        `(${Math.round(audioBuffer.length / 1024)}KB, ${Date.now() - startTime}ms)`,
+        `(${Math.round(synthResult.buffer.length / 1024)}KB, ${Date.now() - startTime}ms, provider=${synthResult.provider})`,
     );
 
     return {
@@ -184,8 +247,27 @@ export class AudioGenerationService {
       storageKey,
       readingVersionId: sealedVersion.id,
       contentHash: sealedVersion.contentHash,
-      size: audioBuffer.length,
+      size: synthResult.buffer.length,
+      provider: synthResult.provider,
+      model: synthResult.model,
+      voice: synthResult.voice,
     };
+  }
+
+  private parseProviderConfig(key: string, fallback: TtsProviderType): TtsProviderType {
+    const raw = (this.configService.get<string>(key) || fallback).trim().toLowerCase();
+    if (ALLOWED_PROVIDERS.includes(raw as TtsProviderType)) {
+      return raw as TtsProviderType;
+    }
+    throw new Error(
+      `Configuration invalide pour ${key}: "${raw}". Valeurs autorisées: ${ALLOWED_PROVIDERS.join(', ')}`,
+    );
+  }
+
+  private getProviderInstance(name: TtsProviderType): AudioTtsProvider {
+    if (name === 'gemini') return this.geminiProvider;
+    if (name === 'google_cloud') return this.googleCloudProvider;
+    throw new Error(`Provider inconnu: ${name}`);
   }
 
   private buildNarration(content: CanonicalReadingContent): string {
@@ -218,100 +300,6 @@ export class AudioGenerationService {
       .replace(/[ \t]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-  }
-
-  private async synthesizeLongText(text: string, voice: AudioVoice): Promise<Buffer> {
-    const chunks = this.splitIntoChunks(text, this.maxChunkCharacters);
-    this.logger.log(`🎙️ Narration split into ${chunks.length} TTS chunk(s)`);
-    const buffers: Buffer[] = [];
-    for (let index = 0; index < chunks.length; index += 1) {
-      this.logger.log(`  🔊 TTS chunk ${index + 1}/${chunks.length}`);
-      buffers.push(await this.synthesize(chunks[index], voice));
-    }
-
-    // MP3 is frame-based. Concatenating complete TTS MP3 responses preserves
-    // sequential playback in modern browsers while avoiding an FFmpeg runtime
-    // dependency in the API image.
-    return Buffer.concat(buffers);
-  }
-
-  private splitIntoChunks(text: string, maxCharacters: number): string[] {
-    const paragraphs = text.split(/\n\n+/).map((value) => value.trim()).filter(Boolean);
-    const chunks: string[] = [];
-    let current = '';
-
-    const push = (value: string) => {
-      const normalized = value.trim();
-      if (normalized) chunks.push(normalized);
-    };
-
-    for (const paragraph of paragraphs) {
-      if (paragraph.length <= maxCharacters) {
-        const candidate = current ? `${current}\n\n${paragraph}` : paragraph;
-        if (candidate.length <= maxCharacters) {
-          current = candidate;
-        } else {
-          push(current);
-          current = paragraph;
-        }
-        continue;
-      }
-
-      push(current);
-      current = '';
-      const sentences = paragraph.split(/(?<=[.!?])\s+/);
-      let sentenceChunk = '';
-      for (const sentence of sentences) {
-        if (sentence.length > maxCharacters) {
-          push(sentenceChunk);
-          sentenceChunk = '';
-          for (let offset = 0; offset < sentence.length; offset += maxCharacters) {
-            push(sentence.slice(offset, offset + maxCharacters));
-          }
-          continue;
-        }
-        const candidate = sentenceChunk ? `${sentenceChunk} ${sentence}` : sentence;
-        if (candidate.length <= maxCharacters) sentenceChunk = candidate;
-        else {
-          push(sentenceChunk);
-          sentenceChunk = sentence;
-        }
-      }
-      push(sentenceChunk);
-    }
-    push(current);
-
-    return chunks.length > 0 ? chunks : [text.slice(0, maxCharacters)];
-  }
-
-  private textToSsml(text: string): string {
-    const ssml = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/\n\n+/g, '<break time="900ms"/>')
-      .replace(/\n/g, '<break time="400ms"/>')
-      .replace(/\.{3}/g, '<break time="600ms"/>')
-      .replace(/—/g, '<break time="300ms"/>');
-    return `<speak>${ssml}</speak>`;
-  }
-
-  private async synthesize(text: string, voice: AudioVoice): Promise<Buffer> {
-    const voiceMap = this.useJourneyVoices ? JOURNEY_VOICE_MAP : VOICE_MAP;
-    const request: protos.google.cloud.texttospeech.v1.ISynthesizeSpeechRequest = {
-      input: { ssml: this.textToSsml(text) },
-      voice: { languageCode: 'fr-FR', name: voiceMap[voice] },
-      audioConfig: {
-        audioEncoding: 'MP3' as unknown as protos.google.cloud.texttospeech.v1.AudioEncoding,
-        speakingRate: 0.92,
-        pitch: -1.0,
-        volumeGainDb: 0.0,
-      },
-    };
-    const [response] = await this.ttsClient.synthesizeSpeech(request);
-    if (!response.audioContent) throw new Error('Google TTS returned empty audio content');
-    return Buffer.from(response.audioContent as Uint8Array);
   }
 
   private async uploadAudio(
@@ -349,11 +337,19 @@ export class AudioGenerationService {
               category: insight.category,
             })
           : insight.full;
+        const provider = this.getProviderInstance(this.primaryProviderName);
+        const synthResult = await provider.synthesizeNarration({
+          text: script,
+          voice,
+          orderId: 'insight',
+          orderNumber,
+        });
+
         const key = `audio/insights/${orderNumber}/${insight.category.toLowerCase()}.mp3`;
-        const buffer = await this.synthesizeLongText(script, voice);
-        const url = await this.uploadAudio(buffer, key, {
+        const url = await this.uploadAudio(synthResult.buffer, key, {
           orderNumber,
           category: insight.category,
+          ttsProvider: synthResult.provider,
         });
         await this.prisma.insight.update({ where: { id: insight.id }, data: { audioUrl: url } });
       } catch (error) {
@@ -371,10 +367,5 @@ export class AudioGenerationService {
     const production = (value as Record<string, unknown>).production;
     if (!production || typeof production !== 'object' || Array.isArray(production)) return null;
     return production as ManagedProductionState;
-  }
-
-  private readPositiveInt(key: string, fallback: number) {
-    const value = Number(this.configService.get<string>(key));
-    return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
   }
 }

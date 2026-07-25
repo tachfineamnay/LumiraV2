@@ -5,6 +5,7 @@
  * - VertexOracle: Multi-Agent AI for reading generation
  * - PdfFactory: PDF generation via Gotenberg
  * - ContextDispatcher: Context-aware request orchestration
+ * - AudioGenerationService: Gemini 3.1 Flash & Google Cloud TTS Audio Pipeline
  *
  * @module services/services.module
  */
@@ -25,6 +26,8 @@ import { AiRoutingService } from '../modules/settings/ai-routing.service';
 import { AiExecutionResolverService } from './factory/ai-execution-resolver.service';
 import { AiRunService } from './factory/ai-run.service';
 import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';
+import { GeminiTtsProvider } from './factory/tts/GeminiTtsProvider';
+import { GoogleCloudTtsProvider } from './factory/tts/GoogleCloudTtsProvider';
 
 @Module({
   imports: [ConfigModule, PrismaModule, ScheduleModule.forRoot()],
@@ -38,6 +41,8 @@ import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';
     ReadingSourceResolver,
     DigitalSoulService,
     AudioScriptService,
+    GeminiTtsProvider,
+    GoogleCloudTtsProvider,
     AudioGenerationService,
     SpiritualPathBatchService,
     AiRoutingService,
@@ -51,6 +56,8 @@ import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';
     ContextDispatcher,
     DigitalSoulService,
     AudioScriptService,
+    GeminiTtsProvider,
+    GoogleCloudTtsProvider,
     AudioGenerationService,
     SpiritualPathBatchService,
     AiRoutingService,
