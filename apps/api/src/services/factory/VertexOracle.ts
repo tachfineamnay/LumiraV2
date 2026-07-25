@@ -17,6 +17,7 @@ import {
 import {
   DEFAULT_AI_MODEL_CONFIG,
   assertExecutableAgentModel,
+  assertValidatedAgentCapabilities,
   estimateOpenAiCost,
   normalizeAiModelConfig,
 } from './ai-model-config';
@@ -500,6 +501,7 @@ export class VertexOracle implements OnModuleInit {
               model: agentConfig.model,
               thinkingLevel: agentConfig.thinkingLevel ?? agentConfig.reasoningEffort,
             });
+            assertValidatedAgentCapabilities(agent, agentConfig);
           } catch (err) {
             throw new Error(
               `AI_MODEL_CONFIG_INVALID: Configuration invalide pour l'agent actif ${agent} — ${err instanceof Error ? err.message : String(err)}`,

@@ -21,6 +21,18 @@ export interface AiPromptSnapshot {
 export type AiProviderMode = 'openai_only' | 'per_agent';
 export type AiProvider = 'openai' | 'vertex' | 'gemini';
 
+export interface AiAgentValidationProof {
+  provider: AiProvider;
+  model: string;
+  checkedAt: string;
+  probeVersion: 1;
+  capabilities: {
+    text: boolean;
+    vision: boolean;
+    structured: boolean;
+  };
+}
+
 export interface AiAgentModelConfig {
   enabled: boolean;
   provider: AiProvider;
@@ -33,6 +45,10 @@ export interface AiAgentModelConfig {
   temperature?: number;
   topP?: number;
   maxOutputTokens: number;
+  /** Proof of real provider probe results performed via Desk Settings. */
+  validation?: AiAgentValidationProof;
+  /** Flag indicating configuration needs revalidation via Desk Settings. */
+  needsValidation?: boolean;
 }
 
 export interface AiModelConfigSnapshot {

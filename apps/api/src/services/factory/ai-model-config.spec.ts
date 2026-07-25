@@ -2,6 +2,7 @@ import {
   assertExecutableAgentModel,
   assertOperationalModel,
   assertSavableAgentModel,
+  assertValidatedAgentCapabilities,
   DEFAULT_AI_MODEL_CONFIG,
   estimateOpenAiCost,
   missingAgentCapabilities,
@@ -238,6 +239,140 @@ describe('ai-model-config', () => {
           thinkingLevel: 'high',
         }),
       ).toThrow(/sélectionnez explicitement un modèle valide/);
+    });
+  });
+
+  describe('assertValidatedAgentCapabilities', () => {
+    it('rejects unknown model without proof', () => {
+      expect(() =>
+        assertValidatedAgentCapabilities('SCRIBE', {
+          enabled: true,
+          provider: 'openai',
+          model: 'custom-unlisted-model',
+          maxOutputTokens: 24000,
+        }),
+      ).toThrow(/Ce modèle doit être testé et appliqué depuis Paramètres/);
+    });
+
+    it('accepts unknown model tested with text + vision + structured for SCRIBE', () => {
+      expect(() =>
+        assertValidatedAgentCapabilities('SCRIBE', {
+          enabled: true,
+          provider: 'openai',
+          model: 'custom-unlisted-model',
+          maxOutputTokens: 24000,
+          validation: {
+            provider: 'openai',
+            model: 'custom-unlisted-model',
+            checkedAt: '2026-07-25T00:00:00.000Z',
+            probeVersion: 1,
+            capabilities: { text: true, vision: true, structured: true },
+          },
+        }),
+      ).not.toThrow();
+    });
+
+    it('rejects model tested without vision for SCRIBE', () => {
+      expect(() =>
+        assertValidatedAgentCapabilities('SCRIBE', {
+          enabled: true,
+          provider: 'openai',
+          model: 'custom-unlisted-model',
+          maxOutputTokens: 24000,
+          validation: {
+            provider: 'openai',
+            model: 'custom-unlisted-model',
+            checkedAt: '2026-07-25T00:00:00.000Z',
+            probeVersion: 1,
+            capabilities: { text: true, vision: false, structured: true },
+          },
+        }),
+      ).toThrow(/n'a pas validé la capacité vision requise pour SCRIBE/);
+    });
+
+    it('rejects model tested without structured for GUIDE and ONIRIQUE', () => {
+      const config = {
+        enabled: true,
+        provider: 'openai' as const,
+        model: 'custom-unlisted-model',
+        maxOutputTokens: 6000,
+        validation: {
+          provider: 'openai' as const,
+          model: 'custom-unlisted-model',
+          checkedAt: '2026-07-25T00:00:00.000Z',
+          probeVersion: 1 as const,
+          capabilities: { text: true, vision: true, structured: false },
+        },
+      };
+
+      expect(() => assertValidatedAgentCapabilities('GUIDE', config)).toThrow(
+        /n'a pas validé la capacité JSON structuré requise pour GUIDE/,
+      );
+      expect(() => assertValidatedAgentCapabilities('ONIRIQUE', config)).toThrow(
+        /n'a pas validé la capacité JSON structuré requise pour ONIRIQUE/,
+      );
+    });
+
+    it('rejects proof of an old model reused after model change', () => {
+      expect(() =>
+        assertValidatedAgentCapabilities('SCRIBE', {
+          enabled: true,
+          provider: 'openai',
+          model: 'new-model-id',
+          maxOutputTokens: 24000,
+          validation: {
+            provider: 'openai',
+            model: 'old-model-id',
+            checkedAt: '2026-07-25T00:00:00.000Z',
+            probeVersion: 1,
+            capabilities: { text: true, vision: true, structured: true },
+          },
+        }),
+      ).toThrow(/Ce modèle doit être testé et appliqué depuis Paramètres/);
+    });
+
+    it('requires revalidation for known model without historical proof', () => {
+      const normalized = normalizeAiModelConfig({
+        providerMode: 'per_agent',
+        agents: {
+          ...DEFAULT_AI_MODEL_CONFIG.agents,
+          SCRIBE: {
+            enabled: true,
+            provider: 'openai',
+            model: 'gpt-5.5-2026-04-23',
+            thinkingLevel: 'high',
+            maxOutputTokens: 24000,
+          },
+        },
+      });
+
+      expect(normalized.config.agents.SCRIBE.needsValidation).toBe(true);
+      expect(() =>
+        assertValidatedAgentCapabilities('SCRIBE', normalized.config.agents.SCRIBE),
+      ).toThrow(/Ce modèle doit être testé et appliqué depuis Paramètres/);
+    });
+
+    it('does not require proof for disabled agents', () => {
+      expect(() =>
+        assertValidatedAgentCapabilities('CONFIDANT', {
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-4o-2024-11-20',
+          maxOutputTokens: 1600,
+        }),
+      ).not.toThrow();
+    });
+
+    it('rejects malformed proof JSON without crashing', () => {
+      expect(() =>
+        assertValidatedAgentCapabilities('SCRIBE', {
+          enabled: true,
+          provider: 'openai',
+          model: 'gpt-5.5-2026-04-23',
+          maxOutputTokens: 24000,
+          validation: 'malformed-string' as unknown as undefined,
+        }),
+      ).toThrow(/Ce modèle doit être testé et appliqué depuis Paramètres/);
     });
   });
 });

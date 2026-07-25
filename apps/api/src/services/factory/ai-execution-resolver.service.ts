@@ -9,7 +9,11 @@ import {
   AiPromptSnapshot,
   ResolvedAiExecution,
 } from './ai-execution.types';
-import { normalizeAiModelConfig, assertExecutableAgentModel } from './ai-model-config';
+import {
+  normalizeAiModelConfig,
+  assertExecutableAgentModel,
+  assertValidatedAgentCapabilities,
+} from './ai-model-config';
 
 @Injectable()
 export class AiExecutionResolverService {
@@ -64,6 +68,7 @@ export class AiExecutionResolverService {
         model: config.model,
         thinkingLevel: effectiveThinking,
       });
+      assertValidatedAgentCapabilities(ctx.agent, config);
     } catch (err) {
       throw new BadRequestException(err instanceof Error ? err.message : String(err));
     }

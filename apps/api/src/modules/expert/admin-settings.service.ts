@@ -3,7 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiRuntimeCacheService } from '../../services/factory/ai-runtime-cache.service';
-import { AiModelConfigSnapshot, AgentType } from '../../services/factory/ai-execution.types';
+import {
+  AiModelConfigSnapshot,
+  AgentType,
+  AiAgentModelConfig,
+} from '../../services/factory/ai-execution.types';
 import {
   DEFAULT_AI_MODEL_CONFIG,
   activeProviderModelPairs,
@@ -14,6 +18,7 @@ import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service'
 import { AiModelCatalogService } from './ai-model-catalog.service';
 import {
   AiCredentialsStatusResponse,
+  ModelConnectionTestResult,
   ProviderConnectionTestResult,
 } from './ai-provider-diagnostics.types';
 
@@ -568,6 +573,7 @@ export class AdminSettingsService {
     }
 
     const probeErrors: string[] = [];
+    const probeResults = new Map<string, ModelConnectionTestResult>();
     const queue = [...pairs];
     const concurrency = 2;
 
@@ -588,6 +594,8 @@ export class AdminSettingsService {
             probeErrors.push(
               `[${pair.provider}:${pair.model}] (${pair.agents.join(', ')}) — ${err}`,
             );
+          } else {
+            probeResults.set(`${pair.provider}:${pair.model}`, res);
           }
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -607,9 +615,41 @@ export class AdminSettingsService {
       );
     }
 
+    const checkedAt = new Date().toISOString();
+    for (const [, agentConfig] of Object.entries(candidateConfig.agents) as Array<
+      [AgentType, AiAgentModelConfig]
+    >) {
+      if (agentConfig.enabled) {
+        const key = `${agentConfig.provider}:${agentConfig.model}`;
+        const res = probeResults.get(key);
+        if (res && res.success) {
+          agentConfig.validation = {
+            provider: agentConfig.provider,
+            model: agentConfig.model,
+            checkedAt: res.testedAt || checkedAt,
+            probeVersion: 1,
+            capabilities: {
+              text: res.text === 'ok',
+              vision: res.multimodal === 'ok',
+              structured: res.structured === 'ok',
+            },
+          };
+          agentConfig.needsValidation = false;
+        } else {
+          delete agentConfig.validation;
+          agentConfig.needsValidation = true;
+        }
+      } else {
+        agentConfig.needsValidation = false;
+      }
+    }
+
+    const finalNormalized = normalizeAiModelConfig(candidateConfig);
+    const finalConfig = finalNormalized.config;
+
     await this.persistPromptVersion(
       PROMPT_KEYS.MODEL_CONFIG,
-      JSON.stringify(candidateConfig, null, 2),
+      JSON.stringify(finalConfig, null, 2),
       changedBy,
       'MODEL_CONFIG testé et appliqué depuis le Desk',
     );
@@ -621,7 +661,7 @@ export class AdminSettingsService {
     return {
       success: true,
       message: 'Configuration IA testée, validée et appliquée avec succès.',
-      config: candidateConfig,
+      config: finalConfig,
     };
   }
 

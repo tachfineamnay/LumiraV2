@@ -55,13 +55,13 @@ const MODEL_CAPABILITIES: Record<string, readonly AgentCapability[]> = {
   'gpt-4o-2024-11-20': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
   'gemini-2.5-pro': ['text', 'vision', 'structured', 'long_text'],
   'gemini-2.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-3.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-3.6-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
 };
 
 export function modelCapabilities(model: string): readonly AgentCapability[] {
   if (MODEL_CAPABILITIES[model]) return MODEL_CAPABILITIES[model];
-  if (model === 'text-only-unknown') return ['text'];
-  // A dynamically discovered model is accepted provisionally, then real probes decide.
-  return ['text', 'vision', 'structured', 'long_text', 'fast_text'];
+  return ['text'];
 }
 
 export function modelSupportsAgent(model: string, agent: AgentType): boolean {
@@ -166,6 +166,14 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'high',
       verbosity: 'high',
       maxOutputTokens: 24000,
+      validation: {
+        provider: 'openai',
+        model: 'gpt-5.5-2026-04-23',
+        checkedAt: '2026-07-25T00:00:00.000Z',
+        probeVersion: 1,
+        capabilities: { text: true, vision: true, structured: true },
+      },
+      needsValidation: false,
     },
     EDITOR: {
       enabled: true,
@@ -175,6 +183,14 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'medium',
       verbosity: 'high',
       maxOutputTokens: 16000,
+      validation: {
+        provider: 'openai',
+        model: 'gpt-5.4-2026-03-05',
+        checkedAt: '2026-07-25T00:00:00.000Z',
+        probeVersion: 1,
+        capabilities: { text: true, vision: true, structured: true },
+      },
+      needsValidation: false,
     },
     GUIDE: {
       enabled: true,
@@ -184,6 +200,14 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 6000,
+      validation: {
+        provider: 'openai',
+        model: 'gpt-5.4-2026-03-05',
+        checkedAt: '2026-07-25T00:00:00.000Z',
+        probeVersion: 1,
+        capabilities: { text: true, vision: true, structured: true },
+      },
+      needsValidation: false,
     },
     NARRATOR: {
       enabled: true,
@@ -193,6 +217,14 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 12000,
+      validation: {
+        provider: 'openai',
+        model: 'gpt-5.4-2026-03-05',
+        checkedAt: '2026-07-25T00:00:00.000Z',
+        probeVersion: 1,
+        capabilities: { text: true, vision: true, structured: true },
+      },
+      needsValidation: false,
     },
     CONFIDANT: {
       enabled: false,
@@ -201,6 +233,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       temperature: 0.6,
       topP: 0.9,
       maxOutputTokens: 1600,
+      needsValidation: false,
     },
     ONIRIQUE: {
       enabled: false,
@@ -209,6 +242,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       temperature: 0.65,
       topP: 0.9,
       maxOutputTokens: 2500,
+      needsValidation: false,
     },
   },
 };
@@ -313,6 +347,48 @@ export function assertExecutableAgentModel({
   }
 }
 
+export function assertValidatedAgentCapabilities(
+  agent: AgentType,
+  config: AiAgentModelConfig,
+): void {
+  if (!config.enabled) return;
+
+  const v = config.validation;
+  if (
+    !v ||
+    typeof v !== 'object' ||
+    v.probeVersion !== 1 ||
+    v.provider !== config.provider ||
+    v.model !== config.model ||
+    !v.capabilities ||
+    typeof v.capabilities !== 'object'
+  ) {
+    throw new Error(
+      `${agent} — Ce modèle doit être testé et appliqué depuis Paramètres → Modèles avant son utilisation.`,
+    );
+  }
+
+  if (v.capabilities.text !== true) {
+    throw new Error(
+      `${agent} — Le modèle ${config.model} n'a pas validé la capacité texte lors des tests.`,
+    );
+  }
+
+  const required = AGENT_BLOCKING_CAPABILITIES[agent] || [];
+
+  if (required.includes('vision') && v.capabilities.vision !== true) {
+    throw new Error(
+      `${agent} — Ce modèle n'a pas validé la capacité vision requise pour ${agent}.`,
+    );
+  }
+
+  if (required.includes('structured') && v.capabilities.structured !== true) {
+    throw new Error(
+      `${agent} — Ce modèle n'a pas validé la capacité JSON structuré requise pour ${agent}.`,
+    );
+  }
+}
+
 function isAgentType(value: string): value is AgentType {
   return AGENTS.includes(value as AgentType);
 }
@@ -348,8 +424,6 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
   }
 
   const requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
-  // Important : un objet agent présent avec un modèle vide reste vide.
-  // Le test-and-apply le rejette ; il n'est jamais remplacé silencieusement.
   const model = requestedProvider ? requestedModel : '';
   if (!model) {
     issues.push(`${agent}: modèle vide — sélection manuelle requise`);
@@ -405,20 +479,59 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     result.verbosity = verbosityValid
       ? (value.verbosity as AiThinkingLevel)
       : (fallback.verbosity ?? 'medium');
-    return result;
+  } else {
+    const temperature = finiteNumber(value.temperature);
+    const topP = finiteNumber(value.topP);
+    const defaultTemperature =
+      provider === 'openai'
+        ? (fallback.temperature ?? 0.3)
+        : DEFAULT_GOOGLE_KNOBS[agent].temperature;
+    const defaultTopP =
+      provider === 'openai' ? (fallback.topP ?? 0.9) : DEFAULT_GOOGLE_KNOBS[agent].topP;
+    result.temperature =
+      temperature !== undefined && temperature >= 0 && temperature <= 2
+        ? temperature
+        : defaultTemperature;
+    result.topP = topP !== undefined && topP >= 0 && topP <= 1 ? topP : defaultTopP;
   }
 
-  const temperature = finiteNumber(value.temperature);
-  const topP = finiteNumber(value.topP);
-  const defaultTemperature =
-    provider === 'openai' ? (fallback.temperature ?? 0.3) : DEFAULT_GOOGLE_KNOBS[agent].temperature;
-  const defaultTopP =
-    provider === 'openai' ? (fallback.topP ?? 0.9) : DEFAULT_GOOGLE_KNOBS[agent].topP;
-  result.temperature =
-    temperature !== undefined && temperature >= 0 && temperature <= 2
-      ? temperature
-      : defaultTemperature;
-  result.topP = topP !== undefined && topP >= 0 && topP <= 1 ? topP : defaultTopP;
+  if (isRecord(value.validation)) {
+    const rawV = value.validation;
+    if (
+      rawV.probeVersion === 1 &&
+      rawV.provider === provider &&
+      rawV.model === model &&
+      isRecord(rawV.capabilities) &&
+      typeof rawV.capabilities.text === 'boolean' &&
+      typeof rawV.capabilities.vision === 'boolean' &&
+      typeof rawV.capabilities.structured === 'boolean' &&
+      typeof rawV.checkedAt === 'string'
+    ) {
+      result.validation = {
+        provider,
+        model,
+        checkedAt: rawV.checkedAt,
+        probeVersion: 1,
+        capabilities: {
+          text: rawV.capabilities.text as boolean,
+          vision: rawV.capabilities.vision as boolean,
+          structured: rawV.capabilities.structured as boolean,
+        },
+      };
+    }
+  }
+
+  if (enabled) {
+    try {
+      assertValidatedAgentCapabilities(agent, result);
+      result.needsValidation = false;
+    } catch {
+      result.needsValidation = true;
+    }
+  } else {
+    result.needsValidation = false;
+  }
+
   return result;
 }
 

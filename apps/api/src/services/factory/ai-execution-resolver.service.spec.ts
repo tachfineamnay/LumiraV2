@@ -23,6 +23,13 @@ const baseSnapshot: AiPromptSnapshot = {
         reasoningEffort: 'high',
         verbosity: 'high',
         maxOutputTokens: 24000,
+        validation: {
+          provider: 'openai',
+          model: 'gpt-5.5-2026-04-23',
+          checkedAt: '2026-07-25T00:00:00.000Z',
+          probeVersion: 1,
+          capabilities: { text: true, vision: true, structured: true },
+        },
       },
       GUIDE: {
         enabled: true,
@@ -31,6 +38,13 @@ const baseSnapshot: AiPromptSnapshot = {
         reasoningEffort: 'low',
         verbosity: 'medium',
         maxOutputTokens: 6000,
+        validation: {
+          provider: 'openai',
+          model: 'gpt-5.4-2026-03-05',
+          checkedAt: '2026-07-25T00:00:00.000Z',
+          probeVersion: 1,
+          capabilities: { text: true, vision: true, structured: true },
+        },
       },
       EDITOR: {
         enabled: true,
@@ -39,6 +53,13 @@ const baseSnapshot: AiPromptSnapshot = {
         reasoningEffort: 'medium',
         verbosity: 'high',
         maxOutputTokens: 16000,
+        validation: {
+          provider: 'openai',
+          model: 'gpt-5.4-2026-03-05',
+          checkedAt: '2026-07-25T00:00:00.000Z',
+          probeVersion: 1,
+          capabilities: { text: true, vision: true, structured: true },
+        },
       },
       NARRATOR: {
         enabled: true,
@@ -48,6 +69,13 @@ const baseSnapshot: AiPromptSnapshot = {
         reasoningEffort: 'low',
         verbosity: 'medium',
         maxOutputTokens: 12000,
+        validation: {
+          provider: 'openai',
+          model: 'gpt-5.4-2026-03-05',
+          checkedAt: '2026-07-25T00:00:00.000Z',
+          probeVersion: 1,
+          capabilities: { text: true, vision: true, structured: true },
+        },
       },
       CONFIDANT: {
         enabled: false,
@@ -162,6 +190,13 @@ describe('AiExecutionResolverService', () => {
             temperature: 0.7,
             topP: 0.9,
             maxOutputTokens: 24000,
+            validation: {
+              provider: 'vertex',
+              model: 'gemini-3.5-flash',
+              checkedAt: '2026-07-25T00:00:00.000Z',
+              probeVersion: 1,
+              capabilities: { text: true, vision: true, structured: true },
+            },
           },
           EDITOR: {
             enabled: true,
@@ -171,6 +206,13 @@ describe('AiExecutionResolverService', () => {
             temperature: 0.4,
             topP: 0.9,
             maxOutputTokens: 16000,
+            validation: {
+              provider: 'gemini',
+              model: 'gemini-3.5-flash',
+              checkedAt: '2026-07-25T00:00:00.000Z',
+              probeVersion: 1,
+              capabilities: { text: true, vision: true, structured: true },
+            },
           },
         },
       },
