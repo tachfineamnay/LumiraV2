@@ -233,7 +233,7 @@ describe('AdminSettingsService restore latest custom', () => {
     const createCall = (promptVersion.create as jest.Mock).mock.calls[0][0];
     const persisted = JSON.parse(createCall.data.value);
     expect(persisted.agents.SCRIBE.thinkingLevel).toBe('medium');
-    expect(persisted.agents.SCRIBE.reasoningEffort).toBe('medium');
+    expect(persisted.agents.SCRIBE.reasoningEffort).toBeUndefined();
     expect(persisted.agents.SCRIBE.validation).toMatchObject({
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',

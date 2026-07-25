@@ -6,6 +6,9 @@ import {
   AiProviderMode,
   AiThinkingLevel,
 } from './ai-execution.types';
+import { getModelRuntimeControls } from './model-runtime-controls';
+
+export { supportsThinkingLevel } from './model-runtime-controls';
 
 /** Legacy model IDs kept for historical configurations, labels and migrations only. */
 export const OPENAI_V1_MODELS = [
@@ -94,21 +97,6 @@ export function capabilityLabel(capability: AgentCapability): string {
   }
 }
 
-export function isOpenAiThinkingModel(model: string): boolean {
-  const normalized = model.trim().toLowerCase();
-  return /^gpt-5(?:[.-]|$)/.test(normalized) && !/(?:^|[.-])pro(?:[.-]|$)/.test(normalized);
-}
-
-export function isGeminiThinkingModel(model: string): boolean {
-  return /^gemini-3(?:[.-]|$)/i.test(model.trim());
-}
-
-export function supportsThinkingLevel(provider: AiProvider, model: string): boolean {
-  if (provider === 'openai') return isOpenAiThinkingModel(model);
-  if (provider === 'gemini' || provider === 'vertex') return isGeminiThinkingModel(model);
-  return false;
-}
-
 export interface ActiveProviderModelPair {
   provider: AiProvider;
   model: string;
@@ -163,7 +151,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.5-2026-04-23',
       thinkingLevel: 'high',
-      reasoningEffort: 'high',
       verbosity: 'high',
       maxOutputTokens: 24000,
       needsValidation: true,
@@ -173,7 +160,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
       thinkingLevel: 'medium',
-      reasoningEffort: 'medium',
       verbosity: 'high',
       maxOutputTokens: 16000,
       needsValidation: true,
@@ -183,7 +169,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
       thinkingLevel: 'low',
-      reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 6000,
       needsValidation: true,
@@ -193,7 +178,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
       thinkingLevel: 'low',
-      reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 12000,
       needsValidation: true,
@@ -202,8 +186,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       enabled: false,
       provider: 'openai',
       model: 'gpt-4o-2024-11-20',
-      temperature: 0.6,
-      topP: 0.9,
       maxOutputTokens: 1600,
       needsValidation: false,
     },
@@ -211,8 +193,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       enabled: false,
       provider: 'openai',
       model: 'gpt-4o-2024-11-20',
-      temperature: 0.65,
-      topP: 0.9,
       maxOutputTokens: 2500,
       needsValidation: false,
     },
@@ -220,20 +200,16 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
 };
 
 const AGENTS: AgentType[] = ['SCRIBE', 'EDITOR', 'GUIDE', 'NARRATOR', 'CONFIDANT', 'ONIRIQUE'];
-const THINKING_VALUES = new Set<AiThinkingLevel>(['low', 'medium', 'high']);
+const THINKING_VALUES = new Set<AiThinkingLevel>([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]);
 const VERBOSITY_VALUES = new Set<AiThinkingLevel>(['low', 'medium', 'high']);
 const ALLOWED_PROVIDERS = new Set<AiProvider>(['openai', 'vertex', 'gemini']);
-const DEFAULT_GOOGLE_KNOBS: Record<
-  AgentType,
-  { temperature: number; topP: number; maxOutputTokens: number }
-> = {
-  SCRIBE: { temperature: 0.7, topP: 0.9, maxOutputTokens: 24000 },
-  EDITOR: { temperature: 0.4, topP: 0.9, maxOutputTokens: 16000 },
-  GUIDE: { temperature: 0.5, topP: 0.9, maxOutputTokens: 6000 },
-  NARRATOR: { temperature: 0.3, topP: 0.9, maxOutputTokens: 12000 },
-  CONFIDANT: { temperature: 0.6, topP: 0.9, maxOutputTokens: 1600 },
-  ONIRIQUE: { temperature: 0.65, topP: 0.9, maxOutputTokens: 2500 },
-};
 
 export interface NormalizedAiModelConfig {
   config: AiModelConfigSnapshot;
@@ -301,13 +277,19 @@ export function assertExecutableAgentModel({
   if (typeof model !== 'string' || model.trim().length === 0 || !isAllowedModel(provider, model)) {
     throw new Error(`${agent} — sélectionnez explicitement un modèle valide pour ${provider}.`);
   }
-  if (!supportsThinkingLevel(provider, model)) {
-    throw new Error(`${agent} — ${model} ne supporte pas un niveau de réflexion explicite.`);
-  }
-  if (!thinkingLevel || !isThinkingLevel(thinkingLevel)) {
-    throw new Error(
-      `${agent} — un niveau de réflexion (low, medium, high) est obligatoire pour ${model}.`,
-    );
+  const controls = getModelRuntimeControls(provider, model);
+  if (controls.thinkingLevels.length === 0) {
+    if (thinkingLevel !== undefined && thinkingLevel !== null) {
+      throw new Error(
+        `${agent} — le modèle ${model} ne supporte pas un niveau de réflexion explicite.`,
+      );
+    }
+  } else {
+    if (!thinkingLevel || !controls.thinkingLevels.includes(thinkingLevel)) {
+      throw new Error(
+        `${agent} — le modèle ${model} exige un niveau de réflexion valide parmi (${controls.thinkingLevels.join(', ')}).`,
+      );
+    }
   }
 }
 
@@ -390,8 +372,7 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
   }
 
   const maxOutputTokens = finiteNumber(value.maxOutputTokens);
-  const defaultMax =
-    provider === 'openai' ? fallback.maxOutputTokens : DEFAULT_GOOGLE_KNOBS[agent].maxOutputTokens;
+  const defaultMax = fallback.maxOutputTokens;
   const normalizedMaxTokens =
     maxOutputTokens !== undefined &&
     Number.isInteger(maxOutputTokens) &&
@@ -410,41 +391,38 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     maxOutputTokens: normalizedMaxTokens,
   };
 
+  const controls = getModelRuntimeControls(provider, model);
+
+  // Unified thinking level handling & migration from legacy reasoningEffort
   const rawThinkingLevel =
     value.thinkingLevel ?? (provider === 'openai' ? value.reasoningEffort : undefined);
-  if (rawThinkingLevel !== undefined && !isThinkingLevel(rawThinkingLevel)) {
-    issues.push(`${agent}: thinkingLevel invalide — sélection manuelle requise`);
-  }
-  const thinkingLevel = isThinkingLevel(rawThinkingLevel) ? rawThinkingLevel : undefined;
+  const thinkingCandidate =
+    typeof rawThinkingLevel === 'string' && isThinkingLevel(rawThinkingLevel)
+      ? (rawThinkingLevel as AiThinkingLevel)
+      : undefined;
 
-  if (supportsThinkingLevel(provider, model) && thinkingLevel) {
-    result.thinkingLevel = thinkingLevel;
-  }
-
-  if (provider === 'openai' && isOpenAiThinkingModel(model)) {
-    if (result.thinkingLevel) {
-      result.reasoningEffort = result.thinkingLevel;
+  if (controls.thinkingLevels.length > 0) {
+    if (thinkingCandidate && controls.thinkingLevels.includes(thinkingCandidate)) {
+      result.thinkingLevel = thinkingCandidate;
+    } else {
+      if (thinkingCandidate) {
+        issues.push(
+          `${agent}: niveau de réflexion "${thinkingCandidate}" invalide pour ${model}, niveau par défaut appliqué`,
+        );
+      }
+      if (controls.defaultThinkingLevel) {
+        result.thinkingLevel = controls.defaultThinkingLevel;
+      }
     }
+  }
+
+  if (controls.supportsVerbosity) {
     const verbosityValid =
       typeof value.verbosity === 'string' &&
       VERBOSITY_VALUES.has(value.verbosity as AiThinkingLevel);
     result.verbosity = verbosityValid
       ? (value.verbosity as AiThinkingLevel)
       : (fallback.verbosity ?? 'medium');
-  } else {
-    const temperature = finiteNumber(value.temperature);
-    const topP = finiteNumber(value.topP);
-    const defaultTemperature =
-      provider === 'openai'
-        ? (fallback.temperature ?? 0.3)
-        : DEFAULT_GOOGLE_KNOBS[agent].temperature;
-    const defaultTopP =
-      provider === 'openai' ? (fallback.topP ?? 0.9) : DEFAULT_GOOGLE_KNOBS[agent].topP;
-    result.temperature =
-      temperature !== undefined && temperature >= 0 && temperature <= 2
-        ? temperature
-        : defaultTemperature;
-    result.topP = topP !== undefined && topP >= 0 && topP <= 1 ? topP : defaultTopP;
   }
 
   if (isRecord(value.validation)) {

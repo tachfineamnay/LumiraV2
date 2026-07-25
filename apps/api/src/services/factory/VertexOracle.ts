@@ -495,7 +495,7 @@ export class VertexOracle implements OnModuleInit {
               agent,
               provider: agentConfig.provider,
               model: agentConfig.model,
-              thinkingLevel: agentConfig.thinkingLevel ?? agentConfig.reasoningEffort,
+              thinkingLevel: agentConfig.thinkingLevel,
             });
             assertValidatedAgentCapabilities(agent, agentConfig);
           } catch (err) {
@@ -761,9 +761,7 @@ export class VertexOracle implements OnModuleInit {
       userContent,
       images: options?.images,
       maxTokens: Math.min(options?.maxTokens ?? resolved.maxTokens, resolved.maxTokens),
-      temperature: resolved.temperature,
-      topP: resolved.topP,
-      reasoningEffort: resolved.reasoningEffort,
+      thinkingLevel: resolved.thinkingLevel,
       verbosity: resolved.verbosity,
       jsonSchema: options?.jsonSchema,
       signal,

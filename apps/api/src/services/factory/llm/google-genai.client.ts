@@ -3,6 +3,7 @@ import { sanitizeGoogleJsonSchema } from './google-schema';
 import { parseVertexServiceAccount, VertexServiceAccount } from './settings-crypto';
 import { ImagePayload, JsonSchema, LlmRequest, LlmResult } from './llm.types';
 import { resolveVertexLocation } from './vertex-location';
+import { getModelRuntimeControls } from '../model-runtime-controls';
 
 export type GoogleAuthMode = 'api_key' | 'service_account';
 
@@ -75,19 +76,18 @@ export function buildGoogleContents(req: LlmRequest): Array<{
 export function buildGoogleGenerationConfig(req: LlmRequest): Record<string, unknown> {
   const config: Record<string, unknown> = {
     maxOutputTokens: req.maxTokens,
-    temperature: req.temperature ?? 0.4,
-    topP: req.topP ?? 0.9,
     systemInstruction: req.systemPrompt,
     abortSignal: req.signal,
   };
 
-  const explicitThinkingLevel = req.thinkingLevel ?? req.reasoningEffort;
-  const thinkingLevel =
-    explicitThinkingLevel ??
-    (isGeminiThinkingModel(req.model) && req.maxTokens <= 512 ? 'low' : undefined);
-  if (isGeminiThinkingModel(req.model) && thinkingLevel) {
+  const controls = getModelRuntimeControls('gemini', req.model);
+  if (
+    controls.thinkingLevels.length > 0 &&
+    req.thinkingLevel &&
+    controls.thinkingLevels.includes(req.thinkingLevel)
+  ) {
     config.thinkingConfig = {
-      thinkingLevel: thinkingLevel.toUpperCase(),
+      thinkingLevel: req.thinkingLevel.toUpperCase(),
       includeThoughts: false,
     };
   }

@@ -235,10 +235,8 @@ describe('VertexOracle OpenAI-only runtime', () => {
       return {
         provider: 'openai',
         model: config.model,
-        temperature: config.temperature,
-        topP: config.topP,
         maxTokens: config.maxOutputTokens,
-        reasoningEffort: config.reasoningEffort,
+        thinkingLevel: config.thinkingLevel,
         verbosity: config.verbosity,
         systemPrompt: `${snapshot.lumiraDna}\n\n---\n\n${snapshot.agentContexts[ctx.agent]}`,
         routingSource: `model-config:${ctx.agent}`,

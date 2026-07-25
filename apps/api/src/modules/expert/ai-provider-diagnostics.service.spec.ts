@@ -39,8 +39,6 @@ function configFor(
     provider,
     model,
     maxOutputTokens: 24000,
-    temperature: provider === 'openai' ? undefined : 0.4,
-    topP: provider === 'openai' ? undefined : 0.9,
   };
 
   if (options?.vision === false || options?.structured === false) {
@@ -166,8 +164,12 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
     expect(mockGenerateContent.mock.calls.map((call) => call[0].config.maxOutputTokens)).toEqual([
       256, 256, 512,
     ]);
-    expect(mockGenerateContent.mock.calls[0][0].config.temperature).toBe(0.4);
-    expect(mockGenerateContent.mock.calls[0][0].config.topP).toBe(0.9);
+    expect(mockGenerateContent.mock.calls[0][0].config.temperature).toBeUndefined();
+    expect(mockGenerateContent.mock.calls[0][0].config.topP).toBeUndefined();
+    expect(mockGenerateContent.mock.calls[0][0].config.thinkingConfig).toEqual({
+      thinkingLevel: 'MEDIUM',
+      includeThoughts: false,
+    });
   });
 
   it('fails the pair when the structured probe fails after text and vision succeed', async () => {
@@ -220,8 +222,6 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
       enabled: true,
       provider: 'vertex',
       model: 'gemini-3.6-flash',
-      temperature: 0.4,
-      topP: 0.9,
       maxOutputTokens: 6000,
     };
     prisma.promptVersion.findFirst.mockResolvedValue({ value: JSON.stringify(vertexConfig) });

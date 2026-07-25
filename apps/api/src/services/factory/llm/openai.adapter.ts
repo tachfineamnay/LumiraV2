@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { formatProviderError } from './ai-errors';
 import { LlmAdapter, LlmRequest, LlmResult } from './llm.types';
+import { getModelRuntimeControls } from '../model-runtime-controls';
 
 export class OpenAiAdapter implements LlmAdapter {
   readonly id = 'openai' as const;
@@ -44,28 +45,25 @@ export class OpenAiAdapter implements LlmAdapter {
     }
   }
 
-  private isThinkingModel(model: string): boolean {
-    const normalized = model.trim().toLowerCase();
-    return /^gpt-5(?:[.-]|$)/.test(normalized) && !/(?:^|[.-])pro(?:[.-]|$)/.test(normalized);
-  }
-
   private openAIParameters(req: LlmRequest): Record<string, unknown> {
-    if (this.isThinkingModel(req.model)) {
-      return {
-        reasoning: { effort: req.thinkingLevel ?? req.reasoningEffort ?? 'medium' },
-        max_output_tokens: req.maxTokens,
-      };
-    }
-    return {
-      temperature: req.temperature ?? 0.3,
-      top_p: req.topP ?? 0.9,
+    const controls = getModelRuntimeControls('openai', req.model);
+    const params: Record<string, unknown> = {
       max_output_tokens: req.maxTokens,
     };
+    if (
+      controls.thinkingLevels.length > 0 &&
+      req.thinkingLevel &&
+      controls.thinkingLevels.includes(req.thinkingLevel)
+    ) {
+      params.reasoning = { effort: req.thinkingLevel };
+    }
+    return params;
   }
 
   private textFormat(req: LlmRequest): Record<string, unknown> {
+    const controls = getModelRuntimeControls('openai', req.model);
     return {
-      ...(this.isThinkingModel(req.model) ? { verbosity: req.verbosity ?? 'medium' } : {}),
+      ...(controls.supportsVerbosity ? { verbosity: req.verbosity ?? 'medium' } : {}),
       ...(req.jsonSchema
         ? {
             format: {

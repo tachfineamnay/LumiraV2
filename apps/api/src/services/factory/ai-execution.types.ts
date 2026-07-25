@@ -1,7 +1,8 @@
 import { AiMission, ProductLevel } from '@prisma/client';
+import { AiThinkingLevel } from './model-runtime-controls';
 
+export type { AiThinkingLevel } from './model-runtime-controls';
 export type AgentType = 'SCRIBE' | 'GUIDE' | 'EDITOR' | 'CONFIDANT' | 'ONIRIQUE' | 'NARRATOR';
-export type AiThinkingLevel = 'low' | 'medium' | 'high';
 
 export interface AiExecutionContext {
   orderId?: string;
@@ -39,11 +40,7 @@ export interface AiAgentModelConfig {
   model: string;
   /** Unified production control for models exposing an explicit thinking level. */
   thinkingLevel?: AiThinkingLevel;
-  /** Legacy OpenAI field retained for backward-compatible stored configurations. */
-  reasoningEffort?: AiThinkingLevel;
   verbosity?: AiThinkingLevel;
-  temperature?: number;
-  topP?: number;
   maxOutputTokens: number;
   /** Proof of real provider probe results performed via Desk Settings. */
   validation?: AiAgentValidationProof;
@@ -59,11 +56,7 @@ export interface AiModelConfigSnapshot {
 export interface ResolvedAiExecution {
   provider: AiProvider;
   model: string;
-  temperature?: number;
-  topP?: number;
   thinkingLevel?: AiThinkingLevel;
-  /** Legacy fallback for historical OpenAI configurations. */
-  reasoningEffort?: AiThinkingLevel;
   verbosity?: AiThinkingLevel;
   maxTokens: number;
   systemPrompt: string;

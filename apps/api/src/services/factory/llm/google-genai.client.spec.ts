@@ -66,47 +66,47 @@ describe('google-genai.client', () => {
     expect(options.googleAuthOptions).toBeTruthy();
   });
 
-  it.each(['low', 'medium', 'high'] as const)(
-    'maps Gemini 3 thinkingLevel=%s without exposing thoughts',
+  it.each(['minimal', 'low', 'medium', 'high'] as const)(
+    'maps gemini-3.6-flash thinkingLevel=%s without exposing thoughts',
     (thinkingLevel) => {
       const config = buildGoogleGenerationConfig(request({ thinkingLevel }));
       expect(config.thinkingConfig).toEqual({
         thinkingLevel: thinkingLevel.toUpperCase(),
         includeThoughts: false,
       });
+      expect(config.temperature).toBeUndefined();
+      expect(config.topP).toBeUndefined();
+      expect(config.topK).toBeUndefined();
     },
   );
 
-  it('does not send thinkingConfig to a normal production request without a selected level', () => {
+  it('does not send thinkingConfig to a request without a selected level', () => {
     const config = buildGoogleGenerationConfig(request());
     expect(config.thinkingConfig).toBeUndefined();
   });
 
-  it('uses low thinking temporarily for short Gemini 3 probes', () => {
+  it('small probes maxTokens=256 do not force low automatically', () => {
     const config = buildGoogleGenerationConfig(request({ maxTokens: 256 }));
-    expect(config.thinkingConfig).toEqual({
-      thinkingLevel: 'LOW',
-      includeThoughts: false,
-    });
+    expect(config.thinkingConfig).toBeUndefined();
   });
 
-  it('never sends thinkingConfig to Gemini 2.5', () => {
+  it('never sends thinkingConfig or sampling parameters to gemini-2.5-flash', () => {
     const config = buildGoogleGenerationConfig(
-      request({ model: 'gemini-2.5-flash', thinkingLevel: 'high', maxTokens: 256 }),
+      request({ model: 'gemini-2.5-flash', thinkingLevel: 'high' as any, maxTokens: 256 }),
     );
     expect(config.thinkingConfig).toBeUndefined();
+    expect(config.temperature).toBeUndefined();
+    expect(config.topP).toBeUndefined();
   });
 });
 
 describe('agent model capabilities', () => {
-  it('keeps capability checks separate from thinking-level eligibility', () => {
+  it('allows models without explicit thinking level like gpt-4o without thinkingLevel', () => {
     expect(modelSupportsAgent('gpt-4o-2024-11-20', 'SCRIBE')).toBe(true);
-    expect(() =>
-      assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20'),
-    ).toThrow(/niveau de réflexion explicite/);
+    expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).not.toThrow();
   });
 
-  it('CONFIDANT accepts a thinking-capable text model', () => {
+  it('CONFIDANT accepts a thinking-capable text model with explicit thinkingLevel', () => {
     expect(modelSupportsAgent('gpt-5.5-2026-04-23', 'CONFIDANT')).toBe(true);
     expect(() =>
       assertSavableAgentModel('CONFIDANT', 'openai', 'gpt-5.5-2026-04-23', 'low'),
@@ -127,24 +127,18 @@ describe('agent model capabilities', () => {
           provider: 'vertex',
           model: 'gemini-3.6-flash',
           thinkingLevel: 'high',
-          temperature: 0.7,
-          topP: 0.9,
         },
         GUIDE: {
           ...DEFAULT_AI_MODEL_CONFIG.agents.GUIDE,
           provider: 'vertex',
           model: 'gemini-3.5-flash',
           thinkingLevel: 'medium',
-          temperature: 0.5,
-          topP: 0.9,
         },
         EDITOR: {
           ...DEFAULT_AI_MODEL_CONFIG.agents.EDITOR,
           provider: 'vertex',
           model: 'gemini-3.6-flash',
           thinkingLevel: 'medium',
-          temperature: 0.4,
-          topP: 0.9,
         },
         CONFIDANT: { ...DEFAULT_AI_MODEL_CONFIG.agents.CONFIDANT, enabled: false },
         ONIRIQUE: { ...DEFAULT_AI_MODEL_CONFIG.agents.ONIRIQUE, enabled: false },

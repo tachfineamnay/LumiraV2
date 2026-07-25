@@ -17,6 +17,7 @@ import {
   VERTEX_CREDENTIALS_KEY,
   VertexAdapter,
 } from '../../services/factory/llm';
+import { getModelRuntimeControls } from '../../services/factory/model-runtime-controls';
 import {
   AiCredentialsStatusResponse,
   AiErrorCategory,
@@ -761,6 +762,11 @@ export class AiProviderDiagnosticsService {
     timeoutMs: number,
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
+    const controls = getModelRuntimeControls(provider, model);
+    const probeThinkingLevel = controls.defaultThinkingLevel;
+    this.logger.log(
+      `[Probe ${provider}/${model}] text probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+    );
     try {
       const result = await withTimeout(
         adapter.complete({
@@ -768,6 +774,7 @@ export class AiProviderDiagnosticsService {
           systemPrompt: 'Réponds exactement à la consigne.',
           userContent: 'Réponds uniquement par OK.',
           maxTokens: TEXT_PROBE_TOKENS,
+          thinkingLevel: probeThinkingLevel,
           signal: new AbortController().signal,
           timeoutMs,
         }),
@@ -804,6 +811,11 @@ export class AiProviderDiagnosticsService {
     timeoutMs: number,
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
+    const controls = getModelRuntimeControls(provider, model);
+    const probeThinkingLevel = controls.defaultThinkingLevel;
+    this.logger.log(
+      `[Probe ${provider}/${model}] vision probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+    );
     try {
       const result = await withTimeout(
         adapter.complete({
@@ -812,6 +824,7 @@ export class AiProviderDiagnosticsService {
           userContent: 'Indique la couleur des deux formes et le nombre visible.',
           images: [{ mimeType: 'image/png', base64: IDENTIFIABLE_VISION_PROBE_BASE64 }],
           maxTokens: VISION_PROBE_TOKENS,
+          thinkingLevel: probeThinkingLevel,
           signal: new AbortController().signal,
           timeoutMs,
         }),
@@ -846,6 +859,11 @@ export class AiProviderDiagnosticsService {
     timeoutMs: number,
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
+    const controls = getModelRuntimeControls(provider, model);
+    const probeThinkingLevel = controls.defaultThinkingLevel;
+    this.logger.log(
+      `[Probe ${provider}/${model}] structured probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+    );
     try {
       const result = await withTimeout(
         adapter.complete({
@@ -853,6 +871,7 @@ export class AiProviderDiagnosticsService {
           systemPrompt: 'Retourne uniquement le JSON demandé.',
           userContent: 'Réponds avec ok=true.',
           maxTokens: STRUCTURED_PROBE_TOKENS,
+          thinkingLevel: probeThinkingLevel,
           jsonSchema: this.healthJsonSchema(),
           signal: new AbortController().signal,
           timeoutMs,
@@ -868,9 +887,15 @@ export class AiProviderDiagnosticsService {
   }
 
   private openAiProbeParameters(model: string): Record<string, unknown> {
-    return model.startsWith('gpt-5.')
-      ? { reasoning: { effort: 'low' }, text: { verbosity: 'low' } }
-      : {};
+    const controls = getModelRuntimeControls('openai', model);
+    const probeThinkingLevel = controls.defaultThinkingLevel;
+    this.logger.log(
+      `[Probe openai/${model}] thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+    );
+    if (controls.thinkingLevels.length > 0 && probeThinkingLevel) {
+      return { reasoning: { effort: probeThinkingLevel } };
+    }
+    return {};
   }
 
   private healthJsonSchema() {
@@ -886,8 +911,9 @@ export class AiProviderDiagnosticsService {
   }
 
   private healthJsonFormat(model: string): Record<string, unknown> {
+    const controls = getModelRuntimeControls('openai', model);
     return {
-      ...(model.startsWith('gpt-5.') ? { verbosity: 'low' } : {}),
+      ...(controls.supportsVerbosity ? { verbosity: 'medium' } : {}),
       format: {
         type: 'json_schema',
         name: 'lumira_health_probe',

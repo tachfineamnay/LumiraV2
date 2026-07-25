@@ -28,7 +28,84 @@ type TabId = 'readiness' | 'credentials' | 'personality' | 'agents' | 'models';
 type ProbeStatus = 'ok' | 'error' | 'not_tested';
 type ProviderId = 'openai' | 'vertex' | 'gemini';
 type Capability = 'text' | 'vision' | 'structured' | 'long_text' | 'fast_text';
-type ThinkingLevel = 'low' | 'medium' | 'high';
+type ThinkingLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+interface ModelRuntimeControls {
+  thinkingLevels: readonly ThinkingLevel[];
+  defaultThinkingLevel?: ThinkingLevel;
+  supportsVerbosity: boolean;
+}
+
+function getModelRuntimeControls(provider: ProviderId, model: string): ModelRuntimeControls {
+  if (!model) return { thinkingLevels: [], supportsVerbosity: false };
+  const normalized = model.trim().toLowerCase();
+
+  if (provider === 'openai') {
+    if (/^gpt-5\.5(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
+        defaultThinkingLevel: 'medium',
+        supportsVerbosity: true,
+      };
+    }
+    if (/^gpt-5\.4(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
+        defaultThinkingLevel: 'none',
+        supportsVerbosity: true,
+      };
+    }
+    return { thinkingLevels: [], supportsVerbosity: false };
+  }
+
+  if (provider === 'gemini' || provider === 'vertex') {
+    if (/^gemini-3\.6-flash(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
+        defaultThinkingLevel: 'medium',
+        supportsVerbosity: false,
+      };
+    }
+    if (/^gemini-3\.5-flash-lite(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
+        defaultThinkingLevel: 'minimal',
+        supportsVerbosity: false,
+      };
+    }
+    if (/^gemini-3\.5-flash(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
+        defaultThinkingLevel: 'medium',
+        supportsVerbosity: false,
+      };
+    }
+    if (/^gemini-3\.1-pro(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['low', 'medium', 'high'],
+        defaultThinkingLevel: 'high',
+        supportsVerbosity: false,
+      };
+    }
+    if (/^gemini-3-flash(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
+        defaultThinkingLevel: 'high',
+        supportsVerbosity: false,
+      };
+    }
+    if (/^gemini-3-pro(?:[.-]|$)/i.test(normalized)) {
+      return {
+        thinkingLevels: ['low', 'high'],
+        defaultThinkingLevel: 'high',
+        supportsVerbosity: false,
+      };
+    }
+    return { thinkingLevels: [], supportsVerbosity: false };
+  }
+
+  return { thinkingLevels: [], supportsVerbosity: false };
+}
 
 type AgentVisualStatus = 'disabled' | 'functional' | 'failed' | 'detected' | 'missing';
 
@@ -76,11 +153,7 @@ interface AgentModelConfig {
   provider: ProviderId;
   model: string;
   thinkingLevel?: ThinkingLevel;
-  /** Compatibility with configurations saved before the unified field. */
-  reasoningEffort?: ThinkingLevel;
   verbosity?: ThinkingLevel;
-  temperature?: number;
-  topP?: number;
   maxOutputTokens: number;
   validation?: AgentModelValidationProof;
   needsValidation?: boolean;
@@ -258,9 +331,12 @@ const RECOMMENDED_THINKING: Record<AgentKey, ThinkingLevel> = {
 };
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
-  low: 'Faible',
-  medium: 'Moyen',
-  high: 'Élevé',
+  none: 'Aucune (none)',
+  minimal: 'Minimale (minimal)',
+  low: 'Faible (low)',
+  medium: 'Moyenne (medium)',
+  high: 'Élevée (high)',
+  xhigh: 'Très élevée (xhigh)',
 };
 
 function supportsThinkingLevel(provider: ProviderId, model: string): boolean {
@@ -788,18 +864,19 @@ export default function SettingsPage() {
 
     const invalid = (
       Object.entries(modelConfig.agents) as Array<[AgentKey, AgentModelConfig]>
-    ).find(
-      ([, config]) =>
-        config.enabled &&
-        (!supportsThinkingLevel(config.provider, config.model) ||
-          !(config.thinkingLevel ?? config.reasoningEffort)),
-    );
+    ).find(([_, config]) => {
+      if (!config.enabled) return false;
+      const controls = getModelRuntimeControls(config.provider, config.model);
+      if (controls.thinkingLevels.length > 0) {
+        return !config.thinkingLevel || !controls.thinkingLevels.includes(config.thinkingLevel);
+      }
+      return false;
+    });
     if (invalid) {
       const [agent, config] = invalid;
+      const controls = getModelRuntimeControls(config.provider, config.model);
       setActionError(
-        !supportsThinkingLevel(config.provider, config.model)
-          ? `${agent} : sélectionnez un modèle compatible avec le niveau de réflexion.`
-          : `${agent} : sélectionnez un niveau de réflexion.`,
+        `${agent} : sélectionnez un niveau de réflexion valide (${controls.thinkingLevels.join(', ')}).`,
       );
       return;
     }
@@ -832,10 +909,16 @@ export default function SettingsPage() {
       };
 
       if (providerChanged || modelChanged) {
-        delete next.thinkingLevel;
-        delete next.reasoningEffort;
         delete next.validation;
         next.needsValidation = true;
+        const controls = getModelRuntimeControls(next.provider, next.model);
+        if (controls.thinkingLevels.length > 0) {
+          if (!next.thinkingLevel || !controls.thinkingLevels.includes(next.thinkingLevel)) {
+            next.thinkingLevel = controls.defaultThinkingLevel;
+          }
+        } else {
+          delete next.thinkingLevel;
+        }
       }
 
       return {
@@ -1337,9 +1420,7 @@ export default function SettingsPage() {
             const visual = agentVisualStatus(agent.key, item);
             const probe = item.model ? findProbe(item.provider, item.model) : undefined;
             const options = modelsForProvider(item.provider, agent.key);
-            const thinkingCompatible = supportsThinkingLevel(item.provider, item.model);
-            const isOpenAiThinking = item.provider === 'openai' && thinkingCompatible;
-            const selectedThinking = item.thinkingLevel ?? item.reasoningEffort ?? '';
+            const controls = getModelRuntimeControls(item.provider, item.model);
             const statusPill =
               visual === 'disabled' ? (
                 <Pill level="warning">Désactivé — non évalué</Pill>
@@ -1392,12 +1473,6 @@ export default function SettingsPage() {
                         utilisation.
                       </p>
                     )}
-                    {item.model && !thinkingCompatible && (
-                      <p className="mt-2 rounded-lg bg-amber-500/10 p-2 text-sm text-amber-700">
-                        Ce modèle actuel reste affiché pour visibilité, mais ne peut plus être
-                        appliqué à Lumira : choisissez un modèle avec niveau de réflexion.
-                      </p>
-                    )}
                     {visual === 'failed' && probe?.lastError && (
                       <p className="mt-2 rounded-lg bg-red-500/10 p-2 text-sm text-red-600">
                         {probe.lastError}
@@ -1417,7 +1492,7 @@ export default function SettingsPage() {
                   </label>
                 </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <label className="text-sm text-desk-muted">
                     Fournisseur
                     <select
@@ -1447,19 +1522,16 @@ export default function SettingsPage() {
                     >
                       <option value="">Sélectionner un modèle</option>
                       {options.map((option) => {
-                        const optionCompatible = supportsThinkingLevel(item.provider, option.id);
                         const optionProbe = findProbe(item.provider, option.id);
-                        const label = !optionCompatible
-                          ? 'Actuel — incompatible thinking'
-                          : probePasses(agent.key, optionProbe)
-                            ? 'Fonctionnel'
-                            : probeFails(agent.key, optionProbe)
-                              ? 'Test échoué'
-                              : option.detected === false
-                                ? 'Actuel — non détecté'
-                                : 'Détecté — non testé';
+                        const label = probePasses(agent.key, optionProbe)
+                          ? 'Fonctionnel'
+                          : probeFails(agent.key, optionProbe)
+                            ? 'Test échoué'
+                            : option.detected === false
+                              ? 'Actuel — non détecté'
+                              : 'Détecté — non testé';
                         return (
-                          <option key={option.id} value={option.id} disabled={!optionCompatible}>
+                          <option key={option.id} value={option.id}>
                             {option.displayName || option.id} · {label}
                           </option>
                         );
@@ -1481,11 +1553,11 @@ export default function SettingsPage() {
                     />
                   </label>
 
-                  {thinkingCompatible ? (
-                    <label className="text-sm text-desk-muted">
+                  {controls.thinkingLevels.length > 0 ? (
+                    <label className="text-sm text-desk-muted sm:col-span-2 lg:col-span-3">
                       Niveau de réflexion
                       <select
-                        value={selectedThinking}
+                        value={item.thinkingLevel ?? controls.defaultThinkingLevel ?? ''}
                         onChange={(event) =>
                           updateAgent(agent.key, {
                             thinkingLevel: event.target.value as ThinkingLevel,
@@ -1493,72 +1565,21 @@ export default function SettingsPage() {
                         }
                         className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
                       >
-                        <option value="">Sélectionner…</option>
-                        <option value="low">Faible</option>
-                        <option value="medium">Moyen</option>
-                        <option value="high">Élevé</option>
+                        {controls.thinkingLevels.map((lvl) => (
+                          <option key={lvl} value={lvl}>
+                            {THINKING_LABELS[lvl] || lvl}
+                          </option>
+                        ))}
                       </select>
                       <span className="mt-1 block text-xs leading-5 text-desk-muted">
-                        {thinkingDescription(selectedThinking || undefined)}
-                      </span>
-                      <span className="block text-xs font-medium text-amber-700">
-                        Recommandation Lumira : {THINKING_LABELS[RECOMMENDED_THINKING[agent.key]]}
+                        {thinkingDescription(item.thinkingLevel ?? controls.defaultThinkingLevel)}
                       </span>
                     </label>
                   ) : (
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700">
-                      Sélectionnez un modèle compatible pour régler sa réflexion.
+                    <div className="flex items-center rounded-lg border border-desk-border bg-desk-bg/50 p-3 text-sm text-desk-muted sm:col-span-2 lg:col-span-3">
+                      Ce modèle ne propose pas de niveau de réflexion configurable (réflexion gérée
+                      automatiquement par le fournisseur).
                     </div>
-                  )}
-
-                  {isOpenAiThinking ? (
-                    <label className="text-sm text-desk-muted">
-                      Verbosité
-                      <select
-                        value={item.verbosity || 'medium'}
-                        onChange={(event) =>
-                          updateAgent(agent.key, {
-                            verbosity: event.target.value as AgentModelConfig['verbosity'],
-                          })
-                        }
-                        className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-                      >
-                        <option value="low">low</option>
-                        <option value="medium">medium</option>
-                        <option value="high">high</option>
-                      </select>
-                    </label>
-                  ) : (
-                    <>
-                      <label className="text-sm text-desk-muted">
-                        Température
-                        <input
-                          type="number"
-                          min={0}
-                          max={2}
-                          step={0.05}
-                          value={item.temperature ?? 0.4}
-                          onChange={(event) =>
-                            updateAgent(agent.key, { temperature: Number(event.target.value) })
-                          }
-                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-                        />
-                      </label>
-                      <label className="text-sm text-desk-muted">
-                        Top P
-                        <input
-                          type="number"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={item.topP ?? 0.9}
-                          onChange={(event) =>
-                            updateAgent(agent.key, { topP: Number(event.target.value) })
-                          }
-                          className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
-                        />
-                      </label>
-                    </>
                   )}
                 </div>
               </Card>

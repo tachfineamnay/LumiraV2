@@ -13,11 +13,7 @@ export interface LlmRequest {
   userContent: string;
   images?: ImagePayload[];
   maxTokens: number;
-  temperature?: number;
-  topP?: number;
   thinkingLevel?: AiThinkingLevel;
-  /** Compatibility field populated by the existing runtime request builder. */
-  reasoningEffort?: AiThinkingLevel;
   verbosity?: AiThinkingLevel;
   jsonSchema?: { name: string; schema: JsonSchema };
   signal: AbortSignal;

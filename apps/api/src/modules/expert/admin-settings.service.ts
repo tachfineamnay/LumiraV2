@@ -565,7 +565,7 @@ export class AdminSettingsService {
             agent,
             agentConfig.provider,
             agentConfig.model,
-            agentConfig.thinkingLevel ?? agentConfig.reasoningEffort,
+            agentConfig.thinkingLevel,
           );
         } catch (err) {
           throw new BadRequestException(err instanceof Error ? err.message : String(err));

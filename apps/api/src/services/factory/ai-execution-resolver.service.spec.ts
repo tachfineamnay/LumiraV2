@@ -20,7 +20,7 @@ const baseSnapshot: AiPromptSnapshot = {
         enabled: true,
         provider: 'openai',
         model: 'gpt-5.5-2026-04-23',
-        reasoningEffort: 'high',
+        thinkingLevel: 'high',
         verbosity: 'high',
         maxOutputTokens: 24000,
         validation: {
@@ -35,7 +35,7 @@ const baseSnapshot: AiPromptSnapshot = {
         enabled: true,
         provider: 'openai',
         model: 'gpt-5.4-2026-03-05',
-        reasoningEffort: 'low',
+        thinkingLevel: 'low',
         verbosity: 'medium',
         maxOutputTokens: 6000,
         validation: {
@@ -50,7 +50,7 @@ const baseSnapshot: AiPromptSnapshot = {
         enabled: true,
         provider: 'openai',
         model: 'gpt-5.4-2026-03-05',
-        reasoningEffort: 'medium',
+        thinkingLevel: 'medium',
         verbosity: 'high',
         maxOutputTokens: 16000,
         validation: {
@@ -66,7 +66,6 @@ const baseSnapshot: AiPromptSnapshot = {
         provider: 'openai',
         model: 'gpt-5.4-2026-03-05',
         thinkingLevel: 'low',
-        reasoningEffort: 'low',
         verbosity: 'medium',
         maxOutputTokens: 12000,
         validation: {
@@ -81,16 +80,12 @@ const baseSnapshot: AiPromptSnapshot = {
         enabled: false,
         provider: 'openai',
         model: 'gpt-4o-2024-11-20',
-        temperature: 0.6,
-        topP: 0.9,
         maxOutputTokens: 1600,
       },
       ONIRIQUE: {
         enabled: false,
         provider: 'openai',
         model: 'gpt-4o-2024-11-20',
-        temperature: 0.65,
-        topP: 0.9,
         maxOutputTokens: 2500,
       },
     },
@@ -116,7 +111,7 @@ describe('AiExecutionResolverService', () => {
 
     expect(resolved.provider).toBe('openai');
     expect(resolved.model).toBe('gpt-5.5-2026-04-23');
-    expect(resolved.reasoningEffort).toBe('high');
+    expect(resolved.thinkingLevel).toBe('high');
     expect(resolved.routingSource).toBe('model-config:SCRIBE');
   });
 
@@ -175,8 +170,6 @@ describe('AiExecutionResolverService', () => {
             provider: 'vertex',
             model: 'gemini-3.5-flash',
             thinkingLevel: 'high',
-            temperature: 0.7,
-            topP: 0.9,
             maxOutputTokens: 24000,
             validation: {
               provider: 'vertex',
@@ -191,8 +184,6 @@ describe('AiExecutionResolverService', () => {
             provider: 'gemini',
             model: 'gemini-3.5-flash',
             thinkingLevel: 'medium',
-            temperature: 0.4,
-            topP: 0.9,
             maxOutputTokens: 16000,
             validation: {
               provider: 'gemini',

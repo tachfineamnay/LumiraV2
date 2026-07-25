@@ -15,6 +15,10 @@ import {
   VERTEX_CREDENTIALS_KEY,
 } from '../../services/factory/llm';
 import { AiProvider } from '../../services/factory/ai-execution.types';
+import {
+  getModelRuntimeControls,
+  AiThinkingLevel,
+} from '../../services/factory/model-runtime-controls';
 
 export interface DiscoveredOperationalModel {
   provider: 'openai' | 'gemini' | 'vertex';
@@ -32,6 +36,10 @@ export interface DiscoveredOperationalModel {
   inputTokenLimit?: number;
   outputTokenLimit?: number;
   thinking?: boolean;
+  thinkingLevels?: readonly AiThinkingLevel[];
+  defaultThinkingLevel?: AiThinkingLevel;
+  supportsThinking?: boolean;
+  supportsVerbosity?: boolean;
   testedAt?: string;
   latencyMs?: number;
   errorCategory?: string;
@@ -143,7 +151,12 @@ export class AiModelCatalogService {
 
       for await (const model of pager) {
         const rawName = typeof model.name === 'string' ? model.name : '';
-        const id = rawName.replace(/^models\//, '').split('/').pop()?.trim() || '';
+        const id =
+          rawName
+            .replace(/^models\//, '')
+            .split('/')
+            .pop()
+            ?.trim() || '';
         if (!id || seen.has(id) || !/^gemini-/i.test(id)) continue;
 
         const actions = (model as { supportedActions?: string[] }).supportedActions ?? [];
@@ -163,11 +176,8 @@ export class AiModelCatalogService {
           typeof model.displayName === 'string' && model.displayName.trim()
             ? model.displayName.trim()
             : id;
-        const description =
-          typeof (model as { description?: string }).description === 'string'
-            ? (model as { description?: string }).description || ''
-            : '';
 
+        const controls = getModelRuntimeControls('gemini', id);
         models.push({
           provider: 'gemini',
           id,
@@ -175,17 +185,16 @@ export class AiModelCatalogService {
           discovery: 'provider_list',
           detected: true,
           callable: null,
-          supportedActions:
-            supportedActions.length > 0 ? supportedActions : ['generateContent'],
+          supportedActions: supportedActions.length > 0 ? supportedActions : ['generateContent'],
           inputTokenLimit:
             typeof model.inputTokenLimit === 'number' ? model.inputTokenLimit : undefined,
           outputTokenLimit:
             typeof model.outputTokenLimit === 'number' ? model.outputTokenLimit : undefined,
-          thinking:
-            /thinking/i.test(id) ||
-            /thinking/i.test(displayName) ||
-            /thinking/i.test(description) ||
-            Boolean((model as { thinking?: boolean }).thinking),
+          thinking: controls.thinkingLevels.length > 0,
+          thinkingLevels: controls.thinkingLevels,
+          defaultThinkingLevel: controls.defaultThinkingLevel,
+          supportsThinking: controls.thinkingLevels.length > 0,
+          supportsVerbosity: controls.supportsVerbosity,
         });
       }
 
@@ -211,6 +220,7 @@ export class AiModelCatalogService {
         const id = model.id?.trim();
         if (!id || seen.has(id) || !this.isOpenAiTextGenerationModel(id)) continue;
         seen.add(id);
+        const controls = getModelRuntimeControls('openai', id);
         models.push({
           provider: 'openai',
           id,
@@ -218,6 +228,11 @@ export class AiModelCatalogService {
           discovery: 'provider_list',
           detected: true,
           callable: null,
+          thinking: controls.thinkingLevels.length > 0,
+          thinkingLevels: controls.thinkingLevels,
+          defaultThinkingLevel: controls.defaultThinkingLevel,
+          supportsThinking: controls.thinkingLevels.length > 0,
+          supportsVerbosity: controls.supportsVerbosity,
         });
       }
 
@@ -317,6 +332,7 @@ export class AiModelCatalogService {
         if (this.isNonTextGenerationModel(id)) continue;
 
         seen.add(id);
+        const controls = getModelRuntimeControls('vertex', id);
         models.push({
           provider: 'vertex',
           id,
@@ -328,6 +344,11 @@ export class AiModelCatalogService {
           supportedActions: model.supportedActions,
           inputTokenLimit: model.inputTokenLimit,
           outputTokenLimit: model.outputTokenLimit,
+          thinking: controls.thinkingLevels.length > 0,
+          thinkingLevels: controls.thinkingLevels,
+          defaultThinkingLevel: controls.defaultThinkingLevel,
+          supportsThinking: controls.thinkingLevels.length > 0,
+          supportsVerbosity: controls.supportsVerbosity,
         });
       }
 
