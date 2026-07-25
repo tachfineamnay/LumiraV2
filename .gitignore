@@ -41,3 +41,4 @@ error_log*.txt
 
 # TypeScript build cache
 *.tsbuildinfo
+graphify-out/
