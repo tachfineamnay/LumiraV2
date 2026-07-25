@@ -7,6 +7,7 @@ import { AiExecutionResolverService } from './ai-execution-resolver.service';
 import { AiRunService } from './ai-run.service';
 import { AiRuntimeCacheService } from './ai-runtime-cache.service';
 import { OrderContext, UserProfile, VertexOracle } from './VertexOracle';
+import { DEFAULT_AI_MODEL_CONFIG } from './ai-model-config';
 
 jest.mock('axios');
 jest.mock('openai', () => ({ __esModule: true, default: jest.fn() }));
@@ -488,5 +489,107 @@ describe('VertexOracle OpenAI-only runtime', () => {
       ),
     ).rejects.toThrow(/timeout après 20ms/);
     expect(attempts).toBe(1);
+  });
+
+  describe('Atomic MODEL_CONFIG loading & validation', () => {
+    it('throws AI_MODEL_CONFIG_INVALID on cold start if MODEL_CONFIG is invalid', async () => {
+      const mockPrisma = {
+        promptVersion: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              key: 'MODEL_CONFIG',
+              value: JSON.stringify({
+                providerMode: 'per_agent',
+                agents: {
+                  ...DEFAULT_AI_MODEL_CONFIG.agents,
+                  SCRIBE: {
+                    enabled: true,
+                    provider: 'openai',
+                    model: 'gpt-4o-2024-11-20',
+                  },
+                },
+              }),
+            },
+          ]),
+        },
+      };
+
+      const testModule: TestingModule = await Test.createTestingModule({
+        providers: [
+          VertexOracle,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: (key: string, fallback?: string) =>
+                key === 'AWS_REGION' ? 'eu-west-3' : (fallback ?? ''),
+            },
+          },
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: AiExecutionResolverService, useValue: {} },
+          { provide: AiRunService, useValue: { recordRun: jest.fn() } },
+          { provide: AiRuntimeCacheService, useValue: { registerInvalidator: jest.fn() } },
+        ],
+      }).compile();
+
+      const oracle = testModule.get(VertexOracle);
+      await expect(
+        (
+          oracle as unknown as { loadRuntimeConfiguration: () => Promise<void> }
+        ).loadRuntimeConfiguration(),
+      ).rejects.toThrow(/AI_MODEL_CONFIG_INVALID/);
+    });
+
+    it('retains last valid in-memory configuration on warm state if new MODEL_CONFIG in DB is invalid', async () => {
+      const mockPrisma = {
+        promptVersion: {
+          findMany: jest
+            .fn()
+            .mockResolvedValueOnce([
+              {
+                key: 'MODEL_CONFIG',
+                value: JSON.stringify(DEFAULT_AI_MODEL_CONFIG),
+              },
+            ])
+            .mockResolvedValueOnce([
+              {
+                key: 'MODEL_CONFIG',
+                value: 'invalid-json-string',
+              },
+            ]),
+        },
+      };
+
+      const testModule: TestingModule = await Test.createTestingModule({
+        providers: [
+          VertexOracle,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: (key: string, fallback?: string) =>
+                key === 'AWS_REGION' ? 'eu-west-3' : (fallback ?? ''),
+            },
+          },
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: AiExecutionResolverService, useValue: {} },
+          { provide: AiRunService, useValue: { recordRun: jest.fn() } },
+          { provide: AiRuntimeCacheService, useValue: { registerInvalidator: jest.fn() } },
+        ],
+      }).compile();
+
+      const oracle = testModule.get(VertexOracle);
+      const privateOracle = oracle as unknown as {
+        loadRuntimeConfiguration: () => Promise<void>;
+        invalidateCache: () => void;
+        modelConfig: typeof DEFAULT_AI_MODEL_CONFIG;
+      };
+
+      await privateOracle.loadRuntimeConfiguration();
+      expect(privateOracle.modelConfig.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
+
+      privateOracle.invalidateCache();
+
+      await expect(privateOracle.loadRuntimeConfiguration()).resolves.not.toThrow();
+      expect(privateOracle.modelConfig.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
+    });
   });
 });

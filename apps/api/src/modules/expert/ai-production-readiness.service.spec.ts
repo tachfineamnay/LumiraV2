@@ -60,7 +60,7 @@ const successfulRuns: RunFixture[] = [
     agent: 'NARRATOR',
     mission: 'AUDIO_NARRATION',
     provider: 'openai',
-    model: 'gpt-4o-2024-11-20',
+    model: 'gpt-5.4-2026-03-05',
     routingSource: 'global:NARRATOR',
     status: 'SUCCESS',
     inputTokens: 100,
@@ -187,7 +187,7 @@ describe('AiProductionReadinessService', () => {
           },
           {
             provider: 'openai',
-            model: 'gpt-4o-2024-11-20',
+            model: 'gpt-5.4-2026-03-05',
             configured: true,
             text,
             multimodal: 'not_tested',

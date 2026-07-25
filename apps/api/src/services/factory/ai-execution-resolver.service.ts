@@ -9,7 +9,7 @@ import {
   AiPromptSnapshot,
   ResolvedAiExecution,
 } from './ai-execution.types';
-import { normalizeAiModelConfig, assertOperationalModel } from './ai-model-config';
+import { normalizeAiModelConfig, assertExecutableAgentModel } from './ai-model-config';
 
 @Injectable()
 export class AiExecutionResolverService {
@@ -57,7 +57,16 @@ export class AiExecutionResolverService {
       `[${ctx.agent}] ${routingSource} → ${config.provider}/${config.model} mode=${modelConfig.providerMode} thinking=${effectiveThinking ?? 'non défini'}`,
     );
 
-    assertOperationalModel(config.provider, config.model, ctx.agent);
+    try {
+      assertExecutableAgentModel({
+        agent: ctx.agent,
+        provider: config.provider,
+        model: config.model,
+        thinkingLevel: effectiveThinking,
+      });
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : String(err));
+    }
 
     return {
       provider: config.provider,

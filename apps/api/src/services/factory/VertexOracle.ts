@@ -16,6 +16,7 @@ import {
 } from './ai-execution.types';
 import {
   DEFAULT_AI_MODEL_CONFIG,
+  assertExecutableAgentModel,
   estimateOpenAiCost,
   normalizeAiModelConfig,
 } from './ai-model-config';
@@ -447,8 +448,15 @@ export class VertexOracle implements OnModuleInit {
     };
   }
 
+  private hasValidLoadedConfig = false;
+
   private async loadRuntimeConfiguration(): Promise<void> {
     if (this.promptsLoaded) return;
+
+    let candidateLumiraDna = this.lumiraDna;
+    let candidateModelConfig = this.cloneModelConfig(this.modelConfig);
+    const candidateAgentContexts = { ...this.agentContexts };
+
     try {
       const activePrompts = await this.prisma.promptVersion.findMany({
         where: { isActive: true },
@@ -458,27 +466,67 @@ export class VertexOracle implements OnModuleInit {
       for (const prompt of activePrompts) {
         if (seen.has(prompt.key)) continue;
         seen.add(prompt.key);
+
         if (prompt.key === 'LUMIRA_DNA' && prompt.value.trim()) {
-          this.lumiraDna = prompt.value;
+          candidateLumiraDna = prompt.value;
         } else if (prompt.key === 'MODEL_CONFIG') {
+          let parsed: unknown;
           try {
-            const normalized = normalizeAiModelConfig(JSON.parse(prompt.value));
-            this.modelConfig = this.cloneModelConfig(normalized.config);
-            if (normalized.issues.length > 0) {
-              this.logger.warn(`MODEL_CONFIG normalisé: ${normalized.issues.join(' | ')}`);
-            }
+            parsed = JSON.parse(prompt.value);
           } catch (error) {
-            this.logger.error(`MODEL_CONFIG illisible, défaut V1 utilisé: ${String(error)}`);
+            throw new Error(
+              `AI_MODEL_CONFIG_INVALID: JSON illisible dans PromptVersion MODEL_CONFIG (${error instanceof Error ? error.message : String(error)})`,
+            );
           }
-        } else if (prompt.key in this.agentContexts && prompt.value.trim()) {
-          this.agentContexts[prompt.key as AgentType] = prompt.value;
+          const normalized = normalizeAiModelConfig(parsed);
+          if (normalized.issues.length > 0) {
+            this.logger.warn(`MODEL_CONFIG normalisé: ${normalized.issues.join(' | ')}`);
+          }
+          candidateModelConfig = this.cloneModelConfig(normalized.config);
+        } else if (prompt.key in candidateAgentContexts && prompt.value.trim()) {
+          candidateAgentContexts[prompt.key as AgentType] = prompt.value;
         }
       }
+
+      // Validate all active (enabled === true) agents in candidate configuration
+      for (const [agent, agentConfig] of Object.entries(candidateModelConfig.agents) as Array<
+        [AgentType, (typeof candidateModelConfig.agents)[AgentType]]
+      >) {
+        if (agentConfig.enabled) {
+          try {
+            assertExecutableAgentModel({
+              agent,
+              provider: agentConfig.provider,
+              model: agentConfig.model,
+              thinkingLevel: agentConfig.thinkingLevel ?? agentConfig.reasoningEffort,
+            });
+          } catch (err) {
+            throw new Error(
+              `AI_MODEL_CONFIG_INVALID: Configuration invalide pour l'agent actif ${agent} — ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+      }
+
+      // Atomic update of configuration ONLY after parsing & validation pass completely
+      this.lumiraDna = candidateLumiraDna;
+      this.modelConfig = candidateModelConfig;
+      this.agentContexts = candidateAgentContexts;
+      this.hasValidLoadedConfig = true;
+      this.promptsLoaded = true;
     } catch (error) {
-      this.logger.error(
-        `Configuration IA en base indisponible, défaut V1 utilisé: ${String(error)}`,
-      );
-    } finally {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Échec du chargement de la configuration IA: ${errorMsg}`);
+
+      if (!this.hasValidLoadedConfig) {
+        throw new Error(
+          errorMsg.startsWith('AI_MODEL_CONFIG_INVALID')
+            ? errorMsg
+            : `AI_MODEL_CONFIG_INVALID: ${errorMsg}`,
+        );
+      }
+
+      // Warm state reload with invalid configuration -> keep last valid in-memory state
       this.promptsLoaded = true;
     }
   }

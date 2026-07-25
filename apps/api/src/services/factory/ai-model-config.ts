@@ -188,9 +188,10 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
     NARRATOR: {
       enabled: true,
       provider: 'openai',
-      model: 'gpt-4o-2024-11-20',
-      temperature: 0.3,
-      topP: 0.9,
+      model: 'gpt-5.4-2026-03-05',
+      thinkingLevel: 'low',
+      reasoningEffort: 'low',
+      verbosity: 'medium',
       maxOutputTokens: 12000,
     },
     CONFIDANT: {
@@ -279,21 +280,23 @@ export function assertOperationalModel(
   }
 }
 
-function isAgentType(value: string): value is AgentType {
-  return AGENTS.includes(value as AgentType);
+export interface AssertExecutableAgentModelParams {
+  agent: AgentType;
+  provider: AiProvider;
+  model: string;
+  thinkingLevel?: AiThinkingLevel;
 }
 
-export function assertSavableAgentModel(
-  agent: AgentType,
-  provider: AiProvider,
-  model: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _thinkingLevel?: AiThinkingLevel,
-): void {
+export function assertExecutableAgentModel({
+  agent,
+  provider,
+  model,
+  thinkingLevel,
+}: AssertExecutableAgentModelParams): void {
   if (!ALLOWED_PROVIDERS.has(provider)) {
     throw new Error(`${agent} — provider non autorisé: ${provider}`);
   }
-  if (!isAllowedModel(provider, model)) {
+  if (typeof model !== 'string' || model.trim().length === 0 || !isAllowedModel(provider, model)) {
     throw new Error(`${agent} — sélectionnez explicitement un modèle valide pour ${provider}.`);
   }
   if (!modelSupportsAgent(model, agent)) {
@@ -303,6 +306,24 @@ export function assertSavableAgentModel(
   if (!supportsThinkingLevel(provider, model)) {
     throw new Error(`${agent} — ${model} ne supporte pas un niveau de réflexion explicite.`);
   }
+  if (!thinkingLevel || !isThinkingLevel(thinkingLevel)) {
+    throw new Error(
+      `${agent} — un niveau de réflexion (low, medium, high) est obligatoire pour ${model}.`,
+    );
+  }
+}
+
+function isAgentType(value: string): value is AgentType {
+  return AGENTS.includes(value as AgentType);
+}
+
+export function assertSavableAgentModel(
+  agent: AgentType,
+  provider: AiProvider,
+  model: string,
+  thinkingLevel?: AiThinkingLevel,
+): void {
+  assertExecutableAgentModel({ agent, provider, model, thinkingLevel });
 }
 
 function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiAgentModelConfig {

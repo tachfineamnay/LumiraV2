@@ -1,4 +1,5 @@
 import {
+  assertExecutableAgentModel,
   assertOperationalModel,
   assertSavableAgentModel,
   DEFAULT_AI_MODEL_CONFIG,
@@ -18,7 +19,7 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
     expect(normalized.config.agents.SCRIBE.thinkingLevel).toBe('high');
     expect(normalized.config.agents.EDITOR.model).toBe('gpt-5.4-2026-03-05');
-    expect(normalized.config.agents.NARRATOR.model).toBe('gpt-4o-2024-11-20');
+    expect(normalized.config.agents.NARRATOR.model).toBe('gpt-5.4-2026-03-05');
     expect(normalized.config.agents.CONFIDANT.enabled).toBe(false);
     expect(normalized.config.agents.ONIRIQUE.enabled).toBe(false);
   });
@@ -165,12 +166,12 @@ describe('ai-model-config', () => {
     expect(() =>
       assertSavableAgentModel('GUIDE', 'gemini', 'gemini-3.5-flash', 'medium'),
     ).not.toThrow();
-    expect(() =>
-      assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20'),
-    ).toThrow(/niveau de réflexion explicite/);
-    expect(() =>
-      assertSavableAgentModel('SCRIBE', 'vertex', 'gemini-2.5-flash'),
-    ).toThrow(/niveau de réflexion explicite/);
+    expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).toThrow(
+      /niveau de réflexion explicite/,
+    );
+    expect(() => assertSavableAgentModel('SCRIBE', 'vertex', 'gemini-2.5-flash')).toThrow(
+      /niveau de réflexion explicite/,
+    );
   });
 
   it('rejects invalid configuration in strict validation mode', () => {
@@ -182,5 +183,61 @@ describe('ai-model-config', () => {
     expect(estimateOpenAiCost('gpt-5.5-2026-04-23', 1000, 1000)).toBeCloseTo(0.035, 6);
     expect(estimateOpenAiCost('gpt-4o-2024-11-20', 1000, 1000)).toBeCloseTo(0.0125, 6);
     expect(estimateOpenAiCost('unknown-model', 1000, 1000)).toBeUndefined();
+  });
+
+  describe('assertExecutableAgentModel', () => {
+    it('accepts Gemini 3 + high', () => {
+      expect(() =>
+        assertExecutableAgentModel({
+          agent: 'SCRIBE',
+          provider: 'gemini',
+          model: 'gemini-3.5-flash',
+          thinkingLevel: 'high',
+        }),
+      ).not.toThrow();
+    });
+
+    it('rejects Gemini 3 without thinkingLevel', () => {
+      expect(() =>
+        assertExecutableAgentModel({
+          agent: 'SCRIBE',
+          provider: 'gemini',
+          model: 'gemini-3.5-flash',
+        }),
+      ).toThrow(/niveau de réflexion \(low, medium, high\) est obligatoire/);
+    });
+
+    it('rejects Gemini 2.5 + high', () => {
+      expect(() =>
+        assertExecutableAgentModel({
+          agent: 'SCRIBE',
+          provider: 'gemini',
+          model: 'gemini-2.5-flash',
+          thinkingLevel: 'high',
+        }),
+      ).toThrow(/ne supporte pas un niveau de réflexion explicite/);
+    });
+
+    it('rejects GPT-4o for an active agent', () => {
+      expect(() =>
+        assertExecutableAgentModel({
+          agent: 'SCRIBE',
+          provider: 'openai',
+          model: 'gpt-4o-2024-11-20',
+          thinkingLevel: 'high',
+        }),
+      ).toThrow(/ne supporte pas un niveau de réflexion explicite/);
+    });
+
+    it('rejects empty model name', () => {
+      expect(() =>
+        assertExecutableAgentModel({
+          agent: 'SCRIBE',
+          provider: 'openai',
+          model: '',
+          thinkingLevel: 'high',
+        }),
+      ).toThrow(/sélectionnez explicitement un modèle valide/);
+    });
   });
 });

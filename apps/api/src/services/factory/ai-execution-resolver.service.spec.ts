@@ -43,9 +43,10 @@ const baseSnapshot: AiPromptSnapshot = {
       NARRATOR: {
         enabled: true,
         provider: 'openai',
-        model: 'gpt-4o-2024-11-20',
-        temperature: 0.3,
-        topP: 0.9,
+        model: 'gpt-5.4-2026-03-05',
+        thinkingLevel: 'low',
+        reasoningEffort: 'low',
+        verbosity: 'medium',
         maxOutputTokens: 12000,
       },
       CONFIDANT: {
@@ -122,7 +123,7 @@ describe('AiExecutionResolverService', () => {
 
     await expect(
       service.resolve(buildAiContext('SCRIBE', AiMission.READING_GENERATION), snapshot),
-    ).rejects.toThrow('modèle non opérationnel');
+    ).rejects.toThrow(/modèle non autorisé|modèle non opérationnel|sélectionnez explicitement/);
   });
 
   it('rejects gpt-3.5-pro as non-operational model before provider call', async () => {
@@ -143,7 +144,7 @@ describe('AiExecutionResolverService', () => {
 
     await expect(
       service.resolve(buildAiContext('SCRIBE', AiMission.READING_GENERATION), snapshot),
-    ).rejects.toThrow('modèle non opérationnel');
+    ).rejects.toThrow(/modèle non autorisé|modèle non opérationnel|sélectionnez explicitement/);
   });
 
   it('uses per-agent provider and model without reading AiRoutingRule', async () => {
@@ -156,7 +157,8 @@ describe('AiExecutionResolverService', () => {
           SCRIBE: {
             enabled: true,
             provider: 'vertex',
-            model: 'gemini-2.5-pro',
+            model: 'gemini-3.5-flash',
+            thinkingLevel: 'high',
             temperature: 0.7,
             topP: 0.9,
             maxOutputTokens: 24000,
@@ -164,7 +166,8 @@ describe('AiExecutionResolverService', () => {
           EDITOR: {
             enabled: true,
             provider: 'gemini',
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.5-flash',
+            thinkingLevel: 'medium',
             temperature: 0.4,
             topP: 0.9,
             maxOutputTokens: 16000,
@@ -195,10 +198,10 @@ describe('AiExecutionResolverService', () => {
 
     expect(aiRouting.resolveRule).not.toHaveBeenCalled();
     expect(scribe.provider).toBe('vertex');
-    expect(scribe.model).toBe('gemini-2.5-pro');
+    expect(scribe.model).toBe('gemini-3.5-flash');
     expect(scribe.routingSource).toBe('global:SCRIBE');
     expect(editor.provider).toBe('gemini');
-    expect(editor.model).toBe('gemini-2.5-flash');
+    expect(editor.model).toBe('gemini-3.5-flash');
   });
 
   it('falls back to global GUIDE config when productLevel is absent', async () => {
@@ -275,8 +278,7 @@ describe('AiExecutionResolverService', () => {
       baseSnapshot,
     );
 
-    expect(resolved.model).toBe('gpt-4o-2024-11-20');
-    expect(resolved.temperature).toBe(0.3);
+    expect(resolved.model).toBe('gpt-5.4-2026-03-05');
     expect(resolved.maxTokens).toBe(12000);
   });
 });
