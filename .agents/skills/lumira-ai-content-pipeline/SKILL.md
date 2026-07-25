@@ -5,6 +5,10 @@ description: Concevoir, corriger ou tester la chaîne IA Lumira : routing produi
 
 # Lumira — Pipeline IA, contenus et livrables
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation ou modification du pipeline, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour un flux entre services et `graphify affected` avant un changement de contrat. Vérifier chaque conclusion dans le code et les tests, puis exécuter `graphify update .` après le changement. Ne jamais versionner `graphify-out/`.
+
 ## Principe
 
 L'IA est un composant d'un workflow transactionnel, pas une fonction isolée. Toute génération doit être routée, validée, persistée, observable, relançable et compatible avec la revue expert.

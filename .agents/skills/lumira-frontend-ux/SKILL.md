@@ -5,6 +5,10 @@ description: Concevoir, réparer ou harmoniser l'interface Lumira sous Next.js 1
 
 # Lumira — Frontend et expérience utilisateur
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation ou modification frontend, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour le parcours client et `graphify affected` avant un changement partagé. Vérifier chaque conclusion dans le code et les tests, puis exécuter `graphify update .` après le changement. Ne jamais versionner `graphify-out/`.
+
 ## Architecture
 
 - Next.js 14 App Router, React 18 et TypeScript strict.

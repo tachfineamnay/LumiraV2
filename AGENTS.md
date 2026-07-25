@@ -68,3 +68,22 @@ Une modification est terminée uniquement si :
 - les tests pertinents passent ;
 - build, typecheck et lint ne régressent pas ;
 - le compte rendu final liste les fichiers modifiés, les validations exécutées et les risques restant réellement ouverts.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+### Cartographie obligatoire
+
+Pour toute question sur le code, investigation, correction ou modification qui touche plus d’un fichier, consulter d’abord la cartographie Graphify si `graphify-out/graph.json` existe : utiliser `graphify query` pour le contexte, `graphify path` pour une relation précise, `graphify affected` pour les impacts et `graphify explain` pour un nœud. Confirmer ensuite les conclusions dans les sources et les tests : le graphe oriente l’analyse, il ne remplace pas la source de vérité.
+
+Après chaque modification de code, exécuter `graphify update .` avant le compte rendu final. Les artefacts de `graphify-out/` sont locaux et ignorés par Git ; ne jamais les ajouter au commit.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

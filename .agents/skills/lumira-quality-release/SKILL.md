@@ -5,6 +5,10 @@ description: Valider, stabiliser et préparer la release Lumira : typecheck, lin
 
 # Lumira — Qualité, CI et release
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation de régression ou décision de release, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour une dépendance de build et `graphify affected` pour le périmètre de validation. Vérifier chaque conclusion dans le code, la CI et les tests, puis exécuter `graphify update .` après toute modification de code. Ne jamais versionner `graphify-out/`.
+
 ## Principe
 
 Une release n'est pas « prête » parce qu'un build local isolé passe. Elle est prête lorsque le code, la base, les intégrations et les parcours critiques sont validés dans des conditions proches de la production.

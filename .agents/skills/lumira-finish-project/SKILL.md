@@ -5,6 +5,10 @@ description: Finir, auditer, prioriser et implémenter Lumira V2 jusqu'au lancem
 
 # Lumira — Orchestrateur de finalisation
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation ou modification multi-module, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour les dépendances et `graphify affected` pour mesurer le rayon de régression. Vérifier chaque conclusion dans les sources et les tests, puis exécuter `graphify update .` après chaque tranche de code. Ne jamais versionner `graphify-out/`.
+
 ## Objectif
 
 Transformer une demande large en progression réelle du produit, avec une priorisation fondée sur les parcours critiques et des preuves de validation.

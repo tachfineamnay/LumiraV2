@@ -5,6 +5,10 @@ description: Construire, corriger ou tester le parcours client Sanctuaire de Lum
 
 # Lumira — Parcours client Sanctuaire V1
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation ou modification du Sanctuaire, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour un parcours client et `graphify affected` avant un changement de contrat API ou d’état. Vérifier chaque conclusion dans le code et les tests, puis exécuter `graphify update .` après le changement. Ne jamais versionner `graphify-out/`.
+
 ## Source canonique
 
 Lire avant toute modification :

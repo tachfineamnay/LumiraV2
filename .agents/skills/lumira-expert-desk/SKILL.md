@@ -5,6 +5,10 @@ description: Développer, réparer ou auditer le Desk expert Lumira : authentifi
 
 # Lumira — Desk expert et production
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation ou modification du Desk, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour une transition ou une dépendance et `graphify affected` avant un changement multi-module. Vérifier chaque conclusion dans le code et les tests, puis exécuter `graphify update .` après le changement. Ne jamais versionner `graphify-out/`.
+
 ## Objectif
 
 Faire du Desk un outil opérationnel fiable permettant à un expert de suivre une commande depuis le paiement jusqu'à la livraison, sans accès aux données d'un autre rôle et sans états impossibles.

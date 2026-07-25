@@ -5,6 +5,10 @@ description: Sécuriser, corriger ou tester Stripe, webhooks, auth client/expert
 
 # Lumira — Paiements, authentification et sécurité
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation ou modification de paiement, d’authentification ou de sécurité, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour les frontières de confiance et `graphify affected` avant un changement de contrat. Vérifier chaque conclusion dans le code et les tests, puis exécuter `graphify update .` après le changement. Ne jamais versionner `graphify-out/`.
+
 ## Modèle de confiance
 
 - Le navigateur n'est jamais une source de vérité pour le prix, le produit, le statut payé, le rôle ou les entitlements.

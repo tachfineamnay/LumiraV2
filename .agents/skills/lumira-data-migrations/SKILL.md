@@ -5,6 +5,10 @@ description: Modifier, migrer, fiabiliser ou auditer les données Lumira avec Po
 
 # Lumira — Données et migrations Prisma
 
+## Cartographie Graphify obligatoire
+
+Avant toute investigation ou modification de données, interroger `graphify-out/graph.json` avec `graphify query` ; utiliser `graphify path` pour les relations de modèles et `graphify affected` avant un changement de schéma ou de contrat. Vérifier chaque conclusion dans le code et les migrations, puis exécuter `graphify update .` après le changement. Ne jamais versionner `graphify-out/`.
+
 ## Source de vérité
 
 Le schéma actif est `packages/database/prisma/schema.prisma`. Vérifier le `package.json` du package database avant d'utiliser une syntaxe ou une commande Prisma : le projet utilise Prisma 5.22.
