@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { readOrderIntakeReadiness } from '../expert/reading-intake-readiness';
 import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-photo.service';
 import { ReadingIntakeService } from './reading-intake.service';
 
@@ -28,6 +29,7 @@ describe('ReadingIntakeService', () => {
           status: 'PAID',
           clientInputs: null,
         }),
+        findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       userProfile: {
@@ -39,7 +41,10 @@ describe('ReadingIntakeService', () => {
       },
       consentRecord: { upsert: jest.fn().mockResolvedValue({}) },
       onboardingProgress: { upsert: jest.fn().mockResolvedValue({}) },
-      readingIntake: { create: jest.fn().mockResolvedValue({}) },
+      readingIntake: {
+        create: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
     prisma = {
       $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
@@ -117,6 +122,96 @@ describe('ReadingIntakeService', () => {
     expect(gateway.notifyOrderIntakeReady).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'order-1', sealedAt: expect.any(String) }),
     );
+  });
+
+  it('seals the exact filled DRAFT when a newer order exists without an intake', async () => {
+    const storedDraft = {
+      id: 'intake-draft',
+      userId: 'user-1',
+      status: 'DRAFT',
+      revision: 7,
+      data: {
+        schemaVersion: 2,
+        birthDate: '1986-02-14',
+        birthPlace: 'Rabat, Maroc',
+        specificQuestion: 'Comment retrouver une direction qui me ressemble ?',
+        openReading: false,
+        facePhoto: '',
+        palmPhoto: '',
+        deliveryStyle: 'DOUX_ET_CLAIR',
+        pace: 50,
+      },
+      contentHash: null,
+      sealedAt: null,
+    };
+    const scopedOrder = {
+      id: 'order-draft',
+      status: 'PAID',
+      clientInputs: null,
+      readingIntake: storedDraft,
+    };
+    prisma.order.findFirst
+      .mockResolvedValueOnce({ id: 'order-draft' })
+      .mockResolvedValueOnce(scopedOrder);
+    tx.order.findFirst.mockResolvedValueOnce({ id: 'order-draft' });
+    tx.order.findUnique.mockResolvedValue(scopedOrder);
+    tx.consentRecord.upsert.mockResolvedValue({ id: 'consent-1' });
+
+    const result = await service.seal('user-1', {
+      ...validDto,
+      orderId: 'order-draft',
+      intakeRevision: 7,
+    });
+
+    expect(result).toMatchObject({
+      sealed: true,
+      orderId: 'order-draft',
+      revision: 7,
+      contentHash: expect.any(String),
+    });
+    expect(prisma.order.findFirst).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: 'PAID',
+          readingIntake: { is: { status: 'DRAFT' } },
+        }),
+      }),
+    );
+    expect(tx.order.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: 'PAID',
+          readingIntake: { is: { status: 'DRAFT' } },
+        }),
+      }),
+    );
+    expect(tx.readingIntake.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'intake-draft', status: 'DRAFT', revision: 7 }),
+        data: expect.objectContaining({
+          status: 'SEALED',
+          currentStep: 4,
+          contentHash: expect.any(String),
+          sealedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(tx.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: 'order-draft' }) }),
+    );
+    const sealedData = tx.readingIntake.updateMany.mock.calls[0][0].data;
+    expect(
+      readOrderIntakeReadiness({
+        intakeRequired: true,
+        readingIntake: {
+          status: sealedData.status,
+          sealedAt: sealedData.sealedAt,
+          contentHash: sealedData.contentHash,
+          data: sealedData.data,
+        },
+      }),
+    ).toMatchObject({ ready: true, status: 'SEALED', contentHash: result.contentHash });
   });
 
   it('requires explicit consent', async () => {

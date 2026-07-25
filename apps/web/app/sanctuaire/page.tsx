@@ -52,6 +52,7 @@ function SanctuaireHome() {
   const [readingsError, setReadingsError] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isEditingDraft, setIsEditingDraft] = useState(false);
 
   const homeState = resolveSanctuaireHomeState({
     profile,
@@ -59,13 +60,18 @@ function SanctuaireHome() {
     orders,
   });
   const isPreparation = homeState.kind === 'PREPARE' || homeState.kind === 'RESUME';
+  const isResumingDraft = homeState.kind === 'RESUME';
 
   useEffect(() => {
     if (searchParams.get('onboarding') === '1' && isPreparation) {
+      if (isResumingDraft) {
+        setIsEditingDraft(true);
+        return;
+      }
       const el = document.getElementById('dossier-preparation');
       el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [isPreparation, searchParams]);
+  }, [isPreparation, isResumingDraft, searchParams]);
 
   const refreshReadings = useCallback(async () => {
     if (!profile?.profileCompleted) {
@@ -133,6 +139,13 @@ function SanctuaireHome() {
     homeState.kind === 'RESUME'
       ? Math.min(5, Math.max(1, (onboardingProgress?.currentStep ?? 0) + 1))
       : null;
+  const draftData = onboardingProgress?.data ?? {};
+  const draftBirthPlace = typeof draftData.birthPlace === 'string' ? draftData.birthPlace : '';
+  const draftQuestion =
+    typeof draftData.specificQuestion === 'string' ? draftData.specificQuestion : '';
+  const draftObjective = typeof draftData.objective === 'string' ? draftData.objective : '';
+  const hasFacePhoto = Boolean(draftData.facePhoto || draftData.facePhotoUrl);
+  const hasPalmPhoto = Boolean(draftData.palmPhoto || draftData.palmPhotoUrl);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
@@ -301,10 +314,44 @@ function SanctuaireHome() {
         )}
       </section>
 
-      {isPreparation && (
+      {isResumingDraft && !isEditingDraft && (
+        <section className="mt-6 rounded-3xl border border-horizon-400/20 bg-horizon-400/[0.06] p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-horizon-200">
+            Brouillon privé
+          </p>
+          <h2 className="mt-2 font-playfair text-2xl italic text-ivoire-100">
+            Vos informations déjà enregistrées
+          </h2>
+          <div className="mt-4 grid gap-3 text-sm leading-6 text-brume-200 sm:grid-cols-2">
+            <p>
+              {draftBirthPlace ? `Lieu : ${draftBirthPlace}` : 'Vos repères restent enregistrés.'}
+            </p>
+            <p>
+              {hasFacePhoto || hasPalmPhoto
+                ? 'Photos privées enregistrées.'
+                : 'Aucune photo privée transmise.'}
+            </p>
+            {(draftQuestion || draftObjective) && (
+              <p className="sm:col-span-2">{draftQuestion || draftObjective}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditingDraft(true)}
+            className="mt-5 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+          >
+            <ClipboardCheck className="h-4 w-4" /> Modifier mon dossier
+          </button>
+        </section>
+      )}
+
+      {isPreparation && (!isResumingDraft || isEditingDraft) && (
         <div className="mt-8">
           <ReadingPreparation
             variant="inline"
+            onClose={() => {
+              void refetchData().finally(() => setIsEditingDraft(false));
+            }}
             onCompleted={async () => {
               await refetchData();
               await refreshReadings();

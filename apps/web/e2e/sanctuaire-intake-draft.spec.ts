@@ -3,16 +3,30 @@ import { expect, type Page, type Route, test } from '@playwright/test';
 type IntakeData = Record<string, unknown>;
 
 type DraftResponse = {
+  orderId?: string;
   currentStep: number;
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
   data: IntakeData;
   completedAt: string | null;
   revision?: number;
   updatedAt?: string;
+  canEdit?: boolean;
+};
+
+type OrderResponse = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  deliveredAt: string | null;
+  createdAt: string;
+  intakeRequired?: boolean;
+  intakeStatus?: 'DRAFT' | 'SEALED' | null;
+  intakeSealedAt?: string | null;
 };
 
 type MockOptions = {
   draft?: DraftResponse;
+  orders?: OrderResponse[];
   onboardingGetStatus?: number;
   onOnboardingPatch?: (body: IntakeData) => void | Promise<void>;
 };
@@ -62,6 +76,10 @@ function json(route: Route, body: unknown, status = 200) {
 }
 
 async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
+  let currentDraft: DraftResponse = {
+    ...(options.draft ?? DEFAULT_DRAFT),
+    data: { ...(options.draft?.data ?? DEFAULT_DRAFT.data) },
+  };
   const calls = {
     onboardingPatches: [] as IntakeData[],
     presigns: [] as IntakeData[],
@@ -115,7 +133,7 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
     }
 
     if (request.method() === 'GET' && path === '/users/orders/completed') {
-      await json(route, []);
+      await json(route, options.orders ?? []);
       return;
     }
 
@@ -128,7 +146,7 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
         );
         return;
       }
-      await json(route, options.draft ?? DEFAULT_DRAFT);
+      await json(route, currentDraft);
       return;
     }
 
@@ -136,12 +154,19 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
       const body = request.postDataJSON() as IntakeData;
       calls.onboardingPatches.push(body);
       await options.onOnboardingPatch?.(body);
-      await json(route, {
-        ...(options.draft ?? DEFAULT_DRAFT),
+      currentDraft = {
+        ...currentDraft,
         ...body,
+        data: {
+          ...currentDraft.data,
+          ...((body.data as IntakeData | undefined) ?? {}),
+        },
         status: 'IN_PROGRESS',
-        revision: (options.draft?.revision ?? 1) + calls.onboardingPatches.length,
+        revision: (currentDraft.revision ?? 1) + 1,
         updatedAt: new Date().toISOString(),
+      };
+      await json(route, {
+        ...currentDraft,
       });
       return;
     }
@@ -276,10 +301,7 @@ test.describe('Brouillon du dossier de lecture', () => {
 
     const changedValue = 'Je souhaite maintenant avancer étape par étape.';
     await page.getByLabel(/pèse ou se répète/i).fill(changedValue);
-    await page
-      .getByRole('button', { name: /enregistrer et reprendre plus tard/i })
-      .first()
-      .click();
+    await page.getByRole('button', { name: 'Revenir à l’aperçu du dossier' }).click();
 
     await expect
       .poll(() =>
@@ -293,6 +315,87 @@ test.describe('Brouillon du dossier de lecture', () => {
         }),
       )
       .toBe(true);
+  });
+
+  test('garde le brouillon actif visible et modifiable malgré une commande plus récente vide', async ({
+    page,
+  }) => {
+    const draftData = {
+      schemaVersion: 2,
+      birthDate: '1986-02-14',
+      birthTime: '07:35',
+      birthPlace: 'Rabat, Maroc',
+      specificQuestion: 'Comment retrouver une direction qui me ressemble ?',
+      objective: 'Décider avec plus de sérénité.',
+      highs: 'Mes proches et mon activité créative.',
+      lows: 'Je doute au moment de choisir.',
+      deliveryStyle: 'DOUX_ET_CLAIR',
+      pace: 50,
+      facePhoto: '',
+      palmPhoto: '',
+    };
+    await installSanctuaireMocks(page, {
+      draft: {
+        orderId: 'order-draft',
+        currentStep: 2,
+        status: 'IN_PROGRESS',
+        data: draftData,
+        completedAt: null,
+        revision: 7,
+        updatedAt: new Date().toISOString(),
+        canEdit: true,
+      },
+      orders: [
+        {
+          id: 'order-newer-empty',
+          orderNumber: 'LUM-NEWER',
+          status: 'PAID',
+          deliveredAt: null,
+          createdAt: '2026-07-25T12:00:00.000Z',
+          intakeRequired: true,
+          intakeStatus: null,
+          intakeSealedAt: null,
+        },
+        {
+          id: 'order-draft',
+          orderNumber: 'LUM-DRAFT',
+          status: 'PAID',
+          deliveredAt: null,
+          createdAt: '2026-07-24T12:00:00.000Z',
+          intakeRequired: true,
+          intakeStatus: 'DRAFT',
+          intakeSealedAt: null,
+        },
+      ],
+    });
+
+    await page.goto('/sanctuaire');
+    await expect(
+      page.getByRole('heading', { name: 'Vos informations déjà enregistrées' }),
+    ).toBeVisible();
+    await expect(page.getByText(draftData.specificQuestion, { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Modifier mon dossier' }).click();
+    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
+    await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(draftData.lows);
+    const changedLow = 'Je reprends mon élan avec des choix plus sereins.';
+    await page.getByLabel(/pèse ou se répète/i).fill(changedLow);
+    await page.getByRole('button', { name: 'Revenir à l’aperçu du dossier' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Vos informations déjà enregistrées' }),
+    ).toBeVisible();
+
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'Vos informations déjà enregistrées' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Modifier mon dossier' }).click();
+    await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(changedLow);
+
+    await page.goto('/sanctuaire/dossier');
+    await expect(page.getByRole('heading', { name: 'Mon dossier de lecture' })).toBeVisible();
+    await expect(page.getByText(draftData.birthPlace, { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Reprendre et modifier' }).click();
+    await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(changedLow);
   });
 
   test('stocke la photo dans le bucket privé avant de persister sa référence', async ({ page }) => {
@@ -314,10 +417,7 @@ test.describe('Brouillon du dossier de lecture', () => {
     expect(calls.presigns[0]).toMatchObject({ kind: 'FACE' });
     await expect.poll(() => calls.privatePuts).toBe(1);
 
-    await page
-      .getByRole('button', { name: /enregistrer et reprendre plus tard/i })
-      .first()
-      .click();
+    await page.getByRole('button', { name: 'Revenir à l’aperçu du dossier' }).click();
     await expect
       .poll(() =>
         calls.onboardingPatches.some(
@@ -379,22 +479,25 @@ test.describe('Brouillon du dossier de lecture', () => {
       await installSanctuaireMocks(page);
       await openIntake(page);
 
-      const dialog = page.getByRole('dialog');
-      const footer = dialog.locator('footer');
+      const preparation = page.getByRole('region', { name: 'Vos repères essentiels' });
+      const footer = preparation.locator('footer');
       const primaryAction = footer.getByRole('button', { name: /^Continuer$/i });
+      await footer.scrollIntoViewIfNeeded();
       await expect(footer).toBeVisible();
       await expect(primaryAction).toBeVisible();
 
       const layout = await page.evaluate(() => {
-        const dialogNode = document.querySelector('[role="dialog"]') as HTMLElement | null;
+        const preparationNode = document.querySelector(
+          '[role="region"][aria-labelledby="reading-preparation-title"]',
+        ) as HTMLElement | null;
         return {
           pageWidth: document.documentElement.scrollWidth,
-          dialogWidth: dialogNode?.scrollWidth ?? 0,
+          preparationWidth: preparationNode?.scrollWidth ?? 0,
           viewportWidth: window.innerWidth,
         };
       });
       expect(layout.pageWidth).toBeLessThanOrEqual(layout.viewportWidth);
-      expect(layout.dialogWidth).toBeLessThanOrEqual(layout.viewportWidth);
+      expect(layout.preparationWidth).toBeLessThanOrEqual(layout.viewportWidth);
 
       const footerBox = await footer.boundingBox();
       const actionBox = await primaryAction.boundingBox();

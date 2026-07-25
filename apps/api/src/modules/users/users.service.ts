@@ -721,12 +721,32 @@ export class UsersService {
   }
 
   /**
-   * The order that anchors the current intake scope. A terminal order (FAILED
-   * payment retry, delivered reading) without any intake must never shadow an
-   * older, still editable PAID order — otherwise the client sees a locked,
-   * empty dossier.
+   * The order that anchors the current intake scope. A persisted DRAFT always
+   * wins over a newer order without an intake: `OnboardingProgress` is a
+   * compatibility projection shared by the user, so using it to materialize
+   * the newer order would copy or replace the wrong dossier.
    */
-  private findRequiredIntakeOrder(userId: string, client: Pick<Prisma.TransactionClient, 'order'>) {
+  private async findRequiredIntakeOrder(
+    userId: string,
+    client: Pick<Prisma.TransactionClient, 'order'>,
+  ) {
+    const select = {
+      id: true,
+      status: true,
+      readingIntake: true,
+    } as const;
+    const editableDraft = await client.order.findFirst({
+      where: {
+        userId,
+        intakeRequired: true,
+        status: 'PAID',
+        readingIntake: { is: { status: 'DRAFT' } },
+      },
+      orderBy: { createdAt: 'desc' },
+      select,
+    });
+    if (editableDraft) return editableDraft;
+
     return client.order.findFirst({
       where: {
         userId,
@@ -737,11 +757,7 @@ export class UsersService {
         ],
       },
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        status: true,
-        readingIntake: true,
-      },
+      select,
     });
   }
 

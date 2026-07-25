@@ -90,20 +90,7 @@ export class ReadingIntakeService {
    * retain the legacy DTO/clientInputs path.
    */
   async seal(userId: string, dto: UpdateProfileDto): Promise<SealResult> {
-    const activeOrderGuard = await this.prisma.order.findFirst({
-      // Terminal orders (failed retry, delivered reading) without an intake
-      // must not shadow the still-sealable PAID order.
-      where: {
-        userId,
-        intakeRequired: true,
-        OR: [
-          { status: { in: [...ACTIVE_READING_STATUSES] } },
-          { status: { in: ['COMPLETED', 'FAILED'] }, readingIntake: { isNot: null } },
-        ],
-      },
-      select: { id: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const activeOrderGuard = await this.findRequiredIntakeOrderId(userId, this.prisma);
     if (activeOrderGuard?.id !== dto.orderId) {
       throw new ConflictException({
         code: 'ACTIVE_ORDER_CHANGED',
@@ -118,20 +105,25 @@ export class ReadingIntakeService {
       );
     }
 
-    const requiredOrder = await this.prisma.order.findFirst({
-      where: {
-        userId,
-        intakeRequired: true,
-        status: { in: [...ACTIVE_READING_STATUSES] },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        status: true,
-        clientInputs: true,
-        readingIntake: true,
-      },
-    });
+    const requiredOrder = activeOrderGuard
+      ? await this.prisma.order.findFirst({
+          where: {
+            id: activeOrderGuard.id,
+            userId,
+            intakeRequired: true,
+            OR: [
+              { status: { in: [...ACTIVE_READING_STATUSES] } },
+              { status: { in: ['COMPLETED', 'FAILED'] }, readingIntake: { isNot: null } },
+            ],
+          },
+          select: {
+            id: true,
+            status: true,
+            clientInputs: true,
+            readingIntake: true,
+          },
+        })
+      : null;
 
     const result = requiredOrder
       ? await this.sealOrderScoped(userId, dto, requiredOrder)
@@ -198,18 +190,7 @@ export class ReadingIntakeService {
     const sealedAt = new Date();
 
     return this.withSerializableRetry(async (tx) => {
-      const activeOrderInTransaction = await tx.order.findFirst({
-        where: {
-          userId,
-          intakeRequired: true,
-          OR: [
-            { status: { in: [...ACTIVE_READING_STATUSES] } },
-            { status: { in: ['COMPLETED', 'FAILED'] }, readingIntake: { isNot: null } },
-          ],
-        },
-        select: { id: true },
-        orderBy: { createdAt: 'desc' },
-      });
+      const activeOrderInTransaction = await this.findRequiredIntakeOrderId(userId, tx);
       if (activeOrderInTransaction?.id !== dto.orderId) {
         throw new ConflictException({
           code: 'ACTIVE_ORDER_CHANGED',
@@ -482,6 +463,41 @@ export class ReadingIntakeService {
         );
       }
     }
+  }
+
+  /**
+   * Keep sealing on the same order-scoped draft selected by GET/PATCH
+   * onboarding.  A user can own several paid readings; the DRAFT they are
+   * editing must never be displaced by a newer empty or terminal order.
+   */
+  private async findRequiredIntakeOrderId(
+    userId: string,
+    client: Pick<Prisma.TransactionClient, 'order'>,
+  ): Promise<{ id: string } | null> {
+    const editableDraft = await client.order.findFirst({
+      where: {
+        userId,
+        intakeRequired: true,
+        status: 'PAID',
+        readingIntake: { is: { status: 'DRAFT' } },
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (editableDraft) return editableDraft;
+
+    return client.order.findFirst({
+      where: {
+        userId,
+        intakeRequired: true,
+        OR: [
+          { status: { in: [...ACTIVE_READING_STATUSES] } },
+          { status: { in: ['COMPLETED', 'FAILED'] }, readingIntake: { isNot: null } },
+        ],
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   private validateStoredDraft(value: Prisma.JsonValue): OnboardingDraftDataDto {

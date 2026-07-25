@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   CalendarDays,
@@ -19,6 +19,7 @@ import {
 import { ReadingPreparation } from '../../../components/onboarding/ReadingPreparation';
 import { SanctuairePrivatePhoto } from '../../../components/private-media/SanctuairePrivatePhoto';
 import { useSanctuaireAuth } from '../../../context/SanctuaireAuthContext';
+import { resolveSanctuaireActiveOrder } from '../../../lib/sanctuaireHomeState';
 
 const ACTIVE_STATUSES = new Set(['PAID', 'PROCESSING', 'AWAITING_VALIDATION']);
 
@@ -120,47 +121,41 @@ export default function ReadingDossierPage() {
   const [isEditingDraft, setIsEditingDraft] = useState(false);
 
   const progressData = (onboardingProgress?.data || {}) as DraftRecord;
-  const latestOrder = useMemo(
-    () =>
-      [...orders].sort(
-        (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-      )[0],
-    [orders],
-  );
-  const intakeMatchesLatestOrder = latestOrder?.intakeRequired
+  const activeOrder = resolveSanctuaireActiveOrder({ draft: onboardingProgress, orders });
+  const intakeMatchesActiveOrder = activeOrder?.intakeRequired
     ? Boolean(
         onboardingProgress?.orderId &&
-        latestOrder.id &&
-        onboardingProgress.orderId === latestOrder.id,
+        activeOrder.id &&
+        onboardingProgress.orderId === activeOrder.id,
       )
     : Boolean(
         onboardingProgress &&
         (!onboardingProgress.orderId ||
-          !latestOrder?.id ||
-          onboardingProgress.orderId === latestOrder.id),
+          !activeOrder?.id ||
+          onboardingProgress.orderId === activeOrder.id),
       );
   // The draft always belongs to this client: showing it is never wrong, while
   // an empty dossier after filling the form destroys trust.
   const draft = progressData;
   const orderScopedSealed = Boolean(
-    latestOrder?.intakeStatus === 'SEALED' ||
-    latestOrder?.intakeSealedAt ||
-    (intakeMatchesLatestOrder && onboardingProgress?.status === 'COMPLETED'),
+    activeOrder?.intakeStatus === 'SEALED' ||
+    activeOrder?.intakeSealedAt ||
+    (intakeMatchesActiveOrder && onboardingProgress?.status === 'COMPLETED'),
   );
   // The server-side canEdit flag is authoritative: a DRAFT intake on a PAID
   // order is always editable, whatever the local heuristics conclude.
   const sealed =
     onboardingProgress?.canEdit === true
       ? false
-      : latestOrder?.intakeRequired
+      : activeOrder?.intakeRequired
         ? orderScopedSealed
         : orderScopedSealed || profile?.profileCompleted === true;
   const intakeIsAuthoritative = Boolean(
-    intakeMatchesLatestOrder && (!sealed || onboardingProgress?.status === 'COMPLETED'),
+    intakeMatchesActiveOrder && (!sealed || onboardingProgress?.status === 'COMPLETED'),
   );
   const productionActive =
-    sealed && Boolean(latestOrder && ACTIVE_STATUSES.has(latestOrder.status));
-  const delivered = latestOrder?.status === 'COMPLETED';
+    sealed && Boolean(activeOrder && ACTIVE_STATUSES.has(activeOrder.status));
+  const delivered = activeOrder?.status === 'COMPLETED';
 
   const birthDate = pickField(intakeIsAuthoritative, profile?.birthDate, text(draft.birthDate));
   const birthTime = pickField(intakeIsAuthoritative, profile?.birthTime, text(draft.birthTime));
@@ -279,7 +274,13 @@ export default function ReadingDossierPage() {
           <div className="mt-8">
             <ReadingPreparation
               variant="inline"
-              onClose={isEditingDraft ? () => setIsEditingDraft(false) : undefined}
+              onClose={
+                isEditingDraft
+                  ? () => {
+                      void refetchData().finally(() => setIsEditingDraft(false));
+                    }
+                  : undefined
+              }
               onCompleted={async () => {
                 await refetchData();
               }}

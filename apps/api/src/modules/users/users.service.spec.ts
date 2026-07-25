@@ -315,6 +315,64 @@ describe('UsersService', () => {
     });
   });
 
+  describe('getOnboardingProgress', () => {
+    it('returns the filled order-scoped DRAFT instead of a newer empty order or legacy projection', async () => {
+      const filledDraft = {
+        id: 'order-draft',
+        status: 'PAID',
+        readingIntake: {
+          status: 'DRAFT',
+          currentStep: 2,
+          revision: 7,
+          updatedAt: new Date('2026-07-25T10:00:00.000Z'),
+          sealedAt: null,
+          data: {
+            schemaVersion: 2,
+            birthDate: '1986-02-14',
+            birthPlace: 'Rabat, Maroc',
+            specificQuestion: 'Comment retrouver une direction qui me ressemble ?',
+            lifeEvents: 'Une reconversion importante.',
+          },
+        },
+      };
+      const newerEmptyOrder = {
+        id: 'order-newer',
+        status: 'PAID',
+        readingIntake: null,
+      };
+      prisma.order.findFirst.mockImplementation(({ where }: { where: any }) =>
+        where.readingIntake?.is?.status === 'DRAFT' ? filledDraft : newerEmptyOrder,
+      );
+      prisma.onboardingProgress.findUnique.mockResolvedValue({
+        status: 'IN_PROGRESS',
+        currentStep: 0,
+        data: {},
+      });
+      prisma.userProfile.findUnique.mockResolvedValue({ birthPlace: null });
+
+      const result = await service.getOnboardingProgress('user-1');
+
+      expect(result).toMatchObject({
+        status: 'IN_PROGRESS',
+        orderId: 'order-draft',
+        currentStep: 2,
+        revision: 7,
+        canEdit: true,
+        data: filledDraft.readingIntake.data,
+      });
+      expect(prisma.order.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'PAID',
+            readingIntake: { is: { status: 'DRAFT' } },
+          }),
+        }),
+      );
+      expect(prisma.onboardingProgress.findUnique).not.toHaveBeenCalled();
+      expect(prisma.userProfile.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   // =========================================================================
   // findByEmail
   // =========================================================================

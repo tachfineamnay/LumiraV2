@@ -15,6 +15,31 @@ describe('UsersController private photos', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  it('routes a confirmed order-scoped dossier to the immutable seal service', async () => {
+    const updateProfile = jest.fn();
+    const seal = jest.fn().mockResolvedValue({ sealed: true, orderId: 'order-draft' });
+    const assertProfileEditable = jest.fn();
+    const sealingController = new UsersController(
+      { updateProfile } as unknown as UsersService,
+      { seal, assertProfileEditable } as unknown as ReadingIntakeService,
+      photoService,
+    );
+    const dto = {
+      orderId: 'order-draft',
+      intakeRevision: 7,
+      profileCompleted: true,
+      consent: { accepted: true, version: '2026-07-18-user-agency-v1' },
+    };
+
+    await expect(
+      sealingController.updateProfile({ user: { userId: 'user-1' } }, dto),
+    ).resolves.toMatchObject({ sealed: true, orderId: 'order-draft' });
+
+    expect(seal).toHaveBeenCalledWith('user-1', dto);
+    expect(updateProfile).not.toHaveBeenCalled();
+    expect(assertProfileEditable).not.toHaveBeenCalled();
+  });
+
   it('streams the authenticated user face photo and never accepts a foreign userId', async () => {
     photoService.getPhotoStream.mockResolvedValue({
       stream: Readable.from(['img']),
