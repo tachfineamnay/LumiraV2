@@ -19,7 +19,10 @@ describe('Post-delivery reopen contracts', () => {
   });
 
   it('shows Desk reopen CTA and PDF history panel', () => {
-    expect(workflow).toContain('reopen');
+    expect(workflow).toContain('const reopen = async');
     expect(workflow).toContain('/expert/orders/${orderId}/reading/reopen');
+    expect(workflow).toContain("toast.success('Lecture réouverte')");
+    expect(workflow).toContain('Réouvrir');
+    expect(workflow).toContain('<ReadingHistoryPanel');
   });
 });

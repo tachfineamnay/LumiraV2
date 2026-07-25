@@ -8,9 +8,34 @@ import { AiRunService } from './ai-run.service';
 import { AiRuntimeCacheService } from './ai-runtime-cache.service';
 import { OrderContext, UserProfile, VertexOracle } from './VertexOracle';
 import { DEFAULT_AI_MODEL_CONFIG } from './ai-model-config';
+import { AiModelConfigSnapshot } from './ai-execution.types';
 
 jest.mock('axios');
 jest.mock('openai', () => ({ __esModule: true, default: jest.fn() }));
+
+function testedModelConfig(): AiModelConfigSnapshot {
+  return {
+    providerMode: DEFAULT_AI_MODEL_CONFIG.providerMode,
+    agents: Object.fromEntries(
+      Object.entries(DEFAULT_AI_MODEL_CONFIG.agents).map(([agent, config]) => [
+        agent,
+        config.enabled
+          ? {
+              ...config,
+              needsValidation: false,
+              validation: {
+                provider: config.provider,
+                model: config.model,
+                checkedAt: '2026-07-25T00:00:00.000Z',
+                probeVersion: 1,
+                capabilities: { text: true, vision: true, structured: true },
+              },
+            }
+          : { ...config },
+      ]),
+    ) as AiModelConfigSnapshot['agents'],
+  };
+}
 
 describe('VertexOracle OpenAI-only runtime', () => {
   let service: VertexOracle;
@@ -239,7 +264,13 @@ describe('VertexOracle OpenAI-only runtime', () => {
         {
           provide: PrismaService,
           useValue: {
-            promptVersion: { findMany: jest.fn().mockResolvedValue([]) },
+            promptVersion: {
+              findMany: jest
+                .fn()
+                .mockResolvedValue([
+                  { key: 'MODEL_CONFIG', value: JSON.stringify(testedModelConfig()) },
+                ]),
+            },
             systemSetting: { findUnique: jest.fn().mockResolvedValue(null) },
             aiRun: { aggregate: jest.fn().mockResolvedValue({ _sum: { estimatedCost: 0.01 } }) },
           },
@@ -547,7 +578,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
             .mockResolvedValueOnce([
               {
                 key: 'MODEL_CONFIG',
-                value: JSON.stringify(DEFAULT_AI_MODEL_CONFIG),
+                value: JSON.stringify(testedModelConfig()),
               },
             ])
             .mockResolvedValueOnce([
@@ -585,11 +616,45 @@ describe('VertexOracle OpenAI-only runtime', () => {
 
       await privateOracle.loadRuntimeConfiguration();
       expect(privateOracle.modelConfig.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
+      expect(privateOracle.modelConfig.agents.SCRIBE.validation?.capabilities.vision).toBe(true);
 
       privateOracle.invalidateCache();
 
       await expect(privateOracle.loadRuntimeConfiguration()).resolves.not.toThrow();
       expect(privateOracle.modelConfig.agents.SCRIBE.model).toBe('gpt-5.5-2026-04-23');
+      expect(privateOracle.modelConfig.agents.SCRIBE.validation?.capabilities.vision).toBe(true);
+    });
+
+    it('returns an isolated copy of nested validation capabilities', async () => {
+      const mockPrisma = {
+        promptVersion: {
+          findMany: jest
+            .fn()
+            .mockResolvedValue([
+              { key: 'MODEL_CONFIG', value: JSON.stringify(testedModelConfig()) },
+            ]),
+        },
+      };
+      const testModule = await Test.createTestingModule({
+        providers: [
+          VertexOracle,
+          { provide: ConfigService, useValue: { get: jest.fn() } },
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: AiExecutionResolverService, useValue: {} },
+          { provide: AiRunService, useValue: { recordRun: jest.fn() } },
+          { provide: AiRuntimeCacheService, useValue: { registerInvalidator: jest.fn() } },
+        ],
+      }).compile();
+      const oracle = testModule.get(VertexOracle);
+      const privateOracle = oracle as unknown as {
+        loadRuntimeConfiguration: () => Promise<void>;
+      };
+
+      await privateOracle.loadRuntimeConfiguration();
+      const exposed = oracle.getModelConfig();
+      exposed.agents.SCRIBE.validation!.capabilities.vision = false;
+
+      expect(oracle.getModelConfig().agents.SCRIBE.validation?.capabilities.vision).toBe(true);
     });
   });
 });

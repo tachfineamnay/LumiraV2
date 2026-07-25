@@ -4,7 +4,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   activeProvidersInConfig,
   AGENT_REQUIRED_CAPABILITIES,
-  modelSupportsAgent,
   normalizeAiModelConfig,
 } from '../../services/factory/ai-model-config';
 import { AgentType, AiProvider, AiProviderMode } from '../../services/factory/ai-execution.types';
@@ -462,7 +461,6 @@ export class AiProductionReadinessService {
   ): ReadinessCheck[] {
     const checks: ReadinessCheck[] = [];
     const probes = status.modelProbes ?? [];
-
     for (const [agent, config] of Object.entries(agents) as Array<
       [AgentType, (typeof agents)[AgentType]]
     >) {
@@ -486,18 +484,12 @@ export class AiProductionReadinessService {
           multimodal: 'not_tested',
           structured: 'not_tested',
         } satisfies ModelProbeSnapshot);
-
       const parts: string[] = [`${agent} → ${provider} → ${model}`];
       let level: ReadinessLevel = 'pass';
       const escalate = (next: ReadinessLevel) => {
         if (next === 'fail' || level === 'fail') level = 'fail';
         else if (next === 'warning') level = 'warning';
       };
-
-      if (!modelSupportsAgent(model, agent)) {
-        escalate('fail');
-        parts.push('modèle incompatible');
-      }
 
       if (!providerStatus.configured) {
         escalate('fail');

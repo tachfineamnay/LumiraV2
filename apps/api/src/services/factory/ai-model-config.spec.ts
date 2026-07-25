@@ -3,6 +3,7 @@ import {
   assertOperationalModel,
   assertSavableAgentModel,
   assertValidatedAgentCapabilities,
+  cloneAiModelConfig,
   DEFAULT_AI_MODEL_CONFIG,
   estimateOpenAiCost,
   missingAgentCapabilities,
@@ -23,6 +24,13 @@ describe('ai-model-config', () => {
     expect(normalized.config.agents.NARRATOR.model).toBe('gpt-5.4-2026-03-05');
     expect(normalized.config.agents.CONFIDANT.enabled).toBe(false);
     expect(normalized.config.agents.ONIRIQUE.enabled).toBe(false);
+  });
+
+  it('ships defaults without a fabricated provider validation proof', () => {
+    for (const config of Object.values(DEFAULT_AI_MODEL_CONFIG.agents)) {
+      expect(config.validation).toBeUndefined();
+    }
+    expect(DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE.needsValidation).toBe(true);
   });
 
   it('keeps legacy OpenAI reasoningEffort configurations valid', () => {
@@ -84,6 +92,27 @@ describe('ai-model-config', () => {
     expect(normalized.issues).toEqual([]);
     expect(normalized.config.agents.SCRIBE.thinkingLevel).toBeUndefined();
   });
+
+  it.each(['low', 'medium', 'high'] as const)(
+    'never restores a missing thinkingLevel from defaults (%s)',
+    (defaultLevel) => {
+      const normalized = normalizeAiModelConfig({
+        providerMode: 'per_agent',
+        agents: {
+          ...DEFAULT_AI_MODEL_CONFIG.agents,
+          SCRIBE: {
+            ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
+            thinkingLevel: undefined,
+            reasoningEffort: undefined,
+            verbosity: defaultLevel,
+          },
+        },
+      });
+
+      expect(normalized.config.agents.SCRIBE.thinkingLevel).toBeUndefined();
+      expect(normalized.config.agents.SCRIBE.reasoningEffort).toBeUndefined();
+    },
+  );
 
   it('keeps dynamically discovered model ids without allowlist rejection', () => {
     const normalized = normalizeAiModelConfig({
@@ -187,6 +216,32 @@ describe('ai-model-config', () => {
   });
 
   describe('assertExecutableAgentModel', () => {
+    it('does not reject a future thinking model because it is absent from static capabilities', () => {
+      const config = {
+        enabled: true,
+        provider: 'openai' as const,
+        model: 'gpt-5.99-future',
+        thinkingLevel: 'high' as const,
+        maxOutputTokens: 24000,
+        validation: {
+          provider: 'openai' as const,
+          model: 'gpt-5.99-future',
+          checkedAt: '2026-07-25T00:00:00.000Z',
+          probeVersion: 1 as const,
+          capabilities: { text: true, vision: true, structured: true },
+        },
+      };
+
+      expect(() =>
+        assertExecutableAgentModel({
+          agent: 'SCRIBE',
+          provider: config.provider,
+          model: config.model,
+          thinkingLevel: config.thinkingLevel,
+        }),
+      ).not.toThrow();
+      expect(() => assertValidatedAgentCapabilities('SCRIBE', config)).not.toThrow();
+    });
     it('accepts Gemini 3 + high', () => {
       expect(() =>
         assertExecutableAgentModel({
@@ -374,5 +429,28 @@ describe('ai-model-config', () => {
         }),
       ).toThrow(/Ce modèle doit être testé et appliqué depuis Paramètres/);
     });
+  });
+
+  it('deep-clones nested validation capabilities', () => {
+    const source = {
+      providerMode: 'per_agent' as const,
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
+          validation: {
+            provider: 'openai' as const,
+            model: 'gpt-5.5-2026-04-23',
+            checkedAt: '2026-07-25T00:00:00.000Z',
+            probeVersion: 1 as const,
+            capabilities: { text: true, vision: true, structured: true },
+          },
+        },
+      },
+    };
+    const clone = cloneAiModelConfig(source);
+    clone.agents.SCRIBE.validation!.capabilities.vision = false;
+
+    expect(source.agents.SCRIBE.validation!.capabilities.vision).toBe(true);
   });
 });

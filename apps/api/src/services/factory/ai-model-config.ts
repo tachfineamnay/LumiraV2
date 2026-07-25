@@ -166,14 +166,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'high',
       verbosity: 'high',
       maxOutputTokens: 24000,
-      validation: {
-        provider: 'openai',
-        model: 'gpt-5.5-2026-04-23',
-        checkedAt: '2026-07-25T00:00:00.000Z',
-        probeVersion: 1,
-        capabilities: { text: true, vision: true, structured: true },
-      },
-      needsValidation: false,
+      needsValidation: true,
     },
     EDITOR: {
       enabled: true,
@@ -183,14 +176,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'medium',
       verbosity: 'high',
       maxOutputTokens: 16000,
-      validation: {
-        provider: 'openai',
-        model: 'gpt-5.4-2026-03-05',
-        checkedAt: '2026-07-25T00:00:00.000Z',
-        probeVersion: 1,
-        capabilities: { text: true, vision: true, structured: true },
-      },
-      needsValidation: false,
+      needsValidation: true,
     },
     GUIDE: {
       enabled: true,
@@ -200,14 +186,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 6000,
-      validation: {
-        provider: 'openai',
-        model: 'gpt-5.4-2026-03-05',
-        checkedAt: '2026-07-25T00:00:00.000Z',
-        probeVersion: 1,
-        capabilities: { text: true, vision: true, structured: true },
-      },
-      needsValidation: false,
+      needsValidation: true,
     },
     NARRATOR: {
       enabled: true,
@@ -217,14 +196,7 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       reasoningEffort: 'low',
       verbosity: 'medium',
       maxOutputTokens: 12000,
-      validation: {
-        provider: 'openai',
-        model: 'gpt-5.4-2026-03-05',
-        checkedAt: '2026-07-25T00:00:00.000Z',
-        probeVersion: 1,
-        capabilities: { text: true, vision: true, structured: true },
-      },
-      needsValidation: false,
+      needsValidation: true,
     },
     CONFIDANT: {
       enabled: false,
@@ -308,10 +280,6 @@ export function assertOperationalModel(
       `${prefix}modèle non opérationnel: ${model || '(vide)'} (provider ${provider})`,
     );
   }
-  if (agent && isAgentType(agent) && !modelSupportsAgent(model, agent)) {
-    const missing = missingAgentCapabilities(model, agent).map(capabilityLabel).join(' + ');
-    throw new Error(`${agent} — ${model} ne supporte pas ${missing}.`);
-  }
 }
 
 export interface AssertExecutableAgentModelParams {
@@ -332,10 +300,6 @@ export function assertExecutableAgentModel({
   }
   if (typeof model !== 'string' || model.trim().length === 0 || !isAllowedModel(provider, model)) {
     throw new Error(`${agent} — sélectionnez explicitement un modèle valide pour ${provider}.`);
-  }
-  if (!modelSupportsAgent(model, agent)) {
-    const missing = missingAgentCapabilities(model, agent).map(capabilityLabel).join(' + ');
-    throw new Error(`${agent} — ${model} ne supporte pas ${missing}.`);
   }
   if (!supportsThinkingLevel(provider, model)) {
     throw new Error(`${agent} — ${model} ne supporte pas un niveau de réflexion explicite.`);
@@ -387,10 +351,6 @@ export function assertValidatedAgentCapabilities(
       `${agent} — Ce modèle n'a pas validé la capacité JSON structuré requise pour ${agent}.`,
     );
   }
-}
-
-function isAgentType(value: string): value is AgentType {
-  return AGENTS.includes(value as AgentType);
 }
 
 export function assertSavableAgentModel(
@@ -462,16 +422,8 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
   }
 
   if (provider === 'openai' && isOpenAiThinkingModel(model)) {
-    const effectiveThinking =
-      result.thinkingLevel ??
-      (isThinkingLevel(fallback.thinkingLevel)
-        ? fallback.thinkingLevel
-        : isThinkingLevel(fallback.reasoningEffort)
-          ? fallback.reasoningEffort
-          : undefined);
-    if (effectiveThinking) {
-      result.thinkingLevel = effectiveThinking;
-      result.reasoningEffort = effectiveThinking;
+    if (result.thinkingLevel) {
+      result.reasoningEffort = result.thinkingLevel;
     }
     const verbosityValid =
       typeof value.verbosity === 'string' &&
@@ -533,6 +485,30 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
   }
 
   return result;
+}
+
+/**
+ * Runtime snapshots cross cache boundaries. Keep the persisted validation proof
+ * isolated so a caller can never mutate the live configuration by reference.
+ */
+export function cloneAiModelConfig(config: AiModelConfigSnapshot): AiModelConfigSnapshot {
+  return {
+    providerMode: config.providerMode,
+    agents: Object.fromEntries(
+      Object.entries(config.agents).map(([agent, value]) => [
+        agent,
+        {
+          ...value,
+          validation: value.validation
+            ? {
+                ...value.validation,
+                capabilities: { ...value.validation.capabilities },
+              }
+            : undefined,
+        },
+      ]),
+    ) as AiModelConfigSnapshot['agents'],
+  };
 }
 
 export function normalizeAiModelConfig(input: unknown): NormalizedAiModelConfig {

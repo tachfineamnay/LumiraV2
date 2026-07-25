@@ -18,6 +18,7 @@ import {
   DEFAULT_AI_MODEL_CONFIG,
   assertExecutableAgentModel,
   assertValidatedAgentCapabilities,
+  cloneAiModelConfig,
   estimateOpenAiCost,
   normalizeAiModelConfig,
 } from './ai-model-config';
@@ -441,12 +442,7 @@ export class VertexOracle implements OnModuleInit {
   }
 
   private cloneModelConfig(config: AiModelConfigSnapshot): AiModelConfigSnapshot {
-    return {
-      providerMode: config.providerMode,
-      agents: Object.fromEntries(
-        Object.entries(config.agents).map(([agent, value]) => [agent, { ...value }]),
-      ) as AiModelConfigSnapshot['agents'],
-    };
+    return cloneAiModelConfig(config);
   }
 
   private hasValidLoadedConfig = false;
@@ -598,10 +594,10 @@ export class VertexOracle implements OnModuleInit {
     this.openaiAdapter = null;
     this.vertexAdapter = null;
     this.geminiAdapter = null;
-    this.lumiraDna = DEFAULT_LUMIRA_DNA;
-    this.agentContexts = { ...DEFAULT_AGENT_CONTEXTS };
-    this.modelConfig = this.cloneModelConfig(DEFAULT_AI_MODEL_CONFIG);
-    this.logger.log('Cache IA invalidé');
+    // Preserve the last complete runtime snapshot until the replacement has been
+    // parsed and validated. A failed warm reload must never downgrade routing to
+    // defaults (or a partially updated prompt set).
+    this.logger.log('Cache IA invalidé; dernier snapshot valide conservé');
   }
 
   private getPromptSnapshot(): AiPromptSnapshot {

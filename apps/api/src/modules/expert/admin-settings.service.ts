@@ -12,6 +12,7 @@ import {
   DEFAULT_AI_MODEL_CONFIG,
   activeProviderModelPairs,
   assertSavableAgentModel,
+  cloneAiModelConfig,
   normalizeAiModelConfig,
 } from '../../services/factory/ai-model-config';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
@@ -560,7 +561,12 @@ export class AdminSettingsService {
     >) {
       if (agentConfig.enabled) {
         try {
-          assertSavableAgentModel(agent, agentConfig.provider, agentConfig.model);
+          assertSavableAgentModel(
+            agent,
+            agentConfig.provider,
+            agentConfig.model,
+            agentConfig.thinkingLevel ?? agentConfig.reasoningEffort,
+          );
         } catch (err) {
           throw new BadRequestException(err instanceof Error ? err.message : String(err));
         }
@@ -679,15 +685,7 @@ export class AdminSettingsService {
   }
 
   getDefaultModelConfig(): ModelConfig {
-    return {
-      providerMode: DEFAULT_AI_MODEL_CONFIG.providerMode,
-      agents: Object.fromEntries(
-        Object.entries(DEFAULT_AI_MODEL_CONFIG.agents).map(([agent, value]) => [
-          agent,
-          { ...value },
-        ]),
-      ) as ModelConfig['agents'],
-    };
+    return cloneAiModelConfig(DEFAULT_AI_MODEL_CONFIG);
   }
 
   getDefaultPrompts(): Record<string, string> {

@@ -203,6 +203,44 @@ describe('AdminSettingsService restore latest custom', () => {
     expect(promptVersion.updateMany).not.toHaveBeenCalled();
   });
 
+  it('preserves an explicit thinkingLevel and replaces stale validation after Desk probes', async () => {
+    promptVersion.findFirst.mockResolvedValue({ version: 5 });
+    promptVersion.updateMany.mockResolvedValue({ count: 1 });
+    promptVersion.create.mockResolvedValue({ version: 6 });
+
+    const staleConfig = {
+      ...DEFAULT_AI_MODEL_CONFIG,
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
+          model: 'gpt-5.4-2026-03-05',
+          thinkingLevel: 'medium' as const,
+          reasoningEffort: 'medium' as const,
+          validation: {
+            provider: 'openai' as const,
+            model: 'gpt-5.5-2026-04-23',
+            checkedAt: '2026-07-01T00:00:00.000Z',
+            probeVersion: 1 as const,
+            capabilities: { text: true, vision: true, structured: true },
+          },
+        },
+      },
+    };
+
+    await service.testAndApplyModelConfig(staleConfig, 'founder');
+
+    const createCall = (promptVersion.create as jest.Mock).mock.calls[0][0];
+    const persisted = JSON.parse(createCall.data.value);
+    expect(persisted.agents.SCRIBE.thinkingLevel).toBe('medium');
+    expect(persisted.agents.SCRIBE.reasoningEffort).toBe('medium');
+    expect(persisted.agents.SCRIBE.validation).toMatchObject({
+      provider: 'openai',
+      model: 'gpt-5.4-2026-03-05',
+      capabilities: { text: true, vision: true, structured: true },
+    });
+  });
+
   it('rejects testAndApplyModelConfig when probe fails and preserves existing DB config', async () => {
     promptVersion.findFirst.mockResolvedValue({
       id: 'mc',

@@ -834,6 +834,8 @@ export default function SettingsPage() {
       if (providerChanged || modelChanged) {
         delete next.thinkingLevel;
         delete next.reasoningEffort;
+        delete next.validation;
+        next.needsValidation = true;
       }
 
       return {
