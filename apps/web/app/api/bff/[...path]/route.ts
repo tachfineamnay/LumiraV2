@@ -129,14 +129,17 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   if (contentDisposition) {
     responseHeaders.set('content-disposition', contentDisposition);
   }
-  const contentLength = upstream.headers.get('content-length');
-  if (contentLength && !normalizedResponse.modified) {
-    responseHeaders.set('content-length', contentLength);
+
+  // For onboarding responses, enforce no-store to prevent stale caching.
+  if (path === 'users/onboarding' || path.startsWith('users/onboarding/')) {
+    responseHeaders.set('cache-control', 'no-store, no-cache, must-revalidate');
+  } else {
+    const cacheControl = upstream.headers.get('cache-control');
+    if (cacheControl) {
+      responseHeaders.set('cache-control', cacheControl);
+    }
   }
-  const cacheControl = upstream.headers.get('cache-control');
-  if (cacheControl) {
-    responseHeaders.set('cache-control', cacheControl);
-  }
+
   const nosniff = upstream.headers.get('x-content-type-options');
   if (nosniff) {
     responseHeaders.set('x-content-type-options', nosniff);

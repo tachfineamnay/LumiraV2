@@ -340,7 +340,7 @@ function SanctuaireHome() {
             onClick={() => setIsEditingDraft(true)}
             className="mt-5 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
           >
-            <ClipboardCheck className="h-4 w-4" /> Modifier mon dossier
+            <ClipboardCheck className="h-4 w-4" /> Reprendre mon dossier
           </button>
         </section>
       )}

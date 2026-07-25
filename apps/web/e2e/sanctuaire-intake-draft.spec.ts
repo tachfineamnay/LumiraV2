@@ -468,6 +468,69 @@ test.describe('Brouillon du dossier de lecture', () => {
     expect(calls.onboardingPatches).toHaveLength(0);
   });
 
+  test('hydrate un brouillon valide au format JSON string avec currentStep: 1 sur Intention', async ({
+    page,
+  }) => {
+    await installSanctuaireMocks(page, {
+      draft: {
+        orderId: 'order-scoped-1',
+        currentStep: 1,
+        status: 'IN_PROGRESS',
+        revision: 7,
+        updatedAt: new Date().toISOString(),
+        completedAt: null,
+        canEdit: true,
+        data: {
+          usageName: 'Amnay',
+          birthDate: '1990-01-01',
+          birthPlace: 'Paris',
+          specificQuestion: 'Quelle est ma voie ?',
+          objective: 'Clarté spirituelle',
+        },
+      },
+    });
+
+    await page.goto('/sanctuaire?onboarding=1');
+    await expect(page.getByRole('heading', { name: 'Ce qui vous amène' })).toBeVisible();
+    await expect(page.getByLabel('Nom d’usage')).toHaveValue('Amnay');
+    await expect(page.getByLabel('Votre question principale')).toHaveValue('Quelle est ma voie ?');
+  });
+
+  test('affiche Votre brouillon est prêt à être repris sur Accueil et la synthèse complète sur Mon dossier', async ({
+    page,
+  }) => {
+    await installSanctuaireMocks(page, {
+      draft: {
+        orderId: 'order-scoped-1',
+        currentStep: 1,
+        status: 'IN_PROGRESS',
+        revision: 7,
+        updatedAt: new Date().toISOString(),
+        completedAt: null,
+        canEdit: true,
+        data: {
+          usageName: 'Amnay',
+          birthDate: '1990-01-01',
+          birthPlace: 'Paris',
+          specificQuestion: 'Quelle est ma voie ?',
+          objective: 'Clarté spirituelle',
+        },
+      },
+    });
+
+    await page.goto('/sanctuaire');
+    await expect(
+      page.getByRole('heading', { name: 'Votre brouillon est prêt à être repris' }),
+    ).toBeVisible();
+    await expect(page.getByText('Lieu : Paris')).toBeVisible();
+
+    await page.goto('/sanctuaire/dossier');
+    await expect(page.getByRole('heading', { name: 'Mon dossier de lecture' })).toBeVisible();
+    await expect(page.getByText('Appelé(e) Amnay')).toBeVisible();
+    await expect(page.getByText('Paris')).toBeVisible();
+    await expect(page.getByText('« Quelle est ma voie ? »')).toBeVisible();
+  });
+
   for (const viewport of [
     { width: 320, height: 568 },
     { width: 375, height: 812 },

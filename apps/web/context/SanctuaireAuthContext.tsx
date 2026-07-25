@@ -1,8 +1,17 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import { AxiosError } from 'axios';
 import sanctuaireApi from '../lib/sanctuaireApi';
+import { parseAndNormalizeOnboardingProgress } from '../lib/onboarding-parser';
 
 // =============================================================================
 // TYPES
@@ -216,6 +225,9 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
   // Error state
   const [error, setError] = useState<string | null>(null);
 
+  // Request counter to avoid stale concurrent requests overwriting state
+  const initRequestIdRef = useRef(0);
+
   // Logout
   const handleLogout = useCallback(async () => {
     await clearSanctuaireSession();
@@ -237,6 +249,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
 
   // Initialize from existing token
   const initializeFromToken = useCallback(async () => {
+    const requestId = ++initRequestIdRef.current;
     try {
       const [profileRes, entitlementsRes, onboardingRes] = await Promise.all([
         sanctuaireApi.get('/users/profile'),
@@ -259,6 +272,18 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
         }
       }
 
+      if (requestId !== initRequestIdRef.current) return;
+
+      // Parse and normalize onboarding payload safely
+      let parsedProgress: OnboardingProgress | null = null;
+      if (onboardingRes?.data) {
+        try {
+          parsedProgress = parseAndNormalizeOnboardingProgress(onboardingRes.data);
+        } catch (parseErr) {
+          console.warn('Failed to parse onboarding progress payload:', parseErr);
+        }
+      }
+
       // Set user from profile
       const profileData = profileRes.data;
       setUser({
@@ -271,7 +296,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       });
       setProfile(profileData.profile);
       setStats(profileData.stats);
-      setOnboardingProgress((onboardingRes?.data as OnboardingProgress | null | undefined) ?? null);
+      setOnboardingProgress(parsedProgress);
 
       // Set entitlements
       const entData = entitlementsRes.data as EntitlementsData;
@@ -286,6 +311,7 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
       setIsAuthenticated(true);
       setError(null);
     } catch (err: unknown) {
+      if (requestId !== initRequestIdRef.current) return;
       console.error('Failed to initialize from token:', err);
       const status = (err as { response?: { status?: number } })?.response?.status;
       // Only logout on explicit 401 (expired/invalid token), not on network errors
@@ -295,7 +321,9 @@ export const SanctuaireAuthProvider: React.FC<{ children: React.ReactNode }> = (
         setIsLoading(false);
       }
     } finally {
-      setIsLoading(false);
+      if (requestId === initRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [
     handleLogout,

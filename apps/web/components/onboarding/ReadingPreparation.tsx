@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { SmartPhotoUploader, PhotoUploadState } from './SmartPhotoUploader';
 import sanctuaireApi from '../../lib/sanctuaireApi';
+import { parseAndNormalizeOnboardingProgress } from '../../lib/onboarding-parser';
 import { uploadOnboardingPhoto } from '../../lib/onboarding-upload';
 import {
   DELIVERY_STYLES,
@@ -267,6 +268,9 @@ function makeSnapshot(step: number, data: ReadingPreparationData): DraftSnapshot
 function normalizeSavedStep(value: unknown, rawData: Record<string, unknown>): number {
   const saved = Number(value);
   if (!Number.isFinite(saved)) return 0;
+  if (saved >= 0 && saved < STEPS.length) {
+    return Math.floor(saved);
+  }
   if (rawData.schemaVersion === 2) return Math.min(Math.max(saved, 0), STEPS.length - 1);
 
   // Six-step legacy flow: intro, identity, intention, photos, context, review.
@@ -479,7 +483,9 @@ export function ReadingPreparation({
           headers: { 'Content-Type': 'application/json' },
         });
         if (!response.ok) return false;
-        const fresh = (await response.json().catch(() => null)) as DraftResponse | null;
+        const rawText = await response.text().catch(() => null);
+        if (!rawText) return false;
+        const fresh = parseAndNormalizeOnboardingProgress(rawText);
         if (!fresh || fresh.status === 'COMPLETED' || fresh.canEdit === false) return false;
         orderIdRef.current = fresh.orderId;
         revisionRef.current = typeof fresh.revision === 'number' ? fresh.revision : undefined;
@@ -595,7 +601,10 @@ export function ReadingPreparation({
       ]);
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
 
-      const serverDraft = (draftResponse.data ?? null) as DraftResponse | null;
+      const serverDraft = draftResponse.data
+        ? parseAndNormalizeOnboardingProgress(draftResponse.data)
+        : null;
+
       if (serverDraft?.status === 'COMPLETED' || serverDraft?.canEdit === false) {
         setLoadState('sealed');
         return;
