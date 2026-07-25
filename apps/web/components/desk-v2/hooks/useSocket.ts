@@ -114,7 +114,6 @@ export function useSocket(options: UseSocketOptions = {}) {
     });
 
     socket.on('order:intake-ready', (data: SocketEvents['order:intake-ready']) => {
-      console.log('[Socket] 📋 Intake ready:', data.orderNumber || data.orderId);
       callbacksRef.current.onIntakeReady?.(data);
     });
 

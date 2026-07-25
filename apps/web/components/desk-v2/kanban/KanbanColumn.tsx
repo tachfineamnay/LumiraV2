@@ -12,6 +12,7 @@ interface KanbanColumnProps {
   currentExpertId?: string;
   orderViewers?: Record<string, OrderViewer[]>;
   onClaim?: (orderId: string) => void;
+  claimingOrderId?: string | null;
 }
 
 const COLUMN_COLORS = {
@@ -47,12 +48,12 @@ export function KanbanColumn({
   currentExpertId,
   orderViewers = {},
   onClaim,
+  claimingOrderId,
 }: KanbanColumnProps) {
   const colors = COLUMN_COLORS[column.color as keyof typeof COLUMN_COLORS] ?? COLUMN_COLORS.amber;
   const myOrdersCount = currentExpertId
     ? orders.filter(
-        (order) =>
-          (order.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId,
+        (order) => (order.expertReview as { assignedBy?: string })?.assignedBy === currentExpertId,
       ).length
     : 0;
   const label = COLUMN_LABELS[column.id] ?? column.title;
@@ -70,9 +71,7 @@ export function KanbanColumn({
           </span>
         </div>
         {myOrdersCount > 0 && (
-          <p className="mt-1 text-[11px] font-medium text-emerald-700">
-            {myOrdersCount} à moi
-          </p>
+          <p className="mt-1 text-[11px] font-medium text-emerald-700">{myOrdersCount} à moi</p>
         )}
       </header>
 
@@ -100,6 +99,7 @@ export function KanbanColumn({
                 currentExpertId={currentExpertId}
                 viewers={orderViewers[order.id]}
                 onClaim={onClaim}
+                isClaiming={claimingOrderId === order.id}
               />
             </motion.div>
           ))

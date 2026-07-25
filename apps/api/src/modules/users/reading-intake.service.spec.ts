@@ -95,6 +95,30 @@ describe('ReadingIntakeService', () => {
     );
   });
 
+  it('notifies the Desk only after the intake transaction has sealed the dossier', async () => {
+    const gateway = { notifyOrderIntakeReady: jest.fn() };
+    service = new ReadingIntakeService(
+      prisma as PrismaService,
+      {
+        validateOnboardingPhoto: jest.fn(async (storageRef: string) => ({
+          storageRef,
+          key: storageRef.replace('s3://', ''),
+          contentType: 'image/jpeg',
+          size: 3,
+          etag: 'etag',
+          versionId: null,
+        })),
+      } as unknown as PrivateOnboardingPhotoService,
+      gateway as never,
+    );
+
+    await service.seal('user-1', validDto);
+
+    expect(gateway.notifyOrderIntakeReady).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'order-1', sealedAt: expect.any(String) }),
+    );
+  });
+
   it('requires explicit consent', async () => {
     await expect(
       service.seal('user-1', {

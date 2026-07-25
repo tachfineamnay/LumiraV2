@@ -16,6 +16,7 @@ export function KanbanBoard() {
   const { orders, isLoading, fetchOrders, updateOrder } = useOrders();
   const { expert } = useExpertAuth();
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
+  const [claimingOrderId, setClaimingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && orders.validation.length > 0) {
@@ -30,6 +31,12 @@ export function KanbanBoard() {
   const { orderViewers } = useSocket({
     onNewOrder: (order) => {
       toast.success(`Nouvelle commande : ${order.orderNumber}`);
+      void fetchOrders();
+    },
+    onIntakeReady: (data) => {
+      toast.success('Dossier client confirmé', {
+        description: `La commande ${data.orderNumber || data.orderId} peut maintenant être prise en charge.`,
+      });
       void fetchOrders();
     },
     onStatusChange: () => void fetchOrders(),
@@ -71,14 +78,31 @@ export function KanbanBoard() {
   }, [orders, levelFilter]);
 
   const claim = async (orderId: string) => {
+    if (claimingOrderId) return;
+    setClaimingOrderId(orderId);
     try {
       await expertApi.post(`/expert/orders/${orderId}/assign`);
-      toast.success('Commande prise en charge');
+      toast.success('Commande prise en charge', {
+        description: 'Le dossier scellé est disponible dans le Studio.',
+      });
       await fetchOrders();
     } catch (error: unknown) {
-      const message = (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
-      toast.error(message || 'Impossible de prendre la commande');
+      const data = (
+        error as {
+          response?: { data?: { message?: string | string[]; code?: string } };
+        }
+      )?.response?.data;
+      const message = Array.isArray(data?.message) ? data?.message.join(' ') : data?.message;
+      if (data?.code === 'READING_INTAKE_REQUIRED') {
+        toast.info('Dossier en attente de confirmation', {
+          description:
+            'Le client peut encore relire et modifier son brouillon. La prise en charge sera disponible dès le scellement.',
+        });
+      } else {
+        toast.error('Impossible de prendre la commande', { description: message });
+      }
+    } finally {
+      setClaimingOrderId(null);
     }
   };
 
@@ -93,12 +117,33 @@ export function KanbanBoard() {
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-desk-border bg-desk-card p-1">
-            <button type="button" onClick={() => setLevelFilter(null)} className={`min-h-9 shrink-0 rounded-md px-3 text-sm ${levelFilter === null ? 'bg-amber-500 text-slate-950' : 'text-desk-muted hover:text-desk-text'}`}>Tous</button>
+            <button
+              type="button"
+              onClick={() => setLevelFilter(null)}
+              className={`min-h-9 shrink-0 rounded-md px-3 text-sm ${levelFilter === null ? 'bg-amber-500 text-slate-950' : 'text-desk-muted hover:text-desk-text'}`}
+            >
+              Tous
+            </button>
             {[1, 2, 3, 4].map((level) => (
-              <button key={level} type="button" onClick={() => setLevelFilter(level)} className={`min-h-9 shrink-0 rounded-md px-3 text-sm ${levelFilter === level ? 'bg-amber-500 text-slate-950' : 'text-desk-muted hover:text-desk-text'}`}>N{level}</button>
+              <button
+                key={level}
+                type="button"
+                onClick={() => setLevelFilter(level)}
+                className={`min-h-9 shrink-0 rounded-md px-3 text-sm ${levelFilter === level ? 'bg-amber-500 text-slate-950' : 'text-desk-muted hover:text-desk-text'}`}
+              >
+                N{level}
+              </button>
             ))}
           </div>
-          <button type="button" onClick={() => void fetchOrders()} disabled={isLoading} aria-label="Rafraîchir" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-desk-muted hover:bg-desk-hover hover:text-desk-text disabled:opacity-50"><RefreshCw className={`h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} /></button>
+          <button
+            type="button"
+            onClick={() => void fetchOrders()}
+            disabled={isLoading}
+            aria-label="Rafraîchir"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-desk-muted hover:bg-desk-hover hover:text-desk-text disabled:opacity-50"
+          >
+            <RefreshCw className={`h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </header>
 
@@ -113,6 +158,7 @@ export function KanbanBoard() {
               currentExpertId={expert?.id}
               orderViewers={orderViewers}
               onClaim={claim}
+              claimingOrderId={claimingOrderId}
             />
           ))}
         </div>

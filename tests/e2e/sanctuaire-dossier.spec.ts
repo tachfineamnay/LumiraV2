@@ -19,11 +19,16 @@ test.describe('Sanctuaire — mon dossier', () => {
     await page.goto('/sanctuaire/dossier');
 
     await expect(page.getByRole('heading', { name: 'Mon dossier de lecture' })).toBeVisible();
-    await expect(page.getByText('Brouillon privé')).toBeVisible();
+    await expect(page.getByText('Brouillon privé')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: 'Reprendre et modifier' })).toBeVisible();
     await expect(page.getByText('Que dois-je comprendre maintenant ?')).toBeVisible({
       timeout: 20_000,
     });
+    await page.getByRole('button', { name: 'Reprendre et modifier' }).click();
+    await expect(page.getByRole('heading', { name: 'Ce qui vous amène' })).toBeVisible();
+    await expect(page.getByLabel(/éclairer une seule question/i)).toHaveValue(
+      'Que dois-je comprendre maintenant ?',
+    );
   });
 
   test('shows a protected sealed dossier during production', async ({ page }) => {
@@ -35,11 +40,7 @@ test.describe('Sanctuaire — mon dossier', () => {
     await page.goto('/sanctuaire/dossier');
 
     await expect(page.getByText('Dossier scellé')).toBeVisible();
-    await expect(
-      page.getByRole('heading', {
-        name: 'Les éléments transmis sont protégés pendant la production',
-      }),
-    ).toBeVisible();
+    await expect(page.getByText(/utilisé pour préparer la lecture/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /modifier/i })).toHaveCount(0);
   });
 
@@ -52,7 +53,7 @@ test.describe('Sanctuaire — mon dossier', () => {
     await page.goto('/sanctuaire/dossier');
 
     await expect(page.getByText('Dossier scellé')).toBeVisible();
-    await expect(page.getByText(/ne modifieront pas cette lecture/)).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Gérer mon profil' })).toBeVisible();
+    await expect(page.getByText(/restent consultables/i)).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Voir ma lecture' })).toBeVisible();
   });
 });

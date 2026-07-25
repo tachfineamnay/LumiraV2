@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Optional } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { createHash } from 'crypto';
@@ -9,6 +9,7 @@ import {
   PrivateOnboardingPhotoService,
   ValidatedOnboardingPhoto,
 } from '../uploads/private-onboarding-photo.service';
+import { ExpertGateway } from '../expert/expert.gateway';
 
 const CONSENT_PURPOSE = 'PERSONALIZED_SPIRITUAL_EXPERIENCE';
 const CONSENT_VERSION = '2026-07-18-user-agency-v1';
@@ -80,6 +81,7 @@ export class ReadingIntakeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly privatePhotos: PrivateOnboardingPhotoService,
+    @Optional() private readonly expertGateway?: ExpertGateway,
   ) {}
 
   /**
@@ -131,10 +133,20 @@ export class ReadingIntakeService {
       },
     });
 
-    if (requiredOrder) {
-      return this.sealOrderScoped(userId, dto, requiredOrder);
-    }
-    return this.sealLegacy(userId, dto);
+    const result = requiredOrder
+      ? await this.sealOrderScoped(userId, dto, requiredOrder)
+      : await this.sealLegacy(userId, dto);
+
+    // A Desk can stay open while the client confirms their dossier.  The
+    // websocket event makes the now-eligible order actionable immediately,
+    // instead of leaving an expert with a stale "dossier en brouillon" card
+    // until the next polling interval.
+    this.expertGateway?.notifyOrderIntakeReady({
+      orderId: result.orderId,
+      sealedAt: result.sealedAt,
+    });
+
+    return result;
   }
 
   private async sealOrderScoped(

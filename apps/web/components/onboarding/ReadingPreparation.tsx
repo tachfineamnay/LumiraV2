@@ -280,6 +280,18 @@ function requestStatus(error: unknown): number | undefined {
   return candidate.status ?? candidate.response?.status;
 }
 
+function requestMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const response = (error as { response?: { data?: { message?: unknown } } }).response;
+  const message = response?.data?.message;
+  if (typeof message === 'string' && message.trim()) return message.trim();
+  if (Array.isArray(message)) {
+    const joined = message.filter((entry): entry is string => typeof entry === 'string').join(' ');
+    return joined || null;
+  }
+  return null;
+}
+
 function savedTime(value: string | null): string | null {
   if (!value) return null;
   const date = new Date(value);
@@ -308,6 +320,7 @@ export function ReadingPreparation({
   variant?: 'overlay' | 'inline';
 }) {
   const isInline = variant === 'inline';
+  const hasCloseAction = Boolean(onClose);
   const dismiss = onClose ?? (() => undefined);
   const {
     register,
@@ -999,12 +1012,15 @@ export function ReadingPreparation({
           // The user can still retry manually; the draft is preserved server-side.
         }
       }
+      const serverMessage = requestMessage(error);
       setActionError(
         requestStatus(error) === 409
           ? errorCode === 'ACTIVE_ORDER_CHANGED'
             ? 'Votre commande vient d’être confirmée. Votre brouillon est conservé : cliquez à nouveau sur Confirmer.'
             : 'Ce dossier vient d’être scellé ou la production a commencé. Rechargez votre Sanctuaire.'
-          : 'Le dossier n’a pas pu être transmis. Votre brouillon reste sauvegardé : réessayez dans un instant.',
+          : serverMessage
+            ? `Le dossier n’a pas pu être transmis : ${serverMessage}`
+            : 'Le dossier n’a pas pu être transmis. Votre brouillon reste sauvegardé : réessayez dans un instant.',
       );
     } finally {
       submittingRef.current = false;
@@ -1115,13 +1131,13 @@ export function ReadingPreparation({
             La version que vous venez de relire est maintenant liée à cette lecture. L’équipe vous
             écrira lorsqu’elle sera disponible.
           </p>
-          {!isInline && (
+          {(!isInline || hasCloseAction) && (
             <button
               type="button"
               onClick={dismiss}
               className="mt-7 min-h-[48px] w-full rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 sm:w-auto"
             >
-              Retour à mon Sanctuaire
+              {isInline ? 'Voir mon dossier scellé' : 'Retour à mon Sanctuaire'}
             </button>
           )}
         </section>
@@ -1165,16 +1181,20 @@ export function ReadingPreparation({
                 {saveLabel}
               </p>
             </div>
-            {!isInline && (
+            {(!isInline || hasCloseAction) && (
               <button
                 type="button"
                 onClick={() => void handleClose()}
                 disabled={isSubmitting || isClosing}
-                aria-label="Enregistrer et reprendre plus tard"
+                aria-label={
+                  isInline ? 'Revenir à l’aperçu du dossier' : 'Enregistrer et reprendre plus tard'
+                }
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/[0.08] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
               >
                 {isClosing ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
+                ) : isInline ? (
+                  <ArrowLeft className="h-5 w-5" />
                 ) : (
                   <X className="h-5 w-5" />
                 )}

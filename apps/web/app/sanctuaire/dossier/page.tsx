@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   CalendarDays,
@@ -117,6 +117,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export default function ReadingDossierPage() {
   const { onboardingProgress, orders, profile, refetchData } = useSanctuaireAuth();
+  const [isEditingDraft, setIsEditingDraft] = useState(false);
 
   const progressData = (onboardingProgress?.data || {}) as DraftRecord;
   const latestOrder = useMemo(
@@ -228,9 +229,66 @@ export default function ReadingDossierPage() {
       label: 'Pratiques ou rituels actuels',
       value: pickField(intakeIsAuthoritative, profile?.rituals, text(draft.rituals)),
     },
+    {
+      label: 'Repère de force',
+      value: pickField(intakeIsAuthoritative, profile?.strongSide, text(draft.strongSide)),
+    },
+    {
+      label: 'Repère de fragilité',
+      value: pickField(intakeIsAuthoritative, profile?.weakSide, text(draft.weakSide)),
+    },
+    {
+      label: 'Zone qui soutient',
+      value: pickField(intakeIsAuthoritative, profile?.strongZone, text(draft.strongZone)),
+    },
+    {
+      label: 'Zone sensible',
+      value: pickField(intakeIsAuthoritative, profile?.weakZone, text(draft.weakZone)),
+    },
   ].filter((field) => Boolean(field.value));
 
+  const hasDraftContent = Boolean(
+    birthDate ||
+    birthTime ||
+    birthPlace ||
+    usageName ||
+    specificQuestion ||
+    objective ||
+    openReading ||
+    facePhoto ||
+    palmPhoto ||
+    contextFields.length,
+  );
+
   if (!sealed) {
+    if (isEditingDraft || !hasDraftContent) {
+      return (
+        <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
+          <header className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
+              Votre transmission
+            </p>
+            <h1 className="mt-3 font-playfair text-3xl italic text-ivoire-100 sm:text-4xl">
+              Mon dossier de lecture
+            </h1>
+            <p className="mt-3 text-base leading-7 text-brume-200">
+              Complétez ou modifiez votre dossier ici. Rien n’est transmis tant que vous n’avez pas
+              scellé.
+            </p>
+          </header>
+          <div className="mt-8">
+            <ReadingPreparation
+              variant="inline"
+              onClose={isEditingDraft ? () => setIsEditingDraft(false) : undefined}
+              onCompleted={async () => {
+                await refetchData();
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
         <header className="max-w-3xl">
@@ -241,18 +299,124 @@ export default function ReadingDossierPage() {
             Mon dossier de lecture
           </h1>
           <p className="mt-3 text-base leading-7 text-brume-200">
-            Complétez ou modifiez votre dossier ici. Rien n’est transmis tant que vous n’avez pas
-            scellé.
+            Retrouvez les éléments déjà enregistrés. Ils restent privés et modifiables jusqu’au
+            scellement final.
           </p>
         </header>
-        <div className="mt-8">
-          <ReadingPreparation
-            variant="inline"
-            onCompleted={async () => {
-              await refetchData();
-            }}
-          />
+
+        <section className="mt-8 rounded-3xl border border-horizon-400/20 bg-horizon-400/[0.06] p-5 sm:p-7">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-horizon-400/15 text-horizon-200">
+                <FileLock2 className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-horizon-200">
+                  Brouillon privé
+                </p>
+                <h2 className="mt-2 font-playfair text-2xl italic text-ivoire-100">
+                  Votre dossier reste entre vos mains
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-brume-200">
+                  Vérifiez ce qui est déjà enregistré, puis modifiez librement chaque réponse avant
+                  de relire et sceller la version transmise à l’équipe.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditingDraft(true)}
+              className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-5 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+            >
+              <Sparkles className="h-4 w-4" /> Reprendre et modifier
+            </button>
+          </div>
+        </section>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <SummaryCard
+            icon={<CalendarDays className="h-5 w-5" />}
+            title="Repères essentiels"
+            status={birthDate && birthPlace ? 'Enregistrés' : 'À compléter'}
+          >
+            <div className="space-y-2">
+              <p className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-brume-400" />
+                {birthDate || 'Date non renseignée'}
+              </p>
+              <p className="flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-brume-400" />
+                {birthTime || 'Heure non transmise — facultative'}
+              </p>
+              <p className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-brume-400" />
+                {birthPlace || 'Lieu non renseigné'}
+              </p>
+              {usageName && (
+                <p className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-brume-400" />
+                  Appelé(e) {usageName}
+                </p>
+              )}
+            </div>
+          </SummaryCard>
+
+          <SummaryCard
+            icon={<MessageSquareText className="h-5 w-5" />}
+            title="Votre intention"
+            status={specificQuestion || objective || openReading ? 'Enregistrée' : 'À compléter'}
+          >
+            {openReading && (
+              <DetailRow label="Cadre" value="Lecture ouverte, sans question imposée" />
+            )}
+            {specificQuestion && <DetailRow label="Question" value={specificQuestion} />}
+            {objective && <DetailRow label="Objectif" value={objective} />}
+            {!specificQuestion && !objective && !openReading && (
+              <p>Vous pourrez choisir une question ou une lecture ouverte.</p>
+            )}
+          </SummaryCard>
+
+          <SummaryCard
+            icon={<ImageIcon className="h-5 w-5" />}
+            title="Photos privées"
+            status={facePhoto || palmPhoto ? 'Enregistrées' : 'Facultatives'}
+          >
+            <p>
+              {facePhoto
+                ? 'Photo de visage enregistrée dans votre brouillon privé.'
+                : 'Aucune photo de visage transmise.'}
+            </p>
+            <p className="mt-2">
+              {palmPhoto
+                ? 'Photo de paume enregistrée dans votre brouillon privé.'
+                : 'Aucune photo de paume transmise.'}
+            </p>
+          </SummaryCard>
+
+          <SummaryCard
+            icon={<SlidersHorizontal className="h-5 w-5" />}
+            title="Préférences de lecture"
+            status="Enregistrées"
+          >
+            <DetailRow label="Style" value={deliveryStyleLabel(deliveryStyle)} />
+            <DetailRow label="Rythme" value={paceLabel(pace)} />
+          </SummaryCard>
         </div>
+
+        <section className="mt-6 rounded-3xl border border-ivoire-500/[0.06] glass-aube p-5 sm:p-6">
+          <h2 className="font-playfair text-xl italic text-ivoire-100">Contexte personnel</h2>
+          {contextFields.length ? (
+            <div className="mt-4 rounded-2xl border border-ivoire-500/[0.04] p-4 sm:p-5">
+              {contextFields.map((field) => (
+                <DetailRow key={field.label} label={field.label} value={field.value} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm leading-7 text-brume-200">
+              Vous n’avez pas encore ajouté de contexte personnel complémentaire.
+            </p>
+          )}
+        </section>
       </div>
     );
   }
