@@ -100,24 +100,13 @@ const baseSnapshot: AiPromptSnapshot = {
 describe('AiExecutionResolverService', () => {
   let service: AiExecutionResolverService;
   let prisma: { promptVersion: { findUnique: jest.Mock } };
-  let aiRouting: { resolveRule: jest.Mock };
 
   beforeEach(() => {
     prisma = { promptVersion: { findUnique: jest.fn() } };
-    aiRouting = { resolveRule: jest.fn().mockResolvedValue(null) };
-    service = new AiExecutionResolverService(prisma as never, aiRouting as never);
+    service = new AiExecutionResolverService(prisma as never);
   });
 
   it('uses global agent config as the only source in openai_only mode', async () => {
-    aiRouting.resolveRule.mockResolvedValue({
-      provider: 'openai',
-      model: 'gpt-4o',
-      temperature: 0.5,
-      maxTokens: 4096,
-      source: 'rule:INITIE/SCRIBE/READING_GENERATION',
-      isCustomRule: true,
-    });
-
     const resolved = await service.resolve(
       buildAiContext('SCRIBE', AiMission.READING_GENERATION, {
         productLevel: ProductLevel.INITIE,
@@ -125,11 +114,10 @@ describe('AiExecutionResolverService', () => {
       baseSnapshot,
     );
 
-    expect(aiRouting.resolveRule).not.toHaveBeenCalled();
     expect(resolved.provider).toBe('openai');
     expect(resolved.model).toBe('gpt-5.5-2026-04-23');
     expect(resolved.reasoningEffort).toBe('high');
-    expect(resolved.routingSource).toBe('global:SCRIBE');
+    expect(resolved.routingSource).toBe('model-config:SCRIBE');
   });
 
   it('rejects an invalid persisted model config before execution', async () => {
@@ -218,15 +206,6 @@ describe('AiExecutionResolverService', () => {
       },
     };
 
-    aiRouting.resolveRule.mockResolvedValue({
-      provider: 'openai',
-      model: 'gpt-4o-2024-11-20',
-      temperature: 0.1,
-      maxTokens: 100,
-      source: 'rule:should-not-apply',
-      isCustomRule: true,
-    });
-
     const scribe = await service.resolve(
       buildAiContext('SCRIBE', AiMission.READING_GENERATION, {
         productLevel: ProductLevel.INITIE,
@@ -238,10 +217,9 @@ describe('AiExecutionResolverService', () => {
       snapshot,
     );
 
-    expect(aiRouting.resolveRule).not.toHaveBeenCalled();
     expect(scribe.provider).toBe('vertex');
     expect(scribe.model).toBe('gemini-3.5-flash');
-    expect(scribe.routingSource).toBe('global:SCRIBE');
+    expect(scribe.routingSource).toBe('model-config:SCRIBE');
     expect(editor.provider).toBe('gemini');
     expect(editor.model).toBe('gemini-3.5-flash');
   });
@@ -253,8 +231,7 @@ describe('AiExecutionResolverService', () => {
     );
 
     expect(resolved.model).toBe('gpt-5.4-2026-03-05');
-    expect(resolved.routingSource).toBe('global:GUIDE');
-    expect(aiRouting.resolveRule).not.toHaveBeenCalled();
+    expect(resolved.routingSource).toBe('model-config:GUIDE');
   });
 
   it('applies a promptVersion only when it belongs to the requested agent', async () => {

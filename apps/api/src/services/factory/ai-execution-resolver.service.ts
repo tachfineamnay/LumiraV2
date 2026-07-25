@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { AiMission } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AiRoutingService } from '../../modules/settings/ai-routing.service';
 import {
   AGENT_PROMPT_KEYS,
   AgentType,
@@ -19,11 +18,7 @@ import {
 export class AiExecutionResolverService {
   private readonly logger = new Logger(AiExecutionResolverService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    /** Kept for DI compatibility; Tranche A never reads AiRoutingRule. */
-    private readonly aiRouting: AiRoutingService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async resolve(ctx: AiExecutionContext, snapshot: AiPromptSnapshot): Promise<ResolvedAiExecution> {
     const normalized = normalizeAiModelConfig(snapshot.modelConfig);
@@ -39,10 +34,7 @@ export class AiExecutionResolverService {
       throw new BadRequestException(`L'agent ${ctx.agent} est désactivé.`);
     }
 
-    // Tranche A: openai_only | per_agent from MODEL_CONFIG only. Never call aiRouting.
-    void this.aiRouting;
-
-    const routingSource = `global:${ctx.agent}`;
+    const routingSource = `model-config:${ctx.agent}`;
     const promptVersionId = ctx.promptVersionId;
     const agentPrompt = await this.resolveAgentPrompt(ctx.agent, snapshot, promptVersionId);
 

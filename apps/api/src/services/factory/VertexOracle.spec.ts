@@ -216,7 +216,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
         reasoningEffort: config.reasoningEffort,
         verbosity: config.verbosity,
         systemPrompt: `${snapshot.lumiraDna}\n\n---\n\n${snapshot.agentContexts[ctx.agent]}`,
-        routingSource: `global:${ctx.agent}`,
+        routingSource: `model-config:${ctx.agent}`,
       };
     });
 
