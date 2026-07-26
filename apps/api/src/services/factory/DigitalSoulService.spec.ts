@@ -63,6 +63,8 @@ function buildService(
 ) {
   const transactionOrderUpdate = jest.fn().mockResolvedValue({});
   const readingVersionCreate = jest.fn().mockResolvedValue({ id: 'candidate-version-1' });
+  const spiritualPathCreate = jest.fn();
+  const pathStepCreate = jest.fn();
   const prisma = {
     order: {
       findUnique: jest.fn().mockResolvedValue({
@@ -94,6 +96,8 @@ function buildService(
           findFirst: jest.fn().mockResolvedValue({ version: 8 }),
           create: readingVersionCreate,
         },
+        spiritualPath: { create: spiritualPathCreate },
+        pathStep: { create: pathStepCreate },
       }),
     ),
   };
@@ -131,6 +135,8 @@ function buildService(
     prisma,
     transactionOrderUpdate,
     readingVersionCreate,
+    spiritualPathCreate,
+    pathStepCreate,
     vertexOracle,
     readingSource,
     onboardingPhotos,
@@ -187,6 +193,27 @@ describe('DigitalSoulService candidate promotion', () => {
       );
     },
   );
+
+  it('stores GUIDE in the versioned draft without creating a journey before sealing', async () => {
+    const { service, readingVersionCreate, spiritualPathCreate, pathStepCreate } =
+      buildService('PASS');
+
+    await expect(service.generateContentOnly('order-1')).resolves.toMatchObject({
+      stepsCreated: 0,
+    });
+
+    expect(readingVersionCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'DRAFT',
+          source: 'SCRIBE_CANDIDATE',
+          content: expect.objectContaining({ timeline: expect.any(Array) }),
+        }),
+      }),
+    );
+    expect(spiritualPathCreate).not.toHaveBeenCalled();
+    expect(pathStepCreate).not.toHaveBeenCalled();
+  });
 
   it('versions a successful regeneration candidate without overwriting the source draft', async () => {
     const sourceDraft = {

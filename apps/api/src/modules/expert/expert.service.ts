@@ -25,7 +25,16 @@ import {
 } from './production-control.types';
 import { S3Service } from '../uploads/s3.service';
 import * as bcrypt from 'bcryptjs';
-import { Expert, Order, Prisma, User, UserProfile, OrderFile, UserStatus } from '@prisma/client';
+import {
+  Expert,
+  Order,
+  PathActionType,
+  Prisma,
+  User,
+  UserProfile,
+  OrderFile,
+  UserStatus,
+} from '@prisma/client';
 import { Readable } from 'stream';
 import {
   buildGeneratedReadingVersion,
@@ -992,106 +1001,21 @@ export class ExpertService {
   // ORDER PROCESSING
   // ========================
 
-  async processOrder(
-    dto: ProcessOrderDto,
-    expert: ExpertEntity,
-  ): Promise<Order & { generationResult?: { archetype: string; stepsCreated: number } }> {
+  /**
+   * Legacy endpoint wrapper. Long-running reading work is always represented
+   * by a durable ProductionControl job.
+   */
+  async processOrder(dto: ProcessOrderDto, expert: ExpertEntity) {
     const order = await this.prisma.order.findUnique({
       where: { id: dto.orderId },
-      include: {
-        user: { include: { profile: true } },
-        readingIntake: true,
-        files: true,
-      },
+      select: { generatedContent: true },
     });
-
-    if (!order) {
-      throw new NotFoundException('Commande non trouvée');
-    }
-    assertOrderIntakeReady(order);
-
-    // PROCESSING is an active generation lease, never a requestable state.
-    const validStatuses = ['PAID', 'AWAITING_VALIDATION', 'FAILED'];
-    if (!validStatuses.includes(order.status)) {
-      throw new BadRequestException("Cette commande n'est pas prête pour la génération");
-    }
-    const assignedBy = (order.expertReview as Record<string, unknown> | null)?.assignedBy;
-    if (assignedBy && assignedBy !== expert.id && expert.role !== 'ADMIN') {
-      throw new ForbiddenException('Cette commande est assignée à un autre expert');
-    }
-
-    // Persist expert context before DigitalSoul acquires the atomic lease.
-    const updatedOrder = await this.prisma.order.update({
-      where: { id: dto.orderId },
-      data: {
-        expertPrompt: dto.expertPrompt,
-        expertInstructions: dto.expertInstructions,
-        expertReview: {
-          ...((order.expertReview as Record<string, unknown>) || {}),
-          processedBy: expert.id,
-          processedAt: new Date().toISOString(),
-        },
-      },
+    return this.productionControl.enqueueReading(dto.orderId, expert as Expert, {
+      expertPrompt: dto.expertPrompt,
+      expertInstructions: dto.expertInstructions,
+      regenerationOfExistingContent: Boolean(order?.generatedContent),
     });
-
-    // Use internal DigitalSoulService instead of n8n webhook
-    this.logger.log(`🚀 Starting internal generation for order ${order.orderNumber}`);
-
-    try {
-      // Generate AI content only (no PDF yet) - will be validated by expert
-      const result = await this.digitalSoulService.generateContentOnly(dto.orderId);
-
-      this.logger.log(
-        `✅ Order ${order.orderNumber} content generated - Archetype: ${result.archetype}`,
-      );
-      this.logger.log(`📋 Order now AWAITING_VALIDATION`);
-
-      // Fetch the updated order with generated content
-      const finalOrder = await this.prisma.order.findUnique({
-        where: { id: dto.orderId },
-        include: { user: { include: { profile: true } }, files: true },
-      });
-
-      this.gateway.notifyOrderStatusChange({
-        id: dto.orderId,
-        orderNumber: order.orderNumber,
-        previousStatus: order.status,
-        newStatus: 'AWAITING_VALIDATION',
-        updatedBy: expert.id,
-      });
-      this.gateway.notifyGenerationComplete(dto.orderId, order.orderNumber, true);
-
-      return {
-        ...(finalOrder || updatedOrder),
-        generationResult: {
-          archetype: result.archetype,
-          stepsCreated: result.stepsCreated,
-        },
-      };
-    } catch (error) {
-      this.logger.error(`❌ Generation failed for order ${order.orderNumber}: ${error}`);
-
-      // Update order status to FAILED
-      await this.prisma.order.update({
-        where: { id: dto.orderId },
-        data: {
-          status: 'FAILED',
-          errorLog: `Generation failed: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      });
-      this.gateway.notifyGenerationComplete(
-        dto.orderId,
-        order.orderNumber,
-        false,
-        error instanceof Error ? error.message : String(error),
-      );
-
-      throw new BadRequestException(
-        `Échec de la génération: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
-
   /**
    * @deprecated This method is no longer used - order generation now uses internal DigitalSoulService.
    * Kept for reference and potential future external integration needs.
@@ -1261,16 +1185,7 @@ export class ExpertService {
    * Triggers AI-powered reading generation using the new Internal Factory.
    * Generates content only. PDF creation is restricted to validation.
    */
-  async generateReading(
-    orderId: string,
-    expert: ExpertEntity,
-  ): Promise<{
-    success: boolean;
-    orderId: string;
-    orderNumber: string;
-    archetype: string;
-    stepsCreated: number;
-  }> {
+  async generateReading(orderId: string, expert: ExpertEntity) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { readingIntake: true },
@@ -1288,7 +1203,9 @@ export class ExpertService {
     if (!review.assignedBy) {
       await this.assignOrder(orderId, expert.id);
     }
-    return this.generateReadingWithPrompt(orderId, undefined, expert);
+    return this.productionControl.enqueueReading(orderId, expert as Expert, {
+      regenerationOfExistingContent: Boolean(order.generatedContent),
+    });
   }
 
   /**
@@ -1299,29 +1216,8 @@ export class ExpertService {
     orderId: string,
     expertPrompt: string | undefined,
     expert: ExpertEntity,
-  ): Promise<{
-    success: boolean;
-    orderId: string;
-    orderNumber: string;
-    archetype: string;
-    stepsCreated: number;
-  }> {
-    this.logger.log(
-      `🚀 Starting AI reading generation for order: ${orderId}${expertPrompt ? ' (with expert prompt)' : ''}`,
-    );
-
-    const order = await this.processOrder({ orderId, expertPrompt }, expert);
-    const result = order.generationResult;
-    if (!result) {
-      throw new BadRequestException('La génération de contenu n’a retourné aucun résultat');
-    }
-    return {
-      success: true,
-      orderId,
-      orderNumber: order.orderNumber,
-      archetype: result.archetype,
-      stepsCreated: result.stepsCreated,
-    };
+  ) {
+    return this.processOrder({ orderId, expertPrompt }, expert);
   }
 
   // ========================
@@ -1718,6 +1614,32 @@ MESSAGE DE L'EXPERT:`;
         },
       });
 
+      // GUIDE stays inside the DRAFT payload until this point. A sealed
+      // reading receives its own journey, so prior completed steps and dreams
+      // are never rewritten by a new reading or regeneration.
+      await tx.spiritualPath.create({
+        data: {
+          userId: order.userId,
+          readingVersionId: version.id,
+          archetype: content.synthesis.archetype,
+          synthesis: content.pdf_content.introduction,
+          keyBlockage: content.synthesis.key_blockage || null,
+          steps: {
+            create: content.timeline.map((day, index) => ({
+              dayNumber: day.day || index + 1,
+              title: day.title,
+              description: day.action,
+              synthesis: day.mantra || day.action,
+              archetype: content.synthesis.archetype,
+              actionType: this.toPathActionType(day.actionType),
+              isCompleted: false,
+              unlockedAt: index === 0 ? sealedAt : null,
+              originReadingId: order.id,
+            })),
+          },
+        },
+      });
+
       await tx.order.update({
         where: { id: order.id },
         data: {
@@ -1735,6 +1657,19 @@ MESSAGE DE L'EXPERT:`;
 
       return version;
     });
+  }
+
+  private toPathActionType(value: string | undefined): PathActionType {
+    const allowed: PathActionType[] = [
+      'MANTRA',
+      'RITUAL',
+      'JOURNALING',
+      'MEDITATION',
+      'REFLECTION',
+    ];
+    return value && allowed.includes(value as PathActionType)
+      ? (value as PathActionType)
+      : 'REFLECTION';
   }
 
   /**
@@ -1961,7 +1896,9 @@ MESSAGE DE L'EXPERT:`;
           take: 20,
         },
         akashicRecord: true,
-        spiritualPath: {
+        spiritualPaths: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           include: {
             steps: {
               orderBy: { dayNumber: 'asc' },
@@ -1985,6 +1922,7 @@ MESSAGE DE L'EXPERT:`;
     if (!client) {
       throw new NotFoundException('Client non trouvé');
     }
+    const spiritualPath = client.spiritualPaths[0];
 
     // Get insights separately (different table)
     const insights = await this.prisma.insight.findMany({
@@ -2004,10 +1942,9 @@ MESSAGE DE L'EXPERT:`;
     const isVip = totalSpent >= 29900;
 
     // ── Engagement metrics ──
-    const stepsTotal = client.spiritualPath?.steps?.length ?? 0;
+    const stepsTotal = spiritualPath?.steps?.length ?? 0;
     const stepsCompleted =
-      client.spiritualPath?.steps?.filter((s: { isCompleted: boolean }) => s.isCompleted).length ??
-      0;
+      spiritualPath?.steps?.filter((s: { isCompleted: boolean }) => s.isCompleted).length ?? 0;
     const insightsTotal = insights.length;
     const insightsViewed = insights.filter(
       (i: { viewedAt: Date | null }) => i.viewedAt !== null,
@@ -2054,7 +1991,7 @@ MESSAGE DE L'EXPERT:`;
     if (client.dreams?.length > 0)
       activityDates.push({ date: new Date(client.dreams[0].createdAt), type: 'dream' });
     const completedSteps =
-      client.spiritualPath?.steps?.filter((s: { isCompleted: boolean }) => s.isCompleted) ?? [];
+      spiritualPath?.steps?.filter((s: { isCompleted: boolean }) => s.isCompleted) ?? [];
     if (completedSteps.length > 0)
       activityDates.push({
         date: new Date(
@@ -2106,7 +2043,7 @@ MESSAGE DE L'EXPERT:`;
     const profileCompleteness = Math.round((profileFilledCount / profileKeyFields.length) * 100);
 
     // Archetype
-    const archetype = client.spiritualPath?.archetype ?? client.akashicRecord?.archetype ?? null;
+    const archetype = spiritualPath?.archetype ?? client.akashicRecord?.archetype ?? null;
 
     // ── Subscription ──
     const sub = client.subscription;

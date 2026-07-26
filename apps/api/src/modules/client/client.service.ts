@@ -49,8 +49,9 @@ export class ClientService {
    * Get the user's spiritual path with all steps
    */
   async getSpiritualPath(userId: string) {
-    const spiritualPath = await this.prisma.spiritualPath.findUnique({
+    const spiritualPath = await this.prisma.spiritualPath.findFirst({
       where: { userId },
+      orderBy: { createdAt: 'desc' },
       include: {
         steps: {
           orderBy: { dayNumber: 'asc' },

@@ -137,7 +137,7 @@ model User {
 
   profile       UserProfile?
   orders        Order[]
-  spiritualPath SpiritualPath?
+  spiritualPaths SpiritualPath[]
   chatSessions  ChatSession[]
   akashicRecord AkashicRecord?
   notifications Notification[]
@@ -363,6 +363,7 @@ model ReadingVersion {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   deliveries      DeliveryRecord[]
+  spiritualPath   SpiritualPath?
 
   @@unique([orderId, version])
   @@index([orderId, status, version(sort: Desc)])
@@ -510,8 +511,12 @@ model Insight {
 
 model SpiritualPath {
   id          String    @id @default(cuid())
-  userId      String    @unique
+  userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The sealed reading that promoted this immutable journey. Legacy paths
+  /// created before versioning intentionally keep this null.
+  readingVersionId String? @unique
+  readingVersion   ReadingVersion? @relation(fields: [readingVersionId], references: [id], onDelete: SetNull)
   archetype   String // e.g., "Le Guérisseur", "Le Visionnaire"
   synthesis   String    @db.Text // AI-generated synthesis of the user's spiritual journey
   keyBlockage String? // Primary spiritual blockage identified
@@ -523,7 +528,7 @@ model SpiritualPath {
 
   steps PathStep[]
 
-  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
   @@index([archetype])
 }
 

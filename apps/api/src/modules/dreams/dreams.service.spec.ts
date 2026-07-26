@@ -81,7 +81,7 @@ describe('DreamsService', () => {
         findFirst: jest.fn(),
       },
       spiritualPath: {
-        findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       akashicRecord: {
         findUnique: jest.fn(),
@@ -119,7 +119,7 @@ describe('DreamsService', () => {
       prisma.dream.findMany.mockResolvedValue([]); // pastDreams in Promise.all
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.insight.findMany.mockResolvedValue(mockInsights);
-      prisma.spiritualPath.findUnique.mockResolvedValue(mockSpiritualPath);
+      prisma.spiritualPath.findFirst.mockResolvedValue(mockSpiritualPath);
       prisma.akashicRecord.findUnique.mockResolvedValue(mockAkashicRecord);
       prisma.dream.create.mockResolvedValue(mockDream);
       prisma.insight.findFirst.mockResolvedValue(null);
@@ -216,7 +216,7 @@ describe('DreamsService', () => {
     });
 
     it('should work without spiritual path', async () => {
-      prisma.spiritualPath.findUnique.mockResolvedValue(null);
+      prisma.spiritualPath.findFirst.mockResolvedValue(null);
 
       const result = await service.create('user-1', dto);
       expect(result.dream).toEqual(mockDream);

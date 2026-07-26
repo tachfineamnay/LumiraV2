@@ -383,22 +383,6 @@ export class ContextDispatcher {
       },
     });
 
-    // Step 8: Update SpiritualPath if needed
-    await this.prisma.spiritualPath.upsert({
-      where: { userId: user.id },
-      update: {
-        archetype: synthesis.archetype,
-        synthesis: synthesis.emotional_state || pdfData.introduction.substring(0, 500),
-        keyBlockage: synthesis.key_blockage || null,
-      },
-      create: {
-        userId: user.id,
-        archetype: synthesis.archetype,
-        synthesis: synthesis.emotional_state || pdfData.introduction.substring(0, 500),
-        keyBlockage: synthesis.key_blockage || null,
-      },
-    });
-
     const elapsed = Date.now() - startTime;
     this.logger.log(`\n${'='.repeat(60)}`);
     this.logger.log(`🎉 ORDER FINALIZED: ${order.orderNumber}`);

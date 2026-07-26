@@ -13,7 +13,6 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { PathActionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VertexOracle, ReadingSynthesis, TimelineDay, UserProfile } from '../factory/VertexOracle';
@@ -37,10 +36,8 @@ export class SpiritualPathBatchService {
   // CRON: runs every 6 hours
   // =========================================================================
 
-  @Cron(CronExpression.EVERY_6_HOURS)
   async runBatchGeneration(): Promise<void> {
-    this.logger.log('⏰ [SpiritualPathBatch] Cron triggered');
-    await Promise.all([this.processBatch(2), this.processBatch(3)]);
+    this.logger.warn('SpiritualPath batch generation is retired; journeys are promoted at seal.');
   }
 
   // =========================================================================
@@ -48,7 +45,9 @@ export class SpiritualPathBatchService {
   // =========================================================================
 
   async generateBatch1ForUser(userId: string): Promise<void> {
-    await this.generateBatchForUser(userId, 1);
+    this.logger.warn(
+      `No batch generated for ${userId.substring(0, 8)}; awaiting a sealed reading.`,
+    );
   }
 
   // =========================================================================
@@ -117,8 +116,9 @@ export class SpiritualPathBatchService {
         where: { id: userId },
         include: { profile: true },
       }),
-      this.prisma.spiritualPath.findUnique({
+      this.prisma.spiritualPath.findFirst({
         where: { userId },
+        orderBy: { createdAt: 'desc' },
         select: { id: true, archetype: true, synthesis: true, keyBlockage: true },
       }),
     ]);

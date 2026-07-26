@@ -55,8 +55,9 @@ export class DreamsService {
         where: { userId },
         select: { category: true, short: true },
       }),
-      this.prisma.spiritualPath.findUnique({
+      this.prisma.spiritualPath.findFirst({
         where: { userId },
+        orderBy: { createdAt: 'desc' },
         include: {
           steps: {
             where: { isCompleted: false },

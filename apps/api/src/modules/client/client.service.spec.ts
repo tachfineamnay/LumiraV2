@@ -11,7 +11,7 @@ describe('ClientService', () => {
 
   beforeEach(async () => {
     prisma = {
-      spiritualPath: { findUnique: jest.fn() },
+      spiritualPath: { findFirst: jest.fn() },
       pathStep: { findFirst: jest.fn(), update: jest.fn() },
       orderFile: { findFirst: jest.fn() },
       user: { findUnique: jest.fn() },
@@ -78,7 +78,7 @@ describe('ClientService', () => {
           },
         ],
       };
-      prisma.spiritualPath.findUnique.mockResolvedValue(mockPath);
+      prisma.spiritualPath.findFirst.mockResolvedValue(mockPath);
       prisma.orderFile.findFirst.mockResolvedValue({ order: { orderNumber: 'LUM-001' } });
 
       const result = await service.getSpiritualPath('user-1');
@@ -93,14 +93,14 @@ describe('ClientService', () => {
     });
 
     it('should return null when no path exists', async () => {
-      prisma.spiritualPath.findUnique.mockResolvedValue(null);
+      prisma.spiritualPath.findFirst.mockResolvedValue(null);
 
       const result = await service.getSpiritualPath('user-1');
       expect(result).toBeNull();
     });
 
     it('should return null synthesisAudioUrl when no audio file', async () => {
-      prisma.spiritualPath.findUnique.mockResolvedValue({
+      prisma.spiritualPath.findFirst.mockResolvedValue({
         id: 'path-1',
         archetype: 'Test',
         synthesis: 'S',

@@ -28,7 +28,7 @@ import {
   ReadingSourceResolver,
   ResolvedReadingSource,
 } from './reading-source.resolver';
-import { PathActionType, InsightCategory, Prisma } from '@prisma/client';
+import { InsightCategory, Prisma } from '@prisma/client';
 import {
   hashReadingWorkspaceSnapshot,
   isCanonicalReadingContent,
@@ -116,8 +116,9 @@ export class DigitalSoulService {
    * 1. Retrieve Order + User Profile
    * 2. Call VertexOracle.generateFullReading()
    * 3. Validate AI response
-   * 4. Update SpiritualPath and PathSteps
-   * 5. Set status to AWAITING_VALIDATION
+   * 4. Persist a versioned review draft (including the GUIDE timeline)
+   * 5. Set status to AWAITING_VALIDATION. The journey is promoted only when
+   *    the expert seals a ReadingVersion.
    */
   async generateContentOnly(
     orderId: string,
@@ -273,72 +274,40 @@ export class DigitalSoulService {
             },
             readingSource,
           ) as Record<string, unknown>;
-          let candidateVersionId: string | undefined;
-          if (isRegeneration) {
-            const latestVersion = await tx.readingVersion.findFirst({
-              where: { orderId },
-              orderBy: { version: 'desc' },
-              select: { version: true },
-            });
-            const candidateVersion = await tx.readingVersion.create({
-              data: {
-                orderId,
-                version: (latestVersion?.version || 0) + 1,
-                status: 'DRAFT',
-                content: candidatePayload as Prisma.InputJsonValue,
-                contentHash: hashReadingWorkspaceSnapshot(candidatePayload),
-                source: sourceMatches
+          const latestVersion = await tx.readingVersion.findFirst({
+            where: { orderId },
+            orderBy: { version: 'desc' },
+            select: { version: true },
+          });
+          const currentPayload = currentOrder?.generatedContent as Record<string, unknown> | null;
+          const inheritedParentVersionId =
+            typeof currentPayload?.workingReadingVersionId === 'string'
+              ? currentPayload.workingReadingVersionId
+              : typeof currentPayload?.canonicalReadingVersionId === 'string'
+                ? currentPayload.canonicalReadingVersionId
+                : null;
+          const candidateVersion = await tx.readingVersion.create({
+            data: {
+              orderId,
+              version: (latestVersion?.version || 0) + 1,
+              status: 'DRAFT',
+              content: candidatePayload as Prisma.InputJsonValue,
+              contentHash: hashReadingWorkspaceSnapshot(candidatePayload),
+              source: isRegeneration
+                ? sourceMatches
                   ? 'SCRIBE_REGENERATE_CANDIDATE'
-                  : 'SCRIBE_REGENERATE_CONFLICT_CANDIDATE',
-                parentVersionId: generationContext.sourceReadingVersionId,
-              },
-              select: { id: true },
-            });
-            candidateVersionId = candidateVersion.id;
-            if (!sourceMatches) {
-              return { created: 0, conflict: true, candidateVersionId };
-            }
-            candidatePayload.workingReadingVersionId = candidateVersionId;
-            candidatePayload.candidateReadingVersionId = candidateVersionId;
+                  : 'SCRIBE_REGENERATE_CONFLICT_CANDIDATE'
+                : 'SCRIBE_CANDIDATE',
+              parentVersionId: generationContext.sourceReadingVersionId || inheritedParentVersionId,
+            },
+            select: { id: true },
+          });
+          const candidateVersionId = candidateVersion.id;
+          if (!sourceMatches) {
+            return { created: 0, conflict: true, candidateVersionId };
           }
-
-          const hasExistingReading = isCanonicalReadingContent(order.generatedContent);
-          let created = 0;
-          if (!hasExistingReading) {
-            const path = await tx.spiritualPath.upsert({
-              where: { userId: user.id },
-              update: {
-                archetype: aiResponse.synthesis.archetype,
-                synthesis: aiResponse.pdf_content.introduction,
-                keyBlockage: aiResponse.synthesis.key_blockage || null,
-              },
-              create: {
-                userId: user.id,
-                archetype: aiResponse.synthesis.archetype,
-                synthesis: aiResponse.pdf_content.introduction,
-                keyBlockage: aiResponse.synthesis.key_blockage || null,
-              },
-            });
-            const steps = await Promise.all(
-              aiResponse.timeline.map((day, index) =>
-                tx.pathStep.create({
-                  data: {
-                    spiritualPathId: path.id,
-                    dayNumber: day.day || index + 1,
-                    title: day.title,
-                    description: day.action,
-                    synthesis: day.mantra,
-                    archetype: aiResponse.synthesis.archetype,
-                    actionType: this.mapActionType(day.actionType),
-                    isCompleted: false,
-                    unlockedAt: index === 0 ? new Date() : null,
-                    originReadingId: orderId,
-                  },
-                }),
-              ),
-            );
-            created = steps.length;
-          }
+          candidatePayload.workingReadingVersionId = candidateVersionId;
+          candidatePayload.candidateReadingVersionId = candidateVersionId;
           await tx.order.update({
             where: { id: orderId },
             data: {
@@ -347,7 +316,7 @@ export class DigitalSoulService {
               errorLog: null,
             },
           });
-          return { created, conflict: false, candidateVersionId };
+          return { created: 0, conflict: false, candidateVersionId };
         });
         if (result.conflict) {
           throw new ConflictException(
@@ -518,8 +487,8 @@ export class DigitalSoulService {
     }
 
     // Get spiritualPath ID
-    const spiritualPath = await this.prisma.spiritualPath.findUnique({
-      where: { userId: user.id },
+    const spiritualPath = await this.prisma.spiritualPath.findFirst({
+      where: { userId: user.id, readingVersionId: sealedReading.id },
     });
 
     // Upsert Insights from AI sections
@@ -595,379 +564,6 @@ export class DigitalSoulService {
 
     return errors;
   }
-
-  /**
-   * Main orchestration method: processes an order and generates the complete reading.
-   *
-   * Flow:
-   * 1. Retrieve Order + User Profile from Prisma
-   * 2. Call VertexOracle.generateFullReading()
-   * 3. VALIDATE AI response content
-   * 4. Update SpiritualPath and create PathSteps (in transaction)
-   * 5. Generate PDF via PdfFactory
-   * 6. Upload to S3 and update Order status
-   */
-  async processOrderGeneration(orderId: string): Promise<GenerationResult> {
-    const startTime = Date.now();
-
-    this.logger.log(`\n${'='.repeat(60)}`);
-    this.logger.log(`🚀 STARTING GENERATION FOR ORDER: ${orderId}`);
-    this.logger.log(`${'='.repeat(60)}`);
-    this.logger.log(`⏱️ Timestamp: ${new Date().toISOString()}`);
-
-    try {
-      // ==========================================================================
-      // STEP 1: Retrieve Order + User Profile
-      // ==========================================================================
-      this.logger.log(`\n📋 STEP 1: Loading order and user profile...`);
-
-      const order = await this.prisma.order.findUnique({
-        where: { id: orderId },
-        include: {
-          user: {
-            include: { profile: true },
-          },
-          files: true,
-        },
-      });
-
-      if (!order) {
-        throw new NotFoundException(`Order not found: ${orderId}`);
-      }
-
-      this.logger.log(`   ✅ Order found: ${order.orderNumber}`);
-      this.logger.log(`   📦 Status: ${order.status}`);
-      this.logger.log(`   💰 Amount: ${order.amount} (level resolved at context build)`);
-
-      // Allow PAID, PROCESSING, and FAILED (retry) — never unpaid PENDING
-      const validStatuses = ['PAID', 'PROCESSING', 'FAILED'];
-      if (!validStatuses.includes(order.status)) {
-        throw new BadRequestException(
-          `Order ${orderId} is not in a valid state for generation: ${order.status}`,
-        );
-      }
-
-      // Atomic status transition to prevent concurrent processing
-      const locked = await this.acquireProcessingLock(orderId, validStatuses);
-      if (!locked) {
-        throw new ConflictException(
-          `Order ${orderId} is already being processed by another request`,
-        );
-      }
-      this.logger.log(`   📝 Status updated to PROCESSING (lock acquired)`);
-
-      const user = order.user;
-      const { userProfile, readingSource } = this.resolveReadingProfile(order);
-      const readingFields = readingSource.profile;
-
-      this.logger.log(`\n👤 STEP 1b: Reading source loaded`);
-      this.logger.log(`   👤 Name: ${user.firstName} ${user.lastName}`);
-      this.logger.log(`   📧 Email: ${user.email}`);
-      this.logger.log(`   📎 Source: ${readingSource.source}`);
-      this.logger.log(`   🎂 Birth date: ${readingFields.birthDate || 'NOT PROVIDED'}`);
-      this.logger.log(`   📍 Birth place: ${readingFields.birthPlace || 'NOT PROVIDED'}`);
-      this.logger.log(`   🖼️ Face photo: ${readingFields.facePhotoUrl ? 'YES' : 'NO'}`);
-      this.logger.log(`   ✋ Palm photo: ${readingFields.palmPhotoUrl ? 'YES' : 'NO'}`);
-      this.logger.log(`   📁 Files attached: ${order.files?.length || 0}`);
-      this.logger.log(`   ❓ Specific question: ${readingFields.specificQuestion ? 'YES' : 'NO'}`);
-      this.logger.log(`   🎯 Objective: ${readingFields.objective ? 'YES' : 'NO'}`);
-      this.logger.log(`   ⬆️ Highs: ${readingFields.highs ? 'YES' : 'NO'}`);
-      this.logger.log(`   ⬇️ Lows: ${readingFields.lows ? 'YES' : 'NO'}`);
-
-      // Build order context — resolve level from order amount
-      const { level: orderLevel, productName: orderProductName } = this.getLevelFromAmount(
-        order.amount,
-      );
-      const orderContext: OrderContext = {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        level: productLevelFromNumericLevel(orderLevel),
-        productLevel: productLevelFromAmountCents(order.amount),
-        productName: orderProductName,
-        expertPrompt: order.expertPrompt ?? undefined,
-        expertInstructions: order.expertInstructions ?? undefined,
-      };
-
-      // ==========================================================================
-      // STEP 2: AI Generation
-      // ==========================================================================
-      this.logger.log(`\n🔮 STEP 2: Calling Vertex AI (Gemini 1.5 Pro)...`);
-      this.logger.log(`   🎯 Product level: ${orderContext.productName}`);
-
-      let aiResponse: OracleResponse;
-      const aiStartTime = Date.now();
-
-      try {
-        aiResponse = await this.vertexOracle.generateFullReading(userProfile, orderContext);
-        const aiElapsed = Date.now() - aiStartTime;
-
-        this.logger.log(`\n✅ STEP 2 COMPLETE: Vertex AI Response received`);
-        this.logger.log(`   ⏱️ AI generation took: ${aiElapsed}ms`);
-        this.logger.log(`   🎭 Archetype: ${aiResponse.synthesis?.archetype || 'UNKNOWN'}`);
-        this.logger.log(`   📝 Sections: ${aiResponse.pdf_content?.sections?.length || 0}`);
-        this.logger.log(`   📅 Timeline days: ${aiResponse.timeline?.length || 0}`);
-        this.logger.log(`   🔑 Keywords: ${aiResponse.synthesis?.keywords?.join(', ') || 'NONE'}`);
-      } catch (error) {
-        const errorMsg = `AI generation failed: ${error instanceof Error ? error.message : String(error)}`;
-        this.logger.error(`\n❌ STEP 2 FAILED: ${errorMsg}`);
-        await this.saveErrorAndFail(orderId, errorMsg);
-        throw new BadRequestException(errorMsg);
-      }
-
-      // ==========================================================================
-      // STEP 3: VALIDATE AI Response
-      // ==========================================================================
-      this.logger.log(`\n🔍 STEP 3: Validating AI response...`);
-
-      const validationErrors = this.validateAiResponse(aiResponse);
-
-      if (validationErrors.length > 0) {
-        const errorMsg = `AI returned invalid content: ${validationErrors.join('; ')}`;
-        this.logger.error(`\n❌ STEP 3 FAILED: ${errorMsg}`);
-        await this.saveErrorAndFail(orderId, errorMsg);
-        throw new BadRequestException(errorMsg);
-      }
-
-      if (aiResponse.pipeline?.qualityStatus === 'BLOCKED') {
-        const errorMsg = `AI candidate blocked by reading quality validation: ${
-          aiResponse.pipeline.blockingIssues.map((issue) => issue.message).join('; ') ||
-          'blocking issue reported'
-        }`;
-        await this.saveErrorAndFail(orderId, errorMsg);
-        throw new BadRequestException(errorMsg);
-      }
-
-      this.logger.log(`   ✅ Validation passed - all required fields present`);
-
-      // ==========================================================================
-      // STEP 4: Database Updates (Transaction)
-      // ==========================================================================
-      this.logger.log(`\n💾 STEP 4: Updating SpiritualPath and creating PathSteps...`);
-
-      let spiritualPath: { id: string };
-      let stepsCreated: number;
-
-      try {
-        const result = await this.prisma.$transaction(async (tx) => {
-          // Upsert SpiritualPath
-          const path = await tx.spiritualPath.upsert({
-            where: { userId: user.id },
-            update: {
-              archetype: aiResponse.synthesis.archetype,
-              synthesis: aiResponse.pdf_content.introduction,
-              keyBlockage: aiResponse.synthesis.key_blockage || null,
-              updatedAt: new Date(),
-            },
-            create: {
-              userId: user.id,
-              archetype: aiResponse.synthesis.archetype,
-              synthesis: aiResponse.pdf_content.introduction,
-              keyBlockage: aiResponse.synthesis.key_blockage || null,
-            },
-          });
-
-          this.logger.log(`   📚 SpiritualPath upserted: ${path.id}`);
-
-          // Delete existing steps for fresh generation
-          const deletedCount = await tx.pathStep.deleteMany({
-            where: { spiritualPathId: path.id },
-          });
-          this.logger.log(`   🗑️ Deleted ${deletedCount.count} existing steps`);
-
-          // Create PathStep entries from timeline
-          const steps = await Promise.all(
-            aiResponse.timeline.map(async (day, index) => {
-              return tx.pathStep.create({
-                data: {
-                  spiritualPathId: path.id,
-                  dayNumber: day.day || index + 1,
-                  title: day.title,
-                  description: day.action,
-                  synthesis: day.mantra,
-                  archetype: aiResponse.synthesis.archetype,
-                  actionType: this.mapActionType(day.actionType),
-                  isCompleted: false,
-                  unlockedAt: index === 0 ? new Date() : null,
-                  originReadingId: orderId,
-                },
-              });
-            }),
-          );
-
-          return { spiritualPath: path, stepsCreated: steps.length };
-        });
-
-        spiritualPath = result.spiritualPath;
-        stepsCreated = result.stepsCreated;
-
-        this.logger.log(`   ✅ STEP 4 COMPLETE: ${stepsCreated} PathSteps created`);
-      } catch (error) {
-        const errorMsg = `Database transaction failed: ${error instanceof Error ? error.message : String(error)}`;
-        this.logger.error(`\n❌ STEP 4 FAILED: ${errorMsg}`);
-        await this.saveErrorAndFail(orderId, errorMsg);
-        throw new BadRequestException(errorMsg);
-      }
-
-      // ==========================================================================
-      // STEP 5: PDF Generation
-      // ==========================================================================
-      this.logger.log(`\n📄 STEP 5: Generating PDF with Gotenberg...`);
-
-      const pdfData: ReadingPdfData = {
-        userName: `${user.firstName} ${user.lastName}`,
-        archetype: aiResponse.synthesis.archetype,
-        archetypeDescription: aiResponse.pdf_content.archetype_reveal,
-        keywords: aiResponse.synthesis.keywords || [],
-        introduction: aiResponse.pdf_content.introduction,
-        sections: aiResponse.pdf_content.sections.map((s) => ({
-          domain: s.domain,
-          title: s.title,
-          content: s.content,
-        })),
-        karmicInsights: aiResponse.pdf_content.karmic_insights || [],
-        lifeMission: aiResponse.pdf_content.life_mission || '',
-        rituals: aiResponse.pdf_content.rituals || [],
-        conclusion: aiResponse.pdf_content.conclusion,
-        birthData: {
-          date: userProfile.birthDate,
-          time: userProfile.birthTime,
-          place: userProfile.birthPlace,
-        },
-        generatedAt: new Date().toISOString(),
-      };
-
-      this.logger.log(`   📝 PDF data prepared for: ${pdfData.userName}`);
-      this.logger.log(`   📊 Sections to render: ${pdfData.sections.length}`);
-
-      let pdfBuffer: Buffer;
-      const pdfStartTime = Date.now();
-
-      try {
-        pdfBuffer = await this.pdfFactory.generatePdf('reading', pdfData);
-        const pdfElapsed = Date.now() - pdfStartTime;
-
-        this.logger.log(`\n✅ STEP 5 COMPLETE: PDF Buffer created`);
-        this.logger.log(
-          `   📦 Size: ${pdfBuffer.length} bytes (${Math.round(pdfBuffer.length / 1024)}KB)`,
-        );
-        this.logger.log(`   ⏱️ PDF generation took: ${pdfElapsed}ms`);
-      } catch (error) {
-        const errorMsg = `PDF generation failed: ${error instanceof Error ? error.message : String(error)}`;
-        this.logger.error(`\n❌ STEP 5 FAILED: ${errorMsg}`);
-        await this.saveErrorAndFail(orderId, errorMsg);
-        throw new BadRequestException(errorMsg);
-      }
-
-      // ==========================================================================
-      // STEP 6: Upload to S3 and Update Order
-      // ==========================================================================
-      this.logger.log(`\n☁️ STEP 6: Uploading PDF to S3...`);
-      this.logger.log(`   🪣 Bucket: ${this.s3Bucket}`);
-      this.logger.log(`   🌍 Region: ${this.s3Region}`);
-
-      const pdfKey = `readings/${order.orderNumber}/${Date.now()}-lecture.pdf`;
-      let pdfUrl: string;
-
-      try {
-        const s3StartTime = Date.now();
-
-        await this.s3Client.send(
-          new PutObjectCommand({
-            Bucket: this.s3Bucket,
-            Key: pdfKey,
-            Body: pdfBuffer,
-            ContentType: 'application/pdf',
-            Metadata: {
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              userId: user.id,
-            },
-          }),
-        );
-
-        const s3Elapsed = Date.now() - s3StartTime;
-        // Use API endpoint for signed URL access (S3 bucket is private)
-        pdfUrl = `/api/readings/${order.orderNumber}/download`;
-
-        this.logger.log(`\n✅ STEP 6 COMPLETE: S3 Upload successful`);
-        this.logger.log(`   🔑 Key: ${pdfKey}`);
-        this.logger.log(`   🔗 Access URL: ${pdfUrl}`);
-        this.logger.log(`   ⏱️ S3 upload took: ${s3Elapsed}ms`);
-      } catch (error) {
-        const errorMsg = `S3 upload failed: ${error instanceof Error ? error.message : String(error)}`;
-        this.logger.error(`\n❌ STEP 6 FAILED: ${errorMsg}`);
-        await this.saveErrorAndFail(orderId, errorMsg);
-        throw new BadRequestException(errorMsg);
-      }
-
-      // ==========================================================================
-      // STEP 7: Upsert Insights + Final Order Update
-      // ==========================================================================
-      this.logger.log(`\n💾 STEP 7: Upserting Insights and finalizing order...`);
-
-      await this.upsertInsightsFromSections(user.id, orderId, aiResponse);
-
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'COMPLETED',
-          deliveredAt: new Date(),
-          errorLog: null,
-          generatedContent: this.withReadingSourceMetadata(
-            {
-              ...aiResponse,
-              pdfUrl,
-              pdfKey,
-            },
-            readingSource,
-          ),
-        },
-      });
-
-      const totalElapsed = Date.now() - startTime;
-
-      this.logger.log(`\n${'='.repeat(60)}`);
-      this.logger.log(`🎉 GENERATION COMPLETE FOR ORDER: ${order.orderNumber}`);
-      this.logger.log(`${'='.repeat(60)}`);
-      this.logger.log(`   👤 User: ${user.firstName} ${user.lastName}`);
-      this.logger.log(`   🎭 Archetype: ${aiResponse.synthesis.archetype}`);
-      this.logger.log(`   📅 Steps: ${stepsCreated}`);
-      this.logger.log(`   📄 PDF: ${Math.round(pdfBuffer.length / 1024)}KB`);
-      this.logger.log(`   ⏱️ TOTAL TIME: ${totalElapsed}ms (${Math.round(totalElapsed / 1000)}s)`);
-      this.logger.log(`${'='.repeat(60)}\n`);
-
-      // Audio is enqueued by ExpertService after seal (managed AUDIO_GENERATION job).
-
-      return {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        pdfUrl,
-        spiritualPathId: spiritualPath.id,
-        archetype: aiResponse.synthesis.archetype,
-        stepsCreated,
-      };
-    } catch (error) {
-      // Top-level catch for any uncaught errors
-      const totalElapsed = Date.now() - startTime;
-      const errorMsg = error instanceof Error ? error.message : String(error);
-
-      this.logger.error(`\n${'='.repeat(60)}`);
-      this.logger.error(`💥 GENERATION FAILED FOR ORDER: ${orderId}`);
-      this.logger.error(`${'='.repeat(60)}`);
-      this.logger.error(`   ❌ Error: ${errorMsg}`);
-      this.logger.error(`   ⏱️ Failed after: ${totalElapsed}ms`);
-      this.logger.error(`${'='.repeat(60)}\n`);
-
-      // Make sure error is saved (might already be saved by step handlers)
-      await this.saveErrorAndFail(orderId, errorMsg).catch(() => {});
-
-      throw error;
-    }
-  }
-
-  // ===========================================================================
-  // HELPER METHODS
-  // ===========================================================================
 
   private resolveReadingProfile(
     order: OrderForReadingSource & {
@@ -1078,17 +674,6 @@ export class DigitalSoulService {
     } catch (dbError) {
       this.logger.error(`   ❌ Could not save error to database: ${dbError}`);
     }
-  }
-
-  private mapActionType(type: string): PathActionType {
-    const map: Record<string, PathActionType> = {
-      MANTRA: 'MANTRA',
-      RITUAL: 'RITUAL',
-      JOURNALING: 'JOURNALING',
-      MEDITATION: 'MEDITATION',
-      REFLECTION: 'REFLECTION',
-    };
-    return map[type] || 'REFLECTION';
   }
 
   private getLevelFromAmount(amountCents: number): { level: number; productName: string } {

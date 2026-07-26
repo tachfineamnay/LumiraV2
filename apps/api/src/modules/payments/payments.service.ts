@@ -10,7 +10,6 @@ import Stripe from 'stripe';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import { SpiritualPathBatchService } from '../../services/factory/SpiritualPathBatchService';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthService } from '../auth/auth.service';
 import { IdGenerator } from '../../utils/IdGenerator';
@@ -79,7 +78,6 @@ export class PaymentsService {
     private ordersService: OrdersService,
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
-    private spiritualPathBatchService: SpiritualPathBatchService,
     private idGenerator: IdGenerator,
     private authService: AuthService,
   ) {
@@ -401,17 +399,6 @@ export class PaymentsService {
     this.logger.log(
       `[Sub Created] Subscription ${subscription.id} provisioned for user ${userId}.`,
     );
-
-    // Fire-and-forget: trigger batch 1 timeline generation (days 1-10).
-    // setImmediate ensures the webhook 200 response is not blocked.
-    setImmediate(() => {
-      this.spiritualPathBatchService.generateBatch1ForUser(userId).catch((err) => {
-        this.logger.error(
-          `[Sub Created] Batch 1 generation failed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-      this.logger.log(`[Sub Created] Batch 1 generation triggered for user ${userId}.`);
-    });
   }
 
   /**
@@ -535,14 +522,6 @@ export class PaymentsService {
     });
 
     this.logger.log(`[Checkout] Access granted for user ${userId} via session ${session.id}`);
-
-    setImmediate(() => {
-      this.spiritualPathBatchService.generateBatch1ForUser(userId).catch((err) => {
-        this.logger.error(
-          `[Checkout] Batch 1 failed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-    });
   }
 
   /**
@@ -589,18 +568,6 @@ export class PaymentsService {
     });
 
     this.logger.log(`[Invoice Paid] Renewal for user ${existing.userId} — period updated.`);
-
-    // Fire-and-forget: trigger batch 1 timeline generation for the new subscription month.
-    setImmediate(() => {
-      this.spiritualPathBatchService.generateBatch1ForUser(existing.userId).catch((err) => {
-        this.logger.error(
-          `[Invoice Paid] Batch 1 renewal generation failed for user ${existing.userId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-      this.logger.log(
-        `[Invoice Paid] Batch 1 generation triggered for renewal, user ${existing.userId}.`,
-      );
-    });
   }
 
   // =========================================================================
@@ -727,16 +694,6 @@ export class PaymentsService {
         });
 
         this.logger.log(`[PaymentIntent] Subscription activated for user ${order.userId}`);
-
-        // Fire-and-forget: trigger batch 1 generation
-        setImmediate(() => {
-          this.spiritualPathBatchService.generateBatch1ForUser(order.userId).catch((err) => {
-            this.logger.error(
-              `[PaymentIntent] Batch 1 failed for user ${order.userId}: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          });
-          this.logger.log(`[PaymentIntent] Batch 1 generation triggered for user ${order.userId}`);
-        });
       }
 
       return;
