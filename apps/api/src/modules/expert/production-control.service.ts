@@ -16,6 +16,7 @@ import { AudioGenerationService } from '../../services/factory/AudioGenerationSe
 import { DigitalSoulService } from '../../services/factory/DigitalSoulService';
 import { ExpertGateway } from './expert.gateway';
 import {
+  asRecord,
   ExpertReviewState,
   isActiveProductionJob,
   ProductionJobState,
@@ -27,6 +28,7 @@ import {
   readExpertReview,
   toJson,
 } from './production-control.types';
+import { hashReadingWorkspaceSnapshot } from './reading-version';
 import {
   assertOrderIntakeReady,
   readOrderIntakeReadiness,
@@ -43,6 +45,7 @@ interface ClaimedProductionJob {
 interface EnqueueReadingInput extends Record<string, unknown> {
   expertPrompt?: string;
   expertInstructions?: string;
+  regenerationOfExistingContent?: boolean;
 }
 
 @Injectable()
@@ -418,6 +421,44 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
         }
 
         const now = new Date().toISOString();
+        const jobPayload: Record<string, unknown> = { ...payload };
+        if (type === 'READING_GENERATION' && payload.regenerationOfExistingContent === true) {
+          const sourceDraft = asRecord(order.generatedContent);
+          const sourceRevision =
+            typeof sourceDraft.readingRevision === 'number' ? sourceDraft.readingRevision : 0;
+          const sourceDraftHash = hashReadingWorkspaceSnapshot(sourceDraft);
+          const parentVersionId =
+            (typeof sourceDraft.workingReadingVersionId === 'string'
+              ? sourceDraft.workingReadingVersionId
+              : typeof sourceDraft.canonicalReadingVersionId === 'string'
+                ? sourceDraft.canonicalReadingVersionId
+                : typeof sourceDraft.reopenedFromVersionId === 'string'
+                  ? sourceDraft.reopenedFromVersionId
+                  : null) || null;
+          const latestVersion = await tx.readingVersion.findFirst({
+            where: { orderId },
+            orderBy: { version: 'desc' },
+            select: { version: true },
+          });
+          const sourceVersion = await tx.readingVersion.create({
+            data: {
+              orderId,
+              version: (latestVersion?.version || 0) + 1,
+              status: sourceDraft.reopenedFromVersionId ? 'REOPENED' : 'DRAFT',
+              content: sourceDraft as Prisma.InputJsonValue,
+              contentHash: sourceDraftHash,
+              source: 'WORKSPACE_REGENERATION_SOURCE',
+              parentVersionId,
+            },
+            select: { id: true },
+          });
+          jobPayload.generationKind = 'REGENERATE';
+          jobPayload.sourceReadingVersionId = sourceVersion.id;
+          jobPayload.sourceRevision = sourceRevision;
+          jobPayload.sourceDraftHash = sourceDraftHash;
+          jobPayload.expertInstruction =
+            typeof payload.expertInstructions === 'string' ? payload.expertInstructions : null;
+        }
         const history = [...(review.productionHistory || [])];
         if (current) history.push(current);
 
@@ -434,7 +475,7 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
           requestedByExpertName: expert.name,
           queuedAt: now,
           heartbeatAt: now,
-          payload,
+          payload: jobPayload,
         };
 
         const assets = { ...(review.assets || {}) };
@@ -446,12 +487,12 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
           where: { id: orderId },
           data: {
             expertPrompt:
-              type === 'READING_GENERATION' && typeof payload.expertPrompt === 'string'
-                ? payload.expertPrompt
+              type === 'READING_GENERATION' && typeof jobPayload.expertPrompt === 'string'
+                ? jobPayload.expertPrompt
                 : order.expertPrompt,
             expertInstructions:
-              type === 'READING_GENERATION' && typeof payload.expertInstructions === 'string'
-                ? payload.expertInstructions
+              type === 'READING_GENERATION' && typeof jobPayload.expertInstructions === 'string'
+                ? jobPayload.expertInstructions
                 : order.expertInstructions,
             errorLog: type === 'READING_GENERATION' ? null : order.errorLog,
             expertReview: toJson({
@@ -625,7 +666,18 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
         await this.updateRunningJob(claimed.orderId, claimed.job.id, {
           stage: 'GENERATING_READING',
         });
-        const result = await this.digitalSoulService.generateContentOnly(claimed.orderId);
+        const payload = claimed.job.payload || {};
+        const result = await this.digitalSoulService.generateContentOnly(claimed.orderId, {
+          generationKind: payload.generationKind === 'REGENERATE' ? 'REGENERATE' : undefined,
+          sourceReadingVersionId:
+            typeof payload.sourceReadingVersionId === 'string'
+              ? payload.sourceReadingVersionId
+              : undefined,
+          sourceRevision:
+            typeof payload.sourceRevision === 'number' ? payload.sourceRevision : undefined,
+          sourceDraftHash:
+            typeof payload.sourceDraftHash === 'string' ? payload.sourceDraftHash : undefined,
+        });
         await this.completeJob(claimed.orderId, claimed.job.id, {
           archetype: result.archetype,
           stepsCreated: result.stepsCreated,

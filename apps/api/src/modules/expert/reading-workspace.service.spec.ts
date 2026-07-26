@@ -69,24 +69,46 @@ function validReading(): CanonicalReadingContent {
 }
 
 function createHarness(generatedContent: Record<string, unknown>) {
+  let currentGenerated = JSON.parse(JSON.stringify(generatedContent)) as Record<string, unknown>;
+  let transactionQueue: Promise<void> = Promise.resolve();
+  const readOrder = () => ({
+    id: 'order-1',
+    amount: 1700,
+    status: 'AWAITING_VALIDATION',
+    generatedContent: JSON.parse(JSON.stringify(currentGenerated)),
+  });
+  const orderUpdate = jest
+    .fn()
+    .mockImplementation(({ data }: { data: { generatedContent: unknown } }) => {
+      currentGenerated = JSON.parse(JSON.stringify(data.generatedContent)) as Record<
+        string,
+        unknown
+      >;
+      return Promise.resolve({ id: 'order-1' });
+    });
   const prisma = {
     order: {
-      findUnique: jest.fn().mockResolvedValue({
-        id: 'order-1',
-        amount: 1700,
-        status: 'AWAITING_VALIDATION',
-        generatedContent,
-      }),
-      update: jest.fn().mockResolvedValue({ id: 'order-1' }),
+      findUnique: jest.fn().mockImplementation(async () => readOrder()),
+      update: orderUpdate,
     },
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) => {
+      const transaction = transactionQueue.then(() =>
+        callback({ order: { findUnique: async () => readOrder(), update: orderUpdate } }),
+      );
+      transactionQueue = transaction.then(
+        () => undefined,
+        () => undefined,
+      );
+      return transaction;
+    }),
   };
   const expertService = {
-    getOrderById: jest.fn().mockResolvedValue({
+    getOrderById: jest.fn().mockImplementation(async () => ({
       id: 'order-1',
       orderNumber: 'LUM-1',
       amount: 1700,
       status: 'AWAITING_VALIDATION',
-      generatedContent,
+      generatedContent: JSON.parse(JSON.stringify(currentGenerated)),
       user: {
         id: 'user-1',
         firstName: 'Amina',
@@ -94,7 +116,7 @@ function createHarness(generatedContent: Record<string, unknown>) {
         profile: { birthDate: '1990-01-01' },
       },
       files: [],
-    }),
+    })),
     getContentVersions: jest.fn().mockResolvedValue({ versions: [] }),
     listOrderDeliveries: jest.fn().mockResolvedValue({ deliveries: [] }),
     validateContent: jest.fn(),
@@ -112,7 +134,14 @@ function createHarness(generatedContent: Record<string, unknown>) {
     pdfFactory as unknown as PdfFactory,
   );
 
-  return { service, prisma, expertService, vertexOracle };
+  return {
+    service,
+    prisma,
+    expertService,
+    vertexOracle,
+    getCurrentGenerated: () =>
+      JSON.parse(JSON.stringify(currentGenerated)) as Record<string, unknown>,
+  };
 }
 
 describe('ReadingWorkspaceService', () => {
@@ -196,6 +225,90 @@ describe('ReadingWorkspaceService', () => {
     expect(options.context).toContain('Bloc ciblé: conclusion');
     expect(options.context).toContain('life_mission:');
     expect(options.context).toContain('Archétype: Le Guide');
+  });
+
+  it('allows only one of two concurrent edits based on the same revision', async () => {
+    const reading = validReading();
+    const harness = createHarness({ ...reading, readingRevision: 0 });
+
+    const [first, second] = await Promise.allSettled([
+      harness.service.patchBlock(
+        'order-1',
+        'introduction',
+        { value: 'Première écriture concurrente', expectedRevision: 0 },
+        expert,
+      ),
+      harness.service.patchBlock(
+        'order-1',
+        'conclusion',
+        { value: 'Seconde écriture concurrente', expectedRevision: 0 },
+        expert,
+      ),
+    ]);
+
+    expect([first, second].filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect([first, second].filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const failed = [first, second].find((result) => result.status === 'rejected');
+    expect(failed).toMatchObject({ reason: expect.any(ConflictException) });
+    expect(harness.getCurrentGenerated().readingRevision).toBe(1);
+  });
+
+  it('returns 409 when a slow EDITOR result becomes obsolete after a manual edit', async () => {
+    const reading = validReading();
+    const harness = createHarness({ ...reading, readingRevision: 0 });
+    let completeEditor: ((value: string) => void) | undefined;
+    harness.vertexOracle.refineContent.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          completeEditor = resolve;
+        }),
+    );
+
+    const editor = harness.service.reviseBlock(
+      'order-1',
+      'conclusion',
+      { instruction: 'Clarifie ce passage.', expectedRevision: 0 },
+      expert,
+    );
+    await Promise.resolve();
+    await harness.service.patchBlock(
+      'order-1',
+      'conclusion',
+      { value: 'Modification manuelle plus récente.', expectedRevision: 0 },
+      expert,
+    );
+    completeEditor?.('Résultat EDITOR obsolète.');
+
+    await expect(editor).rejects.toBeInstanceOf(ConflictException);
+    expect((harness.getCurrentGenerated().pdf_content as { conclusion: string }).conclusion).toBe(
+      'Modification manuelle plus récente.',
+    );
+    expect(harness.getCurrentGenerated().readingRevision).toBe(1);
+  });
+
+  it('keeps the revision after a workspace refresh and restores a block in the reopened projection', async () => {
+    const reading = validReading();
+    const previous = 'Conclusion antérieure après réouverture.';
+    const harness = createHarness({
+      ...reading,
+      readingRevision: 3,
+      reopenedFromVersionId: 'sealed-1',
+      blockVersions: {
+        conclusion: [{ at: new Date().toISOString(), expertId: expert.id, value: previous }],
+      },
+    });
+
+    const before = await harness.service.getWorkspace('order-1');
+    const restored = await harness.service.restoreBlock(
+      'order-1',
+      'conclusion',
+      { expectedRevision: before.revision },
+      expert,
+    );
+    const after = await harness.service.getWorkspace('order-1');
+
+    expect(restored.reading.pdf_content.conclusion).toBe(previous);
+    expect(after.revision).toBe(4);
   });
 
   it('blocks sealing when the canonical reading is structurally incomplete', async () => {

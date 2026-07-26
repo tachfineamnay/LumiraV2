@@ -38,6 +38,10 @@ export class ProductionQueueInterceptor implements NestInterceptor {
       return from(this.enqueueLegacyProcess(request));
     }
 
+    if (path.endsWith('/expert/regenerate')) {
+      return from(this.prepareAndEnqueueRegenerationFromBody(request));
+    }
+
     const audioTestMatch = path.match(/\/expert\/test-audio\/([^/]+)$/);
     if (audioTestMatch) {
       return from(this.production.enqueueAudio(audioTestMatch[1], request.expert));
@@ -105,6 +109,12 @@ export class ProductionQueueInterceptor implements NestInterceptor {
       expertInstructions: this.stringValue(order.expertInstructions),
       regenerationOfExistingContent: Boolean(order.generatedContent),
     });
+  }
+
+  private async prepareAndEnqueueRegenerationFromBody(request: ExpertRequest) {
+    const orderId = this.stringValue(request.body?.orderId);
+    if (!orderId) throw new BadRequestException('orderId est requis');
+    return this.prepareAndEnqueueRegeneration(orderId, request);
   }
 
   private stringValue(value: unknown): string | undefined {

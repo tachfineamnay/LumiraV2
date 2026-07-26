@@ -439,3 +439,8 @@ export function isCanonicalReadingContent(value: unknown): value is CanonicalRea
 export function hashReadingContent(content: CanonicalReadingContent): string {
   return createHash('sha256').update(JSON.stringify(content)).digest('hex');
 }
+
+/** Hashes the complete editable projection, including revision and block history. */
+export function hashReadingWorkspaceSnapshot(content: Record<string, unknown>): string {
+  return createHash('sha256').update(JSON.stringify(content)).digest('hex');
+}

@@ -23,6 +23,10 @@ function createService(order: Record<string, unknown>) {
     orderFile: {
       findFirst: jest.fn().mockResolvedValue(null),
     },
+    readingVersion: {
+      findFirst: jest.fn().mockResolvedValue({ version: 4 }),
+      create: jest.fn().mockResolvedValue({ id: 'source-snapshot-1' }),
+    },
   };
   const prisma = {
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
@@ -186,6 +190,58 @@ describe('ProductionControlService', () => {
       status: 'QUEUED',
     });
     expect(tx.order.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the immutable source snapshot and regeneration metadata before queuing SCRIBE', async () => {
+    const generatedContent = {
+      readingRevision: 6,
+      workingReadingVersionId: 'reopened-4',
+      lecture: 'Brouillon expert',
+      pdf_content: {
+        introduction: 'Intro',
+        sections: [],
+        archetype_reveal: '',
+        conclusion: '',
+        karmic_insights: [],
+        rituals: [],
+      },
+      synthesis: { archetype: 'Le Guide' },
+      blockVersions: { conclusion: [{ value: 'Avant' }] },
+      expertEditHistory: [{ action: 'block:conclusion' }],
+    };
+    const { service, tx } = createService({
+      id: 'order-regenerate',
+      orderNumber: 'LUM-REGENERATE',
+      status: 'AWAITING_VALIDATION',
+      expertPrompt: null,
+      expertInstructions: null,
+      expertReview: { assignedBy: expert.id },
+      errorLog: null,
+      generatedContent,
+    });
+
+    const result = await service.enqueueReading('order-regenerate', expert, {
+      expertPrompt: 'Reprendre le fil symbolique',
+      expertInstructions: 'Instruction experte complète',
+      regenerationOfExistingContent: true,
+    });
+
+    expect(tx.readingVersion.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'DRAFT',
+          parentVersionId: 'reopened-4',
+          source: 'WORKSPACE_REGENERATION_SOURCE',
+        }),
+      }),
+    );
+    expect(result.job.payload).toMatchObject({
+      generationKind: 'REGENERATE',
+      sourceReadingVersionId: 'source-snapshot-1',
+      sourceRevision: 6,
+      expertInstruction: 'Instruction experte complète',
+      sourceDraftHash: expect.any(String),
+    });
   });
 
   it('revalidates a queued reading inside the claim transaction', async () => {

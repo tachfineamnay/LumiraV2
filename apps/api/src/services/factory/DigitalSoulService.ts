@@ -28,8 +28,11 @@ import {
   ReadingSourceResolver,
   ResolvedReadingSource,
 } from './reading-source.resolver';
-import { PathActionType, InsightCategory } from '@prisma/client';
-import { isCanonicalReadingContent } from '../../modules/expert/reading-version';
+import { PathActionType, InsightCategory, Prisma } from '@prisma/client';
+import {
+  hashReadingWorkspaceSnapshot,
+  isCanonicalReadingContent,
+} from '../../modules/expert/reading-version';
 import {
   PreparedOnboardingPhoto,
   PrivateOnboardingPhotoService,
@@ -57,6 +60,13 @@ export interface ContentGenerationResult {
   archetype: string;
   stepsCreated: number;
   generatedContent: OracleResponse;
+}
+
+export interface ReadingGenerationContext {
+  generationKind?: 'REGENERATE';
+  sourceReadingVersionId?: string;
+  sourceRevision?: number;
+  sourceDraftHash?: string;
 }
 
 // =============================================================================
@@ -109,7 +119,10 @@ export class DigitalSoulService {
    * 4. Update SpiritualPath and PathSteps
    * 5. Set status to AWAITING_VALIDATION
    */
-  async generateContentOnly(orderId: string): Promise<ContentGenerationResult> {
+  async generateContentOnly(
+    orderId: string,
+    generationContext: ReadingGenerationContext = {},
+  ): Promise<ContentGenerationResult> {
     const startTime = Date.now();
 
     this.logger.log(`\n${'='.repeat(60)}`);
@@ -222,6 +235,71 @@ export class DigitalSoulService {
       let stepsCreated = 0;
       try {
         const result = await this.prisma.$transaction(async (tx) => {
+          const isRegeneration = generationContext.generationKind === 'REGENERATE';
+          const currentOrder = isRegeneration
+            ? await tx.order.findUnique({
+                where: { id: orderId },
+                select: { generatedContent: true },
+              })
+            : null;
+          const currentGenerated = currentOrder?.generatedContent as Record<string, unknown> | null;
+          const sourceMatches =
+            !isRegeneration ||
+            (Boolean(currentGenerated) &&
+              typeof generationContext.sourceRevision === 'number' &&
+              typeof generationContext.sourceDraftHash === 'string' &&
+              typeof generationContext.sourceReadingVersionId === 'string' &&
+              (typeof currentGenerated.readingRevision === 'number'
+                ? currentGenerated.readingRevision
+                : 0) === generationContext.sourceRevision &&
+              hashReadingWorkspaceSnapshot(currentGenerated) === generationContext.sourceDraftHash);
+
+          const candidatePayload = this.withReadingSourceMetadata(
+            {
+              ...aiResponse,
+              readingRevision: 0,
+              blockVersions: {},
+              expertEditHistory: [],
+              ...(isRegeneration
+                ? {
+                    generationKind: 'REGENERATE',
+                    sourceReadingVersionId: generationContext.sourceReadingVersionId,
+                    sourceRevision: generationContext.sourceRevision,
+                    sourceDraftHash: generationContext.sourceDraftHash,
+                  }
+                : {}),
+            },
+            readingSource,
+          ) as Record<string, unknown>;
+          let candidateVersionId: string | undefined;
+          if (isRegeneration) {
+            const latestVersion = await tx.readingVersion.findFirst({
+              where: { orderId },
+              orderBy: { version: 'desc' },
+              select: { version: true },
+            });
+            const candidateVersion = await tx.readingVersion.create({
+              data: {
+                orderId,
+                version: (latestVersion?.version || 0) + 1,
+                status: 'DRAFT',
+                content: candidatePayload as Prisma.InputJsonValue,
+                contentHash: hashReadingWorkspaceSnapshot(candidatePayload),
+                source: sourceMatches
+                  ? 'SCRIBE_REGENERATE_CANDIDATE'
+                  : 'SCRIBE_REGENERATE_CONFLICT_CANDIDATE',
+                parentVersionId: generationContext.sourceReadingVersionId,
+              },
+              select: { id: true },
+            });
+            candidateVersionId = candidateVersion.id;
+            if (!sourceMatches) {
+              return { created: 0, conflict: true, candidateVersionId };
+            }
+            candidatePayload.workingReadingVersionId = candidateVersionId;
+            candidatePayload.candidateReadingVersionId = candidateVersionId;
+          }
+
           const hasExistingReading = isCanonicalReadingContent(order.generatedContent);
           let created = 0;
           if (!hasExistingReading) {
@@ -263,14 +341,20 @@ export class DigitalSoulService {
             where: { id: orderId },
             data: {
               status: 'AWAITING_VALIDATION',
-              generatedContent: this.withReadingSourceMetadata(aiResponse, readingSource),
+              generatedContent: candidatePayload as Prisma.InputJsonValue,
               errorLog: null,
             },
           });
-          return created;
+          return { created, conflict: false, candidateVersionId };
         });
-        stepsCreated = result;
+        if (result.conflict) {
+          throw new ConflictException(
+            `Le brouillon source a changé pendant la régénération; le candidat ${result.candidateVersionId} est conservé sans application.`,
+          );
+        }
+        stepsCreated = result.created;
       } catch (error) {
+        if (error instanceof ConflictException) throw error;
         const errorMsg = `Database transaction failed: ${error instanceof Error ? error.message : String(error)}`;
         await this.saveErrorAndFail(orderId, errorMsg);
         throw new BadRequestException(errorMsg);
@@ -294,7 +378,9 @@ export class DigitalSoulService {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`💥 Content generation failed: ${errorMsg}`);
-      await this.saveErrorAndFail(orderId, errorMsg).catch(() => {});
+      if (!(error instanceof ConflictException)) {
+        await this.saveErrorAndFail(orderId, errorMsg).catch(() => {});
+      }
       throw error;
     }
   }

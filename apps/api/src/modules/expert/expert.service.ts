@@ -32,6 +32,7 @@ import {
   buildStudioReadingVersion,
   CanonicalReadingContent,
   hashReadingContent,
+  hashReadingWorkspaceSnapshot,
 } from './reading-version';
 import { assertOrderIntakeReady } from './reading-intake-readiness';
 import { assertReadingDeliverable } from './reading-quality.validator';
@@ -791,6 +792,33 @@ export class ExpertService {
         data: { reopenedAt: now },
       });
 
+      const reopenedProjection = {
+        ...canonical,
+        canonicalReadingVersionId: latestSealed.id,
+        canonicalReadingVersion: latestSealed.version,
+        reopenedFromVersionId: latestSealed.id,
+        reopenedAt: now.toISOString(),
+        readingRevision: 0,
+        blockVersions: {},
+        expertEditHistory: [],
+      };
+      const latestVersion = await tx.readingVersion.findFirst({
+        where: { orderId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      const reopenedVersion = await tx.readingVersion.create({
+        data: {
+          orderId,
+          version: (latestVersion?.version || 0) + 1,
+          status: 'REOPENED',
+          content: reopenedProjection as unknown as Prisma.InputJsonValue,
+          contentHash: hashReadingWorkspaceSnapshot(reopenedProjection),
+          source: 'REOPENED_FROM_SEALED',
+          parentVersionId: latestSealed.id,
+        },
+      });
+
       await tx.order.update({
         where: { id: orderId },
         data: {
@@ -817,14 +845,8 @@ export class ExpertService {
           // version. This prevents the Desk editor from reopening into a
           // status-only state with no structured content.
           generatedContent: toJson({
-            ...canonical,
-            canonicalReadingVersionId: latestSealed.id,
-            canonicalReadingVersion: latestSealed.version,
-            reopenedFromVersionId: latestSealed.id,
-            reopenedAt: now.toISOString(),
-            readingRevision: 0,
-            blockVersions: {},
-            expertEditHistory: [],
+            ...reopenedProjection,
+            workingReadingVersionId: reopenedVersion.id,
           }),
         },
       });
@@ -1208,10 +1230,7 @@ export class ExpertService {
     }
   }
 
-  async regenerateLecture(
-    orderId: string,
-    expert: ExpertEntity,
-  ): Promise<Order & { generationResult?: { archetype: string; stepsCreated: number } }> {
+  async regenerateLecture(orderId: string, expert: ExpertEntity) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { user: { include: { profile: true } }, readingIntake: true },
@@ -1231,24 +1250,11 @@ export class ExpertService {
       );
     }
 
-    // Keep a lockable source status. generateContentOnly will atomically set
-    // PROCESSING and then return the order to AWAITING_VALIDATION.
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        generatedContent: null,
-        revisionCount: { increment: 1 },
-      },
+    return this.productionControl.enqueueReading(orderId, expert as Expert, {
+      expertPrompt: order.expertPrompt,
+      expertInstructions: order.expertInstructions || undefined,
+      regenerationOfExistingContent: Boolean(order.generatedContent),
     });
-
-    return this.processOrder(
-      {
-        orderId,
-        expertPrompt: order.expertPrompt,
-        expertInstructions: order.expertInstructions || undefined,
-      },
-      expert,
-    );
   }
 
   /**
@@ -2592,9 +2598,7 @@ MESSAGE DE L'EXPERT:`;
     return { success: true, deletedCount };
   }
 
-  /**
-   * Full regeneration from Studio - clears content and re-runs AI generation.
-   */
+  /** Queues Studio regeneration without mutating the active draft. */
   async regenerateFromStudio(
     orderId: string,
     expert: ExpertEntity,
@@ -2622,71 +2626,24 @@ MESSAGE DE L'EXPERT:`;
       `🔄 Full regeneration requested for order ${order.orderNumber} by ${expert.name}`,
     );
 
-    // Save current content to version history if exists
-    const currentGenerated = (order.generatedContent as Record<string, unknown>) || {};
-    const existingVersions =
-      (currentGenerated.contentVersions as Array<{
-        content: string;
-        timestamp: string;
-        action: string;
-        expertId: string;
-      }>) || [];
-    const currentContent = currentGenerated.lecture as string;
-
-    if (currentContent) {
-      existingVersions.push({
-        content: currentContent,
-        timestamp: new Date().toISOString(),
-        action: 'before_regenerate',
-        expertId: expert.id,
-      });
-    }
-
-    // Preserve a lockable status; content generation acquires PROCESSING
-    // atomically and will return to AWAITING_VALIDATION on success.
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        generatedContent: {
-          contentVersions: existingVersions.slice(-10), // Keep history
-          regeneratedAt: new Date().toISOString(),
-          regeneratedBy: expert.id,
-        },
-        revisionCount: { increment: 1 },
-      },
+    const queued = await this.productionControl.enqueueReading(orderId, expert as Expert, {
+      expertPrompt: order.expertPrompt || undefined,
+      expertInstructions: order.expertInstructions || undefined,
+      regenerationOfExistingContent: Boolean(order.generatedContent),
     });
 
-    // Trigger new generation
-    try {
-      const result = await this.generateReading(orderId, expert);
-
-      this.logger.log(
-        `✅ Regeneration completed for ${order.orderNumber} - Archetype: ${result.archetype}`,
-      );
-
-      return {
-        success: true,
-        orderId: result.orderId,
-        orderNumber: result.orderNumber,
-        archetype: result.archetype,
-      };
-    } catch (error) {
-      this.logger.error(`❌ Regeneration failed for ${order.orderNumber}: ${error}`);
-
-      // Restore previous content on failure
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'AWAITING_VALIDATION',
-          generatedContent: currentGenerated as object,
-          errorLog: `Regeneration failed: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      });
-
-      throw new BadRequestException(
-        `Échec de la régénération: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+    return {
+      success: true,
+      orderId,
+      orderNumber: order.orderNumber,
+      archetype:
+        ((
+          (order.generatedContent as Record<string, unknown> | null)?.synthesis as
+            | Record<string, unknown>
+            | undefined
+        )?.archetype as string) || '',
+      ...queued,
+    };
   }
 
   // FILES: private onboarding photos are streamed via

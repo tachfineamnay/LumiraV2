@@ -354,6 +354,9 @@ model ReadingVersion {
   content         Json
   contentHash     String
   source          String
+  parentVersionId String?
+  parentVersion   ReadingVersion?     @relation("ReadingVersionLineage", fields: [parentVersionId], references: [id], onDelete: Restrict)
+  childVersions   ReadingVersion[]    @relation("ReadingVersionLineage")
   sealedByExpertId String?
   sealedAt        DateTime?
   reopenedAt      DateTime?
@@ -363,6 +366,7 @@ model ReadingVersion {
 
   @@unique([orderId, version])
   @@index([orderId, status, version(sort: Desc)])
+  @@index([parentVersionId])
   @@index([contentHash])
 }
 

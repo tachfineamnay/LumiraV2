@@ -1,6 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DigitalSoulService } from './DigitalSoulService';
 import { OracleResponse } from './VertexOracle';
+import { hashReadingWorkspaceSnapshot } from '../../modules/expert/reading-version';
 
 const oldDraft = {
   lecture: 'Ancienne lecture livrée qui doit rester lisible.',
@@ -56,8 +57,12 @@ function candidate(qualityStatus: 'PASS' | 'WARNING' | 'BLOCKED'): OracleRespons
   };
 }
 
-function buildService(qualityStatus: 'PASS' | 'WARNING' | 'BLOCKED') {
+function buildService(
+  qualityStatus: 'PASS' | 'WARNING' | 'BLOCKED',
+  generatedContent: Record<string, unknown> = oldDraft,
+) {
   const transactionOrderUpdate = jest.fn().mockResolvedValue({});
+  const readingVersionCreate = jest.fn().mockResolvedValue({ id: 'candidate-version-1' });
   const prisma = {
     order: {
       findUnique: jest.fn().mockResolvedValue({
@@ -65,7 +70,7 @@ function buildService(qualityStatus: 'PASS' | 'WARNING' | 'BLOCKED') {
         orderNumber: 'ORD-1',
         status: 'AWAITING_VALIDATION',
         amount: 2900,
-        generatedContent: oldDraft,
+        generatedContent,
         files: [],
         readingIntake: null,
         user: {
@@ -80,7 +85,16 @@ function buildService(qualityStatus: 'PASS' | 'WARNING' | 'BLOCKED') {
     },
     $executeRawUnsafe: jest.fn().mockResolvedValue(1),
     $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
-      callback({ order: { update: transactionOrderUpdate } }),
+      callback({
+        order: {
+          findUnique: jest.fn().mockResolvedValue({ generatedContent }),
+          update: transactionOrderUpdate,
+        },
+        readingVersion: {
+          findFirst: jest.fn().mockResolvedValue({ version: 8 }),
+          create: readingVersionCreate,
+        },
+      }),
     ),
   };
   const readingSource = {
@@ -88,25 +102,26 @@ function buildService(qualityStatus: 'PASS' | 'WARNING' | 'BLOCKED') {
     contentHash: 'sealed-intake-hash',
     profile: { facePhotoUrl: null, palmPhotoUrl: null },
   };
+  const vertexOracle = {
+    generateFullReading: jest.fn().mockResolvedValue(candidate(qualityStatus)),
+  };
   const service = new DigitalSoulService(
     { get: jest.fn((_key: string, fallback?: string) => fallback) } as never,
     prisma as never,
-    { generateFullReading: jest.fn().mockResolvedValue(candidate(qualityStatus)) } as never,
+    vertexOracle as never,
     {} as never,
     {
       resolve: jest.fn().mockReturnValue(readingSource),
-      toVertexUserProfile: jest
-        .fn()
-        .mockReturnValue({
-          userId: 'user-1',
-          firstName: 'Jean',
-          lastName: 'Dupont',
-          email: 'jean@example.test',
-        }),
+      toVertexUserProfile: jest.fn().mockReturnValue({
+        userId: 'user-1',
+        firstName: 'Jean',
+        lastName: 'Dupont',
+        email: 'jean@example.test',
+      }),
     } as never,
     {} as never,
   );
-  return { service, prisma, transactionOrderUpdate };
+  return { service, prisma, transactionOrderUpdate, readingVersionCreate, vertexOracle };
 }
 
 describe('DigitalSoulService candidate promotion', () => {
@@ -145,4 +160,121 @@ describe('DigitalSoulService candidate promotion', () => {
       );
     },
   );
+
+  it('versions a successful regeneration candidate without overwriting the source draft', async () => {
+    const sourceDraft = {
+      ...oldDraft,
+      readingRevision: 7,
+      workingReadingVersionId: 'source-version-1',
+      blockVersions: {
+        conclusion: [{ at: '2026-07-26T00:00:00.000Z', expertId: 'expert-1', value: 'Avant' }],
+      },
+      expertEditHistory: [{ action: 'block:conclusion', revision: 7 }],
+    };
+    const { service, transactionOrderUpdate, readingVersionCreate } = buildService(
+      'PASS',
+      sourceDraft,
+    );
+
+    await expect(
+      service.generateContentOnly('order-1', {
+        generationKind: 'REGENERATE',
+        sourceReadingVersionId: 'source-version-1',
+        sourceRevision: 7,
+        sourceDraftHash: hashReadingWorkspaceSnapshot(sourceDraft),
+      }),
+    ).resolves.toEqual(expect.objectContaining({ orderId: 'order-1' }));
+
+    const promoted = transactionOrderUpdate.mock.calls.at(-1)[0].data.generatedContent as Record<
+      string,
+      unknown
+    >;
+    expect(promoted).toMatchObject({
+      generationKind: 'REGENERATE',
+      sourceReadingVersionId: 'source-version-1',
+      sourceRevision: 7,
+      candidateReadingVersionId: 'candidate-version-1',
+      readingRevision: 0,
+    });
+    expect(sourceDraft.blockVersions).toEqual({
+      conclusion: [{ at: '2026-07-26T00:00:00.000Z', expertId: 'expert-1', value: 'Avant' }],
+    });
+    expect(readingVersionCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ parentVersionId: 'source-version-1', status: 'DRAFT' }),
+      }),
+    );
+  });
+
+  it('keeps a regeneration candidate but does not apply it when the source draft changed', async () => {
+    const sourceDraft = {
+      ...oldDraft,
+      readingRevision: 2,
+      workingReadingVersionId: 'source-version-1',
+    };
+    const changedDraft = {
+      ...sourceDraft,
+      readingRevision: 3,
+      lecture: 'Modification manuelle récente',
+    };
+    const { service, prisma, transactionOrderUpdate } = buildService('PASS', sourceDraft);
+    const conflictCreate = jest.fn().mockResolvedValue({ id: 'conflict-candidate-1' });
+    prisma.$transaction.mockImplementationOnce(async (callback: (tx: unknown) => unknown) =>
+      callback({
+        order: {
+          findUnique: jest.fn().mockResolvedValue({ generatedContent: changedDraft }),
+          update: transactionOrderUpdate,
+        },
+        readingVersion: {
+          findFirst: jest.fn().mockResolvedValue({ version: 8 }),
+          create: conflictCreate,
+        },
+      }),
+    );
+
+    await expect(
+      service.generateContentOnly('order-1', {
+        generationKind: 'REGENERATE',
+        sourceReadingVersionId: 'source-version-1',
+        sourceRevision: 2,
+        sourceDraftHash: hashReadingWorkspaceSnapshot(sourceDraft),
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transactionOrderUpdate).not.toHaveBeenCalled();
+    expect(conflictCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ source: 'SCRIBE_REGENERATE_CONFLICT_CANDIDATE' }),
+      }),
+    );
+  });
+
+  it('leaves the source draft untouched when SCRIBE regeneration fails', async () => {
+    const sourceDraft = {
+      ...oldDraft,
+      readingRevision: 5,
+      workingReadingVersionId: 'source-version-1',
+    };
+    const { service, prisma, transactionOrderUpdate, vertexOracle } = buildService(
+      'PASS',
+      sourceDraft,
+    );
+    vertexOracle.generateFullReading.mockRejectedValue(new Error('provider unavailable'));
+
+    await expect(
+      service.generateContentOnly('order-1', {
+        generationKind: 'REGENERATE',
+        sourceReadingVersionId: 'source-version-1',
+        sourceRevision: 5,
+        sourceDraftHash: hashReadingWorkspaceSnapshot(sourceDraft),
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transactionOrderUpdate).not.toHaveBeenCalled();
+    expect(sourceDraft.readingRevision).toBe(5);
+    expect(
+      prisma.order.update.mock.calls.every((call) => !('generatedContent' in call[0].data)),
+    ).toBe(true);
+  });
 });

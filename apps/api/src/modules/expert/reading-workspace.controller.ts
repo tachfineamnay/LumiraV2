@@ -17,6 +17,7 @@ import { CurrentExpert } from './decorators';
 import {
   GenerateWorkspaceReadingDto,
   PatchReadingBlockDto,
+  RepairSafeIssuesDto,
   ReopenStructuredReadingDto,
   RestoreReadingBlockDto,
   ReviseReadingBlockDto,
@@ -112,8 +113,12 @@ export class ReadingWorkspaceController {
   }
 
   @Post('quality/repair')
-  async repairSafeIssues(@Param('id') orderId: string, @CurrentExpert() expert: Expert) {
-    return this.workspace.repairSafeIssues(orderId, expert);
+  async repairSafeIssues(
+    @Param('id') orderId: string,
+    @Body() dto: RepairSafeIssuesDto,
+    @CurrentExpert() expert: Expert,
+  ) {
+    return this.workspace.repairSafeIssues(orderId, dto, expert);
   }
 
   @Post('preview')

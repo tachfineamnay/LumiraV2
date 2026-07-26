@@ -227,7 +227,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     try {
       const { data } = await expertApi.post<BlockMutationResponse>(
         `/expert/orders/${orderId}/reading/quality/repair`,
-        {},
+        { expectedRevision: workspace?.revision },
       );
       applyMutation(data);
       toast.success('Défauts de formatage nettoyés');
@@ -298,7 +298,8 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
       });
       setOrientation(instruction.trim());
       toast.success('Lecture renvoyée au SCRIBE', {
-        description: 'La version actuelle reste disponible jusqu’à la réussite du nouveau brouillon.',
+        description:
+          'La version actuelle reste disponible jusqu’à la réussite du nouveau brouillon.',
       });
       await loadWorkspace();
     } catch (requestError: unknown) {
@@ -464,7 +465,11 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                     disabled={sendingToScribe || order.status !== 'AWAITING_VALIDATION'}
                     className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-500/40 px-3 text-sm font-semibold text-amber-700 hover:bg-amber-500/10 disabled:opacity-40"
                   >
-                    {sendingToScribe ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {sendingToScribe ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
                     Renvoyer au SCRIBE
                   </button>
                   <button
@@ -507,7 +512,15 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   );
 }
 
-function HeaderButton({ onClick, icon, label }: { onClick: () => void; icon: ReactNode; label: string }) {
+function HeaderButton({
+  onClick,
+  icon,
+  label,
+}: {
+  onClick: () => void;
+  icon: ReactNode;
+  label: string;
+}) {
   return (
     <button
       type="button"

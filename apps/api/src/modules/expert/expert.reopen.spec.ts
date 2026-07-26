@@ -38,6 +38,7 @@ describe('ExpertService reopenForRevision', () => {
       readingVersion: {
         findFirst: jest.fn().mockResolvedValue({ id: 'rv-1', version: 3, content: sealedContent }),
         update: jest.fn().mockResolvedValue({ id: 'rv-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'rv-reopened-1' }),
       },
       order: {
         update: jest.fn().mockResolvedValue({ ...order, status: 'AWAITING_VALIDATION' }),
@@ -91,7 +92,17 @@ describe('ExpertService reopenForRevision', () => {
             canonicalReadingVersion: 3,
             readingRevision: 0,
             lecture: 'Lecture scellée',
+            workingReadingVersionId: 'rv-reopened-1',
           }),
+        }),
+      }),
+    );
+    expect(tx.readingVersion.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'REOPENED',
+          parentVersionId: 'rv-1',
+          source: 'REOPENED_FROM_SEALED',
         }),
       }),
     );
