@@ -327,6 +327,20 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   }
 
   const { order, reading, quality, history, restorableBlocks } = workspace;
+  const visualWarnings = (
+    (
+      order.generatedContent as {
+        pipeline?: {
+          visualObservations?: Array<{ role?: string; imageQuality?: string; warnings?: string[] }>;
+        };
+      } | null
+    )?.pipeline?.visualObservations ?? []
+  )
+    .filter(
+      (observation) =>
+        observation.role?.startsWith('PALM_') && observation.imageQuality !== 'USABLE',
+    )
+    .flatMap((observation) => observation.warnings ?? ['Analyse de la main limitée.']);
   const readOnly = order.status === 'COMPLETED';
   const canSeal = order.status === 'AWAITING_VALIDATION' && quality?.status !== 'BLOCKED';
 
@@ -507,6 +521,12 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
           onCancel={() => setSealModalOpen(false)}
           onConfirm={() => void seal()}
         />
+      )}
+      {visualWarnings.length > 0 && (
+        <div className="mx-4 mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 sm:mx-6">
+          <strong>Analyse de la main limitée.</strong> {visualWarnings.join(' ')} La lecture reste
+          disponible sans chiromancie non vérifiable.
+        </div>
       )}
     </div>
   );

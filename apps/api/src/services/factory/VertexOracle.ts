@@ -25,10 +25,12 @@ import { AiRunService } from './ai-run.service';
 import { AiRuntimeCacheService } from './ai-runtime-cache.service';
 import {
   GeminiAdapter,
+  ImagePayload,
   LlmAdapter,
   LlmRequest,
   OpenAiAdapter,
   VertexAdapter,
+  VisualAssetRole,
   decryptSettingsValue,
   VERTEX_CREDENTIALS_KEY,
 } from './llm';
@@ -49,7 +51,7 @@ export interface ReadingPipelineMetadata {
   models: Record<string, string>;
   visualObservations?: VisualObservation[];
   visualAssets?: Array<
-    Pick<VisualImageInput, 'kind' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>
+    Pick<VisualImageInput, 'role' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>
   >;
 }
 
@@ -189,20 +191,42 @@ export interface DreamInterpretation {
 export type { AgentType, AiExecutionContext } from './ai-execution.types';
 
 type JsonSchema = Record<string, unknown>;
-type ImagePayload = { mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string };
 export interface VisualImageInput extends ImagePayload {
-  kind: 'face' | 'palm';
   width: number;
   height: number;
   orientation: number | null;
   sha256: string;
+  analysisLimited?: boolean;
+  warnings?: string[];
 }
 
 export interface VisualObservation {
-  role: 'face' | 'palm';
-  visible: string[];
-  uncertain: string[];
-  unavailable: string[];
+  role: VisualAssetRole;
+  imageQuality: 'USABLE' | 'LIMITED' | 'UNUSABLE';
+  framing: string[];
+  face?: {
+    globalShape: string[];
+    visibleProportions: string[];
+    visibleExpressions: string[];
+    nonObservable: string[];
+  };
+  palm?: {
+    knownSide: 'LEFT' | 'RIGHT' | 'UNKNOWN';
+    palmShape: string[];
+    palmFingerProportions: string[];
+    mainLines: Array<{
+      name: 'LIFE' | 'HEAD' | 'HEART' | 'FATE';
+      visibility: 'VISIBLE' | 'UNCERTAIN' | 'NOT_VISIBLE';
+      observation: string | null;
+      confidence: number;
+    }>;
+    mounts: Array<{ name: string; observation: string; confidence: number }>;
+    fingersAndPhalanges: string[];
+    observableTexture: string[];
+    uncertain: string[];
+    nonObservable: string[];
+  };
+  warnings: string[];
 }
 
 const VISUAL_OBSERVATION_SCHEMA: JsonSchema = {
@@ -215,12 +239,49 @@ const VISUAL_OBSERVATION_SCHEMA: JsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['role', 'visible', 'uncertain', 'unavailable'],
+        required: ['role', 'imageQuality', 'framing', 'warnings'],
         properties: {
-          role: { type: 'string', enum: ['face', 'palm'] },
-          visible: { type: 'array', items: { type: 'string' } },
-          uncertain: { type: 'array', items: { type: 'string' } },
-          unavailable: { type: 'array', items: { type: 'string' } },
+          role: { type: 'string', enum: ['FACE_FRONT', 'PALM_LEFT', 'PALM_RIGHT', 'PALM_UNKNOWN'] },
+          imageQuality: { type: 'string', enum: ['USABLE', 'LIMITED', 'UNUSABLE'] },
+          framing: { type: 'array', items: { type: 'string' } },
+          face: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['globalShape', 'visibleProportions', 'visibleExpressions', 'nonObservable'],
+            properties: {
+              globalShape: { type: 'array', items: { type: 'string' } },
+              visibleProportions: { type: 'array', items: { type: 'string' } },
+              visibleExpressions: { type: 'array', items: { type: 'string' } },
+              nonObservable: { type: 'array', items: { type: 'string' } },
+            },
+          },
+          palm: {
+            type: 'object',
+            additionalProperties: false,
+            required: [
+              'knownSide',
+              'palmShape',
+              'palmFingerProportions',
+              'mainLines',
+              'mounts',
+              'fingersAndPhalanges',
+              'observableTexture',
+              'uncertain',
+              'nonObservable',
+            ],
+            properties: {
+              knownSide: { type: 'string', enum: ['LEFT', 'RIGHT', 'UNKNOWN'] },
+              palmShape: { type: 'array', items: { type: 'string' } },
+              palmFingerProportions: { type: 'array', items: { type: 'string' } },
+              mainLines: { type: 'array', items: { type: 'object' } },
+              mounts: { type: 'array', items: { type: 'object' } },
+              fingersAndPhalanges: { type: 'array', items: { type: 'string' } },
+              observableTexture: { type: 'array', items: { type: 'string' } },
+              uncertain: { type: 'array', items: { type: 'string' } },
+              nonObservable: { type: 'array', items: { type: 'string' } },
+            },
+          },
+          warnings: { type: 'array', items: { type: 'string' } },
         },
       },
     },
@@ -813,7 +874,7 @@ export class VertexOracle implements OnModuleInit {
     schema: JsonSchema,
     timeoutMs: number,
     images: ImagePayload[] = [],
-    imageMetadata: Array<Pick<VisualImageInput, 'kind' | 'sha256'>> = [],
+    imageMetadata: Array<Pick<VisualImageInput, 'role' | 'sha256'>> = [],
   ): Promise<T> {
     const adapter = this.requireAdapter(resolved.provider);
     this.logResolvedRoute(ctx.agent, resolved);
@@ -879,7 +940,7 @@ export class VertexOracle implements OnModuleInit {
     content: string,
     options: {
       schemaName?: string;
-      images?: Array<Pick<VisualImageInput, 'kind' | 'sha256'>>;
+      images?: Array<Pick<VisualImageInput, 'role' | 'sha256'>>;
       timeoutMs: number;
       maxTokens: number;
       structured: boolean;
@@ -891,7 +952,7 @@ export class VertexOracle implements OnModuleInit {
       ...(ctx.intakeContentHash ? { intakeContentHash: ctx.intakeContentHash } : {}),
       ...(options.schemaName ? { schemaName: options.schemaName } : {}),
       imageCount: images.length,
-      imageRoles: images.map((image) => image.kind),
+      imageRoles: images.map((image) => image.role),
       imageHashes: images.map((image) => image.sha256),
       ...(resolved.promptVersionId ? { promptVersionId: resolved.promptVersionId } : {}),
       technical: {
@@ -1467,7 +1528,7 @@ ${text}`,
       parts.push(
         '=== OBSERVATIONS VISUELLES FACTUELLES (NE PAS CONFONDRE AVEC L’INTERPRÉTATION SYMBOLIQUE) ===',
         JSON.stringify(visualObservations),
-        'Utilise uniquement les éléments listés dans « visible ». N’invente jamais une ligne de main, un détail du visage, le côté d’une main ou une information absente ; les éléments « uncertain » et « unavailable » doivent rester inconnus.',
+        'Utilise uniquement les champs d’observation structurés. N’invente jamais une ligne de main, un détail du visage, le côté d’une main ou une information absente ; les champs uncertain et nonObservable restent inconnus. Les observations ne sont jamais des interprétations symboliques, médicales, morales ou identitaires.',
       );
     }
     if (order.expertPrompt?.trim()) {
@@ -1492,64 +1553,130 @@ ${text}`,
     assets: VisualImageInput[],
   ): Promise<VisualObservation[]> {
     if (assets.length === 0) return [];
-    const expectedRoles = assets.map((asset) => asset.kind).join(', ');
+    const usableAssets = assets.filter((asset) => !asset.analysisLimited);
+    const expectedRoles = usableAssets.map((asset) => asset.role).join(', ');
     const assetAudit = assets
       .map(
         (asset) =>
-          `${asset.kind}: sha256=${asset.sha256}; type=${asset.mimeType}; dimensions=${asset.width}x${asset.height}; orientation=${asset.orientation ?? 'none'}`,
+          `${asset.role}: sha256=${asset.sha256}; type=${asset.mimeType}; dimensions=${asset.width}x${asset.height}; orientation=${asset.orientation ?? 'none'}`,
       )
       .join('\n');
-    const observations = await this.callJson<{ observations: VisualObservation[] }>(
-      ctx,
-      resolved,
-      [
-        'Tu réalises uniquement des observations visuelles descriptives, sans symbolique ni diagnostic.',
-        `Les images fournies, dans cet ordre, ont les rôles vérifiés : ${expectedRoles}.`,
-        `Métadonnées vérifiées des actifs (sans URL ni contenu binaire) :\n${assetAudit}`,
-        'Pour chaque rôle, liste des faits nettement visibles dans visible. Place dans uncertain toute caractéristique ambiguë. Place dans unavailable les détails non visibles. Ne déduis jamais le côté d’une paume, une ligne de main, un trait facial ou une identité si ce n’est pas clairement identifiable.',
-        'Retourne exactement le JSON demandé.',
-      ].join('\n'),
-      'lumira_visual_observations',
-      VISUAL_OBSERVATION_SCHEMA,
-      120_000,
-      assets.map(({ mimeType, base64 }) => ({ mimeType, base64 })),
-      assets.map(({ kind, sha256 }) => ({ kind, sha256 })),
-    );
+    const observations =
+      usableAssets.length === 0
+        ? { observations: [] as VisualObservation[] }
+        : await this.callJson<{ observations: VisualObservation[] }>(
+            ctx,
+            resolved,
+            [
+              'Tu réalises uniquement des observations visuelles descriptives, sans symbolique ni diagnostic.',
+              `Chaque image est explicitement précédée de son rôle vérifié : ${expectedRoles}. Ne déduis jamais un rôle depuis l’ordre.`,
+              `Métadonnées vérifiées des actifs (sans URL ni contenu binaire) :\n${assetAudit}`,
+              'Visage : qualité/cadrage, forme globale observable, proportions visibles, expression visible, éléments non observables et confiance. Paume : qualité/cadrage, côté connu ou UNKNOWN, forme, proportion paume/doigts, lignes LIFE/HEAD/HEART/FATE séparées avec visibilité et confiance, monts, doigts/phalanges, texture, incertains et non observables. Si une ligne n’est pas clairement visible, marque NOT_VISIBLE ou UNCERTAIN et observation null. Aucune symbolique, médecine, morale, identité ou déduction de côté.',
+              'Retourne exactement le JSON demandé.',
+            ].join('\n'),
+            'lumira_visual_observations',
+            VISUAL_OBSERVATION_SCHEMA,
+            120_000,
+            usableAssets.map(({ mimeType, base64, role }) => ({ mimeType, base64, role })),
+            usableAssets.map(({ role, sha256 }) => ({ role, sha256 })),
+          );
     const byRole = new Map((observations.observations ?? []).map((item) => [item.role, item]));
     return assets.map((asset) => {
-      const result = byRole.get(asset.kind);
-      return result &&
-        Array.isArray(result.visible) &&
-        Array.isArray(result.uncertain) &&
-        Array.isArray(result.unavailable)
-        ? {
-            role: asset.kind,
-            visible: result.visible,
-            uncertain: result.uncertain,
-            unavailable: result.unavailable,
-          }
-        : {
-            role: asset.kind,
-            visible: [],
-            uncertain: [],
-            unavailable: ['Observation indisponible'],
-          };
+      const result = byRole.get(asset.role);
+      if (asset.analysisLimited) {
+        return this.limitedVisualObservation(asset);
+      }
+      return result && Array.isArray(result.framing) && Array.isArray(result.warnings)
+        ? result
+        : this.unavailableVisualObservation(asset);
     });
   }
 
   private snapshotVisualAssets(
     assets: VisualImageInput[],
   ): Array<
-    Pick<VisualImageInput, 'kind' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>
+    Pick<VisualImageInput, 'role' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>
   > {
-    return assets.map(({ kind, mimeType, width, height, orientation, sha256 }) => ({
-      kind,
+    return assets.map(({ role, mimeType, width, height, orientation, sha256 }) => ({
+      role,
       mimeType,
       width,
       height,
       orientation,
       sha256,
     }));
+  }
+
+  private limitedVisualObservation(asset: VisualImageInput): VisualObservation {
+    return {
+      role: asset.role,
+      imageQuality: 'UNUSABLE',
+      framing: [],
+      ...(asset.role === 'FACE_FRONT'
+        ? {
+            face: {
+              globalShape: [],
+              visibleProportions: [],
+              visibleExpressions: [],
+              nonObservable: ['Image insuffisante pour une observation fiable'],
+            },
+          }
+        : {
+            palm: {
+              knownSide:
+                asset.role === 'PALM_LEFT'
+                  ? 'LEFT'
+                  : asset.role === 'PALM_RIGHT'
+                    ? 'RIGHT'
+                    : 'UNKNOWN',
+              palmShape: [],
+              palmFingerProportions: [],
+              mainLines: [],
+              mounts: [],
+              fingersAndPhalanges: [],
+              observableTexture: [],
+              uncertain: [],
+              nonObservable: ['Paume insuffisamment nette ou cadrée : chiromancie non utilisée'],
+            },
+          }),
+      warnings: asset.warnings ?? ['Analyse visuelle limitée'],
+    };
+  }
+
+  private unavailableVisualObservation(asset: VisualImageInput): VisualObservation {
+    return {
+      role: asset.role,
+      imageQuality: 'UNUSABLE',
+      framing: [],
+      ...(asset.role === 'FACE_FRONT'
+        ? {
+            face: {
+              globalShape: [],
+              visibleProportions: [],
+              visibleExpressions: [],
+              nonObservable: ['Observation indisponible'],
+            },
+          }
+        : {
+            palm: {
+              knownSide:
+                asset.role === 'PALM_LEFT'
+                  ? 'LEFT'
+                  : asset.role === 'PALM_RIGHT'
+                    ? 'RIGHT'
+                    : 'UNKNOWN',
+              palmShape: [],
+              palmFingerProportions: [],
+              mainLines: [],
+              mounts: [],
+              fingersAndPhalanges: [],
+              observableTexture: [],
+              uncertain: [],
+              nonObservable: ['Observation indisponible'],
+            },
+          }),
+      warnings: ['Observation visuelle indisponible'],
+    };
   }
 
   /** One line per declared life area: "Relations & famille: tendu — note". */

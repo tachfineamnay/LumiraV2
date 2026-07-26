@@ -4,8 +4,13 @@ import { S3ObjectMetadata, S3ObjectResult, S3Service } from './s3.service';
 import { createHash } from 'crypto';
 import { Readable } from 'stream';
 import sharp from 'sharp';
+import { get as httpsGet } from 'https';
+import { lookup } from 'dns/promises';
+import { isIP } from 'net';
+import { VisualAssetRole } from '../../services/factory/llm/llm.types';
 
 export type OnboardingPhotoKind = 'face' | 'palm';
+export type OnboardingPhotoRole = VisualAssetRole;
 export type PhotoActorType = 'client' | 'expert';
 export type PrivatePhotoSource = 'profile' | 'onboarding';
 
@@ -30,15 +35,20 @@ export interface PrivatePhotoStreamResult extends S3ObjectResult {
  * a signed URL or raw image data. */
 export interface PreparedOnboardingPhoto extends ValidatedOnboardingPhoto {
   kind: OnboardingPhotoKind;
+  role: OnboardingPhotoRole;
   width: number;
   height: number;
   orientation: number | null;
   sha256: string;
   base64: string;
+  analysisLimited: boolean;
+  warnings: string[];
 }
 
 const MIN_IMAGE_DIMENSION = 64;
 const MAX_IMAGE_DIMENSION = 8192;
+const LEGACY_HTTPS_TIMEOUT_MS = 8_000;
+const MAX_LEGACY_REDIRECTS = 3;
 
 @Injectable()
 export class PrivateOnboardingPhotoService {
@@ -209,7 +219,12 @@ export class PrivateOnboardingPhotoService {
     storageRef: string,
     expectedUserId: string,
     kind: OnboardingPhotoKind,
+    role?: OnboardingPhotoRole,
   ): Promise<PreparedOnboardingPhoto> {
+    const resolvedRole = this.resolveRole(kind, role);
+    if (/^https:\/\//i.test(storageRef.trim())) {
+      return this.prepareLegacyHttpsForAi(storageRef, kind, resolvedRole);
+    }
     const validated = await this.validateOnboardingPhoto(storageRef, expectedUserId, kind);
     const object = await this.s3Service.getObject(validated.key, 'uploads');
     const bytes = await this.readStream(object.stream, MAX_ONBOARDING_PHOTO_BYTES);
@@ -217,6 +232,39 @@ export class PrivateOnboardingPhotoService {
       throw new BadRequestException(`La photo ${kind} a changé pendant sa validation`);
     }
 
+    return this.prepareDecodedAsset(validated, bytes, kind, resolvedRole, object.contentType);
+  }
+
+  private async prepareLegacyHttpsForAi(
+    storageRef: string,
+    kind: OnboardingPhotoKind,
+    role: OnboardingPhotoRole,
+  ): Promise<PreparedOnboardingPhoto> {
+    const { bytes, contentType } = await this.fetchLegacyHttps(storageRef);
+    const fingerprint = createHash('sha256').update(bytes).digest('hex');
+    return this.prepareDecodedAsset(
+      {
+        storageRef: storageRef.trim(),
+        key: `legacy/${fingerprint}`,
+        contentType,
+        size: bytes.length,
+        etag: fingerprint,
+        versionId: null,
+      },
+      bytes,
+      kind,
+      role,
+      contentType,
+    );
+  }
+
+  private async prepareDecodedAsset(
+    validated: ValidatedOnboardingPhoto,
+    bytes: Buffer,
+    kind: OnboardingPhotoKind,
+    role: OnboardingPhotoRole,
+    returnedContentType?: string,
+  ): Promise<PreparedOnboardingPhoto> {
     let metadata: sharp.Metadata;
     try {
       // rotate().toBuffer() forces a full decode and rejects truncated/corrupt
@@ -230,25 +278,45 @@ export class PrivateOnboardingPhotoService {
 
     const actualContentType = this.contentTypeForFormat(metadata.format);
     if (!actualContentType || actualContentType !== validated.contentType) {
-      throw new BadRequestException(`Le type réel de la photo ${kind} ne correspond pas à son type déclaré`);
+      throw new BadRequestException(
+        `Le type réel de la photo ${kind} ne correspond pas à son type déclaré`,
+      );
     }
-    if (!metadata.width || !metadata.height ||
-      metadata.width < MIN_IMAGE_DIMENSION || metadata.height < MIN_IMAGE_DIMENSION ||
-      metadata.width > MAX_IMAGE_DIMENSION || metadata.height > MAX_IMAGE_DIMENSION) {
+    if (
+      !metadata.width ||
+      !metadata.height ||
+      metadata.width < MIN_IMAGE_DIMENSION ||
+      metadata.height < MIN_IMAGE_DIMENSION ||
+      metadata.width > MAX_IMAGE_DIMENSION ||
+      metadata.height > MAX_IMAGE_DIMENSION
+    ) {
       throw new BadRequestException(`Les dimensions de la photo ${kind} sont inutilisables`);
     }
-    if (object.contentType && object.contentType.split(';')[0].trim().toLowerCase() !== actualContentType) {
-      throw new BadRequestException(`Le stockage retourne un type incohérent pour la photo ${kind}`);
+    if (
+      returnedContentType &&
+      returnedContentType.split(';')[0].trim().toLowerCase() !== actualContentType
+    ) {
+      throw new BadRequestException(
+        `Le stockage retourne un type incohérent pour la photo ${kind}`,
+      );
     }
+
+    const warnings =
+      kind === 'palm' && (await this.isPalmLowDetail(bytes))
+        ? ['Paume trop floue ou trop peu détaillée : analyse chiromantique limitée.']
+        : [];
 
     return {
       ...validated,
       kind,
+      role,
       width: metadata.width,
       height: metadata.height,
       orientation: metadata.orientation ?? null,
       sha256: createHash('sha256').update(bytes).digest('hex'),
       base64: bytes.toString('base64'),
+      analysisLimited: warnings.length > 0,
+      warnings,
     };
   }
 
@@ -369,6 +437,148 @@ export class PrivateOnboardingPhotoService {
     if (format === 'png') return 'image/png';
     if (format === 'webp') return 'image/webp';
     return null;
+  }
+
+  private resolveRole(kind: OnboardingPhotoKind, role?: OnboardingPhotoRole): OnboardingPhotoRole {
+    if (kind === 'face') return 'FACE_FRONT';
+    return role === 'PALM_LEFT' || role === 'PALM_RIGHT' || role === 'PALM_UNKNOWN'
+      ? role
+      : 'PALM_UNKNOWN';
+  }
+
+  /** Historical URLs are read only at generation time. New uploads stay private S3. */
+  private async fetchLegacyHttps(
+    urlValue: string,
+    redirects = 0,
+  ): Promise<{ bytes: Buffer; contentType: string }> {
+    if (redirects > MAX_LEGACY_REDIRECTS) {
+      throw new BadRequestException('Trop de redirections pour la photo historique');
+    }
+    let url: URL;
+    try {
+      url = new URL(urlValue);
+    } catch {
+      throw new BadRequestException('URL historique invalide');
+    }
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      (url.port && url.port !== '443')
+    ) {
+      throw new BadRequestException('URL historique non autorisée');
+    }
+
+    return new Promise((resolve, reject) => {
+      const request = httpsGet(
+        url,
+        {
+          timeout: LEGACY_HTTPS_TIMEOUT_MS,
+          lookup: (hostname, _options, callback) => {
+            lookup(hostname, { all: false })
+              .then(({ address, family }) => {
+                if (!this.isPublicAddress(address)) {
+                  callback(new Error('Adresse historique non publique'), address, family);
+                  return;
+                }
+                callback(null, address, family);
+              })
+              .catch((error) => callback(error, '', 0));
+          },
+        },
+        (response) => {
+          const status = response.statusCode || 0;
+          if ([301, 302, 303, 307, 308].includes(status)) {
+            const location = response.headers.location;
+            response.resume();
+            if (!location)
+              return reject(new BadRequestException('Redirection historique invalide'));
+            let next: string;
+            try {
+              next = new URL(location, url).toString();
+            } catch {
+              return reject(new BadRequestException('Redirection historique invalide'));
+            }
+            this.fetchLegacyHttps(next, redirects + 1).then(resolve, reject);
+            return;
+          }
+          if (status !== 200) {
+            response.resume();
+            return reject(new BadRequestException('Photo historique inaccessible'));
+          }
+          const contentType = response.headers['content-type']?.split(';')[0].trim().toLowerCase();
+          if (!contentType || !ALLOWED_ONBOARDING_IMAGE_TYPES.has(contentType)) {
+            response.resume();
+            return reject(new BadRequestException('Type de photo historique non autorisé'));
+          }
+          const length = Number(response.headers['content-length']);
+          if (Number.isFinite(length) && (length <= 0 || length > MAX_ONBOARDING_PHOTO_BYTES)) {
+            response.resume();
+            return reject(new BadRequestException('Taille de photo historique non autorisée'));
+          }
+          this.readStream(response, MAX_ONBOARDING_PHOTO_BYTES)
+            .then((bytes) => resolve({ bytes, contentType }))
+            .catch(reject);
+        },
+      );
+      request.once('timeout', () => request.destroy(new Error('Délai photo historique dépassé')));
+      request.once('error', () => reject(new BadRequestException('Photo historique inaccessible')));
+    });
+  }
+
+  private isPublicAddress(address: string): boolean {
+    const family = isIP(address);
+    if (family === 4) {
+      const [a, b] = address.split('.').map(Number);
+      return !(
+        a === 0 ||
+        a === 10 ||
+        a === 127 ||
+        a >= 224 ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168)
+      );
+    }
+    if (family === 6) {
+      const normalized = address.toLowerCase();
+      return !(
+        normalized === '::1' ||
+        normalized === '::' ||
+        normalized.startsWith('fc') ||
+        normalized.startsWith('fd') ||
+        normalized.startsWith('fe8') ||
+        normalized.startsWith('fe9') ||
+        normalized.startsWith('fea') ||
+        normalized.startsWith('feb') ||
+        normalized.startsWith('::ffff:127.') ||
+        normalized.startsWith('::ffff:10.') ||
+        normalized.startsWith('::ffff:192.168.')
+      );
+    }
+    return false;
+  }
+
+  private async isPalmLowDetail(bytes: Buffer): Promise<boolean> {
+    const { data, info } = await sharp(bytes)
+      .rotate()
+      .resize({ width: 160, height: 160, fit: 'inside', withoutEnlargement: true })
+      .grayscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    if (info.width < 96 || info.height < 96) return true;
+    let total = 0;
+    let samples = 0;
+    for (let y = 1; y < info.height; y += 1) {
+      for (let x = 1; x < info.width; x += 1) {
+        const index = y * info.width + x;
+        total +=
+          Math.abs(data[index] - data[index - 1]) +
+          Math.abs(data[index] - data[index - info.width]);
+        samples += 2;
+      }
+    }
+    return samples === 0 || total / samples < 3;
   }
 
   private async readStream(stream: Readable, maxBytes: number): Promise<Buffer> {

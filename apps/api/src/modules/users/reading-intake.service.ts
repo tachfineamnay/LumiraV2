@@ -28,6 +28,7 @@ type IntakeProfile = {
   objective: string | null;
   facePhotoUrl: string | null;
   palmPhotoUrl: string | null;
+  palmRole: 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
   highs: string | null;
   lows: string | null;
   lifeEvents: string | null;
@@ -532,6 +533,10 @@ export class ReadingIntakeService {
       objective: this.clean(draft.objective),
       facePhotoUrl: this.clean(draft.facePhoto) || this.clean(draft.facePhotoUrl),
       palmPhotoUrl: this.clean(draft.palmPhoto) || this.clean(draft.palmPhotoUrl),
+      palmRole:
+        draft.palmRole === 'PALM_LEFT' || draft.palmRole === 'PALM_RIGHT'
+          ? draft.palmRole
+          : 'PALM_UNKNOWN',
       highs: this.clean(draft.highs),
       lows: this.clean(draft.lows),
       lifeEvents: this.clean(draft.lifeEvents),
@@ -558,6 +563,7 @@ export class ReadingIntakeService {
       objective: this.clean(dto.objective),
       facePhotoUrl: this.clean(dto.facePhotoUrl),
       palmPhotoUrl: this.clean(dto.palmPhotoUrl),
+      palmRole: 'PALM_UNKNOWN',
       highs: this.clean(dto.highs),
       lows: this.clean(dto.lows),
       lifeEvents: this.clean(dto.lifeEvents),

@@ -167,11 +167,13 @@ export class DigitalSoulService {
         (asset) => ({
           mimeType: asset.contentType as 'image/jpeg' | 'image/png' | 'image/webp',
           base64: asset.base64,
-          kind: asset.kind,
+          role: asset.role,
           width: asset.width,
           height: asset.height,
           orientation: asset.orientation,
           sha256: asset.sha256,
+          analysisLimited: asset.analysisLimited,
+          warnings: asset.warnings,
         }),
       );
 
@@ -1000,14 +1002,48 @@ export class DigitalSoulService {
     userId: string,
     profile: ResolvedReadingSource['profile'],
   ): Promise<PreparedOnboardingPhoto[]> {
-    const requested: Array<{ kind: 'face' | 'palm'; storageRef: string | null }> = [
-      { kind: 'face', storageRef: profile.facePhotoUrl },
-      { kind: 'palm', storageRef: profile.palmPhotoUrl },
+    const requested: Array<{
+      kind: 'face' | 'palm';
+      storageRef: string | null;
+      role?: 'FACE_FRONT' | 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
+    }> = [
+      { kind: 'face', storageRef: profile.facePhotoUrl, role: 'FACE_FRONT' },
+      { kind: 'palm', storageRef: profile.palmPhotoUrl, role: profile.palmRole ?? 'PALM_UNKNOWN' },
     ];
     const assets: PreparedOnboardingPhoto[] = [];
     for (const asset of requested) {
       if (!asset.storageRef) continue;
-      assets.push(await this.onboardingPhotos.prepareForAi(asset.storageRef, userId, asset.kind));
+      try {
+        assets.push(
+          await this.onboardingPhotos.prepareForAi(
+            asset.storageRef,
+            userId,
+            asset.kind,
+            asset.role,
+          ),
+        );
+      } catch (error) {
+        if (asset.kind !== 'palm') throw error;
+        // A malformed historical palm must never make SCRIBE invent palmistry
+        // or block the rest of the reading. The warning is persisted in pipeline metadata.
+        assets.push({
+          storageRef: '',
+          key: 'unavailable-palm',
+          contentType: 'image/jpeg',
+          size: 0,
+          etag: 'unavailable',
+          versionId: null,
+          kind: 'palm',
+          role: asset.role ?? 'PALM_UNKNOWN',
+          width: 0,
+          height: 0,
+          orientation: null,
+          sha256: 'unavailable',
+          base64: '',
+          analysisLimited: true,
+          warnings: ['Paume inutilisable : lecture produite sans chiromancie.'],
+        });
+      }
     }
     return assets;
   }

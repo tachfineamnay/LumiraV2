@@ -165,33 +165,154 @@ describe('PrivateOnboardingPhotoService', () => {
 
   describe('prepareForAi', () => {
     it('decodes the exact face object and returns auditable visual metadata', async () => {
-      const bytes = await sharp({ create: { width: 128, height: 96, channels: 3, background: '#fff' } })
+      const bytes = await sharp({
+        create: { width: 128, height: 96, channels: 3, background: '#fff' },
+      })
         .jpeg()
         .toBuffer();
       s3Service.headObject.mockResolvedValue({
-        contentType: 'image/jpeg', contentLength: bytes.length, etag: 'etag-1', versionId: 'v1',
+        contentType: 'image/jpeg',
+        contentLength: bytes.length,
+        etag: 'etag-1',
+        versionId: 'v1',
       });
       s3Service.getObject.mockResolvedValue({
-        stream: Readable.from([bytes]), contentType: 'image/jpeg', contentLength: bytes.length,
+        stream: Readable.from([bytes]),
+        contentType: 'image/jpeg',
+        contentLength: bytes.length,
       });
 
-      const result = await service.prepareForAi('s3://onboarding/user-1/face-1.jpg', 'user-1', 'face');
+      const result = await service.prepareForAi(
+        's3://onboarding/user-1/face-1.jpg',
+        'user-1',
+        'face',
+      );
 
-      expect(result).toMatchObject({ kind: 'face', contentType: 'image/jpeg', width: 128, height: 96 });
+      expect(result).toMatchObject({
+        kind: 'face',
+        role: 'FACE_FRONT',
+        contentType: 'image/jpeg',
+        width: 128,
+        height: 96,
+      });
       expect(result.sha256).toHaveLength(64);
       expect(result.base64).toBe(bytes.toString('base64'));
     });
 
     it('rejects a binary whose real type is different from S3 metadata', async () => {
-      const bytes = await sharp({ create: { width: 128, height: 128, channels: 3, background: '#fff' } })
+      const bytes = await sharp({
+        create: { width: 128, height: 128, channels: 3, background: '#fff' },
+      })
         .png()
         .toBuffer();
-      s3Service.headObject.mockResolvedValue({ contentType: 'image/jpeg', contentLength: bytes.length, etag: 'etag-1' });
-      s3Service.getObject.mockResolvedValue({ stream: Readable.from([bytes]), contentType: 'image/jpeg' });
+      s3Service.headObject.mockResolvedValue({
+        contentType: 'image/jpeg',
+        contentLength: bytes.length,
+        etag: 'etag-1',
+      });
+      s3Service.getObject.mockResolvedValue({
+        stream: Readable.from([bytes]),
+        contentType: 'image/jpeg',
+      });
 
       await expect(
         service.prepareForAi('s3://onboarding/user-1/face-1.jpg', 'user-1', 'face'),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('marks a low-detail palm as limited and never assigns a hand side', async () => {
+      const bytes = await sharp({
+        create: { width: 128, height: 128, channels: 3, background: '#fff' },
+      })
+        .jpeg()
+        .toBuffer();
+      s3Service.headObject.mockResolvedValue({
+        contentType: 'image/jpeg',
+        contentLength: bytes.length,
+        etag: 'etag-1',
+      });
+      s3Service.getObject.mockResolvedValue({
+        stream: Readable.from([bytes]),
+        contentType: 'image/jpeg',
+      });
+
+      const result = await service.prepareForAi(
+        's3://onboarding/user-1/palm-1.jpg',
+        'user-1',
+        'palm',
+      );
+
+      expect(result).toMatchObject({ role: 'PALM_UNKNOWN', analysisLimited: true });
+      expect(result.warnings[0]).toContain('chiromantique limitée');
+    });
+
+    it('preserves an explicitly supplied left-palm role without inferring it from pixels', async () => {
+      const bytes = await sharp({
+        create: { width: 128, height: 128, channels: 3, background: '#204060' },
+      })
+        .png()
+        .toBuffer();
+      s3Service.headObject.mockResolvedValue({
+        contentType: 'image/png',
+        contentLength: bytes.length,
+        etag: 'etag-1',
+      });
+      s3Service.getObject.mockResolvedValue({
+        stream: Readable.from([bytes]),
+        contentType: 'image/png',
+      });
+
+      const result = await service.prepareForAi(
+        's3://onboarding/user-1/palm-1.png',
+        'user-1',
+        'palm',
+        'PALM_LEFT',
+      );
+
+      expect(result.role).toBe('PALM_LEFT');
+    });
+
+    it('accepts an HTTPS reference only through the isolated legacy downloader', async () => {
+      const bytes = await sharp({
+        create: { width: 128, height: 128, channels: 3, background: '#8ca' },
+      })
+        .png()
+        .toBuffer();
+      const fetchLegacy = jest
+        .spyOn(
+          service as unknown as {
+            fetchLegacyHttps: (url: string) => Promise<{ bytes: Buffer; contentType: string }>;
+          },
+          'fetchLegacyHttps',
+        )
+        .mockResolvedValue({ bytes, contentType: 'image/png' });
+
+      const result = await service.prepareForAi(
+        'https://legacy.example.test/palm.png',
+        'user-1',
+        'palm',
+      );
+
+      expect(fetchLegacy).toHaveBeenCalledWith('https://legacy.example.test/palm.png');
+      expect(s3Service.getObject).not.toHaveBeenCalled();
+      expect(result.role).toBe('PALM_UNKNOWN');
+    });
+
+    it('rejects a corrupt image payload', async () => {
+      const bytes = Buffer.from('not-an-image');
+      s3Service.headObject.mockResolvedValue({
+        contentType: 'image/jpeg',
+        contentLength: bytes.length,
+        etag: 'etag-1',
+      });
+      s3Service.getObject.mockResolvedValue({
+        stream: Readable.from([bytes]),
+        contentType: 'image/jpeg',
+      });
+
+      await expect(
+        service.prepareForAi('s3://onboarding/user-1/face-1.jpg', 'user-1', 'face'),
+      ).rejects.toThrow('illisible ou corrompue');
     });
   });
 });

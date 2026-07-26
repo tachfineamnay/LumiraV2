@@ -396,7 +396,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
     expect(result.pipeline.models.SCRIBE).toBe(`${run.provider}:${run.model}`);
   });
 
-  it('sends face then palm with real MIME types and high detail', async () => {
+  it('sends explicit face and unknown-palm roles with real MIME types and high detail', async () => {
     responsesCreate.mockResolvedValue({
       status: 'completed',
       output_text: JSON.stringify(coreResponse),
@@ -418,7 +418,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
 
     await service.generateCoreReading(userProfile, orderContext, [
       {
-        kind: 'face',
+        role: 'FACE_FRONT',
         base64: 'ZmFjZQ==',
         mimeType: 'image/png',
         width: 128,
@@ -427,7 +427,7 @@ describe('VertexOracle OpenAI-only runtime', () => {
         sha256: 'face',
       },
       {
-        kind: 'palm',
+        role: 'PALM_UNKNOWN',
         base64: 'cGFsbQ==',
         mimeType: 'image/webp',
         width: 128,
@@ -440,13 +440,22 @@ describe('VertexOracle OpenAI-only runtime', () => {
     expect(fetchImage).not.toHaveBeenCalled();
     const content = responsesCreate.mock.calls[0][0].input[0].content;
     expect(content[1]).toEqual(
+      expect.objectContaining({ type: 'input_text', text: expect.stringContaining('FACE_FRONT') }),
+    );
+    expect(content[2]).toEqual(
       expect.objectContaining({
         type: 'input_image',
         detail: 'high',
         image_url: expect.stringContaining('data:image/png;base64,ZmFjZQ=='),
       }),
     );
-    expect(content[2]).toEqual(
+    expect(content[3]).toEqual(
+      expect.objectContaining({
+        type: 'input_text',
+        text: expect.stringContaining('PALM_UNKNOWN'),
+      }),
+    );
+    expect(content[4]).toEqual(
       expect.objectContaining({
         type: 'input_image',
         detail: 'high',
@@ -454,6 +463,79 @@ describe('VertexOracle OpenAI-only runtime', () => {
       }),
     );
   });
+
+  it.each([
+    ['FACE_FRONT', 'image/jpeg', 'ZmFjZQ=='],
+    ['PALM_UNKNOWN', 'image/png', 'cGFsbQ=='],
+  ] as const)(
+    'uses the verified %s role for a single visual asset',
+    async (role, mimeType, base64) => {
+      const observation =
+        role === 'FACE_FRONT'
+          ? {
+              role,
+              imageQuality: 'USABLE',
+              framing: ['Visage cadré'],
+              face: {
+                globalShape: ['Ovale'],
+                visibleProportions: [],
+                visibleExpressions: [],
+                nonObservable: [],
+              },
+              warnings: [],
+            }
+          : {
+              role,
+              imageQuality: 'USABLE',
+              framing: ['Paume cadrée'],
+              palm: {
+                knownSide: 'UNKNOWN',
+                palmShape: [],
+                palmFingerProportions: [],
+                mainLines: [
+                  { name: 'LIFE', visibility: 'NOT_VISIBLE', observation: null, confidence: 0 },
+                ],
+                mounts: [],
+                fingersAndPhalanges: [],
+                observableTexture: [],
+                uncertain: [],
+                nonObservable: ['Ligne non lisible'],
+              },
+              warnings: [],
+            };
+      responsesCreate
+        .mockResolvedValueOnce({
+          status: 'completed',
+          output_text: JSON.stringify({ observations: [observation] }),
+        })
+        .mockResolvedValueOnce({ status: 'completed', output_text: JSON.stringify(coreResponse) });
+
+      await service.generateCoreReading(userProfile, orderContext, [
+        {
+          role,
+          base64,
+          mimeType,
+          width: 128,
+          height: 128,
+          orientation: null,
+          sha256: role.toLowerCase(),
+        },
+      ]);
+
+      expect(responsesCreate.mock.calls[0][0].input[0].content).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'input_text', text: expect.stringContaining(role) }),
+        ]),
+      );
+      const scribePrompt = responsesCreate.mock.calls[1][0].input;
+      expect(scribePrompt).toContain('OBSERVATIONS VISUELLES FACTUELLES');
+      expect(scribePrompt).toContain(role);
+      if (role === 'PALM_UNKNOWN') {
+        expect(scribePrompt).toContain('NOT_VISIBLE');
+        expect(scribePrompt).not.toContain('ligne de vie visible');
+      }
+    },
+  );
 
   it('rejects duplicate or missing SCRIBE domains even after structured output', async () => {
     responsesCreate.mockResolvedValue({

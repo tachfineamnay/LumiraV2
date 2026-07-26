@@ -29,11 +29,17 @@ export class OpenAiAdapter implements LlmAdapter {
                 role: 'user' as const,
                 content: [
                   { type: 'input_text' as const, text: req.userContent },
-                  ...req.images.map((image) => ({
-                    type: 'input_image' as const,
-                    image_url: `data:${image.mimeType};base64,${image.base64}`,
-                    detail: 'high' as const,
-                  })),
+                  ...req.images.flatMap((image) => [
+                    {
+                      type: 'input_text' as const,
+                      text: `Image suivante — rôle vérifié: ${image.role}.`,
+                    },
+                    {
+                      type: 'input_image' as const,
+                      image_url: `data:${image.mimeType};base64,${image.base64}`,
+                      detail: 'high' as const,
+                    },
+                  ]),
                 ],
               },
             ]

@@ -91,6 +91,7 @@ export const readingPreparationSchema = z.object({
   openReading: z.boolean(),
   facePhoto: z.string(),
   palmPhoto: z.string(),
+  palmRole: z.enum(['PALM_LEFT', 'PALM_RIGHT', 'PALM_UNKNOWN']),
   highs: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.'),
   lows: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.'),
   lifeEvents: optionalText(2000, 'Cette réponse ne peut pas dépasser 2 000 caractères.'),

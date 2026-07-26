@@ -130,6 +130,7 @@ const EMPTY_DATA: ReadingPreparationData = {
   openReading: false,
   facePhoto: '',
   palmPhoto: '',
+  palmRole: 'PALM_UNKNOWN',
   highs: '',
   lows: '',
   lifeEvents: '',
@@ -191,6 +192,8 @@ function normalize(value: unknown): Partial<ReadingPreparationData> {
   if (has('palmPhoto') || has('palmPhotoUrl')) {
     normalized.palmPhoto = stringValue(source.palmPhoto || source.palmPhotoUrl);
   }
+  if (source.palmRole === 'PALM_LEFT' || source.palmRole === 'PALM_RIGHT')
+    normalized.palmRole = source.palmRole;
   if (has('highs')) normalized.highs = stringValue(source.highs);
   else if (has('strongSide') || has('strongZone')) {
     normalized.highs = [stringValue(source.strongSide), stringValue(source.strongZone)]
@@ -239,6 +242,7 @@ function persistedData(data: ReadingPreparationData): PersistedDraftData {
     openReading: data.openReading === true,
     facePhoto: facePhoto.startsWith('s3://onboarding/') ? facePhoto : '',
     palmPhoto: palmPhoto.startsWith('s3://onboarding/') ? palmPhoto : '',
+    palmRole: data.palmRole,
     highs: stringValue(data.highs),
     lows: stringValue(data.lows),
     lifeEvents: stringValue(data.lifeEvents),
@@ -982,6 +986,7 @@ export function ReadingPreparation({
           openReading: values.openReading,
           facePhotoUrl,
           palmPhotoUrl,
+          palmRole: values.palmRole,
           highs: stringValue(values.highs).trim() || null,
           lows: stringValue(values.lows).trim() || null,
           lifeEvents: stringValue(values.lifeEvents).trim() || null,
@@ -1423,6 +1428,33 @@ export function ReadingPreparation({
                           }
                         />
                       </div>
+                      <fieldset className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+                        <legend className="px-1 text-sm font-medium text-white">
+                          Côté de la paume
+                        </legend>
+                        <p className="mt-1 text-xs text-stellar-500">
+                          Indiquez-le seulement si vous en êtes sûr·e. Sinon, l’analyse restera
+                          neutre.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(
+                            [
+                              ['PALM_UNKNOWN', 'Je ne sais pas'],
+                              ['PALM_LEFT', 'Paume gauche'],
+                              ['PALM_RIGHT', 'Paume droite'],
+                            ] as const
+                          ).map(([role, label]) => (
+                            <button
+                              key={role}
+                              type="button"
+                              onClick={() => setValue('palmRole', role, { shouldDirty: true })}
+                              className={`rounded-lg border px-3 py-2 text-sm ${formValues.palmRole === role ? 'border-horizon-400 bg-horizon-400/15 text-white' : 'border-white/15 text-stellar-400'}`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </fieldset>
                       <p className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-xs leading-5 text-stellar-500">
                         Vous pouvez continuer sans photo, avec une seule ou avec les deux. Une photo
                         réussie est enregistrée immédiatement afin de rester disponible après un

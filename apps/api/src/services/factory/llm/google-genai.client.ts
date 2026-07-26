@@ -59,6 +59,7 @@ export function buildGoogleContents(req: LlmRequest): Array<{
     { text: req.userContent },
   ];
   for (const image of req.images ?? []) {
+    parts.push({ text: `Image suivante — rôle vérifié: ${image.role}.` });
     parts.push({
       inlineData: {
         mimeType: image.mimeType,

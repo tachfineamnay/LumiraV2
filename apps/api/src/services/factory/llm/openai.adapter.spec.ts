@@ -65,4 +65,21 @@ describe('OpenAiAdapter (thinking-only production policy)', () => {
     expect(params.top_p).toBeUndefined();
     expect(params.text?.verbosity).toBeUndefined();
   });
+
+  it('places an explicit role immediately before every vision input', async () => {
+    await adapter.complete(
+      makeRequest({
+        thinkingLevel: 'medium',
+        images: [{ mimeType: 'image/jpeg', base64: 'ZmFjZQ==', role: 'FACE_FRONT' }],
+      }),
+    );
+    expect(mockCreate.mock.calls[0][0].input[0].content).toEqual([
+      { type: 'input_text', text: 'user content' },
+      { type: 'input_text', text: 'Image suivante — rôle vérifié: FACE_FRONT.' },
+      expect.objectContaining({
+        type: 'input_image',
+        image_url: expect.stringContaining('ZmFjZQ=='),
+      }),
+    ]);
+  });
 });

@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import {
   buildGoogleGenerationConfig,
+  buildGoogleContents,
   createGeminiDeveloperClient,
   createVertexAiClient,
   GOOGLE_GENAI_API_VERSION,
@@ -93,6 +94,19 @@ describe('google-genai.client', () => {
         request({ model: 'gemini-2.5-flash', thinkingLevel: 'high' as any, maxTokens: 256 }),
       ),
     ).toThrow(/n'est pas autorisé pour la production Lumira/);
+  });
+
+  it('places each binary image beside its verified role instead of relying on order', () => {
+    const parts = buildGoogleContents(
+      request({
+        images: [{ mimeType: 'image/png', base64: 'cGFsbQ==', role: 'PALM_UNKNOWN' }],
+      }),
+    )[0].parts;
+    expect(parts).toEqual([
+      { text: 'user' },
+      { text: 'Image suivante — rôle vérifié: PALM_UNKNOWN.' },
+      { inlineData: { mimeType: 'image/png', data: 'cGFsbQ==' } },
+    ]);
   });
 });
 

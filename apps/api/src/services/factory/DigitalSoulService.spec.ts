@@ -100,11 +100,16 @@ function buildService(
   const readingSource = {
     source: 'SEALED_INTAKE' as const,
     contentHash: 'sealed-intake-hash',
-    profile: { facePhotoUrl: null, palmPhotoUrl: null },
+    profile: {
+      facePhotoUrl: null as string | null,
+      palmPhotoUrl: null as string | null,
+      palmRole: 'PALM_UNKNOWN' as const,
+    },
   };
   const vertexOracle = {
     generateFullReading: jest.fn().mockResolvedValue(candidate(qualityStatus)),
   };
+  const onboardingPhotos = { prepareForAi: jest.fn() };
   const service = new DigitalSoulService(
     { get: jest.fn((_key: string, fallback?: string) => fallback) } as never,
     prisma as never,
@@ -119,12 +124,34 @@ function buildService(
         email: 'jean@example.test',
       }),
     } as never,
-    {} as never,
+    onboardingPhotos as never,
   );
-  return { service, prisma, transactionOrderUpdate, readingVersionCreate, vertexOracle };
+  return {
+    service,
+    prisma,
+    transactionOrderUpdate,
+    readingVersionCreate,
+    vertexOracle,
+    readingSource,
+    onboardingPhotos,
+  };
 }
 
 describe('DigitalSoulService candidate promotion', () => {
+  it('continues without palmistry when the palm cannot be prepared', async () => {
+    const { service, readingSource, onboardingPhotos, vertexOracle } = buildService('PASS');
+    readingSource.profile.palmPhotoUrl = 's3://onboarding/user-1/palm-corrupt.jpg';
+    onboardingPhotos.prepareForAi.mockRejectedValue(new BadRequestException('corrompue'));
+
+    await service.generateContentOnly('order-1');
+
+    expect(vertexOracle.generateFullReading).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      [expect.objectContaining({ role: 'PALM_UNKNOWN', analysisLimited: true })],
+    );
+  });
+
   it('does not persist a BLOCKED candidate and preserves the existing draft', async () => {
     const { service, prisma, transactionOrderUpdate } = buildService('BLOCKED');
 

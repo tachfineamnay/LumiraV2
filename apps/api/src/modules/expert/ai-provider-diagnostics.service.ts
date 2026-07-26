@@ -17,7 +17,10 @@ import {
   VERTEX_CREDENTIALS_KEY,
   VertexAdapter,
 } from '../../services/factory/llm';
-import { getModelRuntimeControls, AiThinkingLevel } from '../../services/factory/model-runtime-controls';
+import {
+  getModelRuntimeControls,
+  AiThinkingLevel,
+} from '../../services/factory/model-runtime-controls';
 import {
   AiCredentialsStatusResponse,
   AiErrorCategory,
@@ -749,10 +752,7 @@ export class AiProviderDiagnosticsService {
     return new VertexAdapter(() => this.loadVertexCredentialsJson(), this.getVertexLocation());
   }
 
-  private probeThinkingLevel(
-    provider: DiagnosticsProvider,
-    model: string,
-  ): AiThinkingLevel {
+  private probeThinkingLevel(provider: DiagnosticsProvider, model: string): AiThinkingLevel {
     const controls = getModelRuntimeControls(provider, model);
     if (!controls.operational || controls.thinkingLevels.length === 0) {
       throw new Error(`Modèle non autorisé pour la production Lumira: ${model}`);
@@ -852,7 +852,9 @@ export class AiProviderDiagnosticsService {
             'Analyse uniquement l’image de test. N’invente rien. Réponds sans explication.',
           userContent:
             'Retourne une seule ligne au format :\ncircle=<couleur>;square=<couleur>;number=<nombre en chiffres>\n\nUtilise seulement ce que tu vois dans l’image.',
-          images: [{ mimeType: 'image/png', base64: IDENTIFIABLE_VISION_PROBE_BASE64 }],
+          images: [
+            { mimeType: 'image/png', base64: IDENTIFIABLE_VISION_PROBE_BASE64, role: 'FACE_FRONT' },
+          ],
           maxTokens: VISION_PROBE_TOKENS,
           thinkingLevel: probeThinkingLevel,
           signal: new AbortController().signal,

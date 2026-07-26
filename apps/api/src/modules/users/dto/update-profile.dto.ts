@@ -114,6 +114,11 @@ export class UpdateProfileDto {
   @MaxLength(512)
   palmPhotoUrl?: string | null;
 
+  /** Explicit client-declared hand side; omit when it is not reliable. */
+  @IsOptional()
+  @IsIn(['PALM_LEFT', 'PALM_RIGHT', 'PALM_UNKNOWN'])
+  palmRole?: 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
+
   @IsOptional()
   @IsString()
   @MaxLength(2000)
@@ -258,6 +263,10 @@ export class OnboardingDraftDataDto {
   @IsString()
   @MaxLength(512)
   palmPhotoUrl?: string | null;
+
+  @IsOptional()
+  @IsIn(['PALM_LEFT', 'PALM_RIGHT', 'PALM_UNKNOWN'])
+  palmRole?: 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
 
   @IsOptional()
   @IsString()

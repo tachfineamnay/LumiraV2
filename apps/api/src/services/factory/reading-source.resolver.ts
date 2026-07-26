@@ -16,6 +16,7 @@ export interface ReadingSourceProfile {
   objective: string | null;
   facePhotoUrl: string | null;
   palmPhotoUrl: string | null;
+  palmRole: 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
   highs: string | null;
   lows: string | null;
   lifeEvents: string | null;
@@ -60,6 +61,7 @@ const PROFILE_FIELDS = [
   'objective',
   'facePhotoUrl',
   'palmPhotoUrl',
+  'palmRole',
   'highs',
   'lows',
   'lifeEvents',
@@ -198,6 +200,7 @@ export class ReadingSourceResolver {
       objective: this.nullableString(raw.objective),
       facePhotoUrl: this.nullableString(raw.facePhotoUrl),
       palmPhotoUrl: this.nullableString(raw.palmPhotoUrl),
+      palmRole: this.palmRole(raw.palmRole),
       highs: this.nullableString(raw.highs),
       lows: this.nullableString(raw.lows),
       lifeEvents: this.nullableString(raw.lifeEvents),
@@ -224,6 +227,7 @@ export class ReadingSourceResolver {
       objective: profile?.objective ?? null,
       facePhotoUrl: profile?.facePhotoUrl ?? null,
       palmPhotoUrl: profile?.palmPhotoUrl ?? null,
+      palmRole: 'PALM_UNKNOWN',
       highs: profile?.highs ?? null,
       lows: profile?.lows ?? null,
       lifeEvents: profile?.lifeEvents ?? null,
@@ -257,6 +261,10 @@ export class ReadingSourceResolver {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private palmRole(value: unknown): 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN' {
+    return value === 'PALM_LEFT' || value === 'PALM_RIGHT' ? value : 'PALM_UNKNOWN';
   }
 
   /** Accepts only well-formed { key: { state, note? } } life-area records. */
