@@ -44,7 +44,7 @@ export const OPERATIONAL_GOOGLE_MODELS = [
   'gemini-3.6-flash',
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
-  'gemini-3.1-pro',
+  'gemini-3.1-pro-preview',
   'gemini-3-flash',
   'gemini-3-pro',
 ] as const;
@@ -437,7 +437,13 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     issues.push(`${agent}: provider absent ou non autorisé`);
   }
 
-  const requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
+  let requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
+  if (requestedModel === 'gemini-3.1-pro') {
+    issues.push(
+      `${agent}: modèle legacy gemini-3.1-pro migré automatiquement vers gemini-3.1-pro-preview`,
+    );
+    requestedModel = 'gemini-3.1-pro-preview';
+  }
   const model = requestedProvider ? requestedModel : '';
 
   const controls = getModelRuntimeControls(provider, model);

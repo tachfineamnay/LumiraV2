@@ -92,13 +92,21 @@ describe('model-runtime-controls', () => {
       expect(controls.operational).toBe(true);
     });
 
-    it('gemini-3.1-pro supports low, medium, high and defaults to high (minimal is unsupported)', () => {
+    it('gemini-3.1-pro-preview supports low, medium, high and defaults to high (minimal and xhigh are unsupported)', () => {
       const controls = getModelRuntimeControls('vertex', 'gemini-3.1-pro-preview');
       expect(controls.thinkingLevels).toEqual(['low', 'medium', 'high']);
       expect(controls.defaultThinkingLevel).toBe('high');
       expect(controls.maxOutputTokens).toBe(65536);
+      expect(controls.capabilities).toEqual(['text', 'vision', 'structured', 'long_text']);
       expect(controls.operational).toBe(true);
       expect(controls.thinkingLevels.includes('minimal' as any)).toBe(false);
+      expect(controls.thinkingLevels.includes('xhigh' as any)).toBe(false);
+    });
+
+    it('gemini-3.1-pro without -preview is non-operational', () => {
+      const controls = getModelRuntimeControls('vertex', 'gemini-3.1-pro');
+      expect(controls.operational).toBe(false);
+      expect(isOperationalThinkingModel('vertex', 'gemini-3.1-pro')).toBe(false);
     });
 
     it('gemini-3-flash supports minimal, low, medium, high and defaults to high', () => {

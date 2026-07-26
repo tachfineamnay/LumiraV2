@@ -1,11 +1,9 @@
 /**
  * Single source of truth for Vertex AI region.
  *
- * Default: `us-central1` — officially compatible with Gemini 2.5 on Vertex.
- * Set `VERTEX_LOCATION=global` only when the selected models support the
- * global endpoint for the project.
+ * Default: `global` — canonical region for Vertex AI in Lumira.
  */
-export const DEFAULT_VERTEX_LOCATION = 'us-central1';
+export const DEFAULT_VERTEX_LOCATION = 'global';
 
 export type VertexLocationReader = {
   get?<T = string>(key: string, defaultValue?: T): T | undefined;

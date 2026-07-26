@@ -128,7 +128,7 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
         samplingPolicy: 'provider_default',
       };
     }
-    if (/^gemini-3\.1-pro(?:[.-]|$)/i.test(normalized)) {
+    if (/^gemini-3\.1-pro-preview(?:[.-]|$)/i.test(normalized)) {
       return {
         thinkingLevels: ['low', 'medium', 'high'],
         defaultThinkingLevel: 'high',

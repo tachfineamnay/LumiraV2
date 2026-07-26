@@ -5,9 +5,15 @@ import {
   modelCapabilities,
   modelSupportsAgent,
   normalizeAiModelConfig,
+  OPERATIONAL_GOOGLE_MODELS,
 } from './ai-model-config';
 
 describe('ai-model-config (thinking-only production policy)', () => {
+  it('includes gemini-3.1-pro-preview in operational models and excludes gemini-3.1-pro alias', () => {
+    expect(OPERATIONAL_GOOGLE_MODELS.includes('gemini-3.1-pro-preview' as any)).toBe(true);
+    expect(OPERATIONAL_GOOGLE_MODELS.includes('gemini-3.1-pro' as any)).toBe(false);
+  });
+
   it('accepts the canonical per-agent snapshot configuration with modern models', () => {
     const normalized = normalizeAiModelConfig(DEFAULT_AI_MODEL_CONFIG);
     expect(normalized.issues).toEqual([]);
@@ -20,6 +26,31 @@ describe('ai-model-config (thinking-only production policy)', () => {
     expect(normalized.config.agents.CONFIDANT.model).toBe('gpt-5.4-2026-03-05');
     expect(normalized.config.agents.ONIRIQUE.enabled).toBe(false);
     expect(normalized.config.agents.ONIRIQUE.model).toBe('gpt-5.4-2026-03-05');
+  });
+
+  it('automatically migrates legacy gemini-3.1-pro model to gemini-3.1-pro-preview', () => {
+    const normalized = normalizeAiModelConfig({
+      providerMode: 'per_agent',
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          enabled: true,
+          provider: 'vertex',
+          model: 'gemini-3.1-pro',
+          thinkingLevel: 'high',
+          maxOutputTokens: 24000,
+        },
+      },
+    });
+
+    expect(normalized.config.agents.SCRIBE.model).toBe('gemini-3.1-pro-preview');
+    expect(
+      normalized.issues.some((issue) =>
+        issue.includes(
+          'modèle legacy gemini-3.1-pro migré automatiquement vers gemini-3.1-pro-preview',
+        ),
+      ),
+    ).toBe(true);
   });
 
   it('strips legacy temperature, topP, verbosity, and reasoningEffort from stored JSON', () => {
@@ -112,7 +143,7 @@ describe('ai-model-config (thinking-only production policy)', () => {
         SCRIBE: {
           enabled: true,
           provider: 'vertex',
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           thinkingLevel: 'minimal' as any,
           maxOutputTokens: 24000,
         },
@@ -293,10 +324,10 @@ describe('ai-model-config (thinking-only production policy)', () => {
         assertExecutableAgentModel({
           agent: 'SCRIBE',
           provider: 'vertex',
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           thinkingLevel: 'minimal' as any,
         }),
-      ).toThrow(/incompatible avec gemini-3.1-pro/);
+      ).toThrow(/incompatible avec gemini-3.1-pro-preview/);
     });
   });
 });

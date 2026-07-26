@@ -164,7 +164,7 @@ describe('AiProductionReadinessService', () => {
           text: 'not_tested',
           multimodal: 'not_tested',
           structured: 'not_tested',
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           state: 'not_configured',
           envVar: 'VERTEX_CREDENTIALS_JSON',
         },
@@ -225,7 +225,7 @@ describe('AiProductionReadinessService', () => {
         SCRIBE: {
           ...modelConfig.agents.SCRIBE,
           provider: 'vertex' as const,
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           temperature: 0.7,
           topP: 0.9,
         },
@@ -310,7 +310,7 @@ describe('AiProductionReadinessService', () => {
           text: 'ok',
           multimodal: 'ok',
           structured: 'ok',
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           state: 'connection_ok',
           envVar: 'VERTEX_CREDENTIALS_JSON',
           location: 'us-central1',
@@ -318,7 +318,7 @@ describe('AiProductionReadinessService', () => {
         modelProbes: [
           {
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             configured: true,
             text: 'ok',
             multimodal: 'ok',
@@ -355,7 +355,7 @@ describe('AiProductionReadinessService', () => {
         SCRIBE: {
           ...modelConfig.agents.SCRIBE,
           provider: 'vertex' as const,
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           temperature: 0.7,
           topP: 0.9,
         },
@@ -432,7 +432,7 @@ describe('AiProductionReadinessService', () => {
           text: 'ok',
           multimodal: 'ok',
           structured: 'ok',
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           state: 'connection_ok',
           envVar: 'VERTEX_CREDENTIALS_JSON',
           location: 'us-central1',
@@ -440,7 +440,7 @@ describe('AiProductionReadinessService', () => {
         modelProbes: [
           {
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             configured: true,
             text: 'ok',
             multimodal: 'ok',
@@ -611,7 +611,7 @@ describe('AiProductionReadinessService', () => {
             text: 'not_tested',
             multimodal: 'not_tested',
             structured: 'not_tested',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             state: 'not_configured',
             envVar: 'VERTEX_CREDENTIALS_JSON',
             ...options.providers.vertex,
@@ -633,7 +633,7 @@ describe('AiProductionReadinessService', () => {
         SCRIBE: {
           ...modelConfig.agents.SCRIBE,
           provider: 'vertex' as const,
-          model: 'gemini-3.1-pro',
+          model: 'gemini-3.1-pro-preview',
           temperature: 0.7,
           topP: 0.9,
         },
@@ -669,7 +669,7 @@ describe('AiProductionReadinessService', () => {
         modelProbes: [
           {
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             configured: true,
             text: 'ok',
             multimodal: 'ok',
@@ -720,7 +720,7 @@ describe('AiProductionReadinessService', () => {
             agent: 'GUIDE',
             mission: 'TIMELINE_BATCH',
             provider: 'gemini',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             routingSource: 'global:GUIDE',
             status: 'ERROR',
             inputTokens: null,
@@ -765,7 +765,7 @@ describe('AiProductionReadinessService', () => {
             agent: 'SCRIBE',
             mission: 'READING_GENERATION',
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             routingSource: 'global:SCRIBE',
             status: 'ERROR',
             inputTokens: null,
@@ -779,7 +779,7 @@ describe('AiProductionReadinessService', () => {
         modelProbes: [
           {
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             configured: true,
             text: 'ok',
             multimodal: 'ok',
@@ -811,7 +811,7 @@ describe('AiProductionReadinessService', () => {
             agent: 'SCRIBE',
             mission: 'READING_GENERATION',
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             routingSource: 'global:SCRIBE',
             status: 'SUCCESS',
             inputTokens: 100,
@@ -825,7 +825,7 @@ describe('AiProductionReadinessService', () => {
         modelProbes: [
           {
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             configured: true,
             text: 'ok',
             multimodal: 'ok',
@@ -857,7 +857,7 @@ describe('AiProductionReadinessService', () => {
             agent: 'SCRIBE',
             mission: 'READING_GENERATION',
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             routingSource: 'global:SCRIBE',
             status: 'SUCCESS',
             inputTokens: 100,
@@ -873,7 +873,7 @@ describe('AiProductionReadinessService', () => {
             agent: 'SCRIBE',
             mission: 'READING_GENERATION',
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             routingSource: 'global:SCRIBE',
             status: 'ERROR',
             inputTokens: null,
@@ -887,7 +887,7 @@ describe('AiProductionReadinessService', () => {
         modelProbes: [
           {
             provider: 'vertex',
-            model: 'gemini-3.1-pro',
+            model: 'gemini-3.1-pro-preview',
             configured: true,
             text: 'ok',
             multimodal: 'ok',

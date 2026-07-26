@@ -1492,7 +1492,7 @@ export default function SettingsPage() {
                             : probeFails(agent.key, optionProbe)
                               ? 'Test échoué'
                               : option.detected === false
-                                ? 'Enregistré — non détecté'
+                                ? 'Enregistré — à tester'
                                 : 'Détecté — non testé';
                         return (
                           <option key={option.id} value={option.id} disabled={!isOperational}>
