@@ -143,7 +143,7 @@ export class ContextDispatcher {
       throw new NotFoundException(`User not found: ${userId}`);
     }
 
-    this.logger.log(`👤 User: ${user.firstName} ${user.lastName}`);
+    this.logger.log('👤 Client context loaded');
 
     // Step 2: Fetch Akashic Record separately (handles model existence)
     const akashicRecord = await this.getAkashicRecord(userId);
@@ -288,7 +288,7 @@ export class ContextDispatcher {
     }
 
     const user = order.user as UserWithRelations;
-    this.logger.log(`📋 Order: ${order.orderNumber} | User: ${user.firstName} ${user.lastName}`);
+    this.logger.log(`📋 Order: ${order.orderNumber}`);
 
     // Step 2: Parse or generate synthesis from content
     const existingContent = order.generatedContent as unknown as OracleResponse | null;

@@ -178,7 +178,7 @@ export class DigitalSoulService {
         }),
       );
 
-      this.logger.log(`👤 User: ${user.firstName} ${user.lastName}`);
+      this.logger.log('👤 Client profile loaded for generation');
       this.logger.log(`📎 Reading source for generation: ${readingSource.source}`);
 
       const { level: orderLevel, productName: orderProductName } = this.getLevelFromAmount(
@@ -401,7 +401,7 @@ export class DigitalSoulService {
     const { userProfile, readingSource } = this.resolveReadingProfile(order);
 
     // Generate PDF
-    this.logger.log(`📄 Generating PDF for ${user.firstName} ${user.lastName}...`);
+    this.logger.log('📄 Generating PDF from sealed reading...');
     this.logger.log(`📎 Reading source for PDF birth data: ${readingSource.source}`);
 
     const pdfData: ReadingPdfData = {

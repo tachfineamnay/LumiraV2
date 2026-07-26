@@ -25,7 +25,7 @@ describe('AiRunService', () => {
         intakeContentHash: 'sealed-intake-hash',
         schemaName: 'lumira_core_reading',
         imageCount: 2,
-        imageRoles: ['face', 'palm'],
+        imageRoles: ['FACE_FRONT', 'PALM_UNKNOWN'],
         imageHashes: ['a'.repeat(64), 'b'.repeat(64)],
         promptVersionId: 'prompt-7',
         technical: {
@@ -51,7 +51,7 @@ describe('AiRunService', () => {
             intakeContentHash: 'sealed-intake-hash',
             schemaName: 'lumira_core_reading',
             imageCount: 2,
-            imageRoles: ['face', 'palm'],
+            imageRoles: ['FACE_FRONT', 'PALM_UNKNOWN'],
             imageHashes: ['a'.repeat(64), 'b'.repeat(64)],
             promptVersionId: 'prompt-7',
             technical: { timeoutMs: 300000, structured: true },

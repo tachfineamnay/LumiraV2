@@ -27,7 +27,15 @@ export class AiRunService {
       ...(typeof snapshot.schemaName === 'string' ? { schemaName: snapshot.schemaName } : {}),
       ...(typeof snapshot.imageCount === 'number' ? { imageCount: snapshot.imageCount } : {}),
       ...(Array.isArray(snapshot.imageRoles)
-        ? { imageRoles: snapshot.imageRoles.filter((role) => role === 'face' || role === 'palm') }
+        ? {
+            imageRoles: snapshot.imageRoles.filter(
+              (role) =>
+                role === 'FACE_FRONT' ||
+                role === 'PALM_LEFT' ||
+                role === 'PALM_RIGHT' ||
+                role === 'PALM_UNKNOWN',
+            ),
+          }
         : {}),
       ...(Array.isArray(snapshot.imageHashes)
         ? {
