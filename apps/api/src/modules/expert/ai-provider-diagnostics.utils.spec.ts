@@ -56,7 +56,9 @@ describe('ai-provider-diagnostics.utils — PNG image validity', () => {
     const sanitized = sanitizeVisionResponsePreview(raw);
 
     expect(sanitized.length).toBeLessThanOrEqual(200);
-    expect(sanitized).not.toMatch(/[\x00-\x1F\x7F]/);
+    expect(
+      [...sanitized].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127),
+    ).toBe(false);
     expect(sanitized).toContain('circle=red');
   });
 });

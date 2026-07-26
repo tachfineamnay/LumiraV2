@@ -1,4 +1,6 @@
 -- Production hardening for the single-admin OpenAI-only Lumira V1 launch.
+-- Historical migration fixture: pre-thinking-only MODEL_CONFIG values remain intact here;
+-- runtime normalization strips those legacy controls before an execution is resolved.
 
 -- 1. The unique Desk account used by the founder must own ADMIN permissions.
 UPDATE "Expert"

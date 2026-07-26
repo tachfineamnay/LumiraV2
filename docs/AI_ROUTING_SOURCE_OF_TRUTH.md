@@ -12,15 +12,15 @@ Chaque agent actif (`SCRIBE`, `GUIDE`, `EDITOR`, `NARRATOR`, `CONFIDANT`, `ONIRI
 
 ---
 
-## Statut des règles de routage (`AiRoutingRule` / `AiRoutingService`)
+## Statut des règles de routage historiques
 
 ### Historique / Inactif dans le runtime
 
-La table de base de données `AiRoutingRule` (gérée via la classe `AiRoutingService`) permet d'associer un modèle et un fournisseur à un couple spécifique d'un niveau produit (`ProductLevel`) et d'une mission (`AiMission`).
+L'ancienne table `AiRoutingRule` permettait d'associer un modèle et un fournisseur à un couple niveau produit (`ProductLevel`) / mission (`AiMission`). Elle n'a jamais participé à la résolution exécutée par `AiExecutionResolverService`.
 
-**Cette table et les routes associées sont actuellement inactives et ignorées lors de l'exécution des agents.**
+La migration `20260726000200_retire_ai_routing_rules` la renomme en `AiRoutingRuleLegacy`. Les routes et le service associés sont retirés : aucun endpoint actif ne peut désormais créer une seconde configuration de modèles.
 
-L'injection morte d'`AiRoutingService` a été retirée du résolveur de production (`AiExecutionResolverService`) pour éviter toute confusion. La table Prisma `AiRoutingRule` et les interfaces associées dans le Desk expert (écrans de configuration) restent présentes en base de données pour préserver l'historique et la compatibilité future, mais ne participent pas à l'exécution.
+Les données historiques restent intactes sous ce nom de table. Toute future réintroduction devra partir de `MODEL_CONFIG`, avoir une migration explicite et prouver qu'elle ne concurrence pas le résolveur canonique.
 
 ---
 

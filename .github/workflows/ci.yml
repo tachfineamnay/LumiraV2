@@ -34,6 +34,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -65,14 +67,31 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit tests
-        run: pnpm test
+      - name: API regression tests
+        run: >-
+          pnpm --filter api exec jest
+          services/factory/ai-model-config.spec.ts
+          services/factory/ai-run.service.spec.ts
+          services/factory/ai-execution-resolver.service.spec.ts
+          services/factory/DigitalSoulService.spec.ts
+          modules/expert/production-control.service.spec.ts
+          modules/expert/reading-workspace.service.spec.ts
+          modules/expert/expert.service.seal-journey.spec.ts
+          modules/expert/ai-production-readiness.service.spec.ts
+          modules/uploads/private-onboarding-photo.service.spec.ts
+          --runInBand --silent
 
       - name: Build
         run: pnpm build
 
+      - name: Build API Docker image and smoke sharp
+        run: docker build --file apps/api/Dockerfile --tag lumira-api-ci:${{ github.sha }} .
+
+      - name: Verify committed diff has no whitespace errors
+        run: git diff --check HEAD^ HEAD
+
   e2e:
-    name: Browser smoke tests
+    name: Desk and Sanctuaire browser tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: build

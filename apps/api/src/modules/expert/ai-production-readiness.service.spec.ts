@@ -90,7 +90,6 @@ describe('AiProductionReadinessService', () => {
   function createService(options?: {
     adminRole?: ExpertRole;
     activeAdminCount?: number;
-    activeRules?: unknown[];
     text?: 'ok' | 'error' | 'not_tested';
     multimodal?: 'ok' | 'error' | 'not_tested';
     runs?: RunFixture[];
@@ -127,7 +126,6 @@ describe('AiProductionReadinessService', () => {
         count: jest.fn().mockResolvedValue(options?.activeAdminCount ?? 1),
       },
       promptVersion: { findMany: jest.fn().mockResolvedValue(activePrompts) },
-      aiRoutingRule: { findMany: jest.fn().mockResolvedValue(options?.activeRules ?? []) },
       aiRun: { findMany: jest.fn().mockResolvedValue(runs) },
       order: {
         findFirst: jest
@@ -226,22 +224,16 @@ describe('AiProductionReadinessService', () => {
           ...modelConfig.agents.SCRIBE,
           provider: 'vertex' as const,
           model: 'gemini-3.1-pro-preview',
-          temperature: 0.7,
-          topP: 0.9,
         },
         EDITOR: {
           ...modelConfig.agents.EDITOR,
           provider: 'gemini' as const,
           model: 'gemini-3.5-flash',
-          temperature: 0.4,
-          topP: 0.9,
         },
         GUIDE: {
           ...modelConfig.agents.GUIDE,
           provider: 'gemini' as const,
           model: 'gemini-3.5-flash',
-          temperature: 0.5,
-          topP: 0.9,
         },
         NARRATOR: {
           ...modelConfig.agents.NARRATOR,
@@ -282,7 +274,6 @@ describe('AiProductionReadinessService', () => {
         count: jest.fn().mockResolvedValue(1),
       },
       promptVersion: { findMany: jest.fn().mockResolvedValue(activePrompts) },
-      aiRoutingRule: { findMany: jest.fn().mockResolvedValue([]) },
       aiRun: { findMany: jest.fn().mockResolvedValue([]) },
       order: { findFirst: jest.fn().mockResolvedValue(null) },
     };
@@ -356,16 +347,12 @@ describe('AiProductionReadinessService', () => {
           ...modelConfig.agents.SCRIBE,
           provider: 'vertex' as const,
           model: 'gemini-3.1-pro-preview',
-          temperature: 0.7,
-          topP: 0.9,
         },
         EDITOR: { ...modelConfig.agents.EDITOR, enabled: false },
         GUIDE: {
           ...modelConfig.agents.GUIDE,
           provider: 'gemini' as const,
           model: 'gemini-3.5-flash',
-          temperature: 0.5,
-          topP: 0.9,
         },
         NARRATOR: { ...modelConfig.agents.NARRATOR, enabled: false },
         CONFIDANT: { ...modelConfig.agents.CONFIDANT, enabled: false },
@@ -403,7 +390,6 @@ describe('AiProductionReadinessService', () => {
           },
         ]),
       },
-      aiRoutingRule: { findMany: jest.fn().mockResolvedValue([]) },
       aiRun: { findMany: jest.fn().mockResolvedValue([]) },
       order: { findFirst: jest.fn().mockResolvedValue(null) },
     };
@@ -506,10 +492,9 @@ describe('AiProductionReadinessService', () => {
     expect(result.checks.find((check) => check.id === 'canonical_admin')?.level).toBe('fail');
   });
 
-  it('returns NO_GO when a legacy routing rule remains active', async () => {
-    const result = await createService({ activeRules: [{ id: 'rule-1' }] }).getReadiness();
-    expect(result.verdict).toBe('NO_GO');
-    expect(result.checks.find((check) => check.id === 'routing_rules')?.level).toBe('fail');
+  it('does not query retired routing rules', async () => {
+    const result = await createService().getReadiness();
+    expect(result.checks.find((check) => check.id === 'routing_rules')).toBeUndefined();
   });
 
   describe('AiRun matching by active provider/model pair', () => {
@@ -580,7 +565,6 @@ describe('AiProductionReadinessService', () => {
             },
           ]),
         },
-        aiRoutingRule: { findMany: jest.fn().mockResolvedValue([]) },
         aiRun: { findMany: jest.fn().mockResolvedValue(options.runs) },
         order: { findFirst: jest.fn().mockResolvedValue(completedOrder) },
       };
@@ -634,8 +618,6 @@ describe('AiProductionReadinessService', () => {
           ...modelConfig.agents.SCRIBE,
           provider: 'vertex' as const,
           model: 'gemini-3.1-pro-preview',
-          temperature: 0.7,
-          topP: 0.9,
         },
         EDITOR: { ...modelConfig.agents.EDITOR, enabled: false },
         GUIDE: { ...modelConfig.agents.GUIDE, enabled: false },
@@ -703,8 +685,6 @@ describe('AiProductionReadinessService', () => {
             ...modelConfig.agents.GUIDE,
             provider: 'gemini' as const,
             model: 'gemini-3.5-flash',
-            temperature: 0.5,
-            topP: 0.9,
           },
           NARRATOR: { ...modelConfig.agents.NARRATOR, enabled: false },
           CONFIDANT: { ...modelConfig.agents.CONFIDANT, enabled: false },

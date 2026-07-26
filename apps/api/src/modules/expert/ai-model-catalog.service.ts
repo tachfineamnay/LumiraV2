@@ -3,21 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleAuth } from 'google-auth-library';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  operationalModelsForProvider,
-  GEMINI_V1_MODELS,
-  OPENAI_V1_MODELS,
-  VERTEX_V1_MODELS,
-} from '../../services/factory/ai-model-config';
+import { operationalModelsForProvider } from '../../services/factory/ai-model-config';
 import {
   createGeminiDiscoveryClient,
   decryptSettingsValue,
   parseVertexServiceAccount,
-  resolveVertexLocation,
   resolveVertexModelGardenLocation,
   VERTEX_CREDENTIALS_KEY,
 } from '../../services/factory/llm';
-import { AiProvider } from '../../services/factory/ai-execution.types';
 import {
   getModelRuntimeControls,
   AiThinkingLevel,
@@ -479,11 +472,4 @@ export class AiModelCatalogService {
       this.configService.get<string>('SETTINGS_ENCRYPTION_KEY'),
     );
   }
-}
-
-/** Legacy seed helper kept only for historical compatibility and migrations. */
-export function legacySeedModelIds(provider: AiProvider): readonly string[] {
-  if (provider === 'openai') return OPENAI_V1_MODELS;
-  if (provider === 'vertex') return VERTEX_V1_MODELS;
-  return GEMINI_V1_MODELS;
 }

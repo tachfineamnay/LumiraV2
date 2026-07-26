@@ -1,5 +1,5 @@
--- Activate every Lumira OpenAI agent without replacing the founder's prompts,
--- pinned models, temperatures, reasoning settings, or token budgets.
+-- Historical migration: activate every Lumira OpenAI agent without replacing the
+-- then-pinned models, legacy sampling/reasoning settings, or token budgets.
 DO $$
 DECLARE
   active_config RECORD;

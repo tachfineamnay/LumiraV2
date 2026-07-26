@@ -47,7 +47,6 @@ export class AiProductionReadinessService {
       admin,
       activeAdminCount,
       activePrompts,
-      activeRules,
       providerStatus,
       recentRuns,
       latestCompletedOrder,
@@ -70,19 +69,6 @@ export class AiProductionReadinessService {
           changedBy: true,
           comment: true,
           createdAt: true,
-        },
-      }),
-      this.prisma.aiRoutingRule.findMany({
-        where: { isActive: true },
-        orderBy: [{ productLevel: 'asc' }, { agent: 'asc' }, { mission: 'asc' }],
-        select: {
-          id: true,
-          productLevel: true,
-          agent: true,
-          mission: true,
-          provider: true,
-          model: true,
-          promptVersionId: true,
         },
       }),
       this.diagnostics.getCredentialsStatus(),
@@ -242,15 +228,6 @@ export class AiProductionReadinessService {
             : `Mode ${normalized.config.providerMode} · providers actifs: ${[...activeProviders].join(', ') || 'aucun'}.`,
       },
       {
-        id: 'routing_rules',
-        label: 'Matrice héritée neutralisée',
-        level: activeRules.length === 0 ? 'pass' : 'fail',
-        detail:
-          activeRules.length === 0
-            ? 'Aucune règle héritée active.'
-            : `${activeRules.length} règle(s) active(s) doivent être désactivées.`,
-      },
-      {
         id: 'prompt_uniqueness',
         label: 'Une version active par prompt',
         level: duplicateKeys.length === 0 ? 'pass' : 'fail',
@@ -335,7 +312,6 @@ export class AiProductionReadinessService {
         comment: prompt.comment,
         createdAt: prompt.createdAt,
       })),
-      activeRoutingRules: activeRules,
       latestCompletedOrder: latestCompletedOrder
         ? {
             id: latestCompletedOrder.id,

@@ -22,7 +22,6 @@ import { ReadingSourceResolver } from './factory/reading-source.resolver';
 import { AudioGenerationService } from './factory/AudioGenerationService';
 import { AudioScriptService } from './factory/AudioScriptService';
 import { SpiritualPathBatchService } from './factory/SpiritualPathBatchService';
-import { AiRoutingService } from '../modules/settings/ai-routing.service';
 import { AiExecutionResolverService } from './factory/ai-execution-resolver.service';
 import { AiRunService } from './factory/ai-run.service';
 import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';
@@ -46,7 +45,6 @@ import { UploadsModule } from '../modules/uploads/uploads.module';
     GoogleCloudTtsProvider,
     AudioGenerationService,
     SpiritualPathBatchService,
-    AiRoutingService,
   ],
   exports: [
     AiRuntimeCacheService,
@@ -61,7 +59,6 @@ import { UploadsModule } from '../modules/uploads/uploads.module';
     GoogleCloudTtsProvider,
     AudioGenerationService,
     SpiritualPathBatchService,
-    AiRoutingService,
   ],
 })
 export class ServicesModule {}

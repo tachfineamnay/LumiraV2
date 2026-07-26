@@ -39,7 +39,14 @@ ENV HUSKY=0
 RUN npm install -g pnpm@8.15.4
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+# sharp needs its platform package and postinstall in the Alpine runtime. Do
+# not use --ignore-scripts here: it leaves image decoding unavailable after a
+# successful build.
+RUN pnpm install --prod --frozen-lockfile
+
+# Fail the image build when sharp cannot load its native binding or decode a
+# known 1x1 PNG. This runs in the exact Coolify runtime stage.
+RUN node -e "const sharp=require('sharp'); sharp(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64')).metadata().then(m=>{if(m.width!==1||m.height!==1)throw new Error('invalid sharp decode')})"
 
 # RÉCUPÉRATION DES ARTIFACTS (CRUCIAL)
 COPY --from=builder /app/apps/api/dist ./apps/api/dist

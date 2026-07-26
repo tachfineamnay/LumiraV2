@@ -15,29 +15,6 @@ export type { AgentCapability };
 
 export const ALLOWED_PROVIDERS: ReadonlySet<AiProvider> = new Set(['openai', 'gemini', 'vertex']);
 
-export const HISTORICAL_OPENAI_MODELS = [
-  'gpt-4o-2024-11-20',
-  'gpt-4o',
-  'gpt-4.1-turbo',
-  'gpt-3.5-turbo',
-] as const;
-
-export const HISTORICAL_GEMINI_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-2.5-pro',
-] as const;
-
-export const HISTORICAL_VERTEX_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-2.5-pro',
-] as const;
-
-export const OPENAI_V1_MODELS = HISTORICAL_OPENAI_MODELS;
-export const GEMINI_V1_MODELS = HISTORICAL_GEMINI_MODELS;
-export const VERTEX_V1_MODELS = HISTORICAL_VERTEX_MODELS;
-
 export const OPERATIONAL_OPENAI_MODELS = ['gpt-5.5-2026-04-23', 'gpt-5.4-2026-03-05'] as const;
 
 export const OPERATIONAL_GOOGLE_MODELS = [
@@ -486,8 +463,10 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     maxOutputTokens: normalizedMaxTokens,
   };
 
-  const rawThinkingLevel =
-    value.thinkingLevel ?? (provider === 'openai' ? value.reasoningEffort : undefined);
+  // MODEL_CONFIG is thinking-only. Legacy reasoningEffort is intentionally
+  // ignored rather than translated, so persisted historical JSON cannot
+  // silently influence a new execution.
+  const rawThinkingLevel = value.thinkingLevel;
   const thinkingCandidate =
     typeof rawThinkingLevel === 'string' && isThinkingLevel(rawThinkingLevel)
       ? (rawThinkingLevel as AiThinkingLevel)

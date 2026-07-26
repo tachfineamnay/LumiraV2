@@ -5,10 +5,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   activeProviderModelPairs,
   ActiveProviderModelPair,
-  GEMINI_V1_MODELS,
   normalizeAiModelConfig,
-  OPENAI_V1_MODELS,
-  VERTEX_V1_MODELS,
+  operationalModelsForProvider,
 } from '../../services/factory/ai-model-config';
 import {
   decryptSettingsValue,
@@ -102,17 +100,17 @@ export class AiProviderDiagnosticsService {
 
   async getConfiguredGeminiModel(): Promise<string> {
     const pair = (await this.loadActivePairs()).find((item) => item.provider === 'gemini');
-    return pair?.model ?? GEMINI_V1_MODELS[1] ?? 'gemini-2.5-flash';
+    return pair?.model ?? operationalModelsForProvider('gemini')[0];
   }
 
   async getConfiguredVertexModel(): Promise<string> {
     const pair = (await this.loadActivePairs()).find((item) => item.provider === 'vertex');
-    return pair?.model ?? VERTEX_V1_MODELS[0];
+    return pair?.model ?? operationalModelsForProvider('vertex')[0];
   }
 
   async getConfiguredOpenAIModel(): Promise<string> {
     const pair = (await this.loadActivePairs()).find((item) => item.provider === 'openai');
-    return pair?.model ?? OPENAI_V1_MODELS[0];
+    return pair?.model ?? operationalModelsForProvider('openai')[0];
   }
 
   getAiHealthSnapshot(): AiHealthSnapshot {

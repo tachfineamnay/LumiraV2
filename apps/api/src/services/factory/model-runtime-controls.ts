@@ -88,6 +88,7 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
         samplingPolicy: 'provider_default',
       };
     }
+    // Historical pre-thinking models are deliberately rejected, never selected.
     if (/^gpt-4o|^gpt-4\.1|^gpt-4(?![0-9])|^gpt-3\.5/i.test(normalized)) {
       return legacyReason();
     }

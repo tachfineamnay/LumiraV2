@@ -53,7 +53,7 @@ describe('ai-model-config (thinking-only production policy)', () => {
     ).toBe(true);
   });
 
-  it('strips legacy temperature, topP, verbosity, and reasoningEffort from stored JSON', () => {
+  it('strips legacy runtime controls from stored JSON without deriving thinkingLevel', () => {
     const historicalInput = {
       temperature: 0.7,
       topP: 0.9,
@@ -75,7 +75,7 @@ describe('ai-model-config (thinking-only production policy)', () => {
     });
 
     const scribe = normalized.config.agents.SCRIBE;
-    expect(scribe.thinkingLevel).toBe('high');
+    expect(scribe.thinkingLevel).toBe('medium');
     expect((scribe as any).temperature).toBeUndefined();
     expect((scribe as any).topP).toBeUndefined();
     expect((scribe as any).verbosity).toBeUndefined();

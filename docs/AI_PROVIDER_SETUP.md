@@ -64,7 +64,7 @@ Le frontend (`apps/web`) n’a pas besoin de ces variables.
 | Auth                 | Clé AI Studio                       | Compte de service Google Cloud             |
 | SDK                  | `@google/genai` (`vertexai: false`) | `@google/genai` (`vertexai: true`)         |
 | API                  | `apiVersion: 'v1'` (stable)         | `apiVersion: 'v1'` (stable)                |
-| Identifiants modèles | `gemini-2.5-pro`, etc.              | Mêmes IDs métier, endpoint Cloud différent |
+| Identifiants modèles | `gemini-3.1-pro-preview`, etc.      | Mêmes IDs métier, endpoint Cloud différent |
 | Région               | N/A                                 | `VERTEX_LOCATION`                          |
 
 ## Clients Google (`@google/genai`)
@@ -82,20 +82,20 @@ Réponse étendue (compatible ascendante) :
 {
   "success": false,
   "provider": "vertex",
-  "model": "gemini-2.5-pro",
+  "model": "gemini-3.1-pro-preview",
   "text": "ok",
   "multimodal": "ok",
   "structured": "ok",
   "models": [
     {
-      "model": "gemini-2.5-pro",
+      "model": "gemini-3.1-pro-preview",
       "success": true,
       "text": "ok",
       "multimodal": "ok",
       "structured": "ok"
     },
     {
-      "model": "gemini-2.5-flash",
+      "model": "gemini-3.5-flash",
       "success": false,
       "text": "ok",
       "structured": "error",
