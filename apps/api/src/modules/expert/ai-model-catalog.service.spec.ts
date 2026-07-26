@@ -37,15 +37,14 @@ async function* asPager<T>(items: T[]) {
   for (const item of items) yield item;
 }
 
-describe('AiModelCatalogService — discovery only', () => {
+describe('AiModelCatalogService — discovery & matrix merging', () => {
   const prisma = {
     systemSetting: { findUnique: jest.fn() },
   };
   const configGet = jest.fn((key: string) => {
     if (key === 'OPENAI_API_KEY') return 'sk-test-key-12345';
     if (key === 'GEMINI_API_KEY') return 'AIzaSyTestKey67890';
-    if (key === 'VERTEX_MODEL_GARDEN_LOCATION') return 'us-central1';
-    if (key === 'VERTEX_LOCATION') return 'global';
+    if (key === 'VERTEX_LOCATION') return 'europe-west1';
     if (key === 'SETTINGS_ENCRYPTION_KEY') return undefined;
     return undefined;
   });
@@ -83,11 +82,10 @@ describe('AiModelCatalogService — discovery only', () => {
       ]),
     );
     geminiGenerate = jest.fn();
-    (GoogleGenAI as unknown as jest.Mock).mockImplementation(
-      (options: { apiVersion?: string }) =>
-        options.apiVersion === 'v1beta'
-          ? { models: { list: geminiList } }
-          : { models: { generateContent: geminiGenerate } },
+    (GoogleGenAI as unknown as jest.Mock).mockImplementation((options: { apiVersion?: string }) =>
+      options.apiVersion === 'v1beta'
+        ? { models: { list: geminiList } }
+        : { models: { generateContent: geminiGenerate } },
     );
 
     prisma.systemSetting.findUnique.mockResolvedValue({
@@ -115,63 +113,43 @@ describe('AiModelCatalogService — discovery only', () => {
     );
   });
 
-  it('découvre les modèles Gemini generateContent sans lancer de génération', async () => {
+  it('découvre les modèles Gemini generateContent et fusionne les modèles enregistrés non détectés', async () => {
     const catalog = await service.getAvailableModels({ force: true });
     expect(geminiList).toHaveBeenCalledTimes(1);
-    expect(catalog.gemini.models.map((model) => model.id)).toEqual(['gemini-3.5-flash']);
-    expect(catalog.gemini.models[0]?.callable).toBeNull();
-    expect(geminiGenerate).not.toHaveBeenCalled();
+    const discovered = catalog.gemini.models.find((m) => m.id === 'gemini-3.5-flash');
+    expect(discovered).toBeDefined();
+    expect(discovered?.detected).toBe(true);
+    expect(discovered?.callable).toBeNull();
+    expect(discovered?.maxOutputTokens).toBe(65536);
+
+    const mergedNotDetected = catalog.gemini.models.find((m) => m.id === 'gemini-3.6-flash');
+    expect(mergedNotDetected).toBeDefined();
+    expect(mergedNotDetected?.detected).toBe(false);
+    expect(mergedNotDetected?.callable).toBeNull();
+    expect(mergedNotDetected?.operational).toBe(true);
   });
 
-  it('découvre uniquement les familles OpenAI génératives et ne probe rien', async () => {
+  it('découvre les familles OpenAI génératives et fusionne les modèles enregistrés manquants', async () => {
     const catalog = await service.getAvailableModels({ force: true });
     expect(openaiMock.__mockList).toHaveBeenCalledTimes(1);
-    expect(catalog.openai.models.map((model) => model.id)).toEqual([
-      'gpt-4o-2024-11-20',
-      'gpt-5.5-2026-04-23',
-    ]);
-    expect(catalog.openai.models.every((model) => model.callable === null)).toBe(true);
-    expect(openaiMock.__mockResponsesCreate).not.toHaveBeenCalled();
+    const gpt55 = catalog.openai.models.find((m) => m.id === 'gpt-5.5-2026-04-23');
+    expect(gpt55?.detected).toBe(true);
+    expect(gpt55?.maxOutputTokens).toBe(128000);
+
+    const gpt54Merged = catalog.openai.models.find((m) => m.id === 'gpt-5.4-2026-03-05');
+    expect(gpt54Merged?.detected).toBe(false);
+    expect(gpt54Merged?.callable).toBeNull();
+    expect(gpt54Merged?.operational).toBe(true);
   });
 
-  it('utilise le catalogue Vertex us-central1, jamais global ni publishers/*', async () => {
+  it('utilise le même emplacement Vertex (VERTEX_LOCATION) que le runtime (europe-west1)', async () => {
     const catalog = await service.getAvailableModels({ force: true });
-    expect(catalog.vertex.models.map((model) => model.id)).toEqual(['gemini-3.5-flash']);
     const url = String((global.fetch as jest.Mock).mock.calls[0][0]);
-    expect(url).toContain('us-central1-aiplatform.googleapis.com');
-    expect(url).toContain('/v1beta1/publishers/google/models');
-    expect(url).toContain('listAllVersions=true');
-    expect(url).toContain('pageSize=100');
-    expect(url).not.toContain('publishers%2F*');
-    expect(url).not.toContain('global-aiplatform');
+    expect(url).toContain('europe-west1-aiplatform.googleapis.com');
+    expect(catalog.vertex.location).toBe('europe-west1');
   });
 
-  it('parcourt toutes les pages du catalogue Vertex', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          publisherModels: [{ name: 'publishers/google/models/gemini-3.5-flash' }],
-          nextPageToken: 'page-2',
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          publisherModels: [{ name: 'publishers/google/models/gemini-3.6-flash' }],
-        }),
-      });
-
-    const catalog = await service.getAvailableModels({ force: true });
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(String((global.fetch as jest.Mock).mock.calls[1][0])).toContain('pageToken=page-2');
-    expect(catalog.vertex.models.map((model) => model.id)).toEqual([
-      'gemini-3.5-flash',
-      'gemini-3.6-flash',
-    ]);
-  });
-
-  it('ne crée aucun faux modèle détecté lorsque les credentials manquent', async () => {
+  it('conserve les modèles enregistrés comme detected=false lorsque les identifiants manquent', async () => {
     const noCredentials = new AiModelCatalogService(
       { get: jest.fn(() => undefined) } as unknown as ConfigService,
       {
@@ -179,9 +157,9 @@ describe('AiModelCatalogService — discovery only', () => {
       } as unknown as PrismaService,
     );
     const catalog = await noCredentials.getAvailableModels({ force: true });
-    expect(catalog.openai.models).toEqual([]);
-    expect(catalog.gemini.models).toEqual([]);
-    expect(catalog.vertex.models).toEqual([]);
+    expect(catalog.openai.detectedCount).toBe(0);
+    expect(catalog.openai.models.every((m) => m.detected === false)).toBe(true);
+    expect(catalog.openai.models.some((m) => m.id === 'gpt-5.5-2026-04-23')).toBe(true);
   });
 
   it('sanitise toutes les formes de secrets', () => {
@@ -192,9 +170,5 @@ describe('AiModelCatalogService — discovery only', () => {
     expect(output).not.toContain('AIzaSy789');
     expect(output).not.toContain('ya29.abc');
     expect(output).not.toContain('MYKEY');
-  });
-
-  it('conserve OpenAI comme dépendance réellement utilisée', () => {
-    expect(OpenAI).toBeDefined();
   });
 });

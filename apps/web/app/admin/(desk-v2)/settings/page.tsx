@@ -93,6 +93,8 @@ interface CatalogModel {
   callable?: boolean | null;
   operational?: boolean;
   operationalReason?: string;
+  maxOutputTokens?: number;
+  capabilities?: readonly string[];
   thinking?: boolean;
   thinkingLevels?: readonly ThinkingLevel[];
   defaultThinkingLevel?: ThinkingLevel;
@@ -651,6 +653,7 @@ export default function SettingsPage() {
           callable: null,
           operational: catModel?.operational ?? false,
           operationalReason: catModel?.operationalReason ?? 'non_operational',
+          maxOutputTokens: catModel?.maxOutputTokens ?? 128000,
           error: catModel?.operational
             ? undefined
             : 'Modèle actuel non autorisé pour la production Lumira',
@@ -797,6 +800,14 @@ export default function SettingsPage() {
       if (!config.thinkingLevel || !catModel.thinkingLevels?.includes(config.thinkingLevel)) {
         return true;
       }
+      const modelLimit = catModel.maxOutputTokens ?? 128000;
+      if (
+        config.maxOutputTokens > modelLimit ||
+        config.maxOutputTokens < 1 ||
+        !Number.isInteger(config.maxOutputTokens)
+      ) {
+        return true;
+      }
       return false;
     });
 
@@ -807,9 +818,17 @@ export default function SettingsPage() {
         setActionError(
           `${agent} : le modèle ${config.model || '(vide)'} n'est pas autorisé pour la production Lumira. Sélectionnez un modèle avec niveau de réflexion explicite.`,
         );
-      } else {
+      } else if (
+        !config.thinkingLevel ||
+        !catModel.thinkingLevels?.includes(config.thinkingLevel)
+      ) {
         setActionError(
           `${agent} : sélectionnez un niveau de réflexion valide (${catModel.thinkingLevels?.join(', ') || 'aucun'}).`,
+        );
+      } else {
+        const modelLimit = catModel.maxOutputTokens ?? 128000;
+        setActionError(
+          `${agent} : maxOutputTokens (${config.maxOutputTokens}) dépasse la limite de ${modelLimit} pour le modèle ${config.model}.`,
         );
       }
       return;
@@ -1457,21 +1476,26 @@ export default function SettingsPage() {
                       onChange={(event) => updateAgent(agent.key, { model: event.target.value })}
                       className={cn(
                         'mt-1 w-full rounded-lg border bg-desk-input p-2.5 text-desk-text',
-                        visual === 'failed' ? 'border-red-500' : 'border-desk-border',
+                        visual === 'failed' || (currentCatModel && !currentCatModel.operational)
+                          ? 'border-red-500'
+                          : 'border-desk-border',
                       )}
                     >
                       <option value="">Sélectionner un modèle</option>
                       {options.map((option) => {
+                        const isOperational = option.operational === true;
                         const optionProbe = findProbe(item.provider, option.id);
-                        const label = probePasses(agent.key, optionProbe)
-                          ? 'Fonctionnel'
-                          : probeFails(agent.key, optionProbe)
-                            ? 'Test échoué'
-                            : option.detected === false
-                              ? 'Actuel — non détecté'
-                              : 'Détecté — non testé';
+                        const label = !isOperational
+                          ? 'Modèle interdit — non sélectionnable'
+                          : probePasses(agent.key, optionProbe)
+                            ? 'Fonctionnel'
+                            : probeFails(agent.key, optionProbe)
+                              ? 'Test échoué'
+                              : option.detected === false
+                                ? 'Enregistré — non détecté'
+                                : 'Détecté — non testé';
                         return (
-                          <option key={option.id} value={option.id}>
+                          <option key={option.id} value={option.id} disabled={!isOperational}>
                             {option.displayName || option.id} · {label}
                           </option>
                         );
@@ -1480,17 +1504,28 @@ export default function SettingsPage() {
                   </label>
 
                   <label className="text-sm text-desk-muted">
-                    Tokens de sortie max
+                    Tokens de sortie max (max : {currentCatModel?.maxOutputTokens ?? 128000})
                     <input
                       type="number"
                       min={1}
-                      max={100000}
+                      max={currentCatModel?.maxOutputTokens ?? 128000}
                       value={item.maxOutputTokens}
                       onChange={(event) =>
                         updateAgent(agent.key, { maxOutputTokens: Number(event.target.value) })
                       }
-                      className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
+                      className={cn(
+                        'mt-1 w-full rounded-lg border bg-desk-input p-2.5 text-desk-text',
+                        item.maxOutputTokens > (currentCatModel?.maxOutputTokens ?? 128000) ||
+                          item.maxOutputTokens < 1
+                          ? 'border-red-500'
+                          : 'border-desk-border',
+                      )}
                     />
+                    {item.maxOutputTokens > (currentCatModel?.maxOutputTokens ?? 128000) && (
+                      <span className="mt-1 block text-xs text-red-500">
+                        Dépasse la limite ({currentCatModel?.maxOutputTokens ?? 128000})
+                      </span>
+                    )}
                   </label>
 
                   {currentCatModel?.operational &&
@@ -1534,7 +1569,23 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => void testAndApplyModels()}
-              disabled={saving || !modelDirty}
+              disabled={
+                saving ||
+                !modelDirty ||
+                Boolean(
+                  modelConfig &&
+                  Object.entries(modelConfig.agents).some(([_, config]) => {
+                    if (!config.enabled) return false;
+                    const catModel = findCatalogModel(config.provider, config.model);
+                    const limit = catModel?.maxOutputTokens ?? 128000;
+                    return (
+                      config.maxOutputTokens > limit ||
+                      config.maxOutputTokens < 1 ||
+                      !Number.isInteger(config.maxOutputTokens)
+                    );
+                  }),
+                )
+              }
               className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving ? (

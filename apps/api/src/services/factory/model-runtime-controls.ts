@@ -1,10 +1,13 @@
 import { AiProvider } from './ai-execution.types';
 
 export type AiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+export type AgentCapability = 'text' | 'vision' | 'structured' | 'long_text' | 'fast_text';
 
 export interface ModelRuntimeControls {
   thinkingLevels: readonly AiThinkingLevel[];
   defaultThinkingLevel?: AiThinkingLevel;
+  maxOutputTokens: number;
+  capabilities: readonly AgentCapability[];
   operational: boolean;
   operationalReason?:
     | 'thinking_supported'
@@ -20,6 +23,8 @@ function nonTextReason(model: string): ModelRuntimeControls | null {
     return {
       thinkingLevels: [],
       defaultThinkingLevel: undefined,
+      maxOutputTokens: 0,
+      capabilities: [],
       operational: false,
       operationalReason: 'non_text_model',
       samplingPolicy: 'provider_default',
@@ -32,6 +37,8 @@ function legacyReason(): ModelRuntimeControls {
   return {
     thinkingLevels: [],
     defaultThinkingLevel: undefined,
+    maxOutputTokens: 0,
+    capabilities: [],
     operational: false,
     operationalReason: 'legacy_model',
     samplingPolicy: 'provider_default',
@@ -42,6 +49,8 @@ function notRegisteredReason(): ModelRuntimeControls {
   return {
     thinkingLevels: [],
     defaultThinkingLevel: undefined,
+    maxOutputTokens: 0,
+    capabilities: [],
     operational: false,
     operationalReason: 'thinking_not_registered',
     samplingPolicy: 'provider_default',
@@ -61,6 +70,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['low', 'medium', 'high', 'xhigh'],
         defaultThinkingLevel: 'medium',
+        maxOutputTokens: 128000,
+        capabilities: ['text', 'vision', 'structured', 'long_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',
@@ -70,6 +81,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['low', 'medium', 'high', 'xhigh'],
         defaultThinkingLevel: 'medium',
+        maxOutputTokens: 128000,
+        capabilities: ['text', 'vision', 'structured', 'long_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',
@@ -86,6 +99,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['minimal', 'low', 'medium', 'high'],
         defaultThinkingLevel: 'medium',
+        maxOutputTokens: 65536,
+        capabilities: ['text', 'vision', 'structured', 'long_text', 'fast_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',
@@ -95,6 +110,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['minimal', 'low', 'medium', 'high'],
         defaultThinkingLevel: 'minimal',
+        maxOutputTokens: 65536,
+        capabilities: ['text', 'vision', 'structured', 'long_text', 'fast_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',
@@ -104,6 +121,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['minimal', 'low', 'medium', 'high'],
         defaultThinkingLevel: 'medium',
+        maxOutputTokens: 65536,
+        capabilities: ['text', 'vision', 'structured', 'long_text', 'fast_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',
@@ -113,6 +132,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['low', 'medium', 'high'],
         defaultThinkingLevel: 'high',
+        maxOutputTokens: 65536,
+        capabilities: ['text', 'vision', 'structured', 'long_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',
@@ -122,6 +143,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['minimal', 'low', 'medium', 'high'],
         defaultThinkingLevel: 'high',
+        maxOutputTokens: 65536,
+        capabilities: ['text', 'vision', 'structured', 'long_text', 'fast_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',
@@ -131,6 +154,8 @@ export function getModelRuntimeControls(provider: AiProvider, model: string): Mo
       return {
         thinkingLevels: ['low', 'high'],
         defaultThinkingLevel: 'high',
+        maxOutputTokens: 65536,
+        capabilities: ['text', 'vision', 'structured', 'long_text'],
         operational: true,
         operationalReason: 'thinking_supported',
         samplingPolicy: 'provider_default',

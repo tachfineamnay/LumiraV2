@@ -4,6 +4,7 @@ import { GoogleAuth } from 'google-auth-library';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  operationalModelsForProvider,
   GEMINI_V1_MODELS,
   OPENAI_V1_MODELS,
   VERTEX_V1_MODELS,
@@ -12,12 +13,14 @@ import {
   createGeminiDiscoveryClient,
   decryptSettingsValue,
   parseVertexServiceAccount,
+  resolveVertexLocation,
   VERTEX_CREDENTIALS_KEY,
 } from '../../services/factory/llm';
 import { AiProvider } from '../../services/factory/ai-execution.types';
 import {
   getModelRuntimeControls,
   AiThinkingLevel,
+  AgentCapability,
 } from '../../services/factory/model-runtime-controls';
 
 export interface DiscoveredOperationalModel {
@@ -35,6 +38,8 @@ export interface DiscoveredOperationalModel {
   supportedActions?: string[];
   inputTokenLimit?: number;
   outputTokenLimit?: number;
+  maxOutputTokens?: number;
+  capabilities?: readonly AgentCapability[];
   operational: boolean;
   operationalReason?: string;
   thinking?: boolean;
@@ -72,7 +77,6 @@ interface CacheEntry {
 
 const CACHE_TTL_SUCCESS_MS = 15 * 60 * 1000;
 const CACHE_TTL_ERROR_MS = 5 * 60 * 1000;
-const DEFAULT_VERTEX_MODEL_GARDEN_LOCATION = 'us-central1';
 
 /** Sanitise les logs et messages d'erreur pour éviter toute fuite de secret. */
 export function sanitizeAiSecretString(input: string): string {
@@ -132,16 +136,46 @@ export class AiModelCatalogService {
   }
 
   getVertexCatalogLocation(): string {
-    return (
-      this.configService.get<string>('VERTEX_MODEL_GARDEN_LOCATION')?.trim() ||
-      DEFAULT_VERTEX_MODEL_GARDEN_LOCATION
-    );
+    return resolveVertexLocation(this.configService);
+  }
+
+  private mergeRegisteredModels(
+    provider: 'openai' | 'gemini' | 'vertex',
+    discoveredModels: DiscoveredOperationalModel[],
+  ): DiscoveredOperationalModel[] {
+    const seen = new Set(discoveredModels.map((m) => m.id.toLowerCase()));
+    const registered = operationalModelsForProvider(provider);
+    const result = [...discoveredModels];
+
+    for (const id of registered) {
+      if (!seen.has(id.toLowerCase())) {
+        const controls = getModelRuntimeControls(provider, id);
+        result.push({
+          provider,
+          id,
+          displayName: id,
+          discovery: provider === 'vertex' ? 'model_garden' : 'provider_list',
+          detected: false,
+          callable: null,
+          operational: controls.operational,
+          operationalReason: controls.operationalReason,
+          thinking: controls.operational,
+          thinkingLevels: controls.thinkingLevels,
+          defaultThinkingLevel: controls.defaultThinkingLevel,
+          supportsThinking: controls.operational,
+          maxOutputTokens: controls.maxOutputTokens,
+          capabilities: controls.capabilities,
+        });
+      }
+    }
+
+    return result;
   }
 
   private async discoverGemini(): Promise<ProviderModelCatalog> {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY')?.trim();
     if (!apiKey) {
-      return this.unavailable('GEMINI_API_KEY non configurée');
+      return this.unavailable('gemini', 'GEMINI_API_KEY non configurée');
     }
 
     try {
@@ -191,6 +225,8 @@ export class AiModelCatalogService {
             typeof model.inputTokenLimit === 'number' ? model.inputTokenLimit : undefined,
           outputTokenLimit:
             typeof model.outputTokenLimit === 'number' ? model.outputTokenLimit : undefined,
+          maxOutputTokens: controls.maxOutputTokens,
+          capabilities: controls.capabilities,
           operational: controls.operational,
           operationalReason: controls.operationalReason,
           thinking: controls.operational,
@@ -200,16 +236,16 @@ export class AiModelCatalogService {
         });
       }
 
-      return this.live(models);
+      return this.live(this.mergeRegisteredModels('gemini', models));
     } catch (error) {
-      return this.discoveryError('Gemini', error);
+      return this.discoveryError('gemini', error);
     }
   }
 
   private async discoverOpenAi(): Promise<ProviderModelCatalog> {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY')?.trim();
     if (!apiKey) {
-      return this.unavailable('OPENAI_API_KEY non configurée');
+      return this.unavailable('openai', 'OPENAI_API_KEY non configurée');
     }
 
     try {
@@ -236,12 +272,14 @@ export class AiModelCatalogService {
           thinkingLevels: controls.thinkingLevels,
           defaultThinkingLevel: controls.defaultThinkingLevel,
           supportsThinking: controls.operational,
+          maxOutputTokens: controls.maxOutputTokens,
+          capabilities: controls.capabilities,
         });
       }
 
-      return this.live(models);
+      return this.live(this.mergeRegisteredModels('openai', models));
     } catch (error) {
-      return this.discoveryError('OpenAI', error);
+      return this.discoveryError('openai', error);
     }
   }
 
@@ -249,7 +287,7 @@ export class AiModelCatalogService {
     const location = this.getVertexCatalogLocation();
     const json = await this.loadVertexCredentialsJson();
     if (!json) {
-      return this.unavailable('Identifiants Vertex non configurés', location);
+      return this.unavailable('vertex', 'Identifiants Vertex non configurés', location);
     }
 
     try {
@@ -275,9 +313,9 @@ export class AiModelCatalogService {
         location,
         accessToken,
       );
-      return this.live(models, location);
+      return this.live(this.mergeRegisteredModels('vertex', models), location);
     } catch (error) {
-      return this.discoveryError('Vertex', error, location);
+      return this.discoveryError('vertex', error, location);
     }
   }
 
@@ -347,6 +385,8 @@ export class AiModelCatalogService {
           supportedActions: model.supportedActions,
           inputTokenLimit: model.inputTokenLimit,
           outputTokenLimit: model.outputTokenLimit,
+          maxOutputTokens: controls.maxOutputTokens,
+          capabilities: controls.capabilities,
           operational: controls.operational,
           operationalReason: controls.operationalReason,
           thinking: controls.operational,
@@ -390,10 +430,15 @@ export class AiModelCatalogService {
     };
   }
 
-  private unavailable(error: string, location?: string): ProviderModelCatalog {
+  private unavailable(
+    provider: 'openai' | 'gemini' | 'vertex',
+    error: string,
+    location?: string,
+  ): ProviderModelCatalog {
+    const models = this.mergeRegisteredModels(provider, []);
     return {
       configured: false,
-      models: [],
+      models,
       source: 'unavailable',
       error,
       location,
@@ -403,7 +448,7 @@ export class AiModelCatalogService {
   }
 
   private discoveryError(
-    provider: string,
+    provider: 'openai' | 'gemini' | 'vertex',
     error: unknown,
     location?: string,
   ): ProviderModelCatalog {
@@ -411,13 +456,14 @@ export class AiModelCatalogService {
       error instanceof Error ? error.message : String(error),
     );
     this.logger.warn(`${provider} model discovery failed: ${safeError}`);
+    const models = this.mergeRegisteredModels(provider, []);
     return {
       configured: true,
-      models: [],
+      models,
       source: 'error',
       error: safeError,
       location,
-      detectedCount: 0,
+      detectedCount: models.length,
       callableCount: 0,
     };
   }

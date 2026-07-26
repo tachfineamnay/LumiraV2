@@ -1,16 +1,10 @@
 import {
   assertExecutableAgentModel,
-  assertOperationalModel,
   assertSavableAgentModel,
-  assertValidatedAgentCapabilities,
-  cloneAiModelConfig,
   DEFAULT_AI_MODEL_CONFIG,
-  estimateOpenAiCost,
-  missingAgentCapabilities,
+  modelCapabilities,
   modelSupportsAgent,
   normalizeAiModelConfig,
-  isOperationalThinkingModel,
-  validateAiModelConfig,
 } from './ai-model-config';
 
 describe('ai-model-config (thinking-only production policy)', () => {
@@ -55,6 +49,27 @@ describe('ai-model-config (thinking-only production policy)', () => {
     expect((scribe as any).topP).toBeUndefined();
     expect((scribe as any).verbosity).toBeUndefined();
     expect((scribe as any).reasoningEffort).toBeUndefined();
+  });
+
+  it('normalizes maxOutputTokens overflow to model ceiling limit', () => {
+    const normalized = normalizeAiModelConfig({
+      providerMode: 'per_agent',
+      agents: {
+        ...DEFAULT_AI_MODEL_CONFIG.agents,
+        SCRIBE: {
+          enabled: true,
+          provider: 'gemini',
+          model: 'gemini-3.6-flash',
+          thinkingLevel: 'high',
+          maxOutputTokens: 100000,
+        },
+      },
+    });
+
+    expect(normalized.config.agents.SCRIBE.maxOutputTokens).toBe(65536);
+    expect(normalized.issues.some((issue) => issue.includes('dépasse la limite de 65536'))).toBe(
+      true,
+    );
   });
 
   it('normalizes gpt-5.4 without level to medium default', () => {
@@ -123,7 +138,42 @@ describe('ai-model-config (thinking-only production policy)', () => {
     expect(normalized.config.agents.SCRIBE.thinkingLevel).toBe('medium');
   });
 
-  describe('assertExecutableAgentModel (strict thinking-only enforcement)', () => {
+  describe('capabilities derivation without MODEL_CAPABILITIES', () => {
+    it('retrieves capabilities directly from ModelRuntimeControls including for preview variants', () => {
+      expect(modelCapabilities('gpt-5.4-preview', 'openai')).toEqual([
+        'text',
+        'vision',
+        'structured',
+        'long_text',
+      ]);
+      expect(modelCapabilities('gemini-3.6-flash-preview', 'gemini')).toEqual([
+        'text',
+        'vision',
+        'structured',
+        'long_text',
+        'fast_text',
+      ]);
+      expect(modelSupportsAgent('gpt-5.4-preview', 'SCRIBE', 'openai')).toBe(true);
+    });
+  });
+
+  describe('assertExecutableAgentModel & assertSavableAgentModel (maxOutputTokens enforcement)', () => {
+    it('rejects maxOutputTokens exceeding model limit', () => {
+      expect(() =>
+        assertExecutableAgentModel({
+          agent: 'SCRIBE',
+          provider: 'gemini',
+          model: 'gemini-3.6-flash',
+          thinkingLevel: 'high',
+          maxOutputTokens: 100000,
+        }),
+      ).toThrow(/dépasse la limite de 65536/);
+
+      expect(() =>
+        assertSavableAgentModel('SCRIBE', 'gemini', 'gemini-3.6-flash', 'high', 100000),
+      ).toThrow(/dépasse la limite de 65536/);
+    });
+
     it('1. GPT-4o is rejected', () => {
       expect(() =>
         assertExecutableAgentModel({

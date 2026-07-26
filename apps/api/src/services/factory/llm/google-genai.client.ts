@@ -17,10 +17,6 @@ export interface GoogleGenAiCallMeta {
 /** Stable Gemini / Vertex API surface for Lumira production calls. */
 export const GOOGLE_GENAI_API_VERSION = 'v1' as const;
 
-export function isGeminiThinkingModel(model: string): boolean {
-  return /^gemini-3(?:[.-]|$)/i.test(model.trim());
-}
-
 export function createGeminiDeveloperClient(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,

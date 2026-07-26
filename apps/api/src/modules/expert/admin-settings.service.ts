@@ -566,6 +566,7 @@ export class AdminSettingsService {
             agentConfig.provider,
             agentConfig.model,
             agentConfig.thinkingLevel,
+            agentConfig.maxOutputTokens,
           );
         } catch (err) {
           throw new BadRequestException(err instanceof Error ? err.message : String(err));
