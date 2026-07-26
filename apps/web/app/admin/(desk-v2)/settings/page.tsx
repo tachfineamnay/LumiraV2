@@ -514,10 +514,21 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [availableModels, setAvailableModels] = useState<AvailableModelsResponse | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [candidateProbeResults, setCandidateProbeResults] = useState<Array<{
+    provider: ProviderId;
+    model: string;
+    text: 'ok' | 'error' | 'not_tested';
+    multimodal?: 'ok' | 'error' | 'not_tested';
+    structured?: 'ok' | 'error' | 'not_tested';
+    error?: string;
+    errorCategory?: string;
+    location?: string;
+  }> | null>(null);
 
   const clearFeedback = () => {
     setActionError(null);
     setSuccess(null);
+    setCandidateProbeResults(null);
   };
 
   const loadCatalog = useCallback(async (force = false) => {
@@ -835,14 +846,54 @@ export default function SettingsPage() {
     }
 
     setSaving(true);
+    setCandidateProbeResults(null);
     try {
-      const { data } = await expertApi.post('/expert/settings/model-config/test-and-apply', {
+      const { data } = await expertApi.post<{
+        success: boolean;
+        message?: string;
+        previousConfigPreserved?: boolean;
+        probeResults?: Array<{
+          provider: ProviderId;
+          model: string;
+          text: 'ok' | 'error' | 'not_tested';
+          multimodal?: 'ok' | 'error' | 'not_tested';
+          structured?: 'ok' | 'error' | 'not_tested';
+          error?: string;
+          errorCategory?: string;
+          location?: string;
+        }>;
+      }>('/expert/settings/model-config/test-and-apply', {
         providerMode: 'per_agent',
         agents: modelConfig.agents,
       });
-      setSuccess(data.message || 'Configuration IA testée et appliquée.');
-      await loadAll();
+
+      if (data.success === false) {
+        setCandidateProbeResults(data.probeResults || []);
+        setActionError('Le test de configuration candidat a échoué. L’ancienne configuration a été conservée.');
+      } else {
+        setSuccess(data.message || 'Configuration IA testée et appliquée.');
+        await loadAll();
+      }
     } catch (error) {
+      const errRes = (error as {
+        response?: {
+          data?: {
+            probeResults?: Array<{
+              provider: ProviderId;
+              model: string;
+              text: 'ok' | 'error' | 'not_tested';
+              multimodal?: 'ok' | 'error' | 'not_tested';
+              structured?: 'ok' | 'error' | 'not_tested';
+              error?: string;
+              errorCategory?: string;
+              location?: string;
+            }>;
+          };
+        };
+      })?.response?.data;
+      if (errRes?.probeResults) {
+        setCandidateProbeResults(errRes.probeResults);
+      }
       setActionError(messageFromError(error));
     } finally {
       setSaving(false);
@@ -1153,7 +1204,14 @@ export default function SettingsPage() {
                         {used
                           ? `Modèle(s) actif(s) : ${card.status.activeModels?.join(', ') || card.status.model}`
                           : 'Aucun agent actif ne l’utilise'}
-                        {card.status.location ? ` · région ${card.status.location}` : ''}
+                        {card.id === 'vertex' ? (
+                          <>
+                            <br />
+                            Runtime Vertex : global · Catalogue Model Garden : us-central1
+                          </>
+                        ) : (
+                          card.status.location ? ` · région ${card.status.location}` : ''
+                        )}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Pill level={card.status.configured ? 'pass' : used ? 'fail' : 'warning'}>
@@ -1311,6 +1369,57 @@ export default function SettingsPage() {
 
       {activeTab === 'models' && (
         <div className="space-y-4">
+          {candidateProbeResults && candidateProbeResults.length > 0 && (
+            <Card className="border-red-500/50 bg-red-500/10 p-5">
+              <h3 className="font-semibold text-red-600">
+                Résultats du test de configuration candidat (échec — ancienne configuration conservée)
+              </h3>
+              <div className="mt-3 space-y-3">
+                {candidateProbeResults.map((candidate, idx) => (
+                  <div key={idx} className="rounded-xl border border-red-500/20 bg-desk-surface p-3 text-sm">
+                    <div className="font-semibold text-desk-text">
+                      Fournisseur : {candidate.provider} · Modèle candidat : {candidate.model}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <Pill level={candidate.text === 'ok' ? 'pass' : 'fail'}>
+                        Texte : {candidate.text === 'ok' ? 'OK' : 'erreur'}
+                      </Pill>
+                      <Pill
+                        level={
+                          candidate.multimodal === 'ok'
+                            ? 'pass'
+                            : candidate.multimodal === 'error'
+                              ? 'fail'
+                              : 'warning'
+                        }
+                      >
+                        Vision : {candidate.multimodal === 'ok' ? 'OK' : candidate.multimodal === 'error' ? 'erreur' : 'non testé'}
+                      </Pill>
+                      <Pill
+                        level={
+                          candidate.structured === 'ok'
+                            ? 'pass'
+                            : candidate.structured === 'error'
+                              ? 'fail'
+                              : 'warning'
+                        }
+                      >
+                        JSON : {candidate.structured === 'ok' ? 'OK' : candidate.structured === 'error' ? 'erreur' : 'non testé'}
+                      </Pill>
+                      <span className="self-center font-mono text-desk-muted">
+                        Région : {candidate.location || (candidate.provider === 'vertex' ? 'global' : 'N/A')}
+                      </span>
+                    </div>
+                    {candidate.error && (
+                      <p className="mt-2 text-xs text-red-600">
+                        Erreur détaillée : {candidate.error}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           <Card className="border-blue-500/30 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

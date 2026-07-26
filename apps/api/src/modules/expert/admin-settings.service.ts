@@ -19,8 +19,11 @@ import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service'
 import { AiModelCatalogService } from './ai-model-catalog.service';
 import {
   AiCredentialsStatusResponse,
+  AiErrorCategory,
+  DiagnosticsProvider,
   ModelConnectionTestResult,
   ProviderConnectionTestResult,
+  ProviderProbeStatus,
 } from './ai-provider-diagnostics.types';
 
 const VERTEX_CREDENTIALS_KEY = 'VERTEX_CREDENTIALS_JSON';
@@ -544,7 +547,22 @@ export class AdminSettingsService {
   async testAndApplyModelConfig(
     input: unknown,
     changedBy?: string,
-  ): Promise<{ success: boolean; message: string; config: ModelConfig }> {
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    previousConfigPreserved?: boolean;
+    probeResults?: Array<{
+      provider: DiagnosticsProvider;
+      model: string;
+      text: ProviderProbeStatus;
+      multimodal?: ProviderProbeStatus;
+      structured?: ProviderProbeStatus;
+      error?: string;
+      errorCategory?: AiErrorCategory;
+      location?: string;
+    }>;
+    config?: ModelConfig;
+  }> {
     const root =
       typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
     const candidate = {
@@ -580,7 +598,17 @@ export class AdminSettingsService {
     }
 
     const probeErrors: string[] = [];
-    const probeResults = new Map<string, ModelConnectionTestResult>();
+    const probeResultsMap = new Map<string, ModelConnectionTestResult>();
+    const probeResultsList: Array<{
+      provider: DiagnosticsProvider;
+      model: string;
+      text: ProviderProbeStatus;
+      multimodal?: ProviderProbeStatus;
+      structured?: ProviderProbeStatus;
+      error?: string;
+      errorCategory?: AiErrorCategory;
+      location?: string;
+    }> = [];
     const queue = [...pairs];
     const concurrency = 2;
 
@@ -596,16 +624,38 @@ export class AdminSettingsService {
             pair.needsStructured,
             30_000,
           );
+          probeResultsList.push({
+            provider: pair.provider,
+            model: pair.model,
+            text: res.text,
+            multimodal: res.multimodal,
+            structured: res.structured,
+            error: res.error,
+            errorCategory: res.errorCategory,
+            location: res.location,
+          });
           if (!res.success) {
             const err = res.error || 'Test de connexion / probe échoué';
             probeErrors.push(
               `[${pair.provider}:${pair.model}] (${pair.agents.join(', ')}) — ${err}`,
             );
           } else {
-            probeResults.set(`${pair.provider}:${pair.model}`, res);
+            probeResultsMap.set(`${pair.provider}:${pair.model}`, res);
           }
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
+          probeResultsList.push({
+            provider: pair.provider,
+            model: pair.model,
+            text: 'error',
+            multimodal: pair.needsVision ? 'error' : 'not_tested',
+            structured: pair.needsStructured ? 'error' : 'not_tested',
+            error: errMsg,
+            location:
+              pair.provider === 'vertex'
+                ? this.aiProviderDiagnostics.getVertexLocation()
+                : undefined,
+          });
           probeErrors.push(
             `[${pair.provider}:${pair.model}] (${pair.agents.join(', ')}) — ${errMsg}`,
           );
@@ -617,9 +667,11 @@ export class AdminSettingsService {
     await Promise.all(workers);
 
     if (probeErrors.length > 0) {
-      throw new BadRequestException(
-        `Le test de configuration a échoué. L'ancienne configuration a été conservée. Erreurs: ${probeErrors.join(' ; ')}`,
-      );
+      return {
+        success: false,
+        previousConfigPreserved: true,
+        probeResults: probeResultsList,
+      };
     }
 
     const checkedAt = new Date().toISOString();
@@ -628,7 +680,7 @@ export class AdminSettingsService {
     >) {
       if (agentConfig.enabled) {
         const key = `${agentConfig.provider}:${agentConfig.model}`;
-        const res = probeResults.get(key);
+        const res = probeResultsMap.get(key);
         if (res && res.success) {
           agentConfig.validation = {
             provider: agentConfig.provider,
@@ -675,7 +727,22 @@ export class AdminSettingsService {
   async saveModelConfig(
     config: Partial<ModelConfig>,
     changedBy?: string,
-  ): Promise<{ success: boolean; message: string; config: ModelConfig }> {
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    previousConfigPreserved?: boolean;
+    probeResults?: Array<{
+      provider: DiagnosticsProvider;
+      model: string;
+      text: ProviderProbeStatus;
+      multimodal?: ProviderProbeStatus;
+      structured?: ProviderProbeStatus;
+      error?: string;
+      errorCategory?: AiErrorCategory;
+      location?: string;
+    }>;
+    config?: ModelConfig;
+  }> {
     return this.testAndApplyModelConfig(config, changedBy);
   }
 

@@ -17,7 +17,7 @@ import {
   VERTEX_CREDENTIALS_KEY,
   VertexAdapter,
 } from '../../services/factory/llm';
-import { getModelRuntimeControls } from '../../services/factory/model-runtime-controls';
+import { getModelRuntimeControls, AiThinkingLevel } from '../../services/factory/model-runtime-controls';
 import {
   AiCredentialsStatusResponse,
   AiErrorCategory,
@@ -37,12 +37,13 @@ import {
   DEFAULT_AI_TEST_TIMEOUT_MS,
   IDENTIFIABLE_VISION_PROBE_BASE64,
   sanitizeAiErrorMessage,
+  sanitizeVisionResponsePreview,
   withTimeout,
 } from './ai-provider-diagnostics.utils';
 
 const MODEL_CONFIG_KEY = 'MODEL_CONFIG';
 const TEXT_PROBE_TOKENS = 256;
-const VISION_PROBE_TOKENS = 256;
+const VISION_PROBE_TOKENS = 1024;
 const STRUCTURED_PROBE_TOKENS = 512;
 
 interface CachedProviderProbes {
@@ -510,6 +511,7 @@ export class AiProviderDiagnosticsService {
       error: failure?.error,
       errorCategory: failure?.errorCategory,
       models,
+      location: provider === 'vertex' ? this.getVertexLocation() : first?.location,
       projectId: success ? `${provider}-api` : undefined,
     };
   }
@@ -747,6 +749,24 @@ export class AiProviderDiagnosticsService {
     return new VertexAdapter(() => this.loadVertexCredentialsJson(), this.getVertexLocation());
   }
 
+  private probeThinkingLevel(
+    provider: DiagnosticsProvider,
+    model: string,
+  ): AiThinkingLevel {
+    const controls = getModelRuntimeControls(provider, model);
+    if (!controls.operational || controls.thinkingLevels.length === 0) {
+      throw new Error(`Modèle non autorisé pour la production Lumira: ${model}`);
+    }
+    if (controls.thinkingLevels.includes('low')) {
+      return 'low';
+    }
+    const first = controls.thinkingLevels.find((level) => level !== ('none' as AiThinkingLevel));
+    if (!first) {
+      throw new Error(`Aucun niveau de réflexion valide pour ${provider}/${model}`);
+    }
+    return first;
+  }
+
   private async runGeminiTextProbe(model: string, timeoutMs: number): Promise<ProviderProbeResult> {
     return this.runGoogleTextProbe('gemini', this.createGeminiAdapter(), model, timeoutMs);
   }
@@ -762,19 +782,14 @@ export class AiProviderDiagnosticsService {
     timeoutMs: number,
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
-    const controls = getModelRuntimeControls(provider, model);
-    if (!controls.operational || controls.thinkingLevels.length === 0) {
-      return this.probeFromError(
-        model,
-        testedAt,
-        new Error(`Modèle non autorisé pour la production Lumira: ${model}`),
-        `${provider} text probe`,
-        provider,
-      );
+    let probeThinkingLevel: AiThinkingLevel;
+    try {
+      probeThinkingLevel = this.probeThinkingLevel(provider, model);
+    } catch (err) {
+      return this.probeFromError(model, testedAt, err, `${provider} text probe`, provider);
     }
-    const probeThinkingLevel = controls.defaultThinkingLevel;
     this.logger.log(
-      `[Probe ${provider}/${model}] text probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+      `[Probe ${provider}/${model}] text probe: thinking=${probeThinkingLevel} sampling=provider_default`,
     );
     try {
       const result = await withTimeout(
@@ -820,26 +835,23 @@ export class AiProviderDiagnosticsService {
     timeoutMs: number,
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
-    const controls = getModelRuntimeControls(provider, model);
-    if (!controls.operational || controls.thinkingLevels.length === 0) {
-      return this.probeFromError(
-        model,
-        testedAt,
-        new Error(`Modèle non autorisé pour la production Lumira: ${model}`),
-        `${provider} vision probe`,
-        provider,
-      );
+    let probeThinkingLevel: AiThinkingLevel;
+    try {
+      probeThinkingLevel = this.probeThinkingLevel(provider, model);
+    } catch (err) {
+      return this.probeFromError(model, testedAt, err, `${provider} vision probe`, provider);
     }
-    const probeThinkingLevel = controls.defaultThinkingLevel;
     this.logger.log(
-      `[Probe ${provider}/${model}] vision probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+      `[Probe ${provider}/${model}] vision probe: thinking=${probeThinkingLevel} sampling=provider_default`,
     );
     try {
       const result = await withTimeout(
         adapter.complete({
           model,
-          systemPrompt: 'Décris uniquement les éléments visibles.',
-          userContent: 'Indique la couleur des deux formes et le nombre visible.',
+          systemPrompt:
+            'Analyse uniquement l’image de test. N’invente rien. Réponds sans explication.',
+          userContent:
+            'Retourne une seule ligne au format :\ncircle=<couleur>;square=<couleur>;number=<nombre en chiffres>\n\nUtilise seulement ce que tu vois dans l’image.',
           images: [{ mimeType: 'image/png', base64: IDENTIFIABLE_VISION_PROBE_BASE64 }],
           maxTokens: VISION_PROBE_TOKENS,
           thinkingLevel: probeThinkingLevel,
@@ -877,19 +889,14 @@ export class AiProviderDiagnosticsService {
     timeoutMs: number,
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
-    const controls = getModelRuntimeControls(provider, model);
-    if (!controls.operational || controls.thinkingLevels.length === 0) {
-      return this.probeFromError(
-        model,
-        testedAt,
-        new Error(`Modèle non autorisé pour la production Lumira: ${model}`),
-        `${provider} structured probe`,
-        provider,
-      );
+    let probeThinkingLevel: AiThinkingLevel;
+    try {
+      probeThinkingLevel = this.probeThinkingLevel(provider, model);
+    } catch (err) {
+      return this.probeFromError(model, testedAt, err, `${provider} structured probe`, provider);
     }
-    const probeThinkingLevel = controls.defaultThinkingLevel;
     this.logger.log(
-      `[Probe ${provider}/${model}] structured probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+      `[Probe ${provider}/${model}] structured probe: thinking=${probeThinkingLevel} sampling=provider_default`,
     );
     try {
       const result = await withTimeout(
@@ -914,18 +921,11 @@ export class AiProviderDiagnosticsService {
   }
 
   private openAiProbeParameters(model: string): Record<string, unknown> {
-    const controls = getModelRuntimeControls('openai', model);
-    if (!controls.operational || controls.thinkingLevels.length === 0) {
-      throw new Error(`Modèle non autorisé pour la production Lumira: ${model}`);
-    }
-    const probeThinkingLevel = controls.defaultThinkingLevel;
+    const probeThinkingLevel = this.probeThinkingLevel('openai', model);
     this.logger.log(
-      `[Probe openai/${model}] thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
+      `[Probe openai/${model}] thinking=${probeThinkingLevel} sampling=provider_default`,
     );
-    if (probeThinkingLevel) {
-      return { reasoning: { effort: probeThinkingLevel } };
-    }
-    throw new Error(`OpenAI — aucun niveau de réflexion défini pour ${model}.`);
+    return { reasoning: { effort: probeThinkingLevel } };
   }
 
   private healthJsonSchema() {
@@ -991,14 +991,15 @@ export class AiProviderDiagnosticsService {
       const response = await withTimeout(
         client.responses.create({
           model,
-          instructions: 'Décris uniquement les éléments visibles.',
+          instructions:
+            'Analyse uniquement l’image de test. N’invente rien. Réponds sans explication.',
           input: [
             {
               role: 'user',
               content: [
                 {
                   type: 'input_text',
-                  text: 'Indique la couleur des deux formes et le nombre visible.',
+                  text: 'Retourne une seule ligne au format :\ncircle=<couleur>;square=<couleur>;number=<nombre en chiffres>\n\nUtilise seulement ce que tu vois dans l’image.',
                 },
                 {
                   type: 'input_image',
@@ -1057,11 +1058,12 @@ export class AiProviderDiagnosticsService {
 
   private assertVisionProbeResponse(text?: string): void {
     const value = text?.toLowerCase() || '';
-    const hasRed = /rouge|red/.test(value);
-    const hasBlue = /bleu|blue/.test(value);
-    const hasNumber = /\b27\b/.test(value);
+    const hasRed = /\b(red|rouge)\b/i.test(value);
+    const hasBlue = /\b(blue|bleu)\b/i.test(value);
+    const hasNumber = /\b27\b|twenty-seven|vingt-sept/i.test(value);
     if (!hasRed || !hasBlue || !hasNumber) {
-      throw new Error('Réponse vision invalide : rouge, bleu et 27 doivent être identifiés.');
+      const preview = sanitizeVisionResponsePreview(text);
+      throw new Error(`Réponse vision invalide.\nRéponse reçue : "${preview}"`);
     }
   }
 

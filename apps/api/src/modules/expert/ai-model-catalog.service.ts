@@ -14,6 +14,7 @@ import {
   decryptSettingsValue,
   parseVertexServiceAccount,
   resolveVertexLocation,
+  resolveVertexModelGardenLocation,
   VERTEX_CREDENTIALS_KEY,
 } from '../../services/factory/llm';
 import { AiProvider } from '../../services/factory/ai-execution.types';
@@ -136,7 +137,7 @@ export class AiModelCatalogService {
   }
 
   getVertexCatalogLocation(): string {
-    return resolveVertexLocation(this.configService);
+    return resolveVertexModelGardenLocation(this.configService);
   }
 
   private mergeRegisteredModels(

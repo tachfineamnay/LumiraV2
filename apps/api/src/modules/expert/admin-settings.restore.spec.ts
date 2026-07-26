@@ -241,7 +241,7 @@ describe('AdminSettingsService restore latest custom', () => {
     });
   });
 
-  it('rejects testAndApplyModelConfig when probe fails and preserves existing DB config', async () => {
+  it('rejects testAndApplyModelConfig with BadRequestException when agent model is invalid', async () => {
     promptVersion.findFirst.mockResolvedValue({
       id: 'mc',
       key: 'MODEL_CONFIG',
@@ -253,11 +253,6 @@ describe('AdminSettingsService restore latest custom', () => {
       createdAt: new Date(),
     });
     promptVersion.findMany.mockResolvedValue([]);
-
-    (aiProviderDiagnostics.testProviderModelPair as jest.Mock) = jest.fn().mockResolvedValue({
-      success: false,
-      error: 'Model probe failed (404 Not Found)',
-    });
 
     await expect(
       service.testAndApplyModelConfig(
@@ -274,6 +269,49 @@ describe('AdminSettingsService restore latest custom', () => {
         'founder',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(promptVersion.create).not.toHaveBeenCalled();
+  });
+
+  it('returns candidate probe results and preserves DB config when model probes fail', async () => {
+    promptVersion.findFirst.mockResolvedValue({
+      id: 'mc',
+      key: 'MODEL_CONFIG',
+      version: 5,
+      value: JSON.stringify(DEFAULT_AI_MODEL_CONFIG),
+      changedBy: 'production-migration',
+      comment: 'baseline',
+      isActive: true,
+      createdAt: new Date(),
+    });
+    promptVersion.findMany.mockResolvedValue([]);
+
+    (aiProviderDiagnostics.testProviderModelPair as jest.Mock) = jest.fn().mockResolvedValue({
+      success: false,
+      error: 'Model probe failed (404 Not Found)',
+      text: 'error',
+      multimodal: 'not_tested',
+      structured: 'not_tested',
+    });
+
+    const result = await service.testAndApplyModelConfig(
+      {
+        providerMode: 'per_agent',
+        agents: {
+          ...DEFAULT_AI_MODEL_CONFIG.agents,
+          SCRIBE: {
+            ...DEFAULT_AI_MODEL_CONFIG.agents.SCRIBE,
+            provider: 'gemini',
+            model: 'gemini-3.6-flash',
+          },
+        },
+      },
+      'founder',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.previousConfigPreserved).toBe(true);
+    expect(result.probeResults).toBeDefined();
+    expect(result.probeResults!.length).toBeGreaterThan(0);
     expect(promptVersion.create).not.toHaveBeenCalled();
   });
 });

@@ -99,6 +99,7 @@ export interface ProviderConnectionTestResult {
   errorCategory?: AiErrorCategory;
   /** Per active provider/model pair results. */
   models: ModelConnectionTestResult[];
+  location?: string;
   /** @deprecated legacy field kept for backward compatibility */
   projectId?: string;
 }

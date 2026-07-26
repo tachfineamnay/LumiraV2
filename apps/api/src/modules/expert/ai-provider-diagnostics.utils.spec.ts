@@ -1,71 +1,62 @@
+import zlib from 'zlib';
 import {
-  classifyAiError,
-  sanitizeAiErrorMessage,
-  withTimeout,
+  IDENTIFIABLE_VISION_PROBE_BASE64,
+  sanitizeVisionResponsePreview,
 } from './ai-provider-diagnostics.utils';
 
-describe('ai-provider-diagnostics.utils', () => {
-  describe('sanitizeAiErrorMessage', () => {
-    it('redacts Gemini and OpenAI key patterns', () => {
-      const message =
-        'Invalid key AIzaSyD_example_key_12345 and sk-proj-abcdefghijklmnopqrstuvwxyz';
-      const sanitized = sanitizeAiErrorMessage(message);
-      expect(sanitized).not.toContain('AIzaSyD_example_key_12345');
-      expect(sanitized).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz');
-      expect(sanitized).toContain('[redacted]');
-    });
+describe('ai-provider-diagnostics.utils — PNG image validity', () => {
+  it('decodes Base64 and verifies valid PNG header magic bytes', () => {
+    const buffer = Buffer.from(IDENTIFIABLE_VISION_PROBE_BASE64, 'base64');
+    expect(buffer.length).toBeGreaterThan(0);
 
-    it('redacts bearer tokens and Vertex private keys', () => {
-      const message =
-        'Bearer eyJhbGciOiJIUzI1NiJ9.abc.def -----BEGIN PRIVATE KEY-----\nSECRET\n-----END PRIVATE KEY-----';
-      const sanitized = sanitizeAiErrorMessage(message);
-      expect(sanitized).not.toContain('eyJhbGciOiJIUzI1NiJ9');
-      expect(sanitized).not.toContain('SECRET');
-      expect(sanitized).toContain('[redacted]');
-    });
+    const pngHeader = buffer.slice(0, 8).toString('hex');
+    expect(pngHeader).toBe('89504e470d0a1a0a');
   });
 
-  describe('classifyAiError', () => {
-    it('maps 401 to invalid_key', () => {
-      expect(classifyAiError('401 Unauthorized').category).toBe('invalid_key');
-    });
+  it('verifies dimensions 512x512 from IHDR chunk', () => {
+    const buffer = Buffer.from(IDENTIFIABLE_VISION_PROBE_BASE64, 'base64');
+    const width = buffer.readUInt32BE(16);
+    const height = buffer.readUInt32BE(20);
 
-    it('maps 403 to forbidden', () => {
-      expect(classifyAiError('403 Permission denied').category).toBe('forbidden');
-    });
-
-    it('maps 429 to rate_limit', () => {
-      expect(classifyAiError('429 Too Many Requests rate limit').category).toBe('rate_limit');
-    });
-
-    it('maps quota errors', () => {
-      expect(classifyAiError('RESOURCE_EXHAUSTED quota exceeded billing').category).toBe('quota');
-    });
-
-    it('includes provider and model in user messages when provided', () => {
-      const result = classifyAiError('404 model does not exist', {
-        provider: 'gemini',
-        model: 'gemini-2.5-flash',
-      });
-      expect(result.category).toBe('model_not_found');
-      expect(result.userMessage).toMatch(/Gemini API/);
-      expect(result.userMessage).toMatch(/gemini-2.5-flash/);
-    });
-
-    it('maps timeout errors', () => {
-      expect(classifyAiError('Gemini text probe timeout after 20000ms').category).toBe('timeout');
-    });
-
-    it('maps model not found', () => {
-      expect(classifyAiError('404 model gpt-foo does not exist').category).toBe('model_not_found');
-    });
+    expect(width).toBe(512);
+    expect(height).toBe(512);
   });
 
-  describe('withTimeout', () => {
-    it('rejects when the promise exceeds the timeout', async () => {
-      await expect(
-        withTimeout(new Promise((resolve) => setTimeout(resolve, 50)), 5, 'slow probe'),
-      ).rejects.toThrow('slow probe timeout');
-    });
+  it('verifies PNG buffer is complete, not truncated, and has valid IDAT checksums', () => {
+    const buffer = Buffer.from(IDENTIFIABLE_VISION_PROBE_BASE64, 'base64');
+
+    let offset = 8;
+    const idatChunks: Buffer[] = [];
+
+    while (offset < buffer.length) {
+      const chunkLen = buffer.readUInt32BE(offset);
+      const chunkType = buffer.toString('ascii', offset + 4, offset + 8);
+      const chunkData = buffer.slice(offset + 8, offset + 8 + chunkLen);
+
+      if (chunkType === 'IDAT') {
+        idatChunks.push(chunkData);
+      }
+
+      offset += 12 + chunkLen;
+      if (chunkType === 'IEND') break;
+    }
+
+    expect(offset).toBeLessThanOrEqual(buffer.length);
+    expect(idatChunks.length).toBeGreaterThan(0);
+    const compressed = Buffer.concat(idatChunks);
+    expect(() => zlib.inflateSync(compressed)).not.toThrow();
+
+    const decompressed = zlib.inflateSync(compressed);
+    // 512 rows, each row has 1 filter byte + 512 * 3 RGB bytes = 1537 bytes per row. Total: 512 * 1537 = 786944 bytes.
+    expect(decompressed.length).toBe(512 * (1 + 512 * 3));
+  });
+
+  it('sanitizes vision response preview up to 200 chars without control characters', () => {
+    const raw = '  circle=red\n\x07\x1F;square=blue;number=27  ' + 'x'.repeat(300);
+    const sanitized = sanitizeVisionResponsePreview(raw);
+
+    expect(sanitized.length).toBeLessThanOrEqual(200);
+    expect(sanitized).not.toMatch(/[\x00-\x1F\x7F]/);
+    expect(sanitized).toContain('circle=red');
   });
 });

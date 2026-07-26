@@ -162,12 +162,12 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
     expect(result.structured).toBe('ok');
     expect(mockGenerateContent).toHaveBeenCalledTimes(3);
     expect(mockGenerateContent.mock.calls.map((call) => call[0].config.maxOutputTokens)).toEqual([
-      256, 256, 512,
+      256, 1024, 512,
     ]);
     expect(mockGenerateContent.mock.calls[0][0].config.temperature).toBeUndefined();
     expect(mockGenerateContent.mock.calls[0][0].config.topP).toBeUndefined();
     expect(mockGenerateContent.mock.calls[0][0].config.thinkingConfig).toEqual({
-      thinkingLevel: 'MEDIUM',
+      thinkingLevel: 'LOW',
       includeThoughts: false,
     });
   });
@@ -182,7 +182,7 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
     mockGenerateContent
       .mockImplementationOnce(async () => ({ text: 'OK' }))
       .mockImplementationOnce(async () => ({
-        text: 'Je vois un cercle rouge, un carré bleu et le nombre 27.',
+        text: 'circle=rouge;square=bleu;number=27',
       }))
       .mockRejectedValueOnce(new Error('response_schema is not supported for this model'));
 
@@ -210,9 +210,106 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
     expect(result.model).toBe('gpt-5.4-2026-03-05');
     expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
     expect(mockResponsesCreate.mock.calls.map((call) => call[0].max_output_tokens)).toEqual([
-      256, 256, 512,
+      256, 1024, 512,
     ]);
     expect(JSON.stringify(result)).not.toContain('sk-test-openai-key');
+  });
+
+  it('uses LOW thinking level for gemini-3.1-pro-preview probe', async () => {
+    configGet.mockImplementation((key: string) =>
+      key === 'GEMINI_API_KEY' ? 'test-gemini-key' : undefined,
+    );
+    prisma.promptVersion.findFirst.mockResolvedValue({
+      value: JSON.stringify(configFor('gemini', 'gemini-3.1-pro-preview')),
+    });
+
+    const result = await service.testGeminiConnection({ force: true });
+
+    expect(result.success).toBe(true);
+    expect(mockGenerateContent.mock.calls[0][0].config.thinkingConfig).toEqual({
+      thinkingLevel: 'LOW',
+      includeThoughts: false,
+    });
+  });
+
+  it('validates vision response formats: english, french, vingt-sept and twenty-seven', async () => {
+    configGet.mockImplementation((key: string) =>
+      key === 'GEMINI_API_KEY' ? 'test-gemini-key' : undefined,
+    );
+    prisma.promptVersion.findFirst.mockResolvedValue({
+      value: JSON.stringify(configFor('gemini', 'gemini-3.5-flash')),
+    });
+
+    // 1. circle=red;square=blue;number=27
+    mockGenerateContent
+      .mockImplementationOnce(async () => ({ text: 'OK' }))
+      .mockImplementationOnce(async () => ({ text: 'circle=red;square=blue;number=27' }))
+      .mockImplementationOnce(async () => ({ text: JSON.stringify({ ok: true }) }));
+    const res1 = await service.testGeminiConnection({ force: true });
+    expect(res1.multimodal).toBe('ok');
+
+    // 2. circle=rouge; square=bleu; number=27
+    mockGenerateContent
+      .mockImplementationOnce(async () => ({ text: 'OK' }))
+      .mockImplementationOnce(async () => ({ text: 'circle=rouge; square=bleu; number=27' }))
+      .mockImplementationOnce(async () => ({ text: JSON.stringify({ ok: true }) }));
+    const res2 = await service.testGeminiConnection({ force: true });
+    expect(res2.multimodal).toBe('ok');
+
+    // 3. circle=rouge; square=bleu; number=vingt-sept
+    mockGenerateContent
+      .mockImplementationOnce(async () => ({ text: 'OK' }))
+      .mockImplementationOnce(async () => ({ text: 'circle=rouge; square=bleu; number=vingt-sept' }))
+      .mockImplementationOnce(async () => ({ text: JSON.stringify({ ok: true }) }));
+    const res3 = await service.testGeminiConnection({ force: true });
+    expect(res3.multimodal).toBe('ok');
+
+    // 4. circle=red; square=blue; number=twenty-seven
+    mockGenerateContent
+      .mockImplementationOnce(async () => ({ text: 'OK' }))
+      .mockImplementationOnce(async () => ({ text: 'circle=red; square=blue; number=twenty-seven' }))
+      .mockImplementationOnce(async () => ({ text: JSON.stringify({ ok: true }) }));
+    const res4 = await service.testGeminiConnection({ force: true });
+    expect(res4.multimodal).toBe('ok');
+  });
+
+  it('rejects invalid vision response and includes received synthetic response preview in error', async () => {
+    configGet.mockImplementation((key: string) =>
+      key === 'GEMINI_API_KEY' ? 'test-gemini-key' : undefined,
+    );
+    prisma.promptVersion.findFirst.mockResolvedValue({
+      value: JSON.stringify(configFor('gemini', 'gemini-3.5-flash')),
+    });
+
+    mockGenerateContent
+      .mockImplementationOnce(async () => ({ text: 'OK' }))
+      .mockImplementationOnce(async () => ({ text: 'circle=green;square=blue;number=27' }))
+      .mockImplementationOnce(async () => ({ text: JSON.stringify({ ok: true }) }));
+
+    const res = await service.testGeminiConnection({ force: true });
+    expect(res.multimodal).toBe('error');
+    expect(res.error).toContain('Réponse vision invalide.');
+    expect(res.error).toContain('circle=green;square=blue;number=27');
+  });
+
+  it('uses global location for runtime and probe Vertex AI calls', async () => {
+    const vertexConfig = configFor('vertex', 'gemini-3.5-flash');
+    prisma.promptVersion.findFirst.mockResolvedValue({ value: JSON.stringify(vertexConfig) });
+    prisma.systemSetting.findUnique.mockResolvedValue({
+      value: JSON.stringify({
+        type: 'service_account',
+        project_id: 'demo',
+        client_email: 'a@b.com',
+        private_key: '-----BEGIN PRIVATE KEY-----\nX\n-----END PRIVATE KEY-----\n',
+      }),
+    });
+    configGet.mockImplementation((key: string) =>
+      key === 'VERTEX_LOCATION' ? 'global' : undefined,
+    );
+
+    const result = await service.testVertexConnection({ force: true });
+    expect(result.location).toBe('global');
+    expect(service.getVertexLocation()).toBe('global');
   });
 
   it('runs two active Vertex model pairs separately and keeps their cache isolated', async () => {

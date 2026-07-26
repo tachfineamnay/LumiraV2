@@ -142,11 +142,12 @@ describe('AiModelCatalogService — discovery & matrix merging', () => {
     expect(gpt54Merged?.operational).toBe(true);
   });
 
-  it('utilise le même emplacement Vertex (VERTEX_LOCATION) que le runtime (europe-west1)', async () => {
+  it('utilise us-central1 pour le catalogue Model Garden et n’appelle jamais global-aiplatform.googleapis.com', async () => {
     const catalog = await service.getAvailableModels({ force: true });
     const url = String((global.fetch as jest.Mock).mock.calls[0][0]);
-    expect(url).toContain('europe-west1-aiplatform.googleapis.com');
-    expect(catalog.vertex.location).toBe('europe-west1');
+    expect(url).toContain('us-central1-aiplatform.googleapis.com');
+    expect(url).not.toContain('global-aiplatform.googleapis.com');
+    expect(catalog.vertex.location).toBe('us-central1');
   });
 
   it('conserve les modèles enregistrés comme detected=false lorsque les identifiants manquent', async () => {
