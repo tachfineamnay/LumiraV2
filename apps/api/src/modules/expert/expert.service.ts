@@ -780,14 +780,16 @@ export class ExpertService {
       const latestSealed = await tx.readingVersion.findFirst({
         where: { orderId, status: 'SEALED' },
         orderBy: { version: 'desc' },
-        select: { id: true },
+        select: { id: true, version: true, content: true },
       });
-      if (latestSealed) {
-        await tx.readingVersion.update({
-          where: { id: latestSealed.id },
-          data: { reopenedAt: now },
-        });
+      if (!latestSealed) {
+        throw new BadRequestException('Aucune version scellée ne peut être réouverte');
       }
+      const canonical = buildGeneratedReadingVersion(latestSealed.content);
+      await tx.readingVersion.update({
+        where: { id: latestSealed.id },
+        data: { reopenedAt: now },
+      });
 
       await tx.order.update({
         where: { id: orderId },
@@ -811,6 +813,19 @@ export class ExpertService {
               reason: reason?.trim() || null,
             },
           },
+          // Recreate the only editable projection from the immutable sealed
+          // version. This prevents the Desk editor from reopening into a
+          // status-only state with no structured content.
+          generatedContent: toJson({
+            ...canonical,
+            canonicalReadingVersionId: latestSealed.id,
+            canonicalReadingVersion: latestSealed.version,
+            reopenedFromVersionId: latestSealed.id,
+            reopenedAt: now.toISOString(),
+            readingRevision: 0,
+            blockVersions: {},
+            expertEditHistory: [],
+          }),
         },
       });
     });
@@ -1337,7 +1352,6 @@ export class ExpertService {
         {
           preserveStructure: true,
           maxTokens: 4096,
-          temperature: 0.7,
           routing: {
             orderId: order.id,
             productLevel: productLevelFromAmountCents(order.amount),
@@ -1470,7 +1484,6 @@ MESSAGE DE L'EXPERT:`;
       // Use the chatWithUser method but with our custom system prompt
       const response = await this.vertexOracle.refineText(`${systemPrompt}\n\n${dto.message}`, {
         maxTokens: 1024,
-        temperature: 0.9,
       });
 
       this.logger.log(`✅ AI Chat response generated for order ${order.orderNumber}`);

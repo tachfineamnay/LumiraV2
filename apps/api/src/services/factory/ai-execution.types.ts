@@ -73,6 +73,8 @@ export interface AiRunRecordInput {
   model: string;
   promptVersionId?: string;
   routingSource?: string;
+  executionSnapshot?: Record<string, unknown>;
+  inputSnapshot?: Record<string, unknown>;
 }
 
 export const AGENT_PROMPT_KEYS: Record<AgentType, string> = {

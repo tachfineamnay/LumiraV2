@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3ObjectMetadata, S3ObjectResult, S3Service } from './s3.service';
 import { createHash } from 'crypto';
+import { Readable } from 'stream';
+import sharp from 'sharp';
 
 export type OnboardingPhotoKind = 'face' | 'palm';
 export type PhotoActorType = 'client' | 'expert';
@@ -22,6 +24,21 @@ export interface ValidatedOnboardingPhoto {
 export interface PrivatePhotoStreamResult extends S3ObjectResult {
   contentType: string;
 }
+
+/** A verified visual asset. The bytes are intentionally short lived and are
+ * passed only to the multimodal call; durable audit metadata is stored without
+ * a signed URL or raw image data. */
+export interface PreparedOnboardingPhoto extends ValidatedOnboardingPhoto {
+  kind: OnboardingPhotoKind;
+  width: number;
+  height: number;
+  orientation: number | null;
+  sha256: string;
+  base64: string;
+}
+
+const MIN_IMAGE_DIMENSION = 64;
+const MAX_IMAGE_DIMENSION = 8192;
 
 @Injectable()
 export class PrivateOnboardingPhotoService {
@@ -183,6 +200,58 @@ export class PrivateOnboardingPhotoService {
     };
   }
 
+  /**
+   * Reads, decodes and fingerprints the exact private object used by a
+   * multimodal generation. Head metadata alone is never sufficient: clients
+   * can upload a different binary under an image content type.
+   */
+  async prepareForAi(
+    storageRef: string,
+    expectedUserId: string,
+    kind: OnboardingPhotoKind,
+  ): Promise<PreparedOnboardingPhoto> {
+    const validated = await this.validateOnboardingPhoto(storageRef, expectedUserId, kind);
+    const object = await this.s3Service.getObject(validated.key, 'uploads');
+    const bytes = await this.readStream(object.stream, MAX_ONBOARDING_PHOTO_BYTES);
+    if (bytes.length !== validated.size) {
+      throw new BadRequestException(`La photo ${kind} a changé pendant sa validation`);
+    }
+
+    let metadata: sharp.Metadata;
+    try {
+      // rotate().toBuffer() forces a full decode and rejects truncated/corrupt
+      // payloads while preserving no transformed bytes in persistence.
+      const decoder = sharp(bytes, { failOn: 'error', limitInputPixels: MAX_IMAGE_DIMENSION ** 2 });
+      metadata = await decoder.metadata();
+      await decoder.rotate().toBuffer();
+    } catch {
+      throw new BadRequestException(`La photo ${kind} est illisible ou corrompue`);
+    }
+
+    const actualContentType = this.contentTypeForFormat(metadata.format);
+    if (!actualContentType || actualContentType !== validated.contentType) {
+      throw new BadRequestException(`Le type réel de la photo ${kind} ne correspond pas à son type déclaré`);
+    }
+    if (!metadata.width || !metadata.height ||
+      metadata.width < MIN_IMAGE_DIMENSION || metadata.height < MIN_IMAGE_DIMENSION ||
+      metadata.width > MAX_IMAGE_DIMENSION || metadata.height > MAX_IMAGE_DIMENSION) {
+      throw new BadRequestException(`Les dimensions de la photo ${kind} sont inutilisables`);
+    }
+    if (object.contentType && object.contentType.split(';')[0].trim().toLowerCase() !== actualContentType) {
+      throw new BadRequestException(`Le stockage retourne un type incohérent pour la photo ${kind}`);
+    }
+
+    return {
+      ...validated,
+      kind,
+      width: metadata.width,
+      height: metadata.height,
+      orientation: metadata.orientation ?? null,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      base64: bytes.toString('base64'),
+    };
+  }
+
   async getPhotoStream(options: {
     clientId: string;
     kind: OnboardingPhotoKind;
@@ -293,6 +362,29 @@ export class PrivateOnboardingPhotoService {
     if (lower.endsWith('.webp')) return 'image/webp';
     if (lower.endsWith('.gif')) return 'image/gif';
     return 'image/jpeg';
+  }
+
+  private contentTypeForFormat(format: string | undefined): string | null {
+    if (format === 'jpeg') return 'image/jpeg';
+    if (format === 'png') return 'image/png';
+    if (format === 'webp') return 'image/webp';
+    return null;
+  }
+
+  private async readStream(stream: Readable, maxBytes: number): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of stream) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += bytes.length;
+      if (size > maxBytes) {
+        stream.destroy();
+        throw new BadRequestException('La photo dépasse la taille autorisée');
+      }
+      chunks.push(bytes);
+    }
+    if (size === 0) throw new BadRequestException('La photo est vide');
+    return Buffer.concat(chunks);
   }
 
   private fileHint(key: string): string {

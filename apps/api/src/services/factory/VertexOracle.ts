@@ -1,8 +1,7 @@
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiMission, ProductLevel } from '@prisma/client';
-import axios from 'axios';
+import { createHash } from 'crypto';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiExecutionResolverService, buildAiContext } from './ai-execution-resolver.service';
@@ -48,6 +47,10 @@ export interface ReadingPipelineMetadata {
   warnings: QualityIssue[];
   promptVersions: Record<string, string>;
   models: Record<string, string>;
+  visualObservations?: VisualObservation[];
+  visualAssets?: Array<
+    Pick<VisualImageInput, 'kind' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>
+  >;
 }
 
 export type LifeAreasMap = Record<string, { state: string; note?: string }>;
@@ -186,6 +189,42 @@ export type { AgentType, AiExecutionContext } from './ai-execution.types';
 
 type JsonSchema = Record<string, unknown>;
 type ImagePayload = { mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string };
+export interface VisualImageInput extends ImagePayload {
+  kind: 'face' | 'palm';
+  width: number;
+  height: number;
+  orientation: number | null;
+  sha256: string;
+}
+
+export interface VisualObservation {
+  role: 'face' | 'palm';
+  visible: string[];
+  uncertain: string[];
+  unavailable: string[];
+}
+
+const VISUAL_OBSERVATION_SCHEMA: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['observations'],
+  properties: {
+    observations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['role', 'visible', 'uncertain', 'unavailable'],
+        properties: {
+          role: { type: 'string', enum: ['face', 'palm'] },
+          visible: { type: 'array', items: { type: 'string' } },
+          uncertain: { type: 'array', items: { type: 'string' } },
+          unavailable: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  },
+};
 type TrackedResult = { text: string; inputTokens?: number; outputTokens?: number };
 
 const ARCHETYPES = [
@@ -414,8 +453,6 @@ export class VertexOracle implements OnModuleInit {
   private agentContexts: Record<AgentType, string> = { ...DEFAULT_AGENT_CONTEXTS };
   private modelConfig: AiModelConfigSnapshot = this.cloneModelConfig(DEFAULT_AI_MODEL_CONFIG);
   private readonly calculationsService = new ReadingCalculationsService();
-  private readonly onboardingS3Client: S3Client;
-  private readonly onboardingBucket: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -423,19 +460,7 @@ export class VertexOracle implements OnModuleInit {
     private readonly aiExecutionResolver: AiExecutionResolverService,
     private readonly aiRunService: AiRunService,
     private readonly aiRuntimeCache: AiRuntimeCacheService,
-  ) {
-    this.onboardingBucket = this.configService.get<string>(
-      'AWS_UPLOADS_BUCKET_NAME',
-      this.configService.get<string>('S3_UPLOAD_BUCKET', ''),
-    );
-    this.onboardingS3Client = new S3Client({
-      region: this.configService.get<string>('AWS_REGION', 'eu-west-3'),
-      credentials: {
-        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID', ''),
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY', ''),
-      },
-    });
-  }
+  ) {}
 
   onModuleInit(): void {
     this.aiRuntimeCache.registerInvalidator(() => this.invalidateCache());
@@ -617,6 +642,7 @@ export class VertexOracle implements OnModuleInit {
     resolved: ResolvedAiExecution,
     timeoutMs: number,
     operation: (signal: AbortSignal) => Promise<TrackedResult>,
+    inputSnapshot: Record<string, unknown>,
   ): Promise<string> {
     const startedAt = Date.now();
     const baseRun = {
@@ -628,6 +654,16 @@ export class VertexOracle implements OnModuleInit {
       model: resolved.model,
       promptVersionId: resolved.promptVersionId,
       routingSource: resolved.routingSource,
+      executionSnapshot: {
+        provider: resolved.provider,
+        model: resolved.model,
+        thinkingLevel: resolved.thinkingLevel ?? null,
+        maxTokens: resolved.maxTokens,
+        promptVersionId: resolved.promptVersionId ?? null,
+        routingSource: resolved.routingSource,
+        systemPromptSha256: this.sha256(resolved.systemPrompt),
+      },
+      inputSnapshot,
     };
 
     try {
@@ -780,13 +816,18 @@ export class VertexOracle implements OnModuleInit {
     const adapter = this.requireAdapter(resolved.provider);
     this.logResolvedRoute(ctx.agent, resolved);
 
-    const text = await this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) =>
-      adapter.complete(
-        this.buildLlmRequest(resolved, userContent, signal, timeoutMs, {
-          images,
-          jsonSchema: { name: schemaName, schema },
-        }),
-      ),
+    const text = await this.runTrackedCall(
+      ctx,
+      resolved,
+      timeoutMs,
+      async (signal) =>
+        adapter.complete(
+          this.buildLlmRequest(resolved, userContent, signal, timeoutMs, {
+            images,
+            jsonSchema: { name: schemaName, schema },
+          }),
+        ),
+      this.snapshotInput(userContent, { schemaName, imageCount: images.length }),
     );
 
     try {
@@ -808,11 +849,37 @@ export class VertexOracle implements OnModuleInit {
     const adapter = this.requireAdapter(resolved.provider);
     this.logResolvedRoute(ctx.agent, resolved);
 
-    return this.runTrackedCall(ctx, resolved, timeoutMs, async (signal) =>
-      adapter.complete(
-        this.buildLlmRequest(resolved, userContent, signal, timeoutMs, { maxTokens }),
-      ),
+    return this.runTrackedCall(
+      ctx,
+      resolved,
+      timeoutMs,
+      async (signal) =>
+        adapter.complete(
+          this.buildLlmRequest(resolved, userContent, signal, timeoutMs, { maxTokens }),
+        ),
+      this.snapshotInput(userContent, { imageCount: 0 }),
     );
+  }
+
+  private snapshotInput(content: string, extras: Record<string, unknown>): Record<string, unknown> {
+    return {
+      // Text is retained for reproducibility; binary image bytes and URLs are
+      // never stored here. Their role/hash metadata lives in the sealed intake.
+      content,
+      sha256: this.sha256(content),
+      ...extras,
+    };
+  }
+
+  private sha256(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
+  }
+
+  /** Compatibility seam for historical callers. Production generation never
+   * accepts a URL here; DigitalSoul supplies decoded, validated intake bytes. */
+  private async fetchImageAsBase64(url: string): Promise<ImagePayload> {
+    void url;
+    throw new Error('Les images doivent provenir du dossier scellé validé.');
   }
 
   private logResolvedRoute(agent: AgentType, resolved: ResolvedAiExecution): void {
@@ -870,6 +937,7 @@ export class VertexOracle implements OnModuleInit {
   async generateCoreReadingWithPipeline(
     userProfile: UserProfile,
     orderContext: OrderContext,
+    visualAssets: VisualImageInput[] = [],
   ): Promise<{
     pdf_content: PdfContent;
     synthesis: ReadingSynthesis;
@@ -884,24 +952,18 @@ export class VertexOracle implements OnModuleInit {
     const scribeResolved = await this.resolveExecution(scribeCtx);
     const scribeModelName = `${scribeResolved.provider}:${scribeResolved.model}`;
 
-    const images: ImagePayload[] = [];
-    if (userProfile.facePhotoUrl) {
-      images.push(await this.fetchImageAsBase64(userProfile.facePhotoUrl));
-    }
-    if (userProfile.palmPhotoUrl) {
-      images.push(await this.fetchImageAsBase64(userProfile.palmPhotoUrl));
-    }
+    const visualObservations = await this.observeVisualAssets(scribeCtx, visualAssets);
 
     let scribeResult = await this.callJson<{
       pdf_content: PdfContent;
       synthesis: ReadingSynthesis;
     }>(
       scribeCtx,
-      this.buildScribePrompt(userProfile, orderContext),
+      this.buildScribePrompt(userProfile, orderContext, visualObservations),
       'lumira_core_reading',
       SCRIBE_SCHEMA,
       300_000,
-      images,
+      [],
     );
 
     try {
@@ -950,6 +1012,8 @@ export class VertexOracle implements OnModuleInit {
           models: {
             SCRIBE: scribeModelName,
           },
+          visualObservations,
+          visualAssets: this.snapshotVisualAssets(visualAssets),
         },
       };
     }
@@ -1035,6 +1099,8 @@ ${JSON.stringify(scribeResult, null, 2)}`;
           SCRIBE: scribeModelName,
           EDITOR: editorModelName,
         },
+        visualObservations,
+        visualAssets: this.snapshotVisualAssets(visualAssets),
       },
     };
   }
@@ -1072,19 +1138,21 @@ ${JSON.stringify(scribeResult, null, 2)}`;
   async generateCoreReading(
     userProfile: UserProfile,
     orderContext: OrderContext,
+    visualAssets: VisualImageInput[] = [],
   ): Promise<{
     pdf_content: PdfContent;
     synthesis: ReadingSynthesis;
     pipeline?: ReadingPipelineMetadata;
   }> {
-    return this.generateCoreReadingWithPipeline(userProfile, orderContext);
+    return this.generateCoreReadingWithPipeline(userProfile, orderContext, visualAssets);
   }
 
   async generateFullReading(
     userProfile: UserProfile,
     orderContext: OrderContext,
+    visualAssets: VisualImageInput[] = [],
   ): Promise<OracleResponse> {
-    const core = await this.generateCoreReadingWithPipeline(userProfile, orderContext);
+    const core = await this.generateCoreReadingWithPipeline(userProfile, orderContext, visualAssets);
     const timeline = await this.generateTimeline(userProfile, core.synthesis, {
       orderId: orderContext.orderId,
       productLevel: orderContext.productLevel,
@@ -1103,14 +1171,18 @@ ${JSON.stringify(scribeResult, null, 2)}`;
     options?: {
       preserveStructure?: boolean;
       maxTokens?: number;
-      temperature?: number;
+      context?: string;
       routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>;
     },
   ): Promise<string> {
     await this.ensureInitialized();
     const ctx = buildAiContext('EDITOR', AiMission.CONTENT_REFINEMENT, options?.routing);
     const systemPrompt = `Tu es l'agent EDITOR d'Oracle Lumira. Ta mission est d'affiner, corriger ou adapter le texte fourni selon les instructions précises. Conserve le ton et l'interprétation originale sans inventer de faits non demandés.`;
-    const userPrompt = `CONTENU À REVOIR:\n"${content}"\n\nINSTRUCTION:\n${instruction}`;
+    const userPrompt = [
+      options?.context ? `CONTEXTE CANONIQUE:\n${options.context}` : '',
+      `CONTENU À REVOIR:\n"${content}"`,
+      `INSTRUCTION:\n${instruction}`,
+    ].filter(Boolean).join('\n\n');
     return this.callText(
       ctx,
       `${systemPrompt}\n\n---\n\n${userPrompt}`,
@@ -1121,12 +1193,12 @@ ${JSON.stringify(scribeResult, null, 2)}`;
 
   async refineText(
     userPrompt: string,
-    options?: { systemPrompt?: string; maxTokens?: number; temperature?: number },
+    options?: { systemPrompt?: string; maxTokens?: number },
   ): Promise<string> {
     return this.refineContent(
       userPrompt,
       options?.systemPrompt || 'Affine ce contenu sans en changer le sens.',
-      { maxTokens: options?.maxTokens, temperature: options?.temperature },
+      { maxTokens: options?.maxTokens },
     );
   }
 
@@ -1259,7 +1331,11 @@ ${text}`,
     });
   }
 
-  private buildScribePrompt(profile: UserProfile, order: OrderContext): string {
+  private buildScribePrompt(
+    profile: UserProfile,
+    order: OrderContext,
+    visualObservations: VisualObservation[] = [],
+  ): string {
     const calcs = (this.calculationsService ?? new ReadingCalculationsService()).calculate(
       profile.birthDate,
     );
@@ -1307,12 +1383,12 @@ ${text}`,
     if (profile.deliveryStyle) parts.push(`Style souhaité: ${profile.deliveryStyle}`);
     if (profile.pace !== undefined) parts.push(`Intensité souhaitée: ${profile.pace}/100`);
 
-    if (profile.facePhotoUrl || profile.palmPhotoUrl) {
-      parts.push('=== PHOTOS ===');
-      if (profile.facePhotoUrl) parts.push('Image 1: visage.');
-      if (profile.palmPhotoUrl) {
-        parts.push(profile.facePhotoUrl ? 'Image 2: paume.' : 'Image 1: paume.');
-      }
+    if (visualObservations.length > 0) {
+      parts.push(
+        '=== OBSERVATIONS VISUELLES FACTUELLES (NE PAS CONFONDRE AVEC L’INTERPRÉTATION SYMBOLIQUE) ===',
+        JSON.stringify(visualObservations),
+        'Utilise uniquement les éléments listés dans « visible ». N’invente jamais une ligne de main, un détail du visage, le côté d’une main ou une information absente ; les éléments « uncertain » et « unavailable » doivent rester inconnus.',
+      );
     }
     if (order.expertPrompt?.trim()) {
       parts.push('=== GUIDANCE PRINCIPALE DE L’EXPERT ===', order.expertPrompt.trim());
@@ -1328,6 +1404,54 @@ ${text}`,
       'Produis une lecture complète, personnelle, cohérente et argumentée. N’invente aucun détail absent ou invisible. Ancre chaque section dans la météo de vie et les éléments déclarés lorsque disponibles. Respecte exactement le schéma de sortie.',
     );
     return parts.join('\n');
+  }
+
+  private async observeVisualAssets(
+    ctx: AiExecutionContext,
+    assets: VisualImageInput[],
+  ): Promise<VisualObservation[]> {
+    if (assets.length === 0) return [];
+    const expectedRoles = assets.map((asset) => asset.kind).join(', ');
+    const assetAudit = assets
+      .map(
+        (asset) =>
+          `${asset.kind}: sha256=${asset.sha256}; type=${asset.mimeType}; dimensions=${asset.width}x${asset.height}; orientation=${asset.orientation ?? 'none'}`,
+      )
+      .join('\n');
+    const observations = await this.callJson<{ observations: VisualObservation[] }>(
+      ctx,
+      [
+        'Tu réalises uniquement des observations visuelles descriptives, sans symbolique ni diagnostic.',
+        `Les images fournies, dans cet ordre, ont les rôles vérifiés : ${expectedRoles}.`,
+        `Métadonnées vérifiées des actifs (sans URL ni contenu binaire) :\n${assetAudit}`,
+        'Pour chaque rôle, liste des faits nettement visibles dans visible. Place dans uncertain toute caractéristique ambiguë. Place dans unavailable les détails non visibles. Ne déduis jamais le côté d’une paume, une ligne de main, un trait facial ou une identité si ce n’est pas clairement identifiable.',
+        'Retourne exactement le JSON demandé.',
+      ].join('\n'),
+      'lumira_visual_observations',
+      VISUAL_OBSERVATION_SCHEMA,
+      120_000,
+      assets.map(({ mimeType, base64 }) => ({ mimeType, base64 })),
+    );
+    const byRole = new Map((observations.observations ?? []).map((item) => [item.role, item]));
+    return assets.map((asset) => {
+      const result = byRole.get(asset.kind);
+      return result && Array.isArray(result.visible) && Array.isArray(result.uncertain) && Array.isArray(result.unavailable)
+        ? { role: asset.kind, visible: result.visible, uncertain: result.uncertain, unavailable: result.unavailable }
+        : { role: asset.kind, visible: [], uncertain: [], unavailable: ['Observation indisponible'] };
+    });
+  }
+
+  private snapshotVisualAssets(
+    assets: VisualImageInput[],
+  ): Array<Pick<VisualImageInput, 'kind' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>> {
+    return assets.map(({ kind, mimeType, width, height, orientation, sha256 }) => ({
+      kind,
+      mimeType,
+      width,
+      height,
+      orientation,
+      sha256,
+    }));
   }
 
   /** One line per declared life area: "Relations & famille: tendu — note". */
@@ -1434,45 +1558,4 @@ ${text}`,
     return parts.join('\n');
   }
 
-  private async fetchImageAsBase64(url: string): Promise<ImagePayload> {
-    if (url.startsWith('s3://onboarding/')) {
-      if (!this.onboardingBucket) {
-        throw new Error('AWS_UPLOADS_BUCKET_NAME requis pour les photos privées.');
-      }
-      const key = url.slice('s3://'.length);
-      const response = await this.onboardingS3Client.send(
-        new GetObjectCommand({ Bucket: this.onboardingBucket, Key: key }),
-      );
-      if (!response.Body) throw new Error('Photo privée vide.');
-      const bytes = await response.Body.transformToByteArray();
-      if (bytes.length > 15 * 1024 * 1024) throw new Error('Photo supérieure à 15 Mo.');
-      return {
-        base64: Buffer.from(bytes).toString('base64'),
-        mimeType: this.normalizeImageMimeType(response.ContentType),
-      };
-    }
-
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'https:') throw new Error('Seules les photos HTTPS sont autorisées.');
-    const response = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 30_000,
-      maxContentLength: 15 * 1024 * 1024,
-      maxBodyLength: 15 * 1024 * 1024,
-    });
-    const buffer = Buffer.from(response.data);
-    if (buffer.length > 15 * 1024 * 1024) throw new Error('Photo supérieure à 15 Mo.');
-    return {
-      base64: buffer.toString('base64'),
-      mimeType: this.normalizeImageMimeType(response.headers['content-type']),
-    };
-  }
-
-  private normalizeImageMimeType(contentType?: string): 'image/jpeg' | 'image/png' | 'image/webp' {
-    const normalized = contentType?.split(';')[0].trim().toLowerCase();
-    if (normalized === 'image/png' || normalized === 'image/webp' || normalized === 'image/jpeg') {
-      return normalized;
-    }
-    return 'image/jpeg';
-  }
 }

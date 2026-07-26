@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Readable } from 'stream';
 import { PrivateOnboardingPhotoService } from './private-onboarding-photo.service';
 import { S3Service } from './s3.service';
+import sharp from 'sharp';
 
 describe('PrivateOnboardingPhotoService', () => {
   const prisma = {
@@ -15,6 +16,7 @@ describe('PrivateOnboardingPhotoService', () => {
 
   const s3Service = {
     getObject: jest.fn(),
+    headObject: jest.fn(),
   } as unknown as jest.Mocked<S3Service>;
 
   const service = new PrivateOnboardingPhotoService(prisma as never, s3Service);
@@ -158,6 +160,38 @@ describe('PrivateOnboardingPhotoService', () => {
           actorId: 'expert-1',
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('prepareForAi', () => {
+    it('decodes the exact face object and returns auditable visual metadata', async () => {
+      const bytes = await sharp({ create: { width: 128, height: 96, channels: 3, background: '#fff' } })
+        .jpeg()
+        .toBuffer();
+      s3Service.headObject.mockResolvedValue({
+        contentType: 'image/jpeg', contentLength: bytes.length, etag: 'etag-1', versionId: 'v1',
+      });
+      s3Service.getObject.mockResolvedValue({
+        stream: Readable.from([bytes]), contentType: 'image/jpeg', contentLength: bytes.length,
+      });
+
+      const result = await service.prepareForAi('s3://onboarding/user-1/face-1.jpg', 'user-1', 'face');
+
+      expect(result).toMatchObject({ kind: 'face', contentType: 'image/jpeg', width: 128, height: 96 });
+      expect(result.sha256).toHaveLength(64);
+      expect(result.base64).toBe(bytes.toString('base64'));
+    });
+
+    it('rejects a binary whose real type is different from S3 metadata', async () => {
+      const bytes = await sharp({ create: { width: 128, height: 128, channels: 3, background: '#fff' } })
+        .png()
+        .toBuffer();
+      s3Service.headObject.mockResolvedValue({ contentType: 'image/jpeg', contentLength: bytes.length, etag: 'etag-1' });
+      s3Service.getObject.mockResolvedValue({ stream: Readable.from([bytes]), contentType: 'image/jpeg' });
+
+      await expect(
+        service.prepareForAi('s3://onboarding/user-1/face-1.jpg', 'user-1', 'face'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

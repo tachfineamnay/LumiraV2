@@ -1,46 +1,32 @@
 import { AiRunService } from './ai-run.service';
-import { AiMission } from '@prisma/client';
 
 describe('AiRunService', () => {
-  it('persists run metadata without prompt content', async () => {
-    const create = jest.fn().mockResolvedValue({ id: 'run-1' });
-    const prisma = { aiRun: { create } };
+  it('persists the resolved thinking-only configuration and actual request snapshot', async () => {
+    const prisma = { aiRun: { create: jest.fn().mockResolvedValue({ id: 'run-1' }) } };
     const service = new AiRunService(prisma as never);
 
     await service.recordRun({
       orderId: 'order-1',
       agent: 'SCRIBE',
-      mission: AiMission.READING_GENERATION,
-      productLevel: 'PROFOND',
-      provider: 'gemini',
-      model: 'gemini-2.5-flash',
-      promptVersionId: 'pv-1',
-      routingSource: 'rule:PROFOND/SCRIBE/READING_GENERATION',
+      mission: 'READING_GENERATION' as never,
+      provider: 'vertex',
+      model: 'gemini-3.1-pro-preview',
       status: 'SUCCESS',
-      durationMs: 42,
-      inputTokens: 100,
-      outputTokens: 200,
-      estimatedCost: 0.01,
+      durationMs: 123,
+      executionSnapshot: {
+        provider: 'vertex', model: 'gemini-3.1-pro-preview', thinkingLevel: 'high',
+        promptVersionId: 'prompt-7', routingSource: 'model-config:SCRIBE',
+      },
+      inputSnapshot: { content: 'dossier scellé', sha256: 'input-hash', imageCount: 2 },
     });
 
-    expect(create).toHaveBeenCalledWith(
+    expect(prisma.aiRun.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          orderId: 'order-1',
-          agent: 'SCRIBE',
-          mission: AiMission.READING_GENERATION,
-          productLevel: 'PROFOND',
-          provider: 'gemini',
-          model: 'gemini-2.5-flash',
-          promptVersionId: 'pv-1',
-          status: 'SUCCESS',
-          durationMs: 42,
-          inputTokens: 100,
-          outputTokens: 200,
-          estimatedCost: 0.01,
+          executionSnapshot: expect.objectContaining({ thinkingLevel: 'high', promptVersionId: 'prompt-7' }),
+          inputSnapshot: expect.objectContaining({ content: 'dossier scellé', imageCount: 2 }),
         }),
       }),
     );
-    expect(create.mock.calls[0][0].data).not.toHaveProperty('systemPrompt');
   });
 });

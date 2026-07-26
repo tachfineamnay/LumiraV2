@@ -180,6 +180,24 @@ describe('ReadingWorkspaceService', () => {
     expect(result.restorableBlocks).not.toContain('conclusion');
   });
 
+  it('gives EDITOR the target block and adjacent canonical context', async () => {
+    const reading = validReading();
+    const harness = createHarness({ ...reading, readingRevision: 0 });
+    harness.vertexOracle.refineContent.mockResolvedValue('Conclusion corrigée dans son contexte.');
+
+    await harness.service.reviseBlock(
+      'order-1',
+      'conclusion',
+      { instruction: 'Rends la conclusion plus claire.', expectedRevision: 0 },
+      expert,
+    );
+
+    const [, , options] = harness.vertexOracle.refineContent.mock.calls[0];
+    expect(options.context).toContain('Bloc ciblé: conclusion');
+    expect(options.context).toContain('life_mission:');
+    expect(options.context).toContain('Archétype: Le Guide');
+  });
+
   it('blocks sealing when the canonical reading is structurally incomplete', async () => {
     const broken = validReading();
     broken.pdf_content.rituals[0].instructions = [];

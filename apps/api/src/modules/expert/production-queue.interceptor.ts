@@ -6,7 +6,7 @@ import {
   NestInterceptor,
   NotFoundException,
 } from '@nestjs/common';
-import { Expert, Prisma } from '@prisma/client';
+import { Expert } from '@prisma/client';
 import { from, Observable } from 'rxjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductionControlService } from './production-control.service';
@@ -85,7 +85,6 @@ export class ProductionQueueInterceptor implements NestInterceptor {
         expertPrompt: true,
         expertInstructions: true,
         generatedContent: true,
-        revisionCount: true,
       },
     });
     if (!order) throw new NotFoundException('Commande non trouvée');
@@ -98,34 +97,14 @@ export class ProductionQueueInterceptor implements NestInterceptor {
       );
     }
 
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        generatedContent: Prisma.DbNull,
-        revisionCount: { increment: 1 },
-      },
+    // The current delivered/draft projection remains readable while a new
+    // candidate is queued. DigitalSoul promotes its result only after the
+    // complete candidate has passed deterministic validation.
+    return this.production.enqueueReading(orderId, request.expert, {
+      expertPrompt: order.expertPrompt.trim(),
+      expertInstructions: this.stringValue(order.expertInstructions),
+      regenerationOfExistingContent: Boolean(order.generatedContent),
     });
-
-    try {
-      return await this.production.enqueueReading(orderId, request.expert, {
-        expertPrompt: order.expertPrompt.trim(),
-        expertInstructions: this.stringValue(order.expertInstructions),
-      });
-    } catch (error) {
-      await this.prisma.order
-        .update({
-          where: { id: orderId },
-          data: {
-            generatedContent:
-              order.generatedContent === null
-                ? Prisma.DbNull
-                : (order.generatedContent as Prisma.InputJsonValue),
-            revisionCount: order.revisionCount,
-          },
-        })
-        .catch(() => undefined);
-      throw error;
-    }
   }
 
   private stringValue(value: unknown): string | undefined {

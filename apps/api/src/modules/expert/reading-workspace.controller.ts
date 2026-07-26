@@ -62,6 +62,16 @@ export class ReadingWorkspaceController {
     return this.workspace.generate(orderId, dto, expert);
   }
 
+  @Post('scribe')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async sendBackToScribe(
+    @Param('id') orderId: string,
+    @Body() dto: GenerateWorkspaceReadingDto,
+    @CurrentExpert() expert: Expert,
+  ) {
+    return this.workspace.sendBackToScribe(orderId, dto, expert);
+  }
+
   @Patch('draft')
   async saveDraft(
     @Param('id') orderId: string,

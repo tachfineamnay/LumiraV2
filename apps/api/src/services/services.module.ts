@@ -28,9 +28,10 @@ import { AiRunService } from './factory/ai-run.service';
 import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';
 import { GeminiTtsProvider } from './factory/tts/GeminiTtsProvider';
 import { GoogleCloudTtsProvider } from './factory/tts/GoogleCloudTtsProvider';
+import { UploadsModule } from '../modules/uploads/uploads.module';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, ScheduleModule.forRoot()],
+  imports: [ConfigModule, PrismaModule, UploadsModule, ScheduleModule.forRoot()],
   providers: [
     AiRuntimeCacheService,
     AiExecutionResolverService,

@@ -748,6 +748,9 @@ model AiRun {
   model           String
   promptVersionId String?
   routingSource   String?
+  /// Immutable, sanitized configuration and input snapshots used for this call.
+  executionSnapshot Json?
+  inputSnapshot     Json?
   startedAt       DateTime      @default(now())
   completedAt     DateTime?
   durationMs      Int?

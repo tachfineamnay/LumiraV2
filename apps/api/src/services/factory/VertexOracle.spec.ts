@@ -356,17 +356,12 @@ describe('VertexOracle OpenAI-only runtime', () => {
       .mockResolvedValueOnce({ base64: 'ZmFjZQ==', mimeType: 'image/png' })
       .mockResolvedValueOnce({ base64: 'cGFsbQ==', mimeType: 'image/webp' });
 
-    await service.generateCoreReading(
-      {
-        ...userProfile,
-        facePhotoUrl: 'https://example.com/face.png',
-        palmPhotoUrl: 'https://example.com/palm.webp',
-      },
-      orderContext,
-    );
+    await service.generateCoreReading(userProfile, orderContext, [
+      { kind: 'face', base64: 'ZmFjZQ==', mimeType: 'image/png', width: 128, height: 128, orientation: null, sha256: 'face' },
+      { kind: 'palm', base64: 'cGFsbQ==', mimeType: 'image/webp', width: 128, height: 128, orientation: null, sha256: 'palm' },
+    ]);
 
-    expect(fetchImage).toHaveBeenNthCalledWith(1, 'https://example.com/face.png');
-    expect(fetchImage).toHaveBeenNthCalledWith(2, 'https://example.com/palm.webp');
+    expect(fetchImage).not.toHaveBeenCalled();
     const content = responsesCreate.mock.calls[0][0].input[0].content;
     expect(content[1]).toEqual(
       expect.objectContaining({

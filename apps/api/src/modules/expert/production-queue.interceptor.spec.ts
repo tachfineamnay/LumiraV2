@@ -89,30 +89,25 @@ describe('ProductionQueueInterceptor', () => {
     expect(production.waitForJob).not.toHaveBeenCalled();
   });
 
-  it('clears the draft and increments revision count before queueing a regeneration', async () => {
+  it('keeps the current draft until the queued regeneration is promoted', async () => {
     const result = await firstValueFrom(
       interceptor.intercept(httpContext('/expert/orders/order-1/regenerate'), next),
     );
 
     expect(result).toEqual(expect.objectContaining({ status: 'QUEUED' }));
-    expect(prisma.order.update).toHaveBeenCalledWith({
-      where: { id: 'order-1' },
-      data: expect.objectContaining({
-        generatedContent: expect.anything(),
-        revisionCount: { increment: 1 },
-      }),
-    });
+    expect(prisma.order.update).not.toHaveBeenCalled();
     expect(production.enqueueReading).toHaveBeenCalledWith(
       'order-1',
       expect.objectContaining({ id: 'expert-1' }),
       {
         expertPrompt: 'Prompt enregistré',
         expertInstructions: 'Instruction enregistrée',
+        regenerationOfExistingContent: true,
       },
     );
   });
 
-  it('restores the previous draft when regeneration cannot be queued', async () => {
+  it('does not mutate the current draft when regeneration cannot be queued', async () => {
     production.enqueueReading.mockRejectedValueOnce(new Error('Job already active'));
 
     await expect(
@@ -121,12 +116,6 @@ describe('ProductionQueueInterceptor', () => {
       ),
     ).rejects.toThrow('Job already active');
 
-    expect(prisma.order.update).toHaveBeenLastCalledWith({
-      where: { id: 'order-1' },
-      data: {
-        generatedContent: { pdf_content: { introduction: 'Ancienne lecture' } },
-        revisionCount: 2,
-      },
-    });
+    expect(prisma.order.update).not.toHaveBeenCalled();
   });
 });

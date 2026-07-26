@@ -11,6 +11,20 @@ describe('ExpertService reopenForRevision', () => {
   } as const;
 
   function buildService(orderOverrides: Record<string, unknown> = {}) {
+    const sealedContent = {
+      pdf_content: {
+        introduction: 'Introduction scellée',
+        archetype_reveal: 'Révélation scellée',
+        sections: [{ domain: 'spirituel', title: 'Spirituel', content: 'Contenu scellé' }],
+        karmic_insights: [],
+        life_mission: 'Mission scellée',
+        rituals: [],
+        conclusion: 'Conclusion scellée',
+      },
+      synthesis: { archetype: 'Le Guide', keywords: [], emotional_state: '', key_blockage: '' },
+      timeline: [],
+      lecture: 'Lecture scellée',
+    };
     const order = {
       id: 'ord-1',
       orderNumber: 'LUM-001',
@@ -22,7 +36,7 @@ describe('ExpertService reopenForRevision', () => {
 
     const tx = {
       readingVersion: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'rv-1' }),
+        findFirst: jest.fn().mockResolvedValue({ id: 'rv-1', version: 3, content: sealedContent }),
         update: jest.fn().mockResolvedValue({ id: 'rv-1' }),
       },
       order: {
@@ -70,7 +84,15 @@ describe('ExpertService reopenForRevision', () => {
     );
     expect(tx.order.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'AWAITING_VALIDATION' }),
+        data: expect.objectContaining({
+          status: 'AWAITING_VALIDATION',
+          generatedContent: expect.objectContaining({
+            canonicalReadingVersionId: 'rv-1',
+            canonicalReadingVersion: 3,
+            readingRevision: 0,
+            lecture: 'Lecture scellée',
+          }),
+        }),
       }),
     );
   });

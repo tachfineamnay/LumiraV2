@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiRunRecordInput, AiRunStatus } from './ai-execution.types';
 
@@ -29,6 +30,10 @@ export class AiRunService {
           model: input.model,
           promptVersionId: input.promptVersionId,
           routingSource: input.routingSource,
+          executionSnapshot: input.executionSnapshot
+            ? (input.executionSnapshot as Prisma.InputJsonValue)
+            : undefined,
+          inputSnapshot: input.inputSnapshot ? (input.inputSnapshot as Prisma.InputJsonValue) : undefined,
           status: input.status,
           durationMs: input.durationMs,
           errorCode: input.errorCode,

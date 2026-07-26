@@ -30,6 +30,10 @@ import {
 } from './reading-source.resolver';
 import { PathActionType, InsightCategory } from '@prisma/client';
 import { isCanonicalReadingContent } from '../../modules/expert/reading-version';
+import {
+  PreparedOnboardingPhoto,
+  PrivateOnboardingPhotoService,
+} from '../../modules/uploads/private-onboarding-photo.service';
 
 // S3 upload dependencies
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -72,6 +76,7 @@ export class DigitalSoulService {
     private readonly vertexOracle: VertexOracle,
     private readonly pdfFactory: PdfFactory,
     private readonly readingSourceResolver: ReadingSourceResolver,
+    private readonly onboardingPhotos: PrivateOnboardingPhotoService,
   ) {
     this.s3Region = this.configService.get<string>('AWS_REGION', 'eu-west-3');
     // Canonical production bucket with compatibility for older deployments.
@@ -118,6 +123,7 @@ export class DigitalSoulService {
         include: {
           user: { include: { profile: true } },
           files: true,
+          readingIntake: true,
         },
       });
 
@@ -144,6 +150,17 @@ export class DigitalSoulService {
 
       const user = order.user;
       const { userProfile, readingSource } = this.resolveReadingProfile(order);
+      const visualAssets = (await this.prepareVisualAssets(user.id, readingSource.profile)).map(
+        (asset) => ({
+          mimeType: asset.contentType as 'image/jpeg' | 'image/png' | 'image/webp',
+          base64: asset.base64,
+          kind: asset.kind,
+          width: asset.width,
+          height: asset.height,
+          orientation: asset.orientation,
+          sha256: asset.sha256,
+        }),
+      );
 
       this.logger.log(`👤 User: ${user.firstName} ${user.lastName}`);
       this.logger.log(`📎 Reading source for generation: ${readingSource.source}`);
@@ -167,7 +184,7 @@ export class DigitalSoulService {
 
       let aiResponse: OracleResponse;
       try {
-        aiResponse = await this.vertexOracle.generateFullReading(userProfile, orderContext);
+        aiResponse = await this.vertexOracle.generateFullReading(userProfile, orderContext, visualAssets);
         this.logger.log(`✅ AI response in ${Date.now() - aiStartTime}ms`);
         this.logger.log(`   🎭 Archetype: ${aiResponse.synthesis?.archetype}`);
       } catch (error) {
@@ -185,47 +202,58 @@ export class DigitalSoulService {
         throw new BadRequestException(errorMsg);
       }
 
-      // STEP 4: Update SpiritualPath and PathSteps
+      // STEP 4: Atomically promote the validated candidate. A regeneration
+      // must never reset an already-started path or overwrite the readable
+      // draft until all writes needed by the candidate can commit together.
       let stepsCreated = 0;
       try {
         const result = await this.prisma.$transaction(async (tx) => {
-          const path = await tx.spiritualPath.upsert({
-            where: { userId: user.id },
-            update: {
-              archetype: aiResponse.synthesis.archetype,
-              synthesis: aiResponse.pdf_content.introduction,
-              keyBlockage: aiResponse.synthesis.key_blockage || null,
-            },
-            create: {
-              userId: user.id,
-              archetype: aiResponse.synthesis.archetype,
-              synthesis: aiResponse.pdf_content.introduction,
-              keyBlockage: aiResponse.synthesis.key_blockage || null,
+          const hasExistingReading = isCanonicalReadingContent(order.generatedContent);
+          let created = 0;
+          if (!hasExistingReading) {
+            const path = await tx.spiritualPath.upsert({
+              where: { userId: user.id },
+              update: {
+                archetype: aiResponse.synthesis.archetype,
+                synthesis: aiResponse.pdf_content.introduction,
+                keyBlockage: aiResponse.synthesis.key_blockage || null,
+              },
+              create: {
+                userId: user.id,
+                archetype: aiResponse.synthesis.archetype,
+                synthesis: aiResponse.pdf_content.introduction,
+                keyBlockage: aiResponse.synthesis.key_blockage || null,
+              },
+            });
+            const steps = await Promise.all(
+              aiResponse.timeline.map((day, index) =>
+                tx.pathStep.create({
+                  data: {
+                    spiritualPathId: path.id,
+                    dayNumber: day.day || index + 1,
+                    title: day.title,
+                    description: day.action,
+                    synthesis: day.mantra,
+                    archetype: aiResponse.synthesis.archetype,
+                    actionType: this.mapActionType(day.actionType),
+                    isCompleted: false,
+                    unlockedAt: index === 0 ? new Date() : null,
+                    originReadingId: orderId,
+                  },
+                }),
+              ),
+            );
+            created = steps.length;
+          }
+          await tx.order.update({
+            where: { id: orderId },
+            data: {
+              status: 'AWAITING_VALIDATION',
+              generatedContent: this.withReadingSourceMetadata(aiResponse, readingSource),
+              errorLog: null,
             },
           });
-
-          await tx.pathStep.deleteMany({ where: { spiritualPathId: path.id } });
-
-          const steps = await Promise.all(
-            aiResponse.timeline.map(async (day, index) => {
-              return tx.pathStep.create({
-                data: {
-                  spiritualPathId: path.id,
-                  dayNumber: day.day || index + 1,
-                  title: day.title,
-                  description: day.action,
-                  synthesis: day.mantra,
-                  archetype: aiResponse.synthesis.archetype,
-                  actionType: this.mapActionType(day.actionType),
-                  isCompleted: false,
-                  unlockedAt: index === 0 ? new Date() : null,
-                  originReadingId: orderId,
-                },
-              });
-            }),
-          );
-
-          return steps.length;
+          return created;
         });
         stepsCreated = result;
       } catch (error) {
@@ -233,16 +261,6 @@ export class DigitalSoulService {
         await this.saveErrorAndFail(orderId, errorMsg);
         throw new BadRequestException(errorMsg);
       }
-
-      // STEP 5: Save content and set to AWAITING_VALIDATION
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'AWAITING_VALIDATION',
-          generatedContent: this.withReadingSourceMetadata(aiResponse, readingSource),
-          errorLog: null,
-        },
-      });
 
       const elapsed = Date.now() - startTime;
       this.logger.log(`\n${'='.repeat(60)}`);
@@ -840,13 +858,49 @@ export class DigitalSoulService {
   // HELPER METHODS
   // ===========================================================================
 
-  private resolveReadingProfile(order: OrderForReadingSource & { files?: unknown[] }): {
+  private resolveReadingProfile(
+    order: OrderForReadingSource & {
+      files?: unknown[];
+      readingIntake?: { data: unknown; sealedAt: Date | null; contentHash: string | null } | null;
+    },
+  ): {
     userProfile: UserProfile;
     readingSource: ResolvedReadingSource;
   } {
-    const readingSource = this.readingSourceResolver.resolve(order);
+    // ReadingIntake is the canonical order-scoped source. clientInputs is kept
+    // only for orders created before the intake migration.
+    const intake = order.readingIntake;
+    const sourceOrder = intake?.sealedAt
+      ? {
+          ...order,
+          clientInputs: {
+            readingIntake: {
+              sealedAt: intake.sealedAt.toISOString(),
+              contentHash: intake.contentHash,
+              profile: intake.data,
+            },
+          },
+        }
+      : order;
+    const readingSource = this.readingSourceResolver.resolve(sourceOrder);
     const userProfile = this.readingSourceResolver.toVertexUserProfile(order.user, readingSource);
     return { userProfile, readingSource };
+  }
+
+  private async prepareVisualAssets(
+    userId: string,
+    profile: ResolvedReadingSource['profile'],
+  ): Promise<PreparedOnboardingPhoto[]> {
+    const requested: Array<{ kind: 'face' | 'palm'; storageRef: string | null }> = [
+      { kind: 'face', storageRef: profile.facePhotoUrl },
+      { kind: 'palm', storageRef: profile.palmPhotoUrl },
+    ];
+    const assets: PreparedOnboardingPhoto[] = [];
+    for (const asset of requested) {
+      if (!asset.storageRef) continue;
+      assets.push(await this.onboardingPhotos.prepareForAi(asset.storageRef, userId, asset.kind));
+    }
+    return assets;
   }
 
   private withReadingSourceMetadata(

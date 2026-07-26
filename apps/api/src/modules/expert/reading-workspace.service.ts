@@ -156,6 +156,7 @@ export class ReadingWorkspaceService {
     const refined = await this.vertexOracle.refineContent(current, dto.instruction, {
       preserveStructure: false,
       maxTokens: 4096,
+      context: this.buildEditorBlockContext(state.reading, blockId),
       routing: {
         orderId,
         productLevel: productLevelFromAmountCents(order.amount),
@@ -507,6 +508,45 @@ export class ReadingWorkspaceService {
     if (typeof value === 'string') return value;
     if (this.isRecord(value) && typeof value.content === 'string') return value.content;
     return null;
+  }
+
+  async sendBackToScribe(orderId: string, dto: GenerateWorkspaceReadingDto, expert: Expert) {
+    const priorities = dto.priorities?.filter(Boolean) ?? [];
+    const instructions = [
+      'Régénération complète demandée par l’expert. Conserver le contenu actuel jusqu’à la promotion du nouveau candidat.',
+      priorities.length ? `Domaines prioritaires : ${priorities.join(', ')}` : '',
+      dto.tone ? `Style de restitution : ${dto.tone}` : '',
+    ].filter(Boolean).join('\n');
+    return this.production.enqueueReading(orderId, expert, {
+      expertPrompt: dto.orientation.trim(),
+      expertInstructions: instructions,
+      regenerationOfExistingContent: true,
+    });
+  }
+
+  /** Supply EDITOR with the surrounding canonical reading, never an isolated
+   * paragraph that can lose its tone, domain or symbolic constraints. */
+  private buildEditorBlockContext(reading: CanonicalReadingContent, blockId: string): string {
+    const blocks = [
+      ['introduction', reading.pdf_content.introduction],
+      ['archetype_reveal', reading.pdf_content.archetype_reveal],
+      ...reading.pdf_content.sections.map((section) => [`section.${section.domain}`, section.content]),
+      ['life_mission', reading.pdf_content.life_mission],
+      ['conclusion', reading.pdf_content.conclusion],
+    ] as Array<[string, string]>;
+    const index = Math.max(0, blocks.findIndex(([id]) => id === blockId));
+    const surrounding = blocks
+      .slice(Math.max(0, index - 1), Math.min(blocks.length, index + 2))
+      .map(([id, value]) => `${id}: ${value}`)
+      .join('\n\n');
+    return [
+      `Archétype: ${reading.synthesis.archetype}`,
+      `Mots-clés: ${reading.synthesis.keywords.join(', ')}`,
+      `Bloc ciblé: ${blockId}`,
+      'Contexte adjacent canonique:',
+      surrounding,
+      'Ne modifie que le bloc ciblé ; préserve le sens et ne crée aucun fait ou observation visuelle.',
+    ].join('\n');
   }
 
   private indexFromBlock(blockId: string, prefix: string, max: number): number {

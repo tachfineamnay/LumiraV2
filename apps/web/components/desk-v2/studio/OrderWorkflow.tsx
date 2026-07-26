@@ -14,6 +14,7 @@ import {
   RefreshCw,
   RotateCcw,
   Send,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import expertApi from '@/lib/expertApi';
@@ -62,6 +63,7 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
   const [previewing, setPreviewing] = useState(false);
   const [sealing, setSealing] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [sendingToScribe, setSendingToScribe] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadWorkspace = useCallback(async () => {
@@ -284,6 +286,28 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
     }
   };
 
+  const sendBackToScribe = async () => {
+    const instruction = window.prompt('Nouvelles instructions pour SCRIBE', orientation);
+    if (instruction === null || instruction.trim().length < 3) return;
+    setSendingToScribe(true);
+    try {
+      await expertApi.post(`/expert/orders/${orderId}/reading/scribe`, {
+        orientation: instruction.trim(),
+        priorities,
+        tone,
+      });
+      setOrientation(instruction.trim());
+      toast.success('Lecture renvoyée au SCRIBE', {
+        description: 'La version actuelle reste disponible jusqu’à la réussite du nouveau brouillon.',
+      });
+      await loadWorkspace();
+    } catch (requestError: unknown) {
+      toast.error('Renvoi au SCRIBE impossible', { description: responseMessage(requestError) });
+    } finally {
+      setSendingToScribe(false);
+    }
+  };
+
   if (loading) {
     return (
       <CenteredState
@@ -433,14 +457,25 @@ export function OrderWorkflow({ orderId }: OrderWorkflowProps) {
                   Réouvrir
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setSealModalOpen(true)}
-                  disabled={!canSeal || sealing}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white disabled:opacity-40"
-                >
-                  <Send className="h-4 w-4" /> Sceller et envoyer
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void sendBackToScribe()}
+                    disabled={sendingToScribe || order.status !== 'AWAITING_VALIDATION'}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-500/40 px-3 text-sm font-semibold text-amber-700 hover:bg-amber-500/10 disabled:opacity-40"
+                  >
+                    {sendingToScribe ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Renvoyer au SCRIBE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSealModalOpen(true)}
+                    disabled={!canSeal || sealing}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                  >
+                    <Send className="h-4 w-4" /> Sceller et envoyer
+                  </button>
+                </>
               )}
             </div>
           </div>
