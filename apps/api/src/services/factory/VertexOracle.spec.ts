@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { AiMission, ProductLevel } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
+import { createHash } from 'crypto';
 import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiExecutionResolverService } from './ai-execution-resolver.service';
@@ -336,6 +337,65 @@ describe('VertexOracle OpenAI-only runtime', () => {
     );
   });
 
+  it('freezes one resolved execution per call and records only a non-sensitive input snapshot', async () => {
+    const frozenModel = 'gpt-5.5-2026-04-23';
+    resolver.mockImplementationOnce(async () => ({
+      provider: 'openai',
+      model: frozenModel,
+      maxTokens: 4096,
+      thinkingLevel: 'high',
+      systemPrompt: 'SCRIBE system prompt',
+      promptVersionId: 'scribe-prompt-9',
+      routingSource: 'model-config:SCRIBE',
+    }));
+    responsesCreate.mockResolvedValue({
+      status: 'completed',
+      output_text: JSON.stringify(coreResponse),
+      usage: { input_tokens: 100, output_tokens: 200 },
+    });
+
+    const result = await service.generateCoreReading(userProfile, {
+      ...orderContext,
+      intakeContentHash: 'sealed-intake-hash',
+    });
+
+    expect(resolver).toHaveBeenCalledTimes(1);
+    expect(responsesCreate.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ model: frozenModel, reasoning: { effort: 'high' } }),
+    );
+    const run = recordRun.mock.calls[0][0];
+    expect(run).toEqual(
+      expect.objectContaining({
+        provider: 'openai',
+        model: frozenModel,
+        promptVersionId: 'scribe-prompt-9',
+        executionSnapshot: expect.objectContaining({
+          provider: 'openai',
+          model: frozenModel,
+          thinkingLevel: 'high',
+          maxTokens: 4096,
+          promptVersionId: 'scribe-prompt-9',
+          systemPromptSha256: createHash('sha256').update('SCRIBE system prompt').digest('hex'),
+        }),
+      }),
+    );
+    expect(run.inputSnapshot).toEqual(
+      expect.objectContaining({
+        intakeContentHash: 'sealed-intake-hash',
+        inputSha256: expect.any(String),
+        schemaName: 'lumira_core_reading',
+        imageCount: 0,
+        imageRoles: [],
+        imageHashes: [],
+        promptVersionId: 'scribe-prompt-9',
+      }),
+    );
+    expect(JSON.stringify(run.inputSnapshot)).not.toContain('Jean Dupont');
+    expect(JSON.stringify(run.inputSnapshot)).not.toContain(userProfile.specificQuestion!);
+    expect(JSON.stringify(run.inputSnapshot)).not.toContain('SCRIBE system prompt');
+    expect(result.pipeline.models.SCRIBE).toBe(`${run.provider}:${run.model}`);
+  });
+
   it('sends face then palm with real MIME types and high detail', async () => {
     responsesCreate.mockResolvedValue({
       status: 'completed',
@@ -357,8 +417,24 @@ describe('VertexOracle OpenAI-only runtime', () => {
       .mockResolvedValueOnce({ base64: 'cGFsbQ==', mimeType: 'image/webp' });
 
     await service.generateCoreReading(userProfile, orderContext, [
-      { kind: 'face', base64: 'ZmFjZQ==', mimeType: 'image/png', width: 128, height: 128, orientation: null, sha256: 'face' },
-      { kind: 'palm', base64: 'cGFsbQ==', mimeType: 'image/webp', width: 128, height: 128, orientation: null, sha256: 'palm' },
+      {
+        kind: 'face',
+        base64: 'ZmFjZQ==',
+        mimeType: 'image/png',
+        width: 128,
+        height: 128,
+        orientation: null,
+        sha256: 'face',
+      },
+      {
+        kind: 'palm',
+        base64: 'cGFsbQ==',
+        mimeType: 'image/webp',
+        width: 128,
+        height: 128,
+        orientation: null,
+        sha256: 'palm',
+      },
     ]);
 
     expect(fetchImage).not.toHaveBeenCalled();
@@ -394,6 +470,24 @@ describe('VertexOracle OpenAI-only runtime', () => {
     const result = await service.generateCoreReading(userProfile, orderContext);
     expect(result.pipeline?.qualityStatus).toBe('BLOCKED');
     expect(result.pipeline?.blockingIssues.some((i) => i.code === 'DOMAINS_NOT_UNIQUE')).toBe(true);
+  });
+
+  it('blocks a final invalid candidate before GUIDE generation', async () => {
+    responsesCreate.mockResolvedValue({
+      status: 'completed',
+      output_text: JSON.stringify({
+        ...coreResponse,
+        pdf_content: {
+          ...coreResponse.pdf_content,
+          sections: sections.map((section) => ({ ...section, domain: 'spirituel' })),
+        },
+      }),
+    });
+
+    await expect(service.generateFullReading(userProfile, orderContext)).rejects.toThrow(
+      'Candidat de lecture bloqué par le validateur',
+    );
+    expect(responsesCreate).toHaveBeenCalledTimes(2); // SCRIBE + one EDITOR pass, never GUIDE
   });
 
   it('rejects invalid GUIDE day numbering', async () => {

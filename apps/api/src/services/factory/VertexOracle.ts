@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiMission, ProductLevel } from '@prisma/client';
 import { createHash } from 'crypto';
@@ -91,6 +91,7 @@ export interface OrderContext {
   productName: string;
   expertPrompt?: string;
   expertInstructions?: string;
+  intakeContentHash?: string;
 }
 
 export interface SectionContent {
@@ -806,13 +807,14 @@ export class VertexOracle implements OnModuleInit {
 
   private async callJson<T>(
     ctx: AiExecutionContext,
+    resolved: ResolvedAiExecution,
     userContent: string,
     schemaName: string,
     schema: JsonSchema,
     timeoutMs: number,
     images: ImagePayload[] = [],
+    imageMetadata: Array<Pick<VisualImageInput, 'kind' | 'sha256'>> = [],
   ): Promise<T> {
-    const resolved = await this.resolveExecution(ctx);
     const adapter = this.requireAdapter(resolved.provider);
     this.logResolvedRoute(ctx.agent, resolved);
 
@@ -827,7 +829,13 @@ export class VertexOracle implements OnModuleInit {
             jsonSchema: { name: schemaName, schema },
           }),
         ),
-      this.snapshotInput(userContent, { schemaName, imageCount: images.length }),
+      this.snapshotInput(ctx, resolved, userContent, {
+        schemaName,
+        images: imageMetadata,
+        timeoutMs,
+        maxTokens: resolved.maxTokens,
+        structured: true,
+      }),
     );
 
     try {
@@ -841,11 +849,11 @@ export class VertexOracle implements OnModuleInit {
 
   private async callText(
     ctx: AiExecutionContext,
+    resolved: ResolvedAiExecution,
     userContent: string,
     timeoutMs: number,
     maxTokens?: number,
   ): Promise<string> {
-    const resolved = await this.resolveExecution(ctx);
     const adapter = this.requireAdapter(resolved.provider);
     this.logResolvedRoute(ctx.agent, resolved);
 
@@ -857,17 +865,40 @@ export class VertexOracle implements OnModuleInit {
         adapter.complete(
           this.buildLlmRequest(resolved, userContent, signal, timeoutMs, { maxTokens }),
         ),
-      this.snapshotInput(userContent, { imageCount: 0 }),
+      this.snapshotInput(ctx, resolved, userContent, {
+        timeoutMs,
+        maxTokens: maxTokens ?? resolved.maxTokens,
+        structured: false,
+      }),
     );
   }
 
-  private snapshotInput(content: string, extras: Record<string, unknown>): Record<string, unknown> {
+  private snapshotInput(
+    ctx: AiExecutionContext,
+    resolved: ResolvedAiExecution,
+    content: string,
+    options: {
+      schemaName?: string;
+      images?: Array<Pick<VisualImageInput, 'kind' | 'sha256'>>;
+      timeoutMs: number;
+      maxTokens: number;
+      structured: boolean;
+    },
+  ): Record<string, unknown> {
+    const images = options.images ?? [];
     return {
-      // Text is retained for reproducibility; binary image bytes and URLs are
-      // never stored here. Their role/hash metadata lives in the sealed intake.
-      content,
-      sha256: this.sha256(content),
-      ...extras,
+      inputSha256: this.sha256(content),
+      ...(ctx.intakeContentHash ? { intakeContentHash: ctx.intakeContentHash } : {}),
+      ...(options.schemaName ? { schemaName: options.schemaName } : {}),
+      imageCount: images.length,
+      imageRoles: images.map((image) => image.kind),
+      imageHashes: images.map((image) => image.sha256),
+      ...(resolved.promptVersionId ? { promptVersionId: resolved.promptVersionId } : {}),
+      technical: {
+        timeoutMs: options.timeoutMs,
+        maxTokens: Math.min(options.maxTokens, resolved.maxTokens),
+        structured: options.structured,
+      },
     };
   }
 
@@ -948,17 +979,23 @@ export class VertexOracle implements OnModuleInit {
     const scribeCtx = buildAiContext('SCRIBE', AiMission.READING_GENERATION, {
       orderId: orderContext.orderId,
       productLevel: orderContext.productLevel,
+      intakeContentHash: orderContext.intakeContentHash,
     });
     const scribeResolved = await this.resolveExecution(scribeCtx);
     const scribeModelName = `${scribeResolved.provider}:${scribeResolved.model}`;
 
-    const visualObservations = await this.observeVisualAssets(scribeCtx, visualAssets);
+    const visualObservations = await this.observeVisualAssets(
+      scribeCtx,
+      scribeResolved,
+      visualAssets,
+    );
 
     let scribeResult = await this.callJson<{
       pdf_content: PdfContent;
       synthesis: ReadingSynthesis;
     }>(
       scribeCtx,
+      scribeResolved,
       this.buildScribePrompt(userProfile, orderContext, visualObservations),
       'lumira_core_reading',
       SCRIBE_SCHEMA,
@@ -966,11 +1003,13 @@ export class VertexOracle implements OnModuleInit {
       [],
     );
 
+    let structuralError: Error | null = null;
     try {
       this.validateCoreReading(scribeResult);
     } catch (valErr) {
+      structuralError = valErr instanceof Error ? valErr : new Error(String(valErr));
       this.logger.warn(
-        `[ReadingPipeline] SCRIBE basic schema note: ${valErr instanceof Error ? valErr.message : String(valErr)}`,
+        `[ReadingPipeline] SCRIBE structure invalid: ${structuralError.message}. Triggering EDITOR.`,
       );
     }
     scribeResult = normalizeReadingStrings(scribeResult);
@@ -997,7 +1036,7 @@ export class VertexOracle implements OnModuleInit {
     };
     const initialReport = validator.validate(initialCanonical);
 
-    if (initialReport.status === 'PASS') {
+    if (!structuralError && initialReport.status === 'PASS') {
       return {
         ...scribeResult,
         pipeline: {
@@ -1026,6 +1065,7 @@ export class VertexOracle implements OnModuleInit {
     const editorCtx = buildAiContext('EDITOR', AiMission.CONTENT_REFINEMENT, {
       orderId: orderContext.orderId,
       productLevel: orderContext.productLevel,
+      intakeContentHash: orderContext.intakeContentHash,
     });
     const editorResolved = await this.resolveExecution(editorCtx);
     const editorModelName = `${editorResolved.provider}:${editorResolved.model}`;
@@ -1042,6 +1082,7 @@ export class VertexOracle implements OnModuleInit {
     try {
       editorResult = await this.callJson<{ pdf_content: PdfContent; synthesis: ReadingSynthesis }>(
         editorCtx,
+        editorResolved,
         editorPrompt,
         'lumira_core_reading_editor',
         SCRIBE_SCHEMA,
@@ -1060,13 +1101,26 @@ ${JSON.stringify(scribeResult, null, 2)}`;
         editorResult = await this.callJson<{
           pdf_content: PdfContent;
           synthesis: ReadingSynthesis;
-        }>(editorCtx, repairPrompt, 'lumira_core_reading_editor_repair', SCRIBE_SCHEMA, 180_000);
+        }>(
+          editorCtx,
+          editorResolved,
+          repairPrompt,
+          'lumira_core_reading_editor_repair',
+          SCRIBE_SCHEMA,
+          180_000,
+        );
       } catch (repairError) {
         this.logger.error(
           `[ReadingPipeline] EDITOR JSON repair failed: ${repairError instanceof Error ? repairError.message : String(repairError)}. Falling back to SCRIBE output.`,
         );
         editorResult = null;
       }
+    }
+
+    if (structuralError && !editorResult) {
+      throw new Error(
+        `[ReadingPipeline] SCRIBE structure could not be repaired: ${structuralError.message}`,
+      );
     }
 
     const finalReading = editorResult ? normalizeReadingStrings(editorResult) : scribeResult;
@@ -1110,14 +1164,16 @@ ${JSON.stringify(scribeResult, null, 2)}`;
     synthesis: ReadingSynthesis,
     batchNumber: 1 | 2 | 3 = 1,
     pastDreams?: Array<{ content: string; symbols: string[]; createdAt: string }>,
-    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel' | 'intakeContentHash'>,
   ): Promise<TimelineDay[]> {
     await this.ensureInitialized();
     const startDay = (batchNumber - 1) * 10 + 1;
     const endDay = batchNumber * 10;
     const ctx = buildAiContext('GUIDE', AiMission.TIMELINE_BATCH, routing);
+    const resolved = await this.resolveExecution(ctx);
     const result = await this.callJson<{ timeline: TimelineDay[] }>(
       ctx,
+      resolved,
       this.buildGuidePrompt(userProfile, synthesis, batchNumber, startDay, endDay, pastDreams),
       'lumira_timeline_batch',
       GUIDE_SCHEMA,
@@ -1130,7 +1186,7 @@ ${JSON.stringify(scribeResult, null, 2)}`;
   async generateTimeline(
     userProfile: UserProfile,
     synthesis: ReadingSynthesis,
-    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel'>,
+    routing?: Pick<AiExecutionContext, 'orderId' | 'productLevel' | 'intakeContentHash'>,
   ): Promise<TimelineDay[]> {
     return this.generateTimelineBatch(userProfile, synthesis, 1, undefined, routing);
   }
@@ -1152,10 +1208,23 @@ ${JSON.stringify(scribeResult, null, 2)}`;
     orderContext: OrderContext,
     visualAssets: VisualImageInput[] = [],
   ): Promise<OracleResponse> {
-    const core = await this.generateCoreReadingWithPipeline(userProfile, orderContext, visualAssets);
+    const core = await this.generateCoreReadingWithPipeline(
+      userProfile,
+      orderContext,
+      visualAssets,
+    );
+    if (core.pipeline.qualityStatus === 'BLOCKED') {
+      throw new BadRequestException(
+        `Candidat de lecture bloqué par le validateur: ${
+          core.pipeline.blockingIssues.map((issue) => issue.message).join('; ') ||
+          'erreur de qualité bloquante'
+        }`,
+      );
+    }
     const timeline = await this.generateTimeline(userProfile, core.synthesis, {
       orderId: orderContext.orderId,
       productLevel: orderContext.productLevel,
+      intakeContentHash: orderContext.intakeContentHash,
     });
     return {
       pdf_content: core.pdf_content,
@@ -1177,14 +1246,18 @@ ${JSON.stringify(scribeResult, null, 2)}`;
   ): Promise<string> {
     await this.ensureInitialized();
     const ctx = buildAiContext('EDITOR', AiMission.CONTENT_REFINEMENT, options?.routing);
+    const resolved = await this.resolveExecution(ctx);
     const systemPrompt = `Tu es l'agent EDITOR d'Oracle Lumira. Ta mission est d'affiner, corriger ou adapter le texte fourni selon les instructions précises. Conserve le ton et l'interprétation originale sans inventer de faits non demandés.`;
     const userPrompt = [
       options?.context ? `CONTEXTE CANONIQUE:\n${options.context}` : '',
       `CONTENU À REVOIR:\n"${content}"`,
       `INSTRUCTION:\n${instruction}`,
-    ].filter(Boolean).join('\n\n');
+    ]
+      .filter(Boolean)
+      .join('\n\n');
     return this.callText(
       ctx,
+      resolved,
       `${systemPrompt}\n\n---\n\n${userPrompt}`,
       120_000,
       options?.maxTokens || 4096,
@@ -1210,6 +1283,7 @@ ${JSON.stringify(scribeResult, null, 2)}`;
   ): Promise<string> {
     await this.ensureInitialized();
     const ctx = buildAiContext('CONFIDANT', AiMission.CHAT_SESSION, routing);
+    const resolved = await this.resolveExecution(ctx);
     const basePrompt = `${this.lumiraDna}\n\n---\n\n${this.agentContexts.CONFIDANT}`;
     const systemPrompt = context
       ? this.buildConfidantSystemPrompt(context, basePrompt)
@@ -1220,7 +1294,7 @@ ${JSON.stringify(scribeResult, null, 2)}`;
           conversationHistory.map((h) => `${h.role.toUpperCase()}: ${h.content}`).join('\n')
         : '';
     const fullPrompt = `${systemPrompt}${historyText}\n\n---\n\nMESSAGE UTILISATEUR: ${message}`;
-    return this.callText(ctx, fullPrompt, 60_000, 2048);
+    return this.callText(ctx, resolved, fullPrompt, 60_000, 2048);
   }
 
   async generateDreamInterpretation(
@@ -1229,9 +1303,11 @@ ${JSON.stringify(scribeResult, null, 2)}`;
   ): Promise<DreamInterpretation> {
     await this.ensureInitialized();
     const executionCtx = buildAiContext('ONIRIQUE', AiMission.DREAM_INTERPRETATION, routing);
+    const resolved = await this.resolveExecution(executionCtx);
     const prompt = this.buildOniriquePrompt(dreamCtx);
     return this.callJson<DreamInterpretation>(
       executionCtx,
+      resolved,
       prompt,
       'lumira_dream_interpretation',
       DREAM_SCHEMA,
@@ -1262,8 +1338,10 @@ ${JSON.stringify(scribeResult, null, 2)}`;
   ): Promise<string> {
     await this.ensureInitialized();
     const ctx = buildAiContext('NARRATOR', AiMission.AUDIO_NARRATION, routing);
+    const resolved = await this.resolveExecution(ctx);
     const result = await this.callText(
       ctx,
+      resolved,
       `LECTURE VALIDÉE À ADAPTER EN NARRATION:
 
 ${text}`,
@@ -1282,8 +1360,10 @@ ${text}`,
       return 'Je m’ancre dans ce qui est juste pour moi, un pas après l’autre.';
     }
     const ctx = buildAiContext('CONFIDANT', AiMission.CHAT_SESSION);
+    const resolved = await this.resolveExecution(ctx);
     const result = await this.callText(
       ctx,
+      resolved,
       `Génère un mantra français de deux phrases maximum pour le jour ${params.currentDayNumber}. Archétype: ${params.archetype}. Retourne uniquement le mantra.`,
       30_000,
       200,
@@ -1408,6 +1488,7 @@ ${text}`,
 
   private async observeVisualAssets(
     ctx: AiExecutionContext,
+    resolved: ResolvedAiExecution,
     assets: VisualImageInput[],
   ): Promise<VisualObservation[]> {
     if (assets.length === 0) return [];
@@ -1420,6 +1501,7 @@ ${text}`,
       .join('\n');
     const observations = await this.callJson<{ observations: VisualObservation[] }>(
       ctx,
+      resolved,
       [
         'Tu réalises uniquement des observations visuelles descriptives, sans symbolique ni diagnostic.',
         `Les images fournies, dans cet ordre, ont les rôles vérifiés : ${expectedRoles}.`,
@@ -1431,19 +1513,35 @@ ${text}`,
       VISUAL_OBSERVATION_SCHEMA,
       120_000,
       assets.map(({ mimeType, base64 }) => ({ mimeType, base64 })),
+      assets.map(({ kind, sha256 }) => ({ kind, sha256 })),
     );
     const byRole = new Map((observations.observations ?? []).map((item) => [item.role, item]));
     return assets.map((asset) => {
       const result = byRole.get(asset.kind);
-      return result && Array.isArray(result.visible) && Array.isArray(result.uncertain) && Array.isArray(result.unavailable)
-        ? { role: asset.kind, visible: result.visible, uncertain: result.uncertain, unavailable: result.unavailable }
-        : { role: asset.kind, visible: [], uncertain: [], unavailable: ['Observation indisponible'] };
+      return result &&
+        Array.isArray(result.visible) &&
+        Array.isArray(result.uncertain) &&
+        Array.isArray(result.unavailable)
+        ? {
+            role: asset.kind,
+            visible: result.visible,
+            uncertain: result.uncertain,
+            unavailable: result.unavailable,
+          }
+        : {
+            role: asset.kind,
+            visible: [],
+            uncertain: [],
+            unavailable: ['Observation indisponible'],
+          };
     });
   }
 
   private snapshotVisualAssets(
     assets: VisualImageInput[],
-  ): Array<Pick<VisualImageInput, 'kind' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>> {
+  ): Array<
+    Pick<VisualImageInput, 'kind' | 'mimeType' | 'width' | 'height' | 'orientation' | 'sha256'>
+  > {
     return assets.map(({ kind, mimeType, width, height, orientation, sha256 }) => ({
       kind,
       mimeType,
@@ -1557,5 +1655,4 @@ ${text}`,
     }
     return parts.join('\n');
   }
-
 }

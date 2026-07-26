@@ -11,6 +11,8 @@ export interface AiExecutionContext {
   mission: AiMission;
   locale?: string;
   promptVersionId?: string;
+  /** Hash of the sealed intake; safe to retain in the execution audit. */
+  intakeContentHash?: string;
 }
 
 export interface AiPromptSnapshot {

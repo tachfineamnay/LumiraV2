@@ -9,6 +9,54 @@ export class AiRunService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * AiRun is operational audit data, not a second copy of the sealed intake.
+   * Keep this allow-list at the persistence boundary so a future caller cannot
+   * accidentally retain prompt text, personal data, URLs or image bytes.
+   */
+  private sanitizeInputSnapshot(
+    snapshot?: Record<string, unknown>,
+  ): Record<string, unknown> | undefined {
+    if (!snapshot) return undefined;
+    const technical = snapshot.technical as Record<string, unknown> | undefined;
+    return {
+      ...(typeof snapshot.inputSha256 === 'string' ? { inputSha256: snapshot.inputSha256 } : {}),
+      ...(typeof snapshot.intakeContentHash === 'string'
+        ? { intakeContentHash: snapshot.intakeContentHash }
+        : {}),
+      ...(typeof snapshot.schemaName === 'string' ? { schemaName: snapshot.schemaName } : {}),
+      ...(typeof snapshot.imageCount === 'number' ? { imageCount: snapshot.imageCount } : {}),
+      ...(Array.isArray(snapshot.imageRoles)
+        ? { imageRoles: snapshot.imageRoles.filter((role) => role === 'face' || role === 'palm') }
+        : {}),
+      ...(Array.isArray(snapshot.imageHashes)
+        ? {
+            imageHashes: snapshot.imageHashes.filter(
+              (hash): hash is string => typeof hash === 'string' && /^[a-f0-9]{64}$/i.test(hash),
+            ),
+          }
+        : {}),
+      ...(typeof snapshot.promptVersionId === 'string'
+        ? { promptVersionId: snapshot.promptVersionId }
+        : {}),
+      ...(technical && typeof technical === 'object' && !Array.isArray(technical)
+        ? {
+            technical: {
+              ...(typeof technical.timeoutMs === 'number'
+                ? { timeoutMs: technical.timeoutMs }
+                : {}),
+              ...(typeof technical.maxTokens === 'number'
+                ? { maxTokens: technical.maxTokens }
+                : {}),
+              ...(typeof technical.structured === 'boolean'
+                ? { structured: technical.structured }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
   async recordRun(
     input: AiRunRecordInput & {
       status: AiRunStatus;
@@ -33,7 +81,9 @@ export class AiRunService {
           executionSnapshot: input.executionSnapshot
             ? (input.executionSnapshot as Prisma.InputJsonValue)
             : undefined,
-          inputSnapshot: input.inputSnapshot ? (input.inputSnapshot as Prisma.InputJsonValue) : undefined,
+          inputSnapshot: this.sanitizeInputSnapshot(input.inputSnapshot) as
+            | Prisma.InputJsonValue
+            | undefined,
           status: input.status,
           durationMs: input.durationMs,
           errorCode: input.errorCode,

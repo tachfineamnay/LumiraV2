@@ -1,7 +1,7 @@
 import { AiRunService } from './ai-run.service';
 
 describe('AiRunService', () => {
-  it('persists the resolved thinking-only configuration and actual request snapshot', async () => {
+  it('persists the resolved thinking-only configuration without retaining raw intake or prompt data', async () => {
     const prisma = { aiRun: { create: jest.fn().mockResolvedValue({ id: 'run-1' }) } };
     const service = new AiRunService(prisma as never);
 
@@ -14,17 +14,48 @@ describe('AiRunService', () => {
       status: 'SUCCESS',
       durationMs: 123,
       executionSnapshot: {
-        provider: 'vertex', model: 'gemini-3.1-pro-preview', thinkingLevel: 'high',
-        promptVersionId: 'prompt-7', routingSource: 'model-config:SCRIBE',
+        provider: 'vertex',
+        model: 'gemini-3.1-pro-preview',
+        thinkingLevel: 'high',
+        promptVersionId: 'prompt-7',
+        routingSource: 'model-config:SCRIBE',
       },
-      inputSnapshot: { content: 'dossier scellé', sha256: 'input-hash', imageCount: 2 },
+      inputSnapshot: {
+        inputSha256: 'input-hash',
+        intakeContentHash: 'sealed-intake-hash',
+        schemaName: 'lumira_core_reading',
+        imageCount: 2,
+        imageRoles: ['face', 'palm'],
+        imageHashes: ['a'.repeat(64), 'b'.repeat(64)],
+        promptVersionId: 'prompt-7',
+        technical: {
+          timeoutMs: 300000,
+          structured: true,
+          privateUrl: 'https://private.example.test/technical',
+        },
+        content: 'Jean Dupont, né le 1er janvier, question personnelle',
+        base64: 'aGVsbG8=',
+        privateUrl: 'https://private.example.test/image',
+      },
     });
 
     expect(prisma.aiRun.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          executionSnapshot: expect.objectContaining({ thinkingLevel: 'high', promptVersionId: 'prompt-7' }),
-          inputSnapshot: expect.objectContaining({ content: 'dossier scellé', imageCount: 2 }),
+          executionSnapshot: expect.objectContaining({
+            thinkingLevel: 'high',
+            promptVersionId: 'prompt-7',
+          }),
+          inputSnapshot: {
+            inputSha256: 'input-hash',
+            intakeContentHash: 'sealed-intake-hash',
+            schemaName: 'lumira_core_reading',
+            imageCount: 2,
+            imageRoles: ['face', 'palm'],
+            imageHashes: ['a'.repeat(64), 'b'.repeat(64)],
+            promptVersionId: 'prompt-7',
+            technical: { timeoutMs: 300000, structured: true },
+          },
         }),
       }),
     );

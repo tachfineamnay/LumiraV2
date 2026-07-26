@@ -176,6 +176,7 @@ export class DigitalSoulService {
         productName: orderProductName,
         expertPrompt: order.expertPrompt ?? undefined,
         expertInstructions: order.expertInstructions ?? undefined,
+        intakeContentHash: readingSource.contentHash ?? undefined,
       };
 
       // STEP 2: Generate AI content
@@ -184,7 +185,11 @@ export class DigitalSoulService {
 
       let aiResponse: OracleResponse;
       try {
-        aiResponse = await this.vertexOracle.generateFullReading(userProfile, orderContext, visualAssets);
+        aiResponse = await this.vertexOracle.generateFullReading(
+          userProfile,
+          orderContext,
+          visualAssets,
+        );
         this.logger.log(`✅ AI response in ${Date.now() - aiStartTime}ms`);
         this.logger.log(`   🎭 Archetype: ${aiResponse.synthesis?.archetype}`);
       } catch (error) {
@@ -198,6 +203,15 @@ export class DigitalSoulService {
       const validationErrors = this.validateAiResponse(aiResponse);
       if (validationErrors.length > 0) {
         const errorMsg = `AI returned invalid content: ${validationErrors.join('; ')}`;
+        await this.saveErrorAndFail(orderId, errorMsg);
+        throw new BadRequestException(errorMsg);
+      }
+
+      if (aiResponse.pipeline?.qualityStatus === 'BLOCKED') {
+        const errorMsg = `AI candidate blocked by reading quality validation: ${
+          aiResponse.pipeline.blockingIssues.map((issue) => issue.message).join('; ') ||
+          'blocking issue reported'
+        }`;
         await this.saveErrorAndFail(orderId, errorMsg);
         throw new BadRequestException(errorMsg);
       }
@@ -622,6 +636,15 @@ export class DigitalSoulService {
       if (validationErrors.length > 0) {
         const errorMsg = `AI returned invalid content: ${validationErrors.join('; ')}`;
         this.logger.error(`\n❌ STEP 3 FAILED: ${errorMsg}`);
+        await this.saveErrorAndFail(orderId, errorMsg);
+        throw new BadRequestException(errorMsg);
+      }
+
+      if (aiResponse.pipeline?.qualityStatus === 'BLOCKED') {
+        const errorMsg = `AI candidate blocked by reading quality validation: ${
+          aiResponse.pipeline.blockingIssues.map((issue) => issue.message).join('; ') ||
+          'blocking issue reported'
+        }`;
         await this.saveErrorAndFail(orderId, errorMsg);
         throw new BadRequestException(errorMsg);
       }
