@@ -763,6 +763,15 @@ export class AiProviderDiagnosticsService {
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     const controls = getModelRuntimeControls(provider, model);
+    if (!controls.operational || controls.thinkingLevels.length === 0) {
+      return this.probeFromError(
+        model,
+        testedAt,
+        new Error(`Modèle non autorisé pour la production Lumira: ${model}`),
+        `${provider} text probe`,
+        provider,
+      );
+    }
     const probeThinkingLevel = controls.defaultThinkingLevel;
     this.logger.log(
       `[Probe ${provider}/${model}] text probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
@@ -812,6 +821,15 @@ export class AiProviderDiagnosticsService {
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     const controls = getModelRuntimeControls(provider, model);
+    if (!controls.operational || controls.thinkingLevels.length === 0) {
+      return this.probeFromError(
+        model,
+        testedAt,
+        new Error(`Modèle non autorisé pour la production Lumira: ${model}`),
+        `${provider} vision probe`,
+        provider,
+      );
+    }
     const probeThinkingLevel = controls.defaultThinkingLevel;
     this.logger.log(
       `[Probe ${provider}/${model}] vision probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
@@ -860,6 +878,15 @@ export class AiProviderDiagnosticsService {
   ): Promise<ProviderProbeResult> {
     const testedAt = new Date().toISOString();
     const controls = getModelRuntimeControls(provider, model);
+    if (!controls.operational || controls.thinkingLevels.length === 0) {
+      return this.probeFromError(
+        model,
+        testedAt,
+        new Error(`Modèle non autorisé pour la production Lumira: ${model}`),
+        `${provider} structured probe`,
+        provider,
+      );
+    }
     const probeThinkingLevel = controls.defaultThinkingLevel;
     this.logger.log(
       `[Probe ${provider}/${model}] structured probe: thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
@@ -888,14 +915,17 @@ export class AiProviderDiagnosticsService {
 
   private openAiProbeParameters(model: string): Record<string, unknown> {
     const controls = getModelRuntimeControls('openai', model);
+    if (!controls.operational || controls.thinkingLevels.length === 0) {
+      throw new Error(`Modèle non autorisé pour la production Lumira: ${model}`);
+    }
     const probeThinkingLevel = controls.defaultThinkingLevel;
     this.logger.log(
       `[Probe openai/${model}] thinking=${probeThinkingLevel ?? 'provider_default'} sampling=provider_default`,
     );
-    if (controls.thinkingLevels.length > 0 && probeThinkingLevel) {
+    if (probeThinkingLevel) {
       return { reasoning: { effort: probeThinkingLevel } };
     }
-    return {};
+    throw new Error(`OpenAI — aucun niveau de réflexion défini pour ${model}.`);
   }
 
   private healthJsonSchema() {
@@ -910,10 +940,8 @@ export class AiProviderDiagnosticsService {
     };
   }
 
-  private healthJsonFormat(model: string): Record<string, unknown> {
-    const controls = getModelRuntimeControls('openai', model);
+  private healthJsonFormat(): Record<string, unknown> {
     return {
-      ...(controls.supportsVerbosity ? { verbosity: 'medium' } : {}),
       format: {
         type: 'json_schema',
         name: 'lumira_health_probe',
@@ -1010,7 +1038,7 @@ export class AiProviderDiagnosticsService {
           store: false,
           max_output_tokens: STRUCTURED_PROBE_TOKENS,
           ...this.openAiProbeParameters(model),
-          text: this.healthJsonFormat(model),
+          text: this.healthJsonFormat(),
         } as Parameters<typeof client.responses.create>[0]),
         timeoutMs,
         'OpenAI structured probe',

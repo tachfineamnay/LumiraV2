@@ -14,7 +14,6 @@ export interface LlmRequest {
   images?: ImagePayload[];
   maxTokens: number;
   thinkingLevel?: AiThinkingLevel;
-  verbosity?: AiThinkingLevel;
   jsonSchema?: { name: string; schema: JsonSchema };
   signal: AbortSignal;
   timeoutMs: number;

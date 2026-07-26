@@ -40,7 +40,6 @@ export interface AiAgentModelConfig {
   model: string;
   /** Unified production control for models exposing an explicit thinking level. */
   thinkingLevel?: AiThinkingLevel;
-  verbosity?: AiThinkingLevel;
   maxOutputTokens: number;
   /** Proof of real provider probe results performed via Desk Settings. */
   validation?: AiAgentValidationProof;
@@ -57,7 +56,6 @@ export interface ResolvedAiExecution {
   provider: AiProvider;
   model: string;
   thinkingLevel?: AiThinkingLevel;
-  verbosity?: AiThinkingLevel;
   maxTokens: number;
   systemPrompt: string;
   promptVersionId?: string;

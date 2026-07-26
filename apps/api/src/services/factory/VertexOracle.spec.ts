@@ -237,7 +237,6 @@ describe('VertexOracle OpenAI-only runtime', () => {
         model: config.model,
         maxTokens: config.maxOutputTokens,
         thinkingLevel: config.thinkingLevel,
-        verbosity: config.verbosity,
         systemPrompt: `${snapshot.lumiraDna}\n\n---\n\n${snapshot.agentContexts[ctx.agent]}`,
         routingSource: `model-config:${ctx.agent}`,
       };
@@ -315,7 +314,6 @@ describe('VertexOracle OpenAI-only runtime', () => {
         store: false,
         reasoning: { effort: 'high' },
         text: expect.objectContaining({
-          verbosity: 'high',
           format: expect.objectContaining({ type: 'json_schema', strict: true }),
         }),
       }),

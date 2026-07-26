@@ -9,6 +9,18 @@ export class OpenAiAdapter implements LlmAdapter {
   constructor(private readonly client: OpenAI) {}
 
   async complete(req: LlmRequest): Promise<LlmResult> {
+    const controls = getModelRuntimeControls('openai', req.model);
+    if (!controls.operational || controls.thinkingLevels.length === 0) {
+      throw new Error(
+        `OpenAI — le modèle ${req.model} n'est pas autorisé pour la production Lumira.`,
+      );
+    }
+    if (!req.thinkingLevel || !controls.thinkingLevels.includes(req.thinkingLevel)) {
+      throw new Error(
+        `OpenAI — un niveau de réflexion valide est obligatoire pour ${req.model} (${controls.thinkingLevels.join(', ')}).`,
+      );
+    }
+
     try {
       const input =
         req.images && req.images.length > 0
@@ -27,15 +39,22 @@ export class OpenAiAdapter implements LlmAdapter {
             ]
           : req.userContent;
 
+      const payload: Record<string, unknown> = {
+        model: req.model,
+        instructions: req.systemPrompt,
+        input,
+        store: false,
+        reasoning: { effort: req.thinkingLevel },
+        max_output_tokens: req.maxTokens,
+      };
+
+      const textFmt = this.textFormat(req);
+      if (textFmt) {
+        payload.text = textFmt;
+      }
+
       const response = await this.client.responses.create(
-        {
-          model: req.model,
-          instructions: req.systemPrompt,
-          input: input as unknown as Parameters<typeof this.client.responses.create>[0]['input'],
-          store: false,
-          ...this.openAIParameters(req),
-          text: this.textFormat(req),
-        } as Parameters<typeof this.client.responses.create>[0],
+        payload as Parameters<typeof this.client.responses.create>[0],
         { signal: req.signal, timeout: req.timeoutMs, maxRetries: 0 },
       );
 
@@ -45,35 +64,15 @@ export class OpenAiAdapter implements LlmAdapter {
     }
   }
 
-  private openAIParameters(req: LlmRequest): Record<string, unknown> {
-    const controls = getModelRuntimeControls('openai', req.model);
-    const params: Record<string, unknown> = {
-      max_output_tokens: req.maxTokens,
-    };
-    if (
-      controls.thinkingLevels.length > 0 &&
-      req.thinkingLevel &&
-      controls.thinkingLevels.includes(req.thinkingLevel)
-    ) {
-      params.reasoning = { effort: req.thinkingLevel };
-    }
-    return params;
-  }
-
-  private textFormat(req: LlmRequest): Record<string, unknown> {
-    const controls = getModelRuntimeControls('openai', req.model);
+  private textFormat(req: LlmRequest): Record<string, unknown> | undefined {
+    if (!req.jsonSchema) return undefined;
     return {
-      ...(controls.supportsVerbosity ? { verbosity: req.verbosity ?? 'medium' } : {}),
-      ...(req.jsonSchema
-        ? {
-            format: {
-              type: 'json_schema',
-              name: req.jsonSchema.name,
-              strict: true,
-              schema: req.jsonSchema.schema,
-            },
-          }
-        : {}),
+      format: {
+        type: 'json_schema',
+        name: req.jsonSchema.name,
+        strict: true,
+        schema: req.jsonSchema.schema,
+      },
     };
   }
 

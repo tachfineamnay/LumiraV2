@@ -28,84 +28,7 @@ type TabId = 'readiness' | 'credentials' | 'personality' | 'agents' | 'models';
 type ProbeStatus = 'ok' | 'error' | 'not_tested';
 type ProviderId = 'openai' | 'vertex' | 'gemini';
 type Capability = 'text' | 'vision' | 'structured' | 'long_text' | 'fast_text';
-type ThinkingLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
-
-interface ModelRuntimeControls {
-  thinkingLevels: readonly ThinkingLevel[];
-  defaultThinkingLevel?: ThinkingLevel;
-  supportsVerbosity: boolean;
-}
-
-function getModelRuntimeControls(provider: ProviderId, model: string): ModelRuntimeControls {
-  if (!model) return { thinkingLevels: [], supportsVerbosity: false };
-  const normalized = model.trim().toLowerCase();
-
-  if (provider === 'openai') {
-    if (/^gpt-5\.5(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
-        defaultThinkingLevel: 'medium',
-        supportsVerbosity: true,
-      };
-    }
-    if (/^gpt-5\.4(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
-        defaultThinkingLevel: 'none',
-        supportsVerbosity: true,
-      };
-    }
-    return { thinkingLevels: [], supportsVerbosity: false };
-  }
-
-  if (provider === 'gemini' || provider === 'vertex') {
-    if (/^gemini-3\.6-flash(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
-        defaultThinkingLevel: 'medium',
-        supportsVerbosity: false,
-      };
-    }
-    if (/^gemini-3\.5-flash-lite(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
-        defaultThinkingLevel: 'minimal',
-        supportsVerbosity: false,
-      };
-    }
-    if (/^gemini-3\.5-flash(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
-        defaultThinkingLevel: 'medium',
-        supportsVerbosity: false,
-      };
-    }
-    if (/^gemini-3\.1-pro(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['low', 'medium', 'high'],
-        defaultThinkingLevel: 'high',
-        supportsVerbosity: false,
-      };
-    }
-    if (/^gemini-3-flash(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['minimal', 'low', 'medium', 'high'],
-        defaultThinkingLevel: 'high',
-        supportsVerbosity: false,
-      };
-    }
-    if (/^gemini-3-pro(?:[.-]|$)/i.test(normalized)) {
-      return {
-        thinkingLevels: ['low', 'high'],
-        defaultThinkingLevel: 'high',
-        supportsVerbosity: false,
-      };
-    }
-    return { thinkingLevels: [], supportsVerbosity: false };
-  }
-
-  return { thinkingLevels: [], supportsVerbosity: false };
-}
+type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
 type AgentVisualStatus = 'disabled' | 'functional' | 'failed' | 'detected' | 'missing';
 
@@ -153,7 +76,6 @@ interface AgentModelConfig {
   provider: ProviderId;
   model: string;
   thinkingLevel?: ThinkingLevel;
-  verbosity?: ThinkingLevel;
   maxOutputTokens: number;
   validation?: AgentModelValidationProof;
   needsValidation?: boolean;
@@ -169,6 +91,12 @@ interface CatalogModel {
   displayName?: string;
   detected?: boolean;
   callable?: boolean | null;
+  operational?: boolean;
+  operationalReason?: string;
+  thinking?: boolean;
+  thinkingLevels?: readonly ThinkingLevel[];
+  defaultThinkingLevel?: ThinkingLevel;
+  supportsThinking?: boolean;
   testedAt?: string;
   error?: string;
 }
@@ -331,24 +259,12 @@ const RECOMMENDED_THINKING: Record<AgentKey, ThinkingLevel> = {
 };
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
-  none: 'Aucune (none)',
   minimal: 'Minimale (minimal)',
   low: 'Faible (low)',
   medium: 'Moyenne (medium)',
   high: 'Élevée (high)',
   xhigh: 'Très élevée (xhigh)',
 };
-
-function supportsThinkingLevel(provider: ProviderId, model: string): boolean {
-  const normalized = model.trim().toLowerCase();
-  if (provider === 'openai') {
-    return /^gpt-5(?:[.-]|$)/.test(normalized) && !/(?:^|[.-])pro(?:[.-]|$)/.test(normalized);
-  }
-  if (provider === 'gemini' || provider === 'vertex') {
-    return /^gemini-3(?:[.-]|$)/.test(normalized);
-  }
-  return false;
-}
 
 function thinkingDescription(level?: ThinkingLevel): string {
   if (level === 'low') return 'Réflexion courte et rapide.';
@@ -707,11 +623,19 @@ export default function SettingsPage() {
     });
   }, []);
 
+  const findCatalogModel = useCallback(
+    (provider: ProviderId, modelId: string): CatalogModel | undefined => {
+      if (!modelId) return undefined;
+      return providerCatalog(provider)?.models.find((m) => m.id === modelId);
+    },
+    [providerCatalog],
+  );
+
   const modelsForProvider = useCallback(
     (provider: ProviderId, agent: AgentKey): CatalogModel[] => {
       const catalog = providerCatalog(provider);
       const models = [...(catalog?.models ?? [])]
-        .filter((model) => supportsThinkingLevel(provider, model.id))
+        .filter((model) => model.operational === true)
         .sort((a, b) => (a.displayName || a.id).localeCompare(b.displayName || b.id));
       const current = modelConfig?.agents[agent];
       if (
@@ -719,14 +643,17 @@ export default function SettingsPage() {
         current.model &&
         !models.some((model) => model.id === current.model)
       ) {
+        const catModel = catalog?.models.find((m) => m.id === current.model);
         models.unshift({
           id: current.model,
           displayName: current.model,
           detected: false,
           callable: null,
-          error: supportsThinkingLevel(provider, current.model)
+          operational: catModel?.operational ?? false,
+          operationalReason: catModel?.operationalReason ?? 'non_operational',
+          error: catModel?.operational
             ? undefined
-            : 'Modèle actuel sans niveau de réflexion explicite',
+            : 'Modèle actuel non autorisé pour la production Lumira',
         });
       }
       return models;
@@ -737,15 +664,14 @@ export default function SettingsPage() {
   const agentVisualStatus = useCallback(
     (agent: AgentKey, item: AgentModelConfig): AgentVisualStatus => {
       if (!item.enabled) return 'disabled';
-      if (!item.model || !supportsThinkingLevel(item.provider, item.model)) return 'missing';
+      const catModel = findCatalogModel(item.provider, item.model);
+      if (!item.model || !catModel || catModel.operational !== true) return 'missing';
       const probe = findProbe(item.provider, item.model);
       if (probeFails(agent, probe)) return 'failed';
       if (probePasses(agent, probe)) return 'functional';
-      return providerCatalog(item.provider)?.models.some((model) => model.id === item.model)
-        ? 'detected'
-        : 'missing';
+      return 'detected';
     },
-    [findProbe, probeFails, probePasses, providerCatalog],
+    [findCatalogModel, findProbe, probeFails, probePasses],
   );
 
   const providerUsed = useCallback(
@@ -866,18 +792,26 @@ export default function SettingsPage() {
       Object.entries(modelConfig.agents) as Array<[AgentKey, AgentModelConfig]>
     ).find(([_, config]) => {
       if (!config.enabled) return false;
-      const controls = getModelRuntimeControls(config.provider, config.model);
-      if (controls.thinkingLevels.length > 0) {
-        return !config.thinkingLevel || !controls.thinkingLevels.includes(config.thinkingLevel);
+      const catModel = findCatalogModel(config.provider, config.model);
+      if (!catModel || !catModel.operational) return true;
+      if (!config.thinkingLevel || !catModel.thinkingLevels?.includes(config.thinkingLevel)) {
+        return true;
       }
       return false;
     });
+
     if (invalid) {
       const [agent, config] = invalid;
-      const controls = getModelRuntimeControls(config.provider, config.model);
-      setActionError(
-        `${agent} : sélectionnez un niveau de réflexion valide (${controls.thinkingLevels.join(', ')}).`,
-      );
+      const catModel = findCatalogModel(config.provider, config.model);
+      if (!catModel || !catModel.operational) {
+        setActionError(
+          `${agent} : le modèle ${config.model || '(vide)'} n'est pas autorisé pour la production Lumira. Sélectionnez un modèle avec niveau de réflexion explicite.`,
+        );
+      } else {
+        setActionError(
+          `${agent} : sélectionnez un niveau de réflexion valide (${catModel.thinkingLevels?.join(', ') || 'aucun'}).`,
+        );
+      }
       return;
     }
 
@@ -911,10 +845,14 @@ export default function SettingsPage() {
       if (providerChanged || modelChanged) {
         delete next.validation;
         next.needsValidation = true;
-        const controls = getModelRuntimeControls(next.provider, next.model);
-        if (controls.thinkingLevels.length > 0) {
-          if (!next.thinkingLevel || !controls.thinkingLevels.includes(next.thinkingLevel)) {
-            next.thinkingLevel = controls.defaultThinkingLevel;
+        const catModel = findCatalogModel(next.provider, next.model);
+        if (
+          catModel?.operational &&
+          catModel.thinkingLevels &&
+          catModel.thinkingLevels.length > 0
+        ) {
+          if (!next.thinkingLevel || !catModel.thinkingLevels.includes(next.thinkingLevel)) {
+            next.thinkingLevel = catModel.defaultThinkingLevel;
           }
         } else {
           delete next.thinkingLevel;
@@ -1367,18 +1305,20 @@ export default function SettingsPage() {
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
                     {(['openai', 'gemini', 'vertex'] as ProviderId[]).map((provider) => {
                       const catalog = providerCatalog(provider)!;
-                      const compatibleCount = catalog.models.filter((model) =>
-                        supportsThinkingLevel(provider, model.id),
+                      const compatibleCount = catalog.models.filter(
+                        (model) => model.operational === true,
                       ).length;
                       const tested =
-                        credentials.modelProbes?.filter(
-                          (probe) =>
-                            probe.provider === provider &&
-                            supportsThinkingLevel(provider, probe.model) &&
+                        credentials.modelProbes?.filter((probe) => {
+                          if (probe.provider !== provider) return false;
+                          const catModel = findCatalogModel(provider, probe.model);
+                          return (
+                            catModel?.operational === true &&
                             probe.text === 'ok' &&
                             probe.multimodal !== 'error' &&
-                            probe.structured !== 'error',
-                        ).length ?? 0;
+                            probe.structured !== 'error'
+                          );
+                        }).length ?? 0;
                       return (
                         <div
                           key={provider}
@@ -1420,7 +1360,7 @@ export default function SettingsPage() {
             const visual = agentVisualStatus(agent.key, item);
             const probe = item.model ? findProbe(item.provider, item.model) : undefined;
             const options = modelsForProvider(item.provider, agent.key);
-            const controls = getModelRuntimeControls(item.provider, item.model);
+            const currentCatModel = findCatalogModel(item.provider, item.model);
             const statusPill =
               visual === 'disabled' ? (
                 <Pill level="warning">Désactivé — non évalué</Pill>
@@ -1553,11 +1493,13 @@ export default function SettingsPage() {
                     />
                   </label>
 
-                  {controls.thinkingLevels.length > 0 ? (
+                  {currentCatModel?.operational &&
+                  currentCatModel.thinkingLevels &&
+                  currentCatModel.thinkingLevels.length > 0 ? (
                     <label className="text-sm text-desk-muted sm:col-span-2 lg:col-span-3">
                       Niveau de réflexion
                       <select
-                        value={item.thinkingLevel ?? controls.defaultThinkingLevel ?? ''}
+                        value={item.thinkingLevel ?? currentCatModel.defaultThinkingLevel ?? ''}
                         onChange={(event) =>
                           updateAgent(agent.key, {
                             thinkingLevel: event.target.value as ThinkingLevel,
@@ -1565,20 +1507,22 @@ export default function SettingsPage() {
                         }
                         className="mt-1 w-full rounded-lg border border-desk-border bg-desk-input p-2.5 text-desk-text"
                       >
-                        {controls.thinkingLevels.map((lvl) => (
+                        {currentCatModel.thinkingLevels.map((lvl) => (
                           <option key={lvl} value={lvl}>
                             {THINKING_LABELS[lvl] || lvl}
                           </option>
                         ))}
                       </select>
                       <span className="mt-1 block text-xs leading-5 text-desk-muted">
-                        {thinkingDescription(item.thinkingLevel ?? controls.defaultThinkingLevel)}
+                        {thinkingDescription(
+                          item.thinkingLevel ?? currentCatModel.defaultThinkingLevel,
+                        )}
                       </span>
                     </label>
                   ) : (
-                    <div className="flex items-center rounded-lg border border-desk-border bg-desk-bg/50 p-3 text-sm text-desk-muted sm:col-span-2 lg:col-span-3">
-                      Ce modèle ne propose pas de niveau de réflexion configurable (réflexion gérée
-                      automatiquement par le fournisseur).
+                    <div className="flex items-center rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 sm:col-span-2 lg:col-span-3">
+                      Ce modèle n’est pas autorisé pour la production Lumira. Sélectionnez un modèle
+                      avec niveau de réflexion explicite.
                     </div>
                   )}
                 </div>

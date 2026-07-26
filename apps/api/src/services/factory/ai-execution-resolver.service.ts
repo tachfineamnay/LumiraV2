@@ -69,7 +69,6 @@ export class AiExecutionResolverService {
       provider: config.provider,
       model: config.model,
       thinkingLevel: config.thinkingLevel,
-      verbosity: config.verbosity,
       maxTokens: config.maxOutputTokens,
       systemPrompt,
       promptVersionId,

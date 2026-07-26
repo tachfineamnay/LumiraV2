@@ -6,30 +6,46 @@ import {
   AiProviderMode,
   AiThinkingLevel,
 } from './ai-execution.types';
-import { getModelRuntimeControls } from './model-runtime-controls';
+import { getModelRuntimeControls, isOperationalThinkingModel } from './model-runtime-controls';
 
-export { supportsThinkingLevel } from './model-runtime-controls';
+export { isOperationalThinkingModel, supportsThinkingLevel } from './model-runtime-controls';
 
-/** Legacy model IDs kept for historical configurations, labels and migrations only. */
-export const OPENAI_V1_MODELS = [
+/** Historical model IDs kept for migration checks, historical runs and doc only. */
+export const HISTORICAL_OPENAI_MODELS = [
   'gpt-5.5-2026-04-23',
   'gpt-5.4-2026-03-05',
   'gpt-4o-2024-11-20',
 ] as const;
-export type OpenAiV1Model = (typeof OPENAI_V1_MODELS)[number];
+export const OPENAI_V1_MODELS = HISTORICAL_OPENAI_MODELS;
 
-export const VERTEX_V1_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'] as const;
-export type VertexV1Model = (typeof VERTEX_V1_MODELS)[number];
+export const HISTORICAL_VERTEX_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'] as const;
+export const VERTEX_V1_MODELS = HISTORICAL_VERTEX_MODELS;
 
-export const GEMINI_V1_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'] as const;
-export type GeminiV1Model = (typeof GEMINI_V1_MODELS)[number];
+export const HISTORICAL_GEMINI_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'] as const;
+export const GEMINI_V1_MODELS = HISTORICAL_GEMINI_MODELS;
 
-/** Historical compatibility only. Never use this object to reject a discovered model. */
+/** Historical compatibility reference only. */
 export const LUMIRA_SUPPORTED_MODELS: Record<AiProvider, readonly string[]> = {
-  openai: OPENAI_V1_MODELS,
-  vertex: VERTEX_V1_MODELS,
-  gemini: GEMINI_V1_MODELS,
+  openai: HISTORICAL_OPENAI_MODELS,
+  vertex: HISTORICAL_VERTEX_MODELS,
+  gemini: HISTORICAL_GEMINI_MODELS,
 };
+
+export const OPERATIONAL_OPENAI_MODELS = ['gpt-5.5-2026-04-23', 'gpt-5.4-2026-03-05'] as const;
+
+export const OPERATIONAL_GOOGLE_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-pro',
+  'gemini-3-flash',
+  'gemini-3-pro',
+] as const;
+
+export function operationalModelsForProvider(provider: AiProvider): readonly string[] {
+  if (provider === 'openai') return OPERATIONAL_OPENAI_MODELS;
+  return OPERATIONAL_GOOGLE_MODELS;
+}
 
 export type AgentCapability = 'text' | 'vision' | 'structured' | 'long_text' | 'fast_text';
 
@@ -42,7 +58,6 @@ export const AGENT_REQUIRED_CAPABILITIES: Record<AgentType, readonly AgentCapabi
   ONIRIQUE: ['text', 'structured'],
 };
 
-/** Only capabilities backed by a real blocking probe. */
 export const AGENT_BLOCKING_CAPABILITIES: Record<AgentType, readonly AgentCapability[]> = {
   SCRIBE: ['text', 'vision', 'structured'],
   GUIDE: ['text', 'structured'],
@@ -55,11 +70,12 @@ export const AGENT_BLOCKING_CAPABILITIES: Record<AgentType, readonly AgentCapabi
 const MODEL_CAPABILITIES: Record<string, readonly AgentCapability[]> = {
   'gpt-5.5-2026-04-23': ['text', 'vision', 'structured', 'long_text'],
   'gpt-5.4-2026-03-05': ['text', 'vision', 'structured', 'long_text'],
-  'gpt-4o-2024-11-20': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
-  'gemini-2.5-pro': ['text', 'vision', 'structured', 'long_text'],
-  'gemini-2.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
-  'gemini-3.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
   'gemini-3.6-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-3.5-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-3.5-flash-lite': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-3.1-pro': ['text', 'vision', 'structured', 'long_text'],
+  'gemini-3-flash': ['text', 'vision', 'structured', 'long_text', 'fast_text'],
+  'gemini-3-pro': ['text', 'vision', 'structured', 'long_text'],
 };
 
 export function modelCapabilities(model: string): readonly AgentCapability[] {
@@ -68,6 +84,11 @@ export function modelCapabilities(model: string): readonly AgentCapability[] {
 }
 
 export function modelSupportsAgent(model: string, agent: AgentType): boolean {
+  const isOp =
+    isOperationalThinkingModel('openai', model) ||
+    isOperationalThinkingModel('gemini', model) ||
+    isOperationalThinkingModel('vertex', model);
+  if (!isOp) return false;
   const required = AGENT_BLOCKING_CAPABILITIES[agent];
   const available = new Set(modelCapabilities(model));
   return required.every((capability) => available.has(capability));
@@ -76,6 +97,10 @@ export function modelSupportsAgent(model: string, agent: AgentType): boolean {
 export function missingAgentCapabilities(model: string, agent: AgentType): AgentCapability[] {
   const available = new Set(modelCapabilities(model));
   return AGENT_BLOCKING_CAPABILITIES[agent].filter((capability) => !available.has(capability));
+}
+
+export function modelsForProvider(provider: AiProvider): readonly string[] {
+  return operationalModelsForProvider(provider);
 }
 
 export function modelsForAgent(provider: AiProvider, agent: AgentType): readonly string[] {
@@ -151,7 +176,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.5-2026-04-23',
       thinkingLevel: 'high',
-      verbosity: 'high',
       maxOutputTokens: 24000,
       needsValidation: true,
     },
@@ -160,7 +184,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
       thinkingLevel: 'medium',
-      verbosity: 'high',
       maxOutputTokens: 16000,
       needsValidation: true,
     },
@@ -169,7 +192,6 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
       thinkingLevel: 'low',
-      verbosity: 'medium',
       maxOutputTokens: 6000,
       needsValidation: true,
     },
@@ -178,21 +200,22 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       provider: 'openai',
       model: 'gpt-5.4-2026-03-05',
       thinkingLevel: 'low',
-      verbosity: 'medium',
       maxOutputTokens: 12000,
       needsValidation: true,
     },
     CONFIDANT: {
       enabled: false,
       provider: 'openai',
-      model: 'gpt-4o-2024-11-20',
+      model: 'gpt-5.4-2026-03-05',
+      thinkingLevel: 'low',
       maxOutputTokens: 1600,
       needsValidation: false,
     },
     ONIRIQUE: {
       enabled: false,
       provider: 'openai',
-      model: 'gpt-4o-2024-11-20',
+      model: 'gpt-5.4-2026-03-05',
+      thinkingLevel: 'medium',
       maxOutputTokens: 2500,
       needsValidation: false,
     },
@@ -200,27 +223,13 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
 };
 
 const AGENTS: AgentType[] = ['SCRIBE', 'EDITOR', 'GUIDE', 'NARRATOR', 'CONFIDANT', 'ONIRIQUE'];
-const THINKING_VALUES = new Set<AiThinkingLevel>([
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-]);
-const VERBOSITY_VALUES = new Set<AiThinkingLevel>(['low', 'medium', 'high']);
+const THINKING_VALUES = new Set<AiThinkingLevel>(['minimal', 'low', 'medium', 'high', 'xhigh']);
 const ALLOWED_PROVIDERS = new Set<AiProvider>(['openai', 'vertex', 'gemini']);
 
 export interface NormalizedAiModelConfig {
   config: AiModelConfigSnapshot;
   issues: string[];
   usedFallback: boolean;
-}
-
-export function modelsForProvider(provider: AiProvider): readonly string[] {
-  if (provider === 'openai') return OPENAI_V1_MODELS;
-  if (provider === 'vertex') return VERTEX_V1_MODELS;
-  return GEMINI_V1_MODELS;
 }
 
 function cloneDefaultAgent(agent: AgentType): AiAgentModelConfig {
@@ -239,19 +248,13 @@ function isThinkingLevel(value: unknown): value is AiThinkingLevel {
   return typeof value === 'string' && THINKING_VALUES.has(value as AiThinkingLevel);
 }
 
-function isAllowedModel(_provider: AiProvider, model: string): boolean {
-  if (typeof model !== 'string' || model.trim().length === 0) return false;
-  const normalized = model.trim();
-  return !['gpt-3.5-pro', 'unknown-model', 'text-only-unknown'].includes(normalized);
-}
-
 export function assertOperationalModel(
   provider: AiProvider,
   model: string,
   agent?: AgentType | string,
 ): void {
   const prefix = agent ? `[${agent}] ` : '';
-  if (!isAllowedModel(provider, model)) {
+  if (!isOperationalThinkingModel(provider, model)) {
     throw new Error(
       `${prefix}modèle non opérationnel: ${model || '(vide)'} (provider ${provider})`,
     );
@@ -274,22 +277,23 @@ export function assertExecutableAgentModel({
   if (!ALLOWED_PROVIDERS.has(provider)) {
     throw new Error(`${agent} — provider non autorisé: ${provider}`);
   }
-  if (typeof model !== 'string' || model.trim().length === 0 || !isAllowedModel(provider, model)) {
-    throw new Error(`${agent} — sélectionnez explicitement un modèle valide pour ${provider}.`);
-  }
+
   const controls = getModelRuntimeControls(provider, model);
-  if (controls.thinkingLevels.length === 0) {
-    if (thinkingLevel !== undefined && thinkingLevel !== null) {
-      throw new Error(
-        `${agent} — le modèle ${model} ne supporte pas un niveau de réflexion explicite.`,
-      );
-    }
-  } else {
-    if (!thinkingLevel || !controls.thinkingLevels.includes(thinkingLevel)) {
-      throw new Error(
-        `${agent} — le modèle ${model} exige un niveau de réflexion valide parmi (${controls.thinkingLevels.join(', ')}).`,
-      );
-    }
+
+  if (!controls.operational || controls.thinkingLevels.length === 0) {
+    throw new Error(
+      `${agent} — ${model || '(vide)'} est interdit. Lumira utilise exclusivement des modèles avec niveau de réflexion explicite.`,
+    );
+  }
+
+  if (!thinkingLevel) {
+    throw new Error(`${agent} — un niveau de réflexion explicite est obligatoire pour ${model}.`);
+  }
+
+  if (!controls.thinkingLevels.includes(thinkingLevel)) {
+    throw new Error(
+      `${agent} — niveau ${thinkingLevel} incompatible avec ${model}. Niveaux autorisés : ${controls.thinkingLevels.join(', ')}.`,
+    );
   }
 }
 
@@ -367,8 +371,19 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
 
   const requestedModel = typeof value.model === 'string' ? value.model.trim() : '';
   const model = requestedProvider ? requestedModel : '';
-  if (!model) {
-    issues.push(`${agent}: modèle vide — sélection manuelle requise`);
+
+  const controls = getModelRuntimeControls(provider, model);
+
+  if (!controls.operational) {
+    if (!enabled) {
+      issues.push(
+        `${agent}: modèle ${model || '(vide)'} non opérationnel, réinitialisé vers ${fallback.model}`,
+      );
+      return fallback;
+    }
+    issues.push(
+      `${agent}: modèle ${model || '(vide)'} non opérationnel — sélection d'un modèle avec réflexion requise`,
+    );
   }
 
   const maxOutputTokens = finiteNumber(value.maxOutputTokens);
@@ -391,9 +406,6 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     maxOutputTokens: normalizedMaxTokens,
   };
 
-  const controls = getModelRuntimeControls(provider, model);
-
-  // Unified thinking level handling & migration from legacy reasoningEffort
   const rawThinkingLevel =
     value.thinkingLevel ?? (provider === 'openai' ? value.reasoningEffort : undefined);
   const thinkingCandidate =
@@ -401,13 +413,17 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
       ? (rawThinkingLevel as AiThinkingLevel)
       : undefined;
 
-  if (controls.thinkingLevels.length > 0) {
+  if (controls.operational && controls.thinkingLevels.length > 0) {
     if (thinkingCandidate && controls.thinkingLevels.includes(thinkingCandidate)) {
       result.thinkingLevel = thinkingCandidate;
     } else {
       if (thinkingCandidate) {
         issues.push(
           `${agent}: niveau de réflexion "${thinkingCandidate}" invalide pour ${model}, niveau par défaut appliqué`,
+        );
+      } else {
+        issues.push(
+          `${agent}: niveau de réflexion absent pour ${model}, niveau par défaut appliqué`,
         );
       }
       if (controls.defaultThinkingLevel) {
@@ -416,16 +432,7 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
     }
   }
 
-  if (controls.supportsVerbosity) {
-    const verbosityValid =
-      typeof value.verbosity === 'string' &&
-      VERBOSITY_VALUES.has(value.verbosity as AiThinkingLevel);
-    result.verbosity = verbosityValid
-      ? (value.verbosity as AiThinkingLevel)
-      : (fallback.verbosity ?? 'medium');
-  }
-
-  if (isRecord(value.validation)) {
+  if (isRecord(value.validation) && controls.operational) {
     const rawV = value.validation;
     if (
       rawV.probeVersion === 1 &&
@@ -465,10 +472,6 @@ function normalizeAgent(agent: AgentType, value: unknown, issues: string[]): AiA
   return result;
 }
 
-/**
- * Runtime snapshots cross cache boundaries. Keep the persisted validation proof
- * isolated so a caller can never mutate the live configuration by reference.
- */
 export function cloneAiModelConfig(config: AiModelConfigSnapshot): AiModelConfigSnapshot {
   return {
     providerMode: config.providerMode,

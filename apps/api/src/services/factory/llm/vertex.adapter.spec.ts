@@ -15,15 +15,16 @@ const SERVICE_ACCOUNT = JSON.stringify({
   private_key: '-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----\n',
 });
 
-describe('VertexAdapter', () => {
+describe('VertexAdapter (thinking-only production policy)', () => {
   it('throws when credentials are missing', async () => {
     const adapter = new VertexAdapter(async () => null);
     await expect(
       adapter.complete({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         systemPrompt: 'sys',
         userContent: 'ping',
         maxTokens: 8,
+        thinkingLevel: 'medium',
         signal: new AbortController().signal,
         timeoutMs: 1000,
       }),
@@ -47,10 +48,11 @@ describe('VertexAdapter', () => {
     const adapter = new VertexAdapter(async () => SERVICE_ACCOUNT, 'europe-west1');
     expect(adapter.getLocation()).toBe('europe-west1');
     const result = await adapter.complete({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.5-flash',
       systemPrompt: 'sys',
       userContent: 'ping',
       maxTokens: 8,
+      thinkingLevel: 'medium',
       signal: new AbortController().signal,
       timeoutMs: 5000,
     });

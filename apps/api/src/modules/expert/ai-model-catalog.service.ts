@@ -35,11 +35,12 @@ export interface DiscoveredOperationalModel {
   supportedActions?: string[];
   inputTokenLimit?: number;
   outputTokenLimit?: number;
+  operational: boolean;
+  operationalReason?: string;
   thinking?: boolean;
   thinkingLevels?: readonly AiThinkingLevel[];
   defaultThinkingLevel?: AiThinkingLevel;
   supportsThinking?: boolean;
-  supportsVerbosity?: boolean;
   testedAt?: string;
   latencyMs?: number;
   errorCategory?: string;
@@ -190,11 +191,12 @@ export class AiModelCatalogService {
             typeof model.inputTokenLimit === 'number' ? model.inputTokenLimit : undefined,
           outputTokenLimit:
             typeof model.outputTokenLimit === 'number' ? model.outputTokenLimit : undefined,
-          thinking: controls.thinkingLevels.length > 0,
+          operational: controls.operational,
+          operationalReason: controls.operationalReason,
+          thinking: controls.operational,
           thinkingLevels: controls.thinkingLevels,
           defaultThinkingLevel: controls.defaultThinkingLevel,
-          supportsThinking: controls.thinkingLevels.length > 0,
-          supportsVerbosity: controls.supportsVerbosity,
+          supportsThinking: controls.operational,
         });
       }
 
@@ -228,11 +230,12 @@ export class AiModelCatalogService {
           discovery: 'provider_list',
           detected: true,
           callable: null,
-          thinking: controls.thinkingLevels.length > 0,
+          operational: controls.operational,
+          operationalReason: controls.operationalReason,
+          thinking: controls.operational,
           thinkingLevels: controls.thinkingLevels,
           defaultThinkingLevel: controls.defaultThinkingLevel,
-          supportsThinking: controls.thinkingLevels.length > 0,
-          supportsVerbosity: controls.supportsVerbosity,
+          supportsThinking: controls.operational,
         });
       }
 
@@ -344,11 +347,12 @@ export class AiModelCatalogService {
           supportedActions: model.supportedActions,
           inputTokenLimit: model.inputTokenLimit,
           outputTokenLimit: model.outputTokenLimit,
-          thinking: controls.thinkingLevels.length > 0,
+          operational: controls.operational,
+          operationalReason: controls.operationalReason,
+          thinking: controls.operational,
           thinkingLevels: controls.thinkingLevels,
           defaultThinkingLevel: controls.defaultThinkingLevel,
-          supportsThinking: controls.thinkingLevels.length > 0,
-          supportsVerbosity: controls.supportsVerbosity,
+          supportsThinking: controls.operational,
         });
       }
 

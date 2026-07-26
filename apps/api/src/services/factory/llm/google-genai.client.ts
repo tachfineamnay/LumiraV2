@@ -73,28 +73,34 @@ export function buildGoogleContents(req: LlmRequest): Array<{
   return [{ role: 'user', parts }];
 }
 
-export function buildGoogleGenerationConfig(req: LlmRequest): Record<string, unknown> {
+export function buildGoogleGenerationConfig(
+  provider: 'gemini' | 'vertex',
+  req: LlmRequest,
+): Record<string, unknown> {
+  const controls = getModelRuntimeControls(provider, req.model);
+  if (!controls.operational || controls.thinkingLevels.length === 0) {
+    throw new Error(
+      `${providerLabel(provider)} — le modèle ${req.model} n'est pas autorisé pour la production Lumira.`,
+    );
+  }
+  if (!req.thinkingLevel || !controls.thinkingLevels.includes(req.thinkingLevel)) {
+    throw new Error(
+      `${providerLabel(provider)} — un niveau de réflexion valide est obligatoire pour ${req.model} (${controls.thinkingLevels.join(', ')}).`,
+    );
+  }
+
   const config: Record<string, unknown> = {
     maxOutputTokens: req.maxTokens,
     systemInstruction: req.systemPrompt,
     abortSignal: req.signal,
-  };
-
-  const controls = getModelRuntimeControls('gemini', req.model);
-  if (
-    controls.thinkingLevels.length > 0 &&
-    req.thinkingLevel &&
-    controls.thinkingLevels.includes(req.thinkingLevel)
-  ) {
-    config.thinkingConfig = {
+    thinkingConfig: {
       thinkingLevel: req.thinkingLevel.toUpperCase(),
       includeThoughts: false,
-    };
-  }
+    },
+  };
 
   if (req.jsonSchema) {
     config.responseMimeType = 'application/json';
-    // Prefer responseJsonSchema (JSON Schema subset) over legacy Schema enums.
     config.responseJsonSchema = sanitizeGoogleJsonSchema(req.jsonSchema.schema);
   }
   return config;
@@ -109,7 +115,7 @@ export async function generateWithGoogleGenAi(
     client.models.generateContent({
       model: req.model,
       contents: buildGoogleContents(req),
-      config: buildGoogleGenerationConfig(req) as never,
+      config: buildGoogleGenerationConfig(meta.businessProvider, req) as never,
     }),
     req.signal,
     req.timeoutMs,
@@ -179,12 +185,10 @@ async function withLocalTimeout<T>(
   }
 }
 
-/** Exported for unit tests — ensures image payloads stay typed. */
 export function assertImagePayload(image: ImagePayload): ImagePayload {
   return image;
 }
 
-/** Exported for unit tests — schema passthrough shape. */
 export function asJsonSchema(schema: JsonSchema): JsonSchema {
   return schema;
 }

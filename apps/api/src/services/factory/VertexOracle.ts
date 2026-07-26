@@ -762,7 +762,6 @@ export class VertexOracle implements OnModuleInit {
       images: options?.images,
       maxTokens: Math.min(options?.maxTokens ?? resolved.maxTokens, resolved.maxTokens),
       thinkingLevel: resolved.thinkingLevel,
-      verbosity: resolved.verbosity,
       jsonSchema: options?.jsonSchema,
       signal,
       timeoutMs,

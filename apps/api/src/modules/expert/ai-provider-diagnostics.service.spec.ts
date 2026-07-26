@@ -200,14 +200,14 @@ describe('AiProviderDiagnosticsService — targeted probes', () => {
       key === 'OPENAI_API_KEY' ? 'sk-test-openai-key-1234567890' : undefined,
     );
     prisma.promptVersion.findFirst.mockResolvedValue({
-      value: JSON.stringify(configFor('openai', 'gpt-4o-2024-11-20')),
+      value: JSON.stringify(configFor('openai', 'gpt-5.4-2026-03-05')),
     });
 
     const result = await service.testOpenAIConnection({ force: true });
 
     expect(result.success).toBe(true);
     expect(result.models).toHaveLength(1);
-    expect(result.model).toBe('gpt-4o-2024-11-20');
+    expect(result.model).toBe('gpt-5.4-2026-03-05');
     expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
     expect(mockResponsesCreate.mock.calls.map((call) => call[0].max_output_tokens)).toEqual([
       256, 256, 512,

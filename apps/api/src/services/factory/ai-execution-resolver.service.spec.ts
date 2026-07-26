@@ -21,7 +21,6 @@ const baseSnapshot: AiPromptSnapshot = {
         provider: 'openai',
         model: 'gpt-5.5-2026-04-23',
         thinkingLevel: 'high',
-        verbosity: 'high',
         maxOutputTokens: 24000,
         validation: {
           provider: 'openai',
@@ -36,7 +35,6 @@ const baseSnapshot: AiPromptSnapshot = {
         provider: 'openai',
         model: 'gpt-5.4-2026-03-05',
         thinkingLevel: 'low',
-        verbosity: 'medium',
         maxOutputTokens: 6000,
         validation: {
           provider: 'openai',
@@ -51,7 +49,6 @@ const baseSnapshot: AiPromptSnapshot = {
         provider: 'openai',
         model: 'gpt-5.4-2026-03-05',
         thinkingLevel: 'medium',
-        verbosity: 'high',
         maxOutputTokens: 16000,
         validation: {
           provider: 'openai',
@@ -66,7 +63,6 @@ const baseSnapshot: AiPromptSnapshot = {
         provider: 'openai',
         model: 'gpt-5.4-2026-03-05',
         thinkingLevel: 'low',
-        verbosity: 'medium',
         maxOutputTokens: 12000,
         validation: {
           provider: 'openai',
@@ -134,7 +130,7 @@ describe('AiExecutionResolverService', () => {
 
     await expect(
       service.resolve(buildAiContext('SCRIBE', AiMission.READING_GENERATION), snapshot),
-    ).rejects.toThrow(/modèle non autorisé|modèle non opérationnel|sélectionnez explicitement/);
+    ).rejects.toThrow(/est interdit|sélectionnez explicitement/);
   });
 
   it('rejects gpt-3.5-pro as non-operational model before provider call', async () => {
@@ -155,7 +151,7 @@ describe('AiExecutionResolverService', () => {
 
     await expect(
       service.resolve(buildAiContext('SCRIBE', AiMission.READING_GENERATION), snapshot),
-    ).rejects.toThrow(/modèle non autorisé|modèle non opérationnel|sélectionnez explicitement/);
+    ).rejects.toThrow(/est interdit|sélectionnez explicitement/);
   });
 
   it('uses per-agent provider and model without reading AiRoutingRule', async () => {

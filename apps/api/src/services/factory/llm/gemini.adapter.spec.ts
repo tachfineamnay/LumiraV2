@@ -5,15 +5,16 @@ jest.mock('@google/genai', () => ({
   GoogleGenAI: jest.fn(),
 }));
 
-describe('GeminiAdapter', () => {
+describe('GeminiAdapter (thinking-only production policy)', () => {
   it('throws when API key is missing', async () => {
     const adapter = new GeminiAdapter(() => undefined);
     await expect(
       adapter.complete({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         systemPrompt: 'sys',
         userContent: 'ping',
         maxTokens: 8,
+        thinkingLevel: 'medium',
         signal: new AbortController().signal,
         timeoutMs: 1000,
       }),
@@ -35,10 +36,11 @@ describe('GeminiAdapter', () => {
 
     const adapter = new GeminiAdapter(() => 'test-key');
     const result = await adapter.complete({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       systemPrompt: 'sys',
       userContent: 'ping',
       maxTokens: 8,
+      thinkingLevel: 'medium',
       signal: new AbortController().signal,
       timeoutMs: 5000,
     });
@@ -60,10 +62,11 @@ describe('GeminiAdapter', () => {
 
     const adapter = new GeminiAdapter(() => 'test-key');
     await adapter.complete({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       systemPrompt: 'sys',
       userContent: 'ping',
       maxTokens: 8,
+      thinkingLevel: 'medium',
       signal: new AbortController().signal,
       timeoutMs: 5000,
     });

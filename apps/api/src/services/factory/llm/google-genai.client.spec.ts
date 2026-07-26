@@ -69,7 +69,7 @@ describe('google-genai.client', () => {
   it.each(['minimal', 'low', 'medium', 'high'] as const)(
     'maps gemini-3.6-flash thinkingLevel=%s without exposing thoughts',
     (thinkingLevel) => {
-      const config = buildGoogleGenerationConfig(request({ thinkingLevel }));
+      const config = buildGoogleGenerationConfig('gemini', request({ thinkingLevel }));
       expect(config.thinkingConfig).toEqual({
         thinkingLevel: thinkingLevel.toUpperCase(),
         includeThoughts: false,
@@ -80,30 +80,26 @@ describe('google-genai.client', () => {
     },
   );
 
-  it('does not send thinkingConfig to a request without a selected level', () => {
-    const config = buildGoogleGenerationConfig(request());
-    expect(config.thinkingConfig).toBeUndefined();
-  });
-
-  it('small probes maxTokens=256 do not force low automatically', () => {
-    const config = buildGoogleGenerationConfig(request({ maxTokens: 256 }));
-    expect(config.thinkingConfig).toBeUndefined();
-  });
-
-  it('never sends thinkingConfig or sampling parameters to gemini-2.5-flash', () => {
-    const config = buildGoogleGenerationConfig(
-      request({ model: 'gemini-2.5-flash', thinkingLevel: 'high' as any, maxTokens: 256 }),
+  it('throws an error for a request without a thinking level', () => {
+    expect(() => buildGoogleGenerationConfig('gemini', request())).toThrow(
+      /un niveau de réflexion valide est obligatoire/,
     );
-    expect(config.thinkingConfig).toBeUndefined();
-    expect(config.temperature).toBeUndefined();
-    expect(config.topP).toBeUndefined();
+  });
+
+  it('throws an error for non-operational gemini-2.5-flash', () => {
+    expect(() =>
+      buildGoogleGenerationConfig(
+        'gemini',
+        request({ model: 'gemini-2.5-flash', thinkingLevel: 'high' as any, maxTokens: 256 }),
+      ),
+    ).toThrow(/n'est pas autorisé pour la production Lumira/);
   });
 });
 
 describe('agent model capabilities', () => {
-  it('allows models without explicit thinking level like gpt-4o without thinkingLevel', () => {
-    expect(modelSupportsAgent('gpt-4o-2024-11-20', 'SCRIBE')).toBe(true);
-    expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).not.toThrow();
+  it('refuses legacy models without thinking control like gpt-4o', () => {
+    expect(modelSupportsAgent('gpt-4o-2024-11-20', 'SCRIBE')).toBe(false);
+    expect(() => assertSavableAgentModel('SCRIBE', 'openai', 'gpt-4o-2024-11-20')).toThrow();
   });
 
   it('CONFIDANT accepts a thinking-capable text model with explicit thinkingLevel', () => {
@@ -113,8 +109,8 @@ describe('agent model capabilities', () => {
     ).not.toThrow();
   });
 
-  it('EDITOR capability checks remain unchanged', () => {
-    expect(modelSupportsAgent('gemini-2.5-flash', 'EDITOR')).toBe(true);
+  it('refuses gemini-2.5-flash for EDITOR', () => {
+    expect(modelSupportsAgent('gemini-2.5-flash', 'EDITOR')).toBe(false);
   });
 
   it('dedupes active provider/model pairs from MODEL_CONFIG', () => {
