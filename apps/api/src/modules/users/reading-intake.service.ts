@@ -659,9 +659,10 @@ export class ReadingIntakeService {
     submittedAt: Date,
   ) {
     // Json columns reject plain null: use an explicit JsonNull sentinel.
-    // openReading is intake metadata without a UserProfile column.
-    const { lifeAreas, openReading, ...scalarFields } = profile;
+    // openReading and palmRole are intake metadata without UserProfile columns.
+    const { lifeAreas, openReading, palmRole, ...scalarFields } = profile;
     void openReading;
+    void palmRole;
     const payload = {
       ...scalarFields,
       lifeAreas: lifeAreas ? (this.toJson(lifeAreas) as Prisma.InputJsonValue) : Prisma.JsonNull,
