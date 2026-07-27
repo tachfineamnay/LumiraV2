@@ -41,7 +41,8 @@ import {
   type ReadingPreparationData,
 } from '../../lib/onboardingSchema';
 
-type StepKey = 'identity' | 'intention' | 'context' | 'photos' | 'review';
+type StepKey = 'identity' | 'intention' | 'photos' | 'review';
+type IntentionMode = 'question' | 'situation' | 'open';
 type LoadState = 'loading' | 'ready' | 'error' | 'sealed';
 type SaveState = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
 
@@ -85,31 +86,22 @@ const STEPS: StepDefinition[] = [
     key: 'intention',
     label: 'Intention',
     title: 'Ce qui vous amène',
-    description:
-      'Quelques mots suffisent. Vous pouvez aussi raconter librement ce qui compte pour vous.',
+    description: 'Choisissez simplement la manière dont vous souhaitez orienter votre lecture.',
     icon: MessageSquareText,
-  },
-  {
-    key: 'context',
-    label: 'Contexte',
-    title: 'Votre contexte personnel',
-    description:
-      'Tout est facultatif : partagez seulement ce qui aidera à mieux comprendre votre situation.',
-    icon: HeartHandshake,
   },
   {
     key: 'photos',
     label: 'Photos',
     title: 'Vos photos privées',
     description:
-      'Visage et paume sont facultatifs. Chaque image est enregistrée dans votre espace privé.',
+      'Ajoutez les photos que vous souhaitez utiliser. Vous pouvez continuer avec une seule photo ou sans photo.',
     icon: ImageIcon,
   },
   {
     key: 'review',
-    label: 'Relecture',
-    title: 'Relire et confirmer',
-    description: 'Vérifiez chaque mot. Cette version deviendra la base immuable de cette lecture.',
+    label: 'Transmission',
+    title: 'Relecture et transmission',
+    description: 'Votre dossier essentiel est prêt. Relisez-le ou personnalisez davantage la lecture.',
     icon: LockKeyhole,
   },
 ];
@@ -167,6 +159,27 @@ function normalizeLifeAreas(value: unknown): LifeAreas {
   return parsed.success ? (parsed.data as LifeAreas) : {};
 }
 
+function hasOptionalContext(data: Partial<ReadingPreparationData>): boolean {
+  return Boolean(
+    hasText(data.highs) ||
+      hasText(data.lows) ||
+      hasText(data.lifeEvents) ||
+      hasText(data.ailments) ||
+      hasText(data.fears) ||
+      hasText(data.rituals) ||
+      LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key])) ||
+      (data.deliveryStyle && data.deliveryStyle !== 'DOUX_ET_CLAIR') ||
+      (typeof data.pace === 'number' && data.pace !== 50),
+  );
+}
+
+function inferIntentionMode(data: ReadingPreparationData): IntentionMode {
+  if (data.openReading) return 'open';
+  if (hasText(data.specificQuestion)) return 'question';
+  if (hasText(data.objective)) return 'situation';
+  return 'question';
+}
+
 function normalize(value: unknown): Partial<ReadingPreparationData> {
   if (!value || typeof value !== 'object') return {};
   const source = value as Record<string, unknown>;
@@ -192,8 +205,9 @@ function normalize(value: unknown): Partial<ReadingPreparationData> {
   if (has('palmPhoto') || has('palmPhotoUrl')) {
     normalized.palmPhoto = stringValue(source.palmPhoto || source.palmPhotoUrl);
   }
-  if (source.palmRole === 'PALM_LEFT' || source.palmRole === 'PALM_RIGHT')
+  if (source.palmRole === 'PALM_LEFT' || source.palmRole === 'PALM_RIGHT') {
     normalized.palmRole = source.palmRole;
+  }
   if (has('highs')) normalized.highs = stringValue(source.highs);
   else if (has('strongSide') || has('strongZone')) {
     normalized.highs = [stringValue(source.strongSide), stringValue(source.strongZone)]
@@ -272,14 +286,19 @@ function makeSnapshot(step: number, data: ReadingPreparationData): DraftSnapshot
 function normalizeSavedStep(value: unknown, rawData: Record<string, unknown>): number {
   const saved = Number(value);
   if (!Number.isFinite(saved)) return 0;
-  if (saved >= 0 && saved < STEPS.length) {
-    return Math.floor(saved);
+
+  if (rawData.schemaVersion === 2) {
+    if (saved <= 1) return Math.max(0, Math.floor(saved));
+    if (saved >= 3) return 3;
+    if (saved === 2) {
+      const normalized = normalize(rawData);
+      return hasOptionalContext(normalized) ? 3 : 2;
+    }
   }
-  if (rawData.schemaVersion === 2) return Math.min(Math.max(saved, 0), STEPS.length - 1);
 
   // Six-step legacy flow: intro, identity, intention, photos, context, review.
-  const legacyMap = [0, 0, 1, 3, 2, 4];
-  return legacyMap[Math.min(Math.max(saved, 0), legacyMap.length - 1)] ?? 0;
+  const legacyMap = [0, 0, 1, 2, 3, 3];
+  return legacyMap[Math.min(Math.max(Math.floor(saved), 0), legacyMap.length - 1)] ?? 0;
 }
 
 function requestStatus(error: unknown): number | undefined {
@@ -382,7 +401,6 @@ export function ReadingPreparation({
   const pendingPhotoUploadsRef = useRef<Set<Promise<string>>>(new Set());
 
   const formValues = watch();
-  // Update ref only if form values actually changed to avoid stale snapshots
   if (JSON.stringify(formValuesRef.current) !== JSON.stringify(formValues)) {
     formValuesRef.current = formValues;
   }
@@ -394,28 +412,6 @@ export function ReadingPreparation({
     ? `?orderId=${encodeURIComponent(orderIdRef.current)}`
     : '';
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const contextEntries = useMemo(
-    () => [
-      ['Ce qui vous soutient', formValues.highs],
-      ['Ce qui vous pèse ou se répète', formValues.lows],
-      ['Une période qui a compté', formValues.lifeEvents],
-      ['Contexte corporel partagé', formValues.ailments],
-      ['À aborder avec douceur', formValues.fears],
-      ['Pratiques qui comptent pour vous', formValues.rituals],
-    ],
-    [
-      formValues.ailments,
-      formValues.fears,
-      formValues.highs,
-      formValues.lifeEvents,
-      formValues.lows,
-      formValues.rituals,
-    ],
-  );
-  const lifeAreaCount = useMemo(
-    () => LIFE_AREA_KEYS.filter((key) => Boolean(formValues.lifeAreas?.[key])).length,
-    [formValues.lifeAreas],
-  );
 
   const queueDraftSave = useCallback(
     (snapshot: DraftSnapshot, options: { keepalive?: boolean; force?: boolean } = {}) => {
@@ -450,9 +446,6 @@ export function ReadingPreparation({
           const response = await fetch('/api/bff/users/onboarding', {
             method: 'PATCH',
             credentials: 'include',
-            // Every small draft mutation is allowed to finish if the browser
-            // backgrounds or tears down the page; explicit flushes still drain
-            // the ordered CAS queue before closing the dialog.
             keepalive: true,
             signal: controller.signal,
             headers: { 'Content-Type': 'application/json' },
@@ -477,9 +470,6 @@ export function ReadingPreparation({
         }
       };
 
-      // A paid order can be confirmed by webhook while the client is already
-      // filling the form: the draft scope silently moves from legacy to
-      // order-scoped. Re-read the scope once and retry so no input is lost.
       const recoverOrderScope = async (): Promise<boolean> => {
         const response = await fetch('/api/bff/users/onboarding', {
           method: 'GET',
@@ -564,9 +554,6 @@ export function ReadingPreparation({
 
   const flushDraft = useCallback(
     async (options: { keepalive?: boolean } = {}) => {
-      // Drain every save that was queued before the flush. A user can type B,
-      // return to the last-saved value A, then close while B is still in flight;
-      // checking A too early would let B overwrite the server after the dialog closes.
       let observedQueue: Promise<boolean>;
       do {
         observedQueue = saveQueueRef.current;
@@ -637,7 +624,6 @@ export function ReadingPreparation({
       formValuesRef.current = initialData;
       stepRef.current = initialStep;
 
-      // Reset form with proper flag to ensure react-hook-form triggers re-render
       reset(initialData, { keepDefaultValues: false });
 
       setStep(initialStep);
@@ -683,7 +669,6 @@ export function ReadingPreparation({
   useEffect(() => {
     if (loadState !== 'ready' || isSubmitting || isComplete || saveState === 'conflict') return;
 
-    // Use the latest ref values to ensure we capture button clicks immediately
     const currentValues = { ...formValuesRef.current };
     const snapshot = makeSnapshot(stepRef.current, currentValues);
 
@@ -741,7 +726,6 @@ export function ReadingPreparation({
         return;
       }
       const nextHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
-      // Never collapse the dialog to an unusable height (keyboard/visualViewport glitches).
       setMobileViewportHeight(nextHeight >= 240 ? nextHeight : null);
     };
     updateViewportHeight();
@@ -905,6 +889,17 @@ export function ReadingPreparation({
   const focusIssue = useCallback(
     (field: FieldPath<ReadingPreparationData>, message: string) => {
       setError(field, { type: 'manual', message });
+      const contextFields = [
+        'highs',
+        'lows',
+        'lifeEvents',
+        'lifeAreas',
+        'ailments',
+        'fears',
+        'rituals',
+        'deliveryStyle',
+        'pace',
+      ];
       const targetStep =
         field === 'birthDate' ||
         field === 'birthTime' ||
@@ -913,23 +908,20 @@ export function ReadingPreparation({
           ? 0
           : field === 'specificQuestion' || field === 'objective'
             ? 1
-            : [
-                  'highs',
-                  'lows',
-                  'lifeEvents',
-                  'lifeAreas',
-                  'ailments',
-                  'fears',
-                  'rituals',
-                  'deliveryStyle',
-                  'pace',
-                ].includes(field)
+            : field === 'facePhoto' || field === 'palmPhoto'
               ? 2
-              : field === 'facePhoto' || field === 'palmPhoto'
-                ? 3
-                : 4;
+              : 3;
       setStep(targetStep);
-      window.setTimeout(() => setFocus(field), 0);
+      stepRef.current = targetStep;
+      window.setTimeout(() => {
+        if (contextFields.includes(field)) {
+          const details = dialogRef.current?.querySelector<HTMLDetailsElement>(
+            `details[data-fields~="${field}"]`,
+          );
+          if (details) details.open = true;
+        }
+        setFocus(field);
+      }, 0);
     },
     [setError, setFocus],
   );
@@ -949,7 +941,8 @@ export function ReadingPreparation({
       return;
     }
     if (photoStates.face === 'error' || photoStates.palm === 'error') {
-      setStep(3);
+      setStep(2);
+      stepRef.current = 2;
       setActionError('Réessayez l’envoi de la photo en erreur ou retirez-la avant de confirmer.');
       return;
     }
@@ -960,7 +953,8 @@ export function ReadingPreparation({
     try {
       const uploadsSucceeded = await waitForPhotoUploads();
       if (!uploadsSucceeded) {
-        setStep(3);
+        setStep(2);
+        stepRef.current = 2;
         setActionError('Une photo n’a pas pu être enregistrée. Réessayez ou retirez-la.');
         return;
       }
@@ -1014,7 +1008,6 @@ export function ReadingPreparation({
       const errorCode = (error as { response?: { data?: { code?: string } } })?.response?.data
         ?.code;
       if (requestStatus(error) === 409 && errorCode === 'ACTIVE_ORDER_CHANGED') {
-        // Refresh the scope so the next "Confirmer" targets the right order.
         try {
           const scope = await sanctuaireApi.get('/users/onboarding', { timeout: 15_000 });
           const fresh = (scope.data ?? null) as DraftResponse | null;
@@ -1064,14 +1057,13 @@ export function ReadingPreparation({
       Boolean(formValues.birthDate && stringValue(formValues.birthPlace).trim()),
       Boolean(
         hasText(formValues.specificQuestion) ||
-        hasText(formValues.objective) ||
-        formValues.openReading,
+          hasText(formValues.objective) ||
+          formValues.openReading,
       ),
-      contextEntries.some(([, value]) => hasText(value)) || lifeAreaCount > 0,
       Boolean(formValues.facePhoto || formValues.palmPhoto),
       formValues.consent,
     ],
-    [contextEntries, formValues, lifeAreaCount],
+    [formValues],
   );
 
   if (loadState === 'loading') {
@@ -1340,8 +1332,8 @@ export function ReadingPreparation({
                   </div>
                 )}
 
-                {current.key !== 'identity' && current.key !== 'review' && (
-                  <EnrichmentMeter data={formValues} />
+                {(current.key === 'intention' || current.key === 'photos') && (
+                  <DossierStatusBanner data={formValues} />
                 )}
 
                 <div className="mt-6">
@@ -1356,27 +1348,11 @@ export function ReadingPreparation({
                   )}
 
                   {current.key === 'intention' && (
-                    <IntentionStep register={register} errors={errors} values={formValues} />
-                  )}
-
-                  {current.key === 'context' && (
-                    <ContextStep
+                    <IntentionStep
                       register={register}
                       errors={errors}
                       values={formValues}
-                      onDeliveryStyleChange={(value) => {
-                        setValue('deliveryStyle', value, {
-                          shouldDirty: true,
-                          shouldTouch: true,
-                          shouldValidate: false,
-                        });
-                        // Force update the ref to ensure autosave triggers
-                        formValuesRef.current = { ...formValuesRef.current, deliveryStyle: value };
-                      }}
-                      onLifeAreasChange={(next) => {
-                        setValue('lifeAreas', next, { shouldDirty: true });
-                        formValuesRef.current = { ...formValuesRef.current, lifeAreas: next };
-                      }}
+                      setValue={setValue}
                     />
                   )}
 
@@ -1464,12 +1440,25 @@ export function ReadingPreparation({
                   )}
 
                   {current.key === 'review' && (
-                    <ReviewStep
+                    <FinalStep
                       data={formValues}
-                      contextEntries={contextEntries}
+                      register={register}
+                      errors={errors}
                       registerConsent={register('consent')}
                       consentError={errors.consent?.message}
                       onEdit={(index) => void goToStep(index)}
+                      onDeliveryStyleChange={(value) => {
+                        setValue('deliveryStyle', value, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: false,
+                        });
+                        formValuesRef.current = { ...formValuesRef.current, deliveryStyle: value };
+                      }}
+                      onLifeAreasChange={(next) => {
+                        setValue('lifeAreas', next, { shouldDirty: true });
+                        formValuesRef.current = { ...formValuesRef.current, lifeAreas: next };
+                      }}
                     />
                   )}
                 </div>
@@ -1634,185 +1623,506 @@ function IntentionStep({
   register,
   errors,
   values,
+  setValue,
 }: {
   register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
   errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
   values: ReadingPreparationData;
+  setValue: ReturnType<typeof useForm<ReadingPreparationData>>['setValue'];
 }) {
+  const [mode, setMode] = useState<IntentionMode>(() => inferIntentionMode(values));
+  const [showObjective, setShowObjective] = useState(() => hasText(values.objective));
+
+  const chooseMode = (nextMode: IntentionMode) => {
+    setMode(nextMode);
+    if (nextMode === 'open') {
+      setValue('openReading', true, { shouldDirty: true, shouldValidate: true });
+      setValue('specificQuestion', '', { shouldDirty: true, shouldValidate: true });
+      setValue('objective', '', { shouldDirty: true, shouldValidate: true });
+      setShowObjective(false);
+      return;
+    }
+
+    setValue('openReading', false, { shouldDirty: true, shouldValidate: true });
+    if (nextMode === 'situation') {
+      setValue('specificQuestion', '', { shouldDirty: true, shouldValidate: true });
+      setShowObjective(true);
+    }
+  };
+
+  const choices: Array<[IntentionMode, string, string]> = [
+    ['question', 'J’ai une question précise', 'Un sujet ou une décision que vous souhaitez éclairer.'],
+    ['situation', 'Je traverse une période particulière', 'Décrivez simplement ce qui se passe en ce moment.'],
+    ['open', 'Je préfère une lecture ouverte', 'Laissez Lumira partir de vos repères sans question imposée.'],
+  ];
+
   return (
     <div className="space-y-5">
-      <TextareaField
-        label="Si cette lecture pouvait éclairer une seule question, laquelle serait-ce ?"
-        helper="Racontez la situation comme à une personne de confiance : depuis quand, ce qui s’est passé, ce que vous ressentez. Plus vous êtes précis, plus la lecture le sera."
-        placeholder="En ce moment, je me demande… Cela a commencé quand… Ce qui me pèse le plus, c’est…"
-        maxLength={2000}
-        valueLength={stringValue(values.specificQuestion).length}
-        error={errors.specificQuestion?.message}
-        registration={register('specificQuestion')}
-      />
-      <TextareaField
-        label="À la fin, qu’aimeriez-vous comprendre, décider ou voir autrement ?"
-        helper="Imaginez votre lecture reçue : qu’est-ce qui aurait changé pour vous ? Une décision plus claire, un poids déposé, une direction retrouvée…"
-        placeholder="J’aimerais repartir avec plus de clarté sur… et me sentir capable de…"
-        maxLength={2000}
-        valueLength={stringValue(values.objective).length}
-        error={errors.objective?.message}
-        registration={register('objective')}
-      />
-      <label
-        className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm leading-6 focus-within:ring-2 focus-within:ring-horizon-400 ${
-          values.openReading
-            ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-200'
-            : 'border-white/[0.09] bg-white/[0.025] text-stellar-400'
-        }`}
-      >
-        <input
-          type="checkbox"
-          className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
-          {...register('openReading')}
-        />
-        <span>
-          <strong className="block font-medium text-stellar-100">
-            Je préfère une lecture ouverte
-          </strong>
-          <span className="mt-1 block text-xs leading-5 text-stellar-500">
-            Je ne souhaite pas orienter la lecture avec une question précise ; l’expert partira de
-            mes repères et du contexte que j’ai choisi de partager.
-          </span>
-        </span>
-      </label>
-      <TrustNote />
-    </div>
-  );
-}
-
-function ContextStep({
-  register,
-  errors,
-  values,
-  onDeliveryStyleChange,
-  onLifeAreasChange,
-}: {
-  register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
-  errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
-  values: ReadingPreparationData;
-  onDeliveryStyleChange: (value: ReadingPreparationData['deliveryStyle']) => void;
-  onLifeAreasChange: (next: LifeAreas) => void;
-}) {
-  return (
-    <div className="space-y-5">
-      <LifeWeatherSection value={values.lifeAreas || {}} onChange={onLifeAreasChange} />
-      <div className="grid gap-5 md:grid-cols-2">
-        <TextareaField
-          label="Ce qui vous soutient actuellement"
-          helper="Une personne, un projet, une qualité, un élan : qu’est-ce qui vous porte au réveil, même les jours difficiles ?"
-          placeholder="Je peux compter sur… Ce qui me redonne de l’énergie, c’est…"
-          maxLength={2000}
-          valueLength={stringValue(values.highs).length}
-          error={errors.highs?.message}
-          registration={register('highs')}
-        />
-        <TextareaField
-          label="Ce qui vous pèse ou se répète"
-          helper="Le schéma qui revient malgré vous — dans vos relations, votre travail, votre corps. C’est souvent la clé de la lecture."
-          placeholder="Depuis des années, je retombe dans… À chaque fois que…, il se passe…"
-          maxLength={2000}
-          valueLength={stringValue(values.lows).length}
-          error={errors.lows?.message}
-          registration={register('lows')}
-        />
-        <TextareaField
-          label="Ce que vous préférez que nous abordions avec douceur"
-          helper="Une peur, une limite ou un sujet sensible — quelques mots suffisent, sans obligation de tout détailler."
-          placeholder="Je préfère qu’on aborde délicatement…"
-          maxLength={2000}
-          valueLength={stringValue(values.fears).length}
-          error={errors.fears?.message}
-          registration={register('fears')}
-        />
-        <TextareaField
-          label="Pratiques qui comptent pour vous"
-          helper="Méditation, écriture, prière, marche, tarot… ce que vous faites déjà nous aide à proposer des rituels qui vous ressemblent."
-          placeholder="J’ai l’habitude de… J’ai déjà essayé…"
-          maxLength={1500}
-          valueLength={stringValue(values.rituals).length}
-          error={errors.rituals?.message}
-          registration={register('rituals')}
-        />
-      </div>
-      <TextareaField
-        label="Une période ou un événement qui vous a marqué"
-        helper="Une année approximative et quelques mots : une rencontre, une perte, un éveil, une rupture, un déménagement… Ces dates de passage éclairent vos cycles de vie."
-        placeholder="Vers 2018, j’ai vécu… et depuis, quelque chose a changé dans…"
-        maxLength={2000}
-        valueLength={stringValue(values.lifeEvents).length}
-        error={errors.lifeEvents?.message}
-        registration={register('lifeEvents')}
-      />
-      <TextareaField
-        label="Contexte corporel que vous souhaitez partager"
-        helper="Tensions, fatigue, zones sensibles : ce que votre corps exprime en ce moment, si vous deviez le traduire. Lumira ne pose aucun diagnostic médical."
-        placeholder="Mon corps me parle surtout par… (dos, sommeil, ventre, énergie…)"
-        maxLength={1500}
-        valueLength={stringValue(values.ailments).length}
-        error={errors.ailments?.message}
-        registration={register('ailments')}
-      />
-
-      <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
-        <h2 className="text-sm font-medium text-stellar-100">
-          Comment souhaitez-vous recevoir la lecture ?
-        </h2>
-        <div
-          className="mt-3 grid gap-2 sm:grid-cols-3"
-          role="radiogroup"
-          aria-label="Ton de la rédaction"
-        >
-          {STYLE_OPTIONS.map(([value, label, helper]) => {
-            const selected = values.deliveryStyle === value;
+      <fieldset>
+        <legend className="text-sm font-medium text-stellar-100">
+          Comment souhaitez-vous orienter votre lecture ?
+        </legend>
+        <div className="mt-3 grid gap-2">
+          {choices.map(([value, label, helper]) => {
+            const selected = mode === value;
             return (
               <button
                 key={value}
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                aria-label={label}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDeliveryStyleChange(value);
-                }}
-                className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
+                onClick={() => chooseMode(value)}
+                className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
                   selected
-                    ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
-                    : 'border-white/[0.08] text-stellar-400 hover:bg-white/[0.04]'
+                    ? 'border-horizon-400/45 bg-horizon-400/10 text-stellar-100'
+                    : 'border-white/[0.09] bg-white/[0.025] text-stellar-300 hover:bg-white/[0.045]'
                 }`}
               >
-                <span className="block text-sm font-medium">{label}</span>
-                <span className="mt-1 block text-xs leading-5 text-stellar-500">{helper}</span>
+                <span className="flex items-center gap-3">
+                  <span
+                    className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
+                      selected ? 'border-horizon-300 bg-horizon-400' : 'border-white/25'
+                    }`}
+                  >
+                    {selected && <Check className="h-3.5 w-3.5 text-abyss-900" />}
+                  </span>
+                  <span>
+                    <strong className="block text-sm font-medium">{label}</strong>
+                    <span className="mt-1 block text-xs leading-5 text-stellar-500">{helper}</span>
+                  </span>
+                </span>
               </button>
             );
           })}
         </div>
-        <label className="mt-5 block text-sm text-stellar-300">
-          Niveau de détail souhaité :{' '}
-          <strong className="text-stellar-100">{paceLabel(values.pace)}</strong>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            className="mt-3 h-11 w-full accent-amber-300"
-            {...register('pace', { valueAsNumber: true })}
+      </fieldset>
+
+      {mode === 'question' && (
+        <>
+          <TextareaField
+            label="Si cette lecture pouvait éclairer une seule question, laquelle serait-ce ?"
+            helper="Quelques mots suffisent. Décrivez le sujet comme vous le diriez à une personne de confiance."
+            placeholder="En ce moment, je me demande…"
+            maxLength={2000}
+            valueLength={stringValue(values.specificQuestion).length}
+            error={errors.specificQuestion?.message}
+            registration={register('specificQuestion')}
           />
-          <span className="flex justify-between text-xs text-stellar-500">
-            <span>Essentiel</span>
-            <span>Très détaillé</span>
-          </span>
-        </label>
-      </section>
+          <button
+            type="button"
+            onClick={() => setShowObjective((current) => !current)}
+            aria-expanded={showObjective}
+            className="inline-flex min-h-[42px] items-center gap-2 rounded-xl px-2 text-sm font-medium text-horizon-200 hover:bg-horizon-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+          >
+            <Sparkles className="h-4 w-4" />
+            {showObjective
+              ? 'Masquer cette précision'
+              : 'Ajouter ce que j’aimerais comprendre ou décider'}
+          </button>
+          {showObjective && (
+            <TextareaField
+              label="Ce que vous aimeriez comprendre, décider ou voir autrement"
+              helper="Une décision plus claire, un poids déposé ou une direction retrouvée."
+              placeholder="J’aimerais repartir avec plus de clarté sur…"
+              maxLength={2000}
+              valueLength={stringValue(values.objective).length}
+              error={errors.objective?.message}
+              registration={register('objective')}
+            />
+          )}
+        </>
+      )}
+
+      {mode === 'situation' && (
+        <TextareaField
+          label="Que traversez-vous en ce moment ?"
+          helper="Racontez seulement ce qui vous semble utile : ce qui a changé, ce qui vous pèse ou ce que vous cherchez à comprendre."
+          placeholder="En ce moment, je traverse…"
+          maxLength={2000}
+          valueLength={stringValue(values.objective).length}
+          error={errors.objective?.message}
+          registration={register('objective')}
+        />
+      )}
+
+      {mode === 'open' && (
+        <p className="rounded-2xl border border-horizon-400/20 bg-horizon-400/[0.07] p-4 text-sm leading-6 text-stellar-300">
+          Votre lecture restera ouverte. L’expert partira de vos repères et des éléments que vous
+          choisirez éventuellement d’ajouter à la fin.
+        </p>
+      )}
       <TrustNote />
     </div>
+  );
+}
+
+function DossierStatusBanner({ data }: { data: ReadingPreparationData }) {
+  const identityReady = Boolean(data.birthDate && stringValue(data.birthPlace).trim());
+  const intentionReady = Boolean(
+    hasText(data.specificQuestion) || hasText(data.objective) || data.openReading,
+  );
+  const essentialsReady = identityReady && intentionReady;
+  const enriched = hasOptionalContext(data);
+
+  return (
+    <div
+      className={`mt-5 rounded-xl border p-3 ${
+        essentialsReady
+          ? 'border-emerald-400/20 bg-emerald-400/[0.07]'
+          : 'border-horizon-400/15 bg-horizon-400/[0.05]'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+            essentialsReady
+              ? 'bg-emerald-400/15 text-emerald-300'
+              : 'bg-horizon-400/12 text-horizon-300'
+          }`}
+        >
+          {essentialsReady ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-stellar-100">
+            {essentialsReady ? 'Votre dossier essentiel est prêt' : 'Dossier essentiel en cours'}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-stellar-400">
+            {essentialsReady
+              ? enriched
+                ? 'Vous pouvez le transmettre maintenant. Des repères personnels supplémentaires sont déjà enregistrés.'
+                : 'Vous pourrez le transmettre après les photos ou le personnaliser davantage lors de la relecture.'
+              : 'Complétez vos repères et choisissez la manière d’orienter votre lecture.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinalStep({
+  data,
+  register,
+  errors,
+  registerConsent,
+  consentError,
+  onEdit,
+  onDeliveryStyleChange,
+  onLifeAreasChange,
+}: {
+  data: ReadingPreparationData;
+  register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
+  errors: ReturnType<typeof useForm<ReadingPreparationData>>['formState']['errors'];
+  registerConsent: ReturnType<ReturnType<typeof useForm<ReadingPreparationData>>['register']>;
+  consentError?: string;
+  onEdit: (index: number) => void;
+  onDeliveryStyleChange: (value: ReadingPreparationData['deliveryStyle']) => void;
+  onLifeAreasChange: (next: LifeAreas) => void;
+}) {
+  const weatherComplete = LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key]));
+  const supportComplete = hasText(data.highs) || hasText(data.lows);
+  const historyComplete =
+    hasText(data.lifeEvents) || hasText(data.fears) || hasText(data.ailments);
+  const preferencesComplete =
+    hasText(data.rituals) || data.deliveryStyle !== 'DOUX_ET_CLAIR' || data.pace !== 50;
+  const optionalCount = [
+    weatherComplete,
+    supportComplete,
+    historyComplete,
+    preferencesComplete,
+  ].filter(Boolean).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] p-4">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-400/15 text-emerald-300">
+            <CheckCircle2 className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="font-playfair text-xl italic text-stellar-100">
+              Votre dossier essentiel est prêt
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-stellar-400">
+              Lumira dispose déjà des éléments nécessaires pour préparer votre lecture. Vous pouvez
+              transmettre maintenant ou ajouter seulement ce qui vous semble utile.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <ReviewSection title="Repères essentiels" onEdit={() => onEdit(0)}>
+        <ReviewValue label="Date" value={formatBirthDate(data.birthDate)} />
+        <ReviewValue label="Heure" value={data.birthTime || 'Non transmise'} />
+        <ReviewValue label="Lieu" value={data.birthPlace || 'À compléter'} />
+        {hasText(data.usageName) && (
+          <ReviewValue label="Prénom d’usage" value={stringValue(data.usageName).trim()} />
+        )}
+      </ReviewSection>
+
+      <ReviewSection title="Ce qui vous amène" onEdit={() => onEdit(1)}>
+        {data.openReading && (
+          <ReviewValue label="Cadre choisi" value="Lecture ouverte, sans question imposée" />
+        )}
+        {!data.openReading && hasText(data.specificQuestion) && (
+          <ReviewValue label="Question" value={data.specificQuestion} />
+        )}
+        {!data.openReading && hasText(data.objective) && (
+          <ReviewValue label="Situation ou intention" value={data.objective} />
+        )}
+        {!data.openReading && !hasText(data.specificQuestion) && !hasText(data.objective) && (
+          <p>Aucune intention n’a encore été transmise.</p>
+        )}
+      </ReviewSection>
+
+      <ReviewSection title="Photos privées" onEdit={() => onEdit(2)}>
+        <ReviewValue
+          label="Visage"
+          value={data.facePhoto ? 'Photo enregistrée' : 'Non transmise'}
+        />
+        <ReviewValue label="Paume" value={data.palmPhoto ? 'Photo enregistrée' : 'Non transmise'} />
+      </ReviewSection>
+
+      <section className="rounded-2xl border border-horizon-400/18 bg-horizon-400/[0.045] p-4">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-horizon-400/12 text-horizon-300">
+            <HeartHandshake className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-stellar-100">
+              Personnaliser davantage ma lecture
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-stellar-500">
+              Facultatif · environ 3 à 5 minutes. Ouvrez uniquement les thèmes qui vous parlent.
+              {optionalCount > 0 && ` ${optionalCount} thème${optionalCount > 1 ? 's' : ''} enrichi${optionalCount > 1 ? 's' : ''}.`}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <OptionalDetails
+            title="Ma situation actuelle"
+            description="Une météo rapide de vos grands domaines de vie."
+            complete={weatherComplete}
+            fields={['lifeAreas']}
+          >
+            <LifeWeatherSection value={data.lifeAreas || {}} onChange={onLifeAreasChange} />
+          </OptionalDetails>
+
+          <OptionalDetails
+            title="Ce qui me porte et ce qui me pèse"
+            description="Les ressources présentes et les schémas qui se répètent."
+            complete={supportComplete}
+            fields={['highs', 'lows']}
+          >
+            <div className="grid gap-5 md:grid-cols-2">
+              <TextareaField
+                label="Ce qui vous soutient actuellement"
+                helper="Une personne, un projet, une qualité ou un élan qui vous porte."
+                placeholder="Je peux compter sur…"
+                maxLength={2000}
+                valueLength={stringValue(data.highs).length}
+                error={errors.highs?.message}
+                registration={register('highs')}
+              />
+              <TextareaField
+                label="Ce qui vous pèse ou se répète"
+                helper="Un schéma qui revient dans vos relations, votre travail ou votre quotidien."
+                placeholder="Je remarque que je retombe souvent dans…"
+                maxLength={2000}
+                valueLength={stringValue(data.lows).length}
+                error={errors.lows?.message}
+                registration={register('lows')}
+              />
+            </div>
+          </OptionalDetails>
+
+          <OptionalDetails
+            title="Mon histoire et mes sensibilités"
+            description="Un passage marquant, un sujet délicat ou un contexte corporel."
+            complete={historyComplete}
+            fields={['lifeEvents', 'fears', 'ailments']}
+          >
+            <div className="space-y-5">
+              <TextareaField
+                label="Une période ou un événement qui vous a marqué"
+                helper="Une année approximative et quelques mots suffisent."
+                placeholder="Vers 2018, j’ai vécu…"
+                maxLength={2000}
+                valueLength={stringValue(data.lifeEvents).length}
+                error={errors.lifeEvents?.message}
+                registration={register('lifeEvents')}
+              />
+              <TextareaField
+                label="Ce que vous préférez que nous abordions avec douceur"
+                helper="Une peur, une limite ou un sujet sensible, sans obligation de tout détailler."
+                placeholder="Je préfère qu’on aborde délicatement…"
+                maxLength={2000}
+                valueLength={stringValue(data.fears).length}
+                error={errors.fears?.message}
+                registration={register('fears')}
+              />
+              <TextareaField
+                label="Contexte corporel que vous souhaitez partager"
+                helper="Tensions, fatigue ou zones sensibles. Lumira ne pose aucun diagnostic médical."
+                placeholder="Mon corps me parle surtout par…"
+                maxLength={1500}
+                valueLength={stringValue(data.ailments).length}
+                error={errors.ailments?.message}
+                registration={register('ailments')}
+              />
+            </div>
+          </OptionalDetails>
+
+          <OptionalDetails
+            title="Mes préférences de lecture"
+            description="Vos pratiques, le ton et le niveau de détail souhaités."
+            complete={preferencesComplete}
+            fields={['rituals', 'deliveryStyle', 'pace']}
+          >
+            <div className="space-y-5">
+              <TextareaField
+                label="Pratiques qui comptent pour vous"
+                helper="Méditation, écriture, prière, marche, tarot ou toute pratique déjà présente."
+                placeholder="J’ai l’habitude de…"
+                maxLength={1500}
+                valueLength={stringValue(data.rituals).length}
+                error={errors.rituals?.message}
+                registration={register('rituals')}
+              />
+              <ReadingPreferencesSection
+                register={register}
+                values={data}
+                onDeliveryStyleChange={onDeliveryStyleChange}
+              />
+            </div>
+          </OptionalDetails>
+        </div>
+      </section>
+
+      <TrustNote />
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300 focus-within:ring-2 focus-within:ring-horizon-400">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
+          aria-invalid={Boolean(consentError)}
+          aria-describedby={consentError ? 'consent-error' : undefined}
+          {...registerConsent}
+        />
+        <span>
+          J’ai relu l’ensemble de ces éléments et je choisis de transmettre cette version à Lumira
+          pour préparer ma lecture personnalisée.
+        </span>
+      </label>
+      <FieldError id="consent-error" message={consentError} />
+    </div>
+  );
+}
+
+function OptionalDetails({
+  title,
+  description,
+  complete,
+  fields,
+  children,
+}: {
+  title: string;
+  description: string;
+  complete: boolean;
+  fields: string[];
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      data-fields={fields.join(' ')}
+      className="group rounded-xl border border-white/[0.08] bg-abyss-700/45"
+    >
+      <summary className="flex min-h-[58px] cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 [&::-webkit-details-marker]:hidden">
+        <span
+          className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${
+            complete ? 'bg-emerald-400/15 text-emerald-300' : 'bg-white/[0.05] text-stellar-500'
+          }`}
+        >
+          {complete ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-stellar-100">{title}</span>
+          <span className="mt-0.5 block text-xs leading-5 text-stellar-500">{description}</span>
+        </span>
+        {complete && (
+          <span className="hidden shrink-0 text-xs font-medium text-emerald-300 sm:inline">
+            Complété
+          </span>
+        )}
+        <ArrowRight className="h-4 w-4 shrink-0 text-stellar-500 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
+      </summary>
+      <div className="border-t border-white/[0.07] p-4">{children}</div>
+    </details>
+  );
+}
+
+function ReadingPreferencesSection({
+  register,
+  values,
+  onDeliveryStyleChange,
+}: {
+  register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
+  values: ReadingPreparationData;
+  onDeliveryStyleChange: (value: ReadingPreparationData['deliveryStyle']) => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+      <h3 className="text-sm font-medium text-stellar-100">
+        Comment souhaitez-vous recevoir la lecture ?
+      </h3>
+      <div
+        className="mt-3 grid gap-2 sm:grid-cols-3"
+        role="radiogroup"
+        aria-label="Ton de la rédaction"
+      >
+        {STYLE_OPTIONS.map(([value, label, helper]) => {
+          const selected = values.deliveryStyle === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={label}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDeliveryStyleChange(value);
+              }}
+              className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 ${
+                selected
+                  ? 'border-horizon-400/40 bg-horizon-400/10 text-stellar-100'
+                  : 'border-white/[0.08] text-stellar-400 hover:bg-white/[0.04]'
+              }`}
+            >
+              <span className="block text-sm font-medium">{label}</span>
+              <span className="mt-1 block text-xs leading-5 text-stellar-500">{helper}</span>
+            </button>
+          );
+        })}
+      </div>
+      <label className="mt-5 block text-sm text-stellar-300">
+        Niveau de détail souhaité :{' '}
+        <strong className="text-stellar-100">{paceLabel(values.pace)}</strong>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          className="mt-3 h-11 w-full accent-amber-300"
+          {...register('pace', { valueAsNumber: true })}
+        />
+        <span className="flex justify-between text-xs text-stellar-500">
+          <span>Essentiel</span>
+          <span>Très détaillé</span>
+        </span>
+      </label>
+    </section>
   );
 }
 
@@ -1841,12 +2151,11 @@ function LifeWeatherSection({
 
   return (
     <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
-      <h2 className="text-sm font-medium text-stellar-100">
+      <h3 className="text-sm font-medium text-stellar-100">
         Votre météo de vie, domaine par domaine
-      </h2>
+      </h3>
       <p className="mt-1 text-xs leading-5 text-stellar-500">
-        Vingt secondes suffisent : indiquez comment chaque domaine se porte en ce moment. Chaque
-        repère donné ancre votre lecture dans votre réalité, pas dans des généralités.
+        Indiquez seulement les domaines que vous souhaitez situer. Vous pouvez laisser le reste vide.
       </p>
       <div className="mt-4 space-y-4">
         {LIFE_AREA_KEYS.map((key) => {
@@ -1898,140 +2207,6 @@ function LifeWeatherSection({
         })}
       </div>
     </section>
-  );
-}
-
-function EnrichmentMeter({ data }: { data: ReadingPreparationData }) {
-  const signals = [
-    hasText(data.birthTime),
-    hasText(data.usageName),
-    hasText(data.specificQuestion) || hasText(data.objective),
-    hasText(data.highs),
-    hasText(data.lows),
-    hasText(data.lifeEvents),
-    LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key])),
-    hasText(data.fears),
-    hasText(data.rituals),
-    hasText(data.ailments),
-    Boolean(data.facePhoto),
-    Boolean(data.palmPhoto),
-  ];
-  const filled = signals.filter(Boolean).length;
-  const percent = Math.round((filled / signals.length) * 100);
-  const message =
-    percent >= 75
-      ? 'Dossier riche : votre lecture pourra être profondément personnelle.'
-      : percent >= 40
-        ? 'Beau dossier. Chaque détail supplémentaire affine encore la lecture.'
-        : 'Tout est facultatif, mais chaque élément partagé rend votre lecture plus juste.';
-
-  return (
-    <div className="mt-5 rounded-xl border border-horizon-400/15 bg-horizon-400/[0.05] p-3">
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="font-semibold uppercase tracking-[0.12em] text-horizon-300">
-          Richesse du dossier
-        </span>
-        <span className="tabular-nums text-stellar-400">
-          {filled}/{signals.length} repères
-        </span>
-      </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-horizon-400 to-amber-300 transition-[width] motion-reduce:transition-none"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <p className="mt-2 text-xs leading-5 text-stellar-400">{message}</p>
-    </div>
-  );
-}
-
-function ReviewStep({
-  data,
-  contextEntries,
-  registerConsent,
-  consentError,
-  onEdit,
-}: {
-  data: ReadingPreparationData;
-  contextEntries: string[][];
-  registerConsent: ReturnType<ReturnType<typeof useForm<ReadingPreparationData>>['register']>;
-  consentError?: string;
-  onEdit: (index: number) => void;
-}) {
-  const transmittedContext = contextEntries.filter(([, value]) => hasText(value));
-  const weatherEntries = LIFE_AREA_KEYS.filter((key) => Boolean(data.lifeAreas?.[key])).map(
-    (key) => {
-      const entry = data.lifeAreas![key]!;
-      const note = entry.note?.trim();
-      return `${LIFE_AREA_LABELS[key]} : ${LIFE_AREA_STATE_LABELS[entry.state]}${
-        note ? ` — ${note}` : ''
-      }`;
-    },
-  );
-  return (
-    <div className="space-y-4">
-      <p className="rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 text-sm leading-6 text-stellar-300">
-        <strong className="text-stellar-100">
-          Le brouillon reste modifiable tant que vous ne confirmez pas.
-        </strong>{' '}
-        Après confirmation, cette version sera conservée telle quelle pour cette lecture.
-      </p>
-      <ReviewSection title="Repères essentiels" onEdit={() => onEdit(0)}>
-        <ReviewValue label="Date" value={formatBirthDate(data.birthDate)} />
-        <ReviewValue label="Heure" value={data.birthTime || 'Non transmise'} />
-        <ReviewValue label="Lieu" value={data.birthPlace || 'À compléter'} />
-        {hasText(data.usageName) && (
-          <ReviewValue label="Prénom d’usage" value={stringValue(data.usageName).trim()} />
-        )}
-      </ReviewSection>
-      <ReviewSection title="Ce qui vous amène" onEdit={() => onEdit(1)}>
-        {data.openReading && (
-          <ReviewValue label="Cadre choisi" value="Lecture ouverte, sans question imposée" />
-        )}
-        <ReviewValue
-          label="Question"
-          value={data.specificQuestion || 'Aucune question précise transmise'}
-        />
-        <ReviewValue
-          label="Intention"
-          value={data.objective || 'Aucune intention supplémentaire transmise'}
-        />
-      </ReviewSection>
-      <ReviewSection title="Votre contexte" onEdit={() => onEdit(2)}>
-        {weatherEntries.length > 0 && (
-          <ReviewValue label="Météo de vie" value={weatherEntries.join('\n')} />
-        )}
-        {transmittedContext.length
-          ? transmittedContext.map(([label, value]) => (
-              <ReviewValue key={label} label={label} value={value} />
-            ))
-          : weatherEntries.length === 0 && <p>Aucun contexte personnel supplémentaire transmis.</p>}
-        <ReviewValue label="Style" value={styleLabel(data.deliveryStyle)} />
-        <ReviewValue label="Niveau de détail" value={paceLabel(data.pace)} />
-      </ReviewSection>
-      <ReviewSection title="Photos privées" onEdit={() => onEdit(3)}>
-        <ReviewValue
-          label="Visage"
-          value={data.facePhoto ? 'Photo enregistrée' : 'Non transmise'}
-        />
-        <ReviewValue label="Paume" value={data.palmPhoto ? 'Photo enregistrée' : 'Non transmise'} />
-      </ReviewSection>
-      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.1] bg-white/[0.035] p-4 text-sm leading-6 text-stellar-300 focus-within:ring-2 focus-within:ring-horizon-400">
-        <input
-          type="checkbox"
-          className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 bg-abyss-700 text-horizon-400 focus:ring-horizon-400"
-          aria-invalid={Boolean(consentError)}
-          aria-describedby={consentError ? 'consent-error' : undefined}
-          {...registerConsent}
-        />
-        <span>
-          J’ai relu l’ensemble de ces éléments et je choisis de transmettre cette version à Lumira
-          pour préparer ma lecture personnalisée.
-        </span>
-      </label>
-      <FieldError id="consent-error" message={consentError} />
-    </div>
   );
 }
 
@@ -2236,10 +2411,6 @@ function getSaveLabel(state: SaveState, updatedAt: string | null): string {
   const time = savedTime(updatedAt);
   if (state === 'saved') return time ? `Brouillon sauvegardé à ${time}` : 'Brouillon sauvegardé';
   return 'Brouillon reprenable sans expiration';
-}
-
-function styleLabel(value: string): string {
-  return STYLE_OPTIONS.find(([option]) => option === value)?.[1] || 'Doux et clair';
 }
 
 function paceLabel(value: number): string {
