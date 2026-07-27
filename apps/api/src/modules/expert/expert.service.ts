@@ -979,10 +979,28 @@ export class ExpertService {
   async deleteOrder(orderId: string): Promise<void> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        _count: { select: { readingVersions: true, deliveries: true } },
+      },
     });
 
     if (!order) {
       throw new NotFoundException('Commande non trouvée');
+    }
+
+    // Reading versions and delivery records are historical production evidence.
+    // Deleting their parent order would cascade-delete immutable client content.
+    if (
+      order.status !== 'PENDING' ||
+      order._count.readingVersions > 0 ||
+      order._count.deliveries > 0
+    ) {
+      throw new ConflictException(
+        'Seules les commandes brouillon non payées et sans historique peuvent être supprimées',
+      );
     }
 
     // Delete related files first
@@ -2230,10 +2248,30 @@ MESSAGE DE L'EXPERT:`;
   async deleteClient(clientId: string): Promise<void> {
     const client = await this.prisma.user.findUnique({
       where: { id: clientId },
+      select: {
+        id: true,
+        _count: {
+          select: {
+            orders: true,
+            readingIntakes: true,
+            spiritualPaths: true,
+            dreams: true,
+            consents: true,
+          },
+        },
+      },
     });
 
     if (!client) {
       throw new NotFoundException('Client non trouvé');
+    }
+
+    // A client with any durable journey or legal/onboarding record must be
+    // retained. The Desk can suspend the client instead of deleting history.
+    if (Object.values(client._count).some((count) => count > 0)) {
+      throw new ConflictException(
+        'Ce client possède un historique Lumira. Suspendez-le au lieu de le supprimer.',
+      );
     }
 
     // Atomic transaction: delete all related data then the user

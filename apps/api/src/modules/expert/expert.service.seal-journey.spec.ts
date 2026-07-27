@@ -58,6 +58,73 @@ function deliverableReading(): CanonicalReadingContent {
 }
 
 describe('ExpertService sealed journey promotion', () => {
+  it('refuses to delete an order that would cascade historical versions or deliveries', async () => {
+    const orderDelete = jest.fn();
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order-1',
+          orderNumber: 'LUM-001',
+          status: 'COMPLETED',
+          _count: { readingVersions: 1, deliveries: 1 },
+        }),
+        delete: orderDelete,
+      },
+      orderFile: { deleteMany: jest.fn() },
+    };
+    const service = new ExpertService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.deleteOrder('order-1')).rejects.toThrow(
+      'sans historique peuvent être supprimées',
+    );
+    expect(orderDelete).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete a client with durable Lumira history', async () => {
+    const userDelete = jest.fn();
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'client-1',
+          _count: {
+            orders: 1,
+            readingIntakes: 1,
+            spiritualPaths: 1,
+            dreams: 0,
+            consents: 1,
+          },
+        }),
+        delete: userDelete,
+      },
+    };
+    const service = new ExpertService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.deleteClient('client-1')).rejects.toThrow('possède un historique Lumira');
+    expect(userDelete).not.toHaveBeenCalled();
+  });
+
   it('delegates legacy generation helpers to the durable production job', async () => {
     const enqueueReading = jest.fn().mockResolvedValue({ accepted: true, jobId: 'prod-1' });
     const prisma = {
