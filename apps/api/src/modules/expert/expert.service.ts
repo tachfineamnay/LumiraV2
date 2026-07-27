@@ -1183,7 +1183,7 @@ export class ExpertService {
       // A rejected candidate remains the editable source of truth. Clearing it
       // here used to destroy the Desk draft before a replacement existed.
       const nextRevisionCount = order.revisionCount + 1;
-      const updatedOrder = await this.prisma.order.update({
+      let updatedOrder = await this.prisma.order.update({
         where: { id: dto.orderId },
         data: {
           status: 'AWAITING_VALIDATION',
@@ -1199,19 +1199,56 @@ export class ExpertService {
               'number'
                 ? ((order.generatedContent as Record<string, unknown>).readingRevision as number)
                 : 0,
-            regeneration: dto.regenerate ? 'QUEUED' : 'REQUIRES_EXPLICIT_ACTION',
+            regeneration: 'REQUIRES_EXPLICIT_ACTION',
           },
         },
       });
 
       if (dto.regenerate) {
-        // This only records a durable job; the worker owns the long-running
-        // SCRIBE call and will preserve the source draft on failure/conflict.
-        await this.productionControl.enqueueReading(dto.orderId, expert as Expert, {
-          expertPrompt: order.expertPrompt || undefined,
-          expertInstructions: order.expertInstructions || undefined,
-          regenerationOfExistingContent: true,
-        });
+        try {
+          const enqueueResult = await this.productionControl.enqueueReading(
+            dto.orderId,
+            expert as Expert,
+            {
+              expertPrompt: order.expertPrompt || undefined,
+              expertInstructions: order.expertInstructions || undefined,
+              regenerationOfExistingContent: true,
+            },
+          );
+
+          const existingValidation =
+            (updatedOrder.expertValidation as Record<string, unknown>) || {};
+          updatedOrder = await this.prisma.order.update({
+            where: { id: dto.orderId },
+            data: {
+              expertValidation: {
+                ...existingValidation,
+                regeneration: 'QUEUED',
+                regenerationJobId: enqueueResult.jobId,
+                regenerationQueuedAt: new Date().toISOString(),
+              } as Prisma.InputJsonValue,
+            },
+          });
+        } catch (error) {
+          const existingValidation =
+            (updatedOrder.expertValidation as Record<string, unknown>) || {};
+          const rawMessage = error instanceof Error ? error.message : String(error);
+          const sanitizedError = rawMessage.split('\n')[0].substring(0, 255);
+
+          await this.prisma.order.update({
+            where: { id: dto.orderId },
+            data: {
+              expertValidation: {
+                ...existingValidation,
+                regeneration: 'QUEUE_FAILED',
+                regenerationFailedAt: new Date().toISOString(),
+                regenerationError: sanitizedError,
+              } as Prisma.InputJsonValue,
+            },
+          });
+
+          throw error;
+        }
       }
 
       this.logger.log(`❌ Order ${order.orderNumber} rejected: ${dto.rejectionReason}`);

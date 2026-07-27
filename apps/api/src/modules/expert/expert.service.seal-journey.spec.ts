@@ -123,9 +123,17 @@ describe('ExpertService sealed journey promotion', () => {
     expect(sealedUpdate).not.toHaveBeenCalled();
   });
 
-  it('uses the durable regeneration job after an explicit rejection request', async () => {
+  it('uses the durable regeneration job after an explicit rejection request (successful enqueue)', async () => {
     const currentDraft = { lecture: 'Draft expert', readingRevision: 2 };
     const enqueueReading = jest.fn().mockResolvedValue({ accepted: true, jobId: 'prod-1' });
+    const orderUpdate = jest.fn().mockImplementation(async (args) => {
+      return {
+        id: 'order-1',
+        generatedContent: currentDraft,
+        expertValidation: args.data.expertValidation,
+      };
+    });
+    const sealedUpdate = jest.fn();
     const prisma = {
       order: {
         findUnique: jest.fn().mockResolvedValue({
@@ -139,8 +147,9 @@ describe('ExpertService sealed journey promotion', () => {
           expertPrompt: 'Reprendre la structure',
           expertInstructions: 'Rester prudent',
         }),
-        update: jest.fn().mockResolvedValue({ id: 'order-1', generatedContent: currentDraft }),
+        update: orderUpdate,
       },
+      readingVersion: { update: sealedUpdate },
     };
     const service = new ExpertService(
       prisma as never,
@@ -155,11 +164,17 @@ describe('ExpertService sealed journey promotion', () => {
       {} as never,
     );
 
-    await service.validateContent(
+    const result = await service.validateContent(
       { orderId: 'order-1', action: 'reject', regenerate: true },
       expert,
     );
 
+    // 1. generatedContent is preserved (not present in update payloads)
+    expect(orderUpdate.mock.calls[0][0].data.generatedContent).toBeUndefined();
+    expect(orderUpdate.mock.calls[1][0].data.generatedContent).toBeUndefined();
+
+    // 2. enqueueReading is called once
+    expect(enqueueReading).toHaveBeenCalledTimes(1);
     expect(enqueueReading).toHaveBeenCalledWith(
       'order-1',
       expect.objectContaining({ id: expert.id }),
@@ -169,13 +184,51 @@ describe('ExpertService sealed journey promotion', () => {
         regenerationOfExistingContent: true,
       }),
     );
+
+    // 3. database updates sequence:
+    expect(orderUpdate).toHaveBeenCalledTimes(2);
+
+    // First update: Initial state set to REQUIRES_EXPLICIT_ACTION
+    expect(orderUpdate.mock.calls[0][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'REQUIRES_EXPLICIT_ACTION',
+      }),
+    );
+
+    // Second update: State updated to QUEUED with returned jobId and queuedAt
+    expect(orderUpdate.mock.calls[1][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'QUEUED',
+        regenerationJobId: 'prod-1',
+        regenerationQueuedAt: expect.any(String),
+      }),
+    );
+
+    // 4. Return value should be the final updated order
+    expect(result.expertValidation).toEqual(
+      expect.objectContaining({
+        regeneration: 'QUEUED',
+        regenerationJobId: 'prod-1',
+        regenerationQueuedAt: expect.any(String),
+      }),
+    );
+
+    // 5. No SEALED ReadingVersion is modified
+    expect(sealedUpdate).not.toHaveBeenCalled();
   });
 
-  it('preserves the rejected draft when durable regeneration cannot be queued', async () => {
+  it('preserves the rejected draft and updates validation metadata to QUEUE_FAILED on enqueue failure', async () => {
     const currentDraft = { lecture: 'Draft expert', readingRevision: 3 };
-    const orderUpdate = jest
-      .fn()
-      .mockResolvedValue({ id: 'order-1', generatedContent: currentDraft });
+    const orderUpdate = jest.fn().mockImplementation(async (args) => {
+      return {
+        id: 'order-1',
+        generatedContent: currentDraft,
+        expertValidation: args.data.expertValidation,
+      };
+    });
+    const sealedUpdate = jest.fn();
     const prisma = {
       order: {
         findUnique: jest.fn().mockResolvedValue({
@@ -191,6 +244,7 @@ describe('ExpertService sealed journey promotion', () => {
         }),
         update: orderUpdate,
       },
+      readingVersion: { update: sealedUpdate },
     };
     const service = new ExpertService(
       prisma as never,
@@ -201,15 +255,48 @@ describe('ExpertService sealed journey promotion', () => {
       {} as never,
       {} as never,
       {} as never,
-      { enqueueReading: jest.fn().mockRejectedValue(new Error('queue unavailable')) } as never,
+      {
+        enqueueReading: jest
+          .fn()
+          .mockRejectedValue(new Error('queue unavailable\nStack trace here')),
+      } as never,
       {} as never,
     );
 
     await expect(
       service.validateContent({ orderId: 'order-1', action: 'reject', regenerate: true }, expert),
     ).rejects.toThrow('queue unavailable');
-    expect(orderUpdate).toHaveBeenCalledTimes(1);
+
+    // 1. generatedContent is preserved (not present in update payloads)
     expect(orderUpdate.mock.calls[0][0].data.generatedContent).toBeUndefined();
+    expect(orderUpdate.mock.calls[1][0].data.generatedContent).toBeUndefined();
+
+    // 2. database updates sequence:
+    expect(orderUpdate).toHaveBeenCalledTimes(2);
+
+    // First update: Initial state set to REQUIRES_EXPLICIT_ACTION
+    expect(orderUpdate.mock.calls[0][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'REQUIRES_EXPLICIT_ACTION',
+      }),
+    );
+
+    // Second update: State updated to QUEUE_FAILED with failedAt and sanitized error
+    expect(orderUpdate.mock.calls[1][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'QUEUE_FAILED',
+        regenerationFailedAt: expect.any(String),
+        regenerationError: 'queue unavailable',
+      }),
+    );
+
+    // 3. Verify no fake jobId is stored
+    expect(orderUpdate.mock.calls[1][0].data.expertValidation.regenerationJobId).toBeUndefined();
+
+    // 4. No SEALED ReadingVersion is modified
+    expect(sealedUpdate).not.toHaveBeenCalled();
   });
 
   it('refuses to delete an order that would cascade historical versions or deliveries', async () => {
