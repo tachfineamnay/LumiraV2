@@ -12,6 +12,43 @@ import { ClientControlOverview } from '@/components/desk-v2/clients/ClientContro
 import { ConfirmModal } from '@/components/desk-v2/shared/ConfirmModal';
 import { ClientFullData } from '@/components/desk-v2/clients/types';
 
+function getDeleteClientError(error: unknown): { status?: number; message: string } {
+  const response = (
+    error as {
+      response?: {
+        status?: number;
+        data?: { message?: unknown };
+      };
+    }
+  )?.response;
+  const rawMessage = response?.data?.message;
+  const serverMessage = Array.isArray(rawMessage)
+    ? rawMessage.filter((entry): entry is string => typeof entry === 'string').join(' ')
+    : typeof rawMessage === 'string'
+      ? rawMessage
+      : '';
+
+  if (serverMessage.trim()) {
+    return { status: response?.status, message: serverMessage.trim() };
+  }
+
+  if (response?.status === 403) {
+    return {
+      status: 403,
+      message: 'Votre session Desk ne permet pas cette suppression. Reconnectez-vous puis réessayez.',
+    };
+  }
+
+  if (response?.status === 404) {
+    return { status: 404, message: 'Ce client n’existe plus ou vient déjà d’être supprimé.' };
+  }
+
+  return {
+    status: response?.status,
+    message: 'La suppression n’a pas abouti. Réessayez dans un instant.',
+  };
+}
+
 export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -120,16 +157,22 @@ export default function ClientDetailPage() {
           try {
             setIsDeletingClient(true);
             await expertApi.delete(`/expert/clients/${clientId}`);
-            toast.success('Client supprimé');
-            router.push('/admin/clients');
+            toast.success('Client supprimé définitivement');
+            router.replace('/admin/clients');
+            router.refresh();
           } catch (err) {
-            toast.error('Erreur lors de la suppression');
-            console.error(err);
+            const failure = getDeleteClientError(err);
+            toast.error(failure.message, { duration: 7000 });
+            console.error('Failed to delete client:', err);
+            if (failure.status === 409 || failure.status === 404) {
+              setShowDeleteClient(false);
+            }
+          } finally {
             setIsDeletingClient(false);
           }
         }}
         title="Supprimer le client"
-        description={`Supprimer définitivement ${client.firstName} ${client.lastName} et toutes ses données ? Cette action est irréversible.`}
+        description={`Supprimer définitivement ${client.firstName} ${client.lastName} et toutes ses données ? Cette action est irréversible et n’est possible que si aucun historique Lumira protégé n’est lié au compte.`}
         confirmLabel="Supprimer"
         variant="danger"
         isLoading={isDeletingClient}

@@ -397,7 +397,6 @@ export class ExpertController {
   }
 
   @Delete('clients/:id')
-  @Roles('ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteClient(@Param('id') id: string) {
     await this.expertService.deleteClient(id);
