@@ -32,7 +32,6 @@ type MockOptions = {
 };
 
 const PRIVATE_FACE_REF = 's3://onboarding/e2e-client/face.png';
-// Same-origin mock: the test exercises the PUT body without introducing a browser CORS preflight.
 const PRIVATE_UPLOAD_URL = 'http://localhost:3000/__e2e__/private-upload/face.png';
 
 const EMPTY_PROFILE = {
@@ -212,6 +211,12 @@ async function advanceToHeading(page: Page, heading: string) {
   await expect(target).toBeVisible();
 }
 
+async function openOptionalSection(page: Page, name: RegExp) {
+  const summary = page.getByText(name).first();
+  await expect(summary).toBeVisible();
+  await summary.click();
+}
+
 test.describe('Brouillon du dossier de lecture', () => {
   test('enregistre immédiatement la dernière saisie avant de fermer', async ({ page }) => {
     let releasePatch!: () => void;
@@ -244,7 +249,6 @@ test.describe('Brouillon du dossier de lecture', () => {
       )
       .toBe(true);
 
-    // La fermeture attend la sauvegarde : le dialogue ne disparaît pas tant que le PATCH est bloqué.
     await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeVisible();
     releasePatch();
     await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeHidden();
@@ -295,7 +299,10 @@ test.describe('Brouillon du dossier de lecture', () => {
     );
 
     await page.getByRole('button', { name: /^Continuer$/i }).click();
-    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
+    await page.getByRole('button', { name: /^Continuer$/i }).click();
+    await expect(page.getByRole('heading', { name: 'Relecture et transmission' })).toBeVisible();
+    await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
     await expect(page.getByLabel(/soutient actuellement/i)).toHaveValue(draftData.highs);
     await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(draftData.lows);
 
@@ -375,7 +382,8 @@ test.describe('Brouillon du dossier de lecture', () => {
     ).toBeVisible();
     await expect(page.getByText(draftData.specificQuestion, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Modifier mon dossier' }).click();
-    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Relecture et transmission' })).toBeVisible();
+    await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
     await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(draftData.lows);
     const changedLow = 'Je reprends mon élan avec des choix plus sereins.';
     await page.getByLabel(/pèse ou se répète/i).fill(changedLow);
@@ -389,12 +397,14 @@ test.describe('Brouillon du dossier de lecture', () => {
       page.getByRole('heading', { name: 'Vos informations déjà enregistrées' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Modifier mon dossier' }).click();
+    await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
     await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(changedLow);
 
     await page.goto('/sanctuaire/dossier');
     await expect(page.getByRole('heading', { name: 'Mon dossier de lecture' })).toBeVisible();
     await expect(page.getByText(draftData.birthPlace, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Reprendre et modifier' }).click();
+    await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
     await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(changedLow);
   });
 
@@ -427,20 +437,17 @@ test.describe('Brouillon du dossier de lecture', () => {
       .toBe(true);
   });
 
-  test('persiste le ton et l’étape immédiatement au clic Continuer', async ({ page }) => {
+  test('persiste le ton depuis l’enrichissement facultatif de la relecture', async ({ page }) => {
     const calls = await installSanctuaireMocks(page);
     await openIntake(page);
-    await advanceToHeading(page, 'Votre contexte personnel');
+    await advanceToHeading(page, 'Relecture et transmission');
+    await openOptionalSection(page, /Mes préférences de lecture/i);
 
     await page.getByRole('radio', { name: /Direct et concret/i }).click();
     await expect(page.getByRole('radio', { name: /Direct et concret/i })).toHaveAttribute(
       'aria-checked',
       'true',
     );
-    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
-
-    await page.getByRole('button', { name: /^Continuer$/i }).click();
-    await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
 
     await expect
       .poll(() =>
@@ -463,7 +470,6 @@ test.describe('Brouillon du dossier de lecture', () => {
     ).toBeVisible();
     await expect(page.getByRole('button', { name: /réessayer/i })).toBeVisible();
 
-    // Dépasse volontairement le délai d'autosave pour détecter tout PATCH destructeur.
     await page.waitForTimeout(1_000);
     expect(calls.onboardingPatches).toHaveLength(0);
   });
@@ -492,8 +498,12 @@ test.describe('Brouillon du dossier de lecture', () => {
 
     await page.goto('/sanctuaire?onboarding=1');
     await expect(page.getByRole('heading', { name: 'Ce qui vous amène' })).toBeVisible();
-    await expect(page.getByLabel('Nom d’usage')).toHaveValue('Amnay');
-    await expect(page.getByLabel('Votre question principale')).toHaveValue('Quelle est ma voie ?');
+    await expect(page.getByLabel(/éclairer une seule question/i)).toHaveValue('Quelle est ma voie ?');
+    await expect(page.getByLabel(/comprendre, décider|voir autrement/i)).toHaveValue(
+      'Clarté spirituelle',
+    );
+    await page.getByRole('button', { name: /revenir à l’étape précédente/i }).click();
+    await expect(page.getByLabel(/prénom par lequel/i)).toHaveValue('Amnay');
   });
 
   test('affiche Votre brouillon est prêt à être repris sur Accueil et la synthèse complète sur Mon dossier', async ({
