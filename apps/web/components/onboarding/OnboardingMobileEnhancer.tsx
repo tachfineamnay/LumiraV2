@@ -56,10 +56,17 @@ export function OnboardingMobileEnhancer() {
         lastTitleRef.current = titleText;
         window.requestAnimationFrame(() => {
           const scrollContainer = findScrollContainer(form);
-          scrollContainer?.scrollTo({
-            top: 0,
-            behavior: prefersReducedMotion.matches ? 'auto' : 'smooth',
-          });
+          const behavior: ScrollBehavior = prefersReducedMotion.matches ? 'auto' : 'smooth';
+          const hasIndependentScroll = Boolean(
+            scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight + 2,
+          );
+
+          if (hasIndependentScroll) {
+            scrollContainer?.scrollTo({ top: 0, behavior });
+          } else {
+            title.scrollIntoView({ block: 'start', behavior });
+          }
+
           title.setAttribute('tabindex', '-1');
           title.focus({ preventScroll: true });
         });
