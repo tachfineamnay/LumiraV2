@@ -14,6 +14,9 @@ const IMPORTANT_ERROR_FRAGMENTS = [
   'Ce dossier vient d’être scellé',
 ];
 
+const SAFE_SERVER_ERROR =
+  'Un problème technique empêche momentanément la transmission. Votre brouillon est bien conservé. Réessayez dans un instant.';
+
 function findReadingForm(): HTMLFormElement | null {
   const title = document.getElementById('reading-preparation-title');
   return title?.closest('form') ?? null;
@@ -26,6 +29,10 @@ function findScrollContainer(form: HTMLFormElement): HTMLElement | null {
 function isImportantAlert(element: Element): element is HTMLElement {
   const text = element.textContent?.trim() ?? '';
   return IMPORTANT_ERROR_FRAGMENTS.some((fragment) => text.includes(fragment));
+}
+
+function normalizedMessage(message: string): string {
+  return /internal server error/i.test(message) ? SAFE_SERVER_ERROR : message;
 }
 
 export function OnboardingMobileEnhancer() {
@@ -59,7 +66,13 @@ export function OnboardingMobileEnhancer() {
       }
 
       const alert = Array.from(form.querySelectorAll('[role="alert"]')).find(isImportantAlert);
-      const nextMessage = alert?.textContent?.trim() || null;
+      const messageNode = alert?.querySelector('p');
+      const rawMessage = messageNode?.textContent?.trim() || alert?.textContent?.trim() || '';
+      const nextMessage = rawMessage ? normalizedMessage(rawMessage) : null;
+
+      if (alert && messageNode && nextMessage && nextMessage !== rawMessage) {
+        messageNode.textContent = nextMessage;
+      }
       setMessage(nextMessage);
 
       if (alert && alert.dataset.mobileErrorSeen !== 'true') {
@@ -88,9 +101,12 @@ export function OnboardingMobileEnhancer() {
 
   const retry = () => {
     const form = findReadingForm();
+    const existingRetryButton = Array.from(form?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+      (button) => button.textContent?.includes('Réessayer'),
+    );
     const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
     setMessage(null);
-    submitButton?.click();
+    (existingRetryButton ?? submitButton)?.click();
   };
 
   return (
