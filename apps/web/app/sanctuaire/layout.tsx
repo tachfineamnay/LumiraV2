@@ -1,4 +1,5 @@
 import React from 'react';
+import { OnboardingMobileEnhancer } from '../../components/onboarding/OnboardingMobileEnhancer';
 import { LegacyStorageCleanup } from '../../components/sanctuary/LegacyStorageCleanup';
 import SanctuaireLayoutClient from './SanctuaireLayoutClient';
 
@@ -11,6 +12,7 @@ export default function SanctuaireLayout({ children }: { children: React.ReactNo
   return (
     <>
       <LegacyStorageCleanup />
+      <OnboardingMobileEnhancer />
       <SanctuaireLayoutClient>{children}</SanctuaireLayoutClient>
     </>
   );
