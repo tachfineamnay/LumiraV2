@@ -1,0 +1,167 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, RefreshCw, X } from 'lucide-react';
+
+const IMPORTANT_ERROR_FRAGMENTS = [
+  'Le dossier n’a pas pu',
+  "Le dossier n'a pas pu",
+  'La sauvegarde automatique',
+  'Une version plus récente',
+  'Une photo n’a pas pu',
+  "Une photo n'a pas pu",
+  'Votre commande vient d’être confirmée',
+  'Ce dossier vient d’être scellé',
+];
+
+function findReadingForm(): HTMLFormElement | null {
+  const title = document.getElementById('reading-preparation-title');
+  return title?.closest('form') ?? null;
+}
+
+function findScrollContainer(form: HTMLFormElement): HTMLElement | null {
+  return form.querySelector<HTMLElement>('.custom-scrollbar.overflow-y-auto');
+}
+
+function isImportantAlert(element: Element): element is HTMLElement {
+  const text = element.textContent?.trim() ?? '';
+  return IMPORTANT_ERROR_FRAGMENTS.some((fragment) => text.includes(fragment));
+}
+
+export function OnboardingMobileEnhancer() {
+  const [message, setMessage] = useState<string | null>(null);
+  const lastTitleRef = useRef('');
+
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    const inspect = () => {
+      const title = document.getElementById('reading-preparation-title');
+      const form = findReadingForm();
+      if (!title || !form) {
+        lastTitleRef.current = '';
+        setMessage(null);
+        return;
+      }
+
+      const titleText = title.textContent?.trim() ?? '';
+      if (titleText && titleText !== lastTitleRef.current) {
+        lastTitleRef.current = titleText;
+        window.requestAnimationFrame(() => {
+          const scrollContainer = findScrollContainer(form);
+          scrollContainer?.scrollTo({
+            top: 0,
+            behavior: prefersReducedMotion.matches ? 'auto' : 'smooth',
+          });
+          title.setAttribute('tabindex', '-1');
+          title.focus({ preventScroll: true });
+        });
+      }
+
+      const alert = Array.from(form.querySelectorAll('[role="alert"]')).find(isImportantAlert);
+      const nextMessage = alert?.textContent?.trim() || null;
+      setMessage(nextMessage);
+
+      if (alert && alert.dataset.mobileErrorSeen !== 'true') {
+        alert.dataset.mobileErrorSeen = 'true';
+        alert.setAttribute('tabindex', '-1');
+        window.requestAnimationFrame(() => {
+          alert.scrollIntoView({
+            block: 'center',
+            behavior: prefersReducedMotion.matches ? 'auto' : 'smooth',
+          });
+          alert.focus({ preventScroll: true });
+        });
+      }
+    };
+
+    inspect();
+    const observer = new MutationObserver(inspect);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const retry = () => {
+    const form = findReadingForm();
+    const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    setMessage(null);
+    submitButton?.click();
+  };
+
+  return (
+    <>
+      <style jsx global>{`
+        form:has(#reading-preparation-title)
+          :is(
+            input:not([type='checkbox']):not([type='radio']):not([type='file']),
+            textarea,
+            select
+          ) {
+          background: #101b32 !important;
+          color: #f8f5ec !important;
+          border-color: rgba(143, 177, 211, 0.42) !important;
+          caret-color: #f4b942;
+          color-scheme: dark;
+          -webkit-text-fill-color: #f8f5ec;
+          opacity: 1;
+        }
+
+        form:has(#reading-preparation-title)
+          :is(
+            input:not([type='checkbox']):not([type='radio']):not([type='file']),
+            textarea
+          )::placeholder {
+          color: #afc3d8 !important;
+          opacity: 1 !important;
+          -webkit-text-fill-color: #afc3d8;
+        }
+
+        form:has(#reading-preparation-title)
+          :is(
+            input:not([type='checkbox']):not([type='radio']):not([type='file']),
+            textarea,
+            select
+          ):disabled {
+          background: #142039 !important;
+          color: #879bb1 !important;
+          -webkit-text-fill-color: #879bb1;
+        }
+      `}</style>
+
+      {message && (
+        <div className="fixed bottom-[calc(6.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-[160] lg:hidden">
+          <div
+            className="mx-auto max-w-xl rounded-2xl border border-rose-300/35 bg-[#2b1824]/95 p-4 text-rose-50 shadow-2xl backdrop-blur-xl"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-200" />
+              <p className="min-w-0 flex-1 text-sm leading-6">{message}</p>
+              <button
+                type="button"
+                onClick={() => setMessage(null)}
+                aria-label="Masquer le message"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-rose-100 hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-3 inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-rose-100 px-4 py-2 text-sm font-semibold text-[#2b1824]"
+            >
+              <RefreshCw className="h-4 w-4" /> Réessayer
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
