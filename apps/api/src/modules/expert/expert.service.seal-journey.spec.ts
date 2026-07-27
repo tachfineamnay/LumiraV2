@@ -299,6 +299,169 @@ describe('ExpertService sealed journey promotion', () => {
     expect(sealedUpdate).not.toHaveBeenCalled();
   });
 
+  it('rethrows the original enqueue error even if writing QUEUE_FAILED metadata also fails', async () => {
+    const currentDraft = { lecture: 'Draft expert', readingRevision: 3 };
+    const orderUpdate = jest.fn().mockImplementation(async (args) => {
+      if (args.data.expertValidation?.regeneration === 'QUEUE_FAILED') {
+        throw new Error('Database connection failed on update failed metadata');
+      }
+      return {
+        id: 'order-1',
+        generatedContent: currentDraft,
+        expertValidation: args.data.expertValidation,
+      };
+    });
+    const sealedUpdate = jest.fn();
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order-1',
+          orderNumber: 'LUM-001',
+          status: 'AWAITING_VALIDATION',
+          intakeRequired: false,
+          readingIntake: null,
+          generatedContent: currentDraft,
+          revisionCount: 0,
+          expertPrompt: null,
+          expertInstructions: null,
+        }),
+        update: orderUpdate,
+      },
+      readingVersion: { update: sealedUpdate },
+    };
+    const service = new ExpertService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { enqueueReading: jest.fn().mockRejectedValue(new Error('queue unavailable')) } as never,
+      {} as never,
+    );
+
+    // The validation throws the original enqueue error 'queue unavailable', not the db error
+    await expect(
+      service.validateContent({ orderId: 'order-1', action: 'reject', regenerate: true }, expert),
+    ).rejects.toThrow('queue unavailable');
+
+    // 1. generatedContent is preserved (not present in update payloads)
+    expect(orderUpdate.mock.calls[0][0].data.generatedContent).toBeUndefined();
+    expect(orderUpdate.mock.calls[1][0].data.generatedContent).toBeUndefined();
+
+    // 2. database updates sequence:
+    expect(orderUpdate).toHaveBeenCalledTimes(2);
+
+    // First update: Initial state set to REQUIRES_EXPLICIT_ACTION
+    expect(orderUpdate.mock.calls[0][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'REQUIRES_EXPLICIT_ACTION',
+      }),
+    );
+
+    // Second update: Attempted state update to QUEUE_FAILED (which threw internally)
+    expect(orderUpdate.mock.calls[1][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'QUEUE_FAILED',
+        regenerationFailedAt: expect.any(String),
+        regenerationError: 'queue unavailable',
+      }),
+    );
+
+    // 3. No SEALED ReadingVersion is modified
+    expect(sealedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('propagates the database error and does not write QUEUE_FAILED if enqueue succeeds but QUEUED metadata update fails', async () => {
+    const currentDraft = { lecture: 'Draft expert', readingRevision: 2 };
+    const enqueueReading = jest.fn().mockResolvedValue({ accepted: true, jobId: 'prod-1' });
+    const orderUpdate = jest.fn().mockImplementation(async (args) => {
+      if (args.data.expertValidation?.regeneration === 'QUEUED') {
+        throw new Error('Database connection failed on update queued metadata');
+      }
+      return {
+        id: 'order-1',
+        generatedContent: currentDraft,
+        expertValidation: args.data.expertValidation,
+      };
+    });
+    const sealedUpdate = jest.fn();
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order-1',
+          orderNumber: 'LUM-001',
+          status: 'AWAITING_VALIDATION',
+          intakeRequired: false,
+          readingIntake: null,
+          generatedContent: currentDraft,
+          revisionCount: 0,
+          expertPrompt: null,
+          expertInstructions: null,
+        }),
+        update: orderUpdate,
+      },
+      readingVersion: { update: sealedUpdate },
+    };
+    const service = new ExpertService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { enqueueReading } as never,
+      {} as never,
+    );
+
+    // Database metadata error is propagated
+    await expect(
+      service.validateContent({ orderId: 'order-1', action: 'reject', regenerate: true }, expert),
+    ).rejects.toThrow('Database connection failed on update queued metadata');
+
+    // 1. enqueueReading was called exactly once
+    expect(enqueueReading).toHaveBeenCalledTimes(1);
+
+    // 2. database updates sequence:
+    expect(orderUpdate).toHaveBeenCalledTimes(2);
+
+    // First update: Initial state set to REQUIRES_EXPLICIT_ACTION
+    expect(orderUpdate.mock.calls[0][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'REQUIRES_EXPLICIT_ACTION',
+      }),
+    );
+
+    // Second update: Attempted state update to QUEUED (which threw)
+    expect(orderUpdate.mock.calls[1][0].data.expertValidation).toEqual(
+      expect.objectContaining({
+        action: 'reject',
+        regeneration: 'QUEUED',
+        regenerationJobId: 'prod-1',
+        regenerationQueuedAt: expect.any(String),
+      }),
+    );
+
+    // 3. Confirm QUEUE_FAILED was never written
+    for (const call of orderUpdate.mock.calls) {
+      expect(call[0].data.expertValidation.regeneration).not.toBe('QUEUE_FAILED');
+    }
+
+    // 4. generatedContent remains untouched
+    expect(orderUpdate.mock.calls[0][0].data.generatedContent).toBeUndefined();
+    expect(orderUpdate.mock.calls[1][0].data.generatedContent).toBeUndefined();
+
+    // 5. No SEALED ReadingVersion is modified
+    expect(sealedUpdate).not.toHaveBeenCalled();
+  });
+
   it('refuses to delete an order that would cascade historical versions or deliveries', async () => {
     const orderDelete = jest.fn();
     const prisma = {

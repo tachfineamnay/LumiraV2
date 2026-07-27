@@ -1205,8 +1205,9 @@ export class ExpertService {
       });
 
       if (dto.regenerate) {
+        let enqueueResult;
         try {
-          const enqueueResult = await this.productionControl.enqueueReading(
+          enqueueResult = await this.productionControl.enqueueReading(
             dto.orderId,
             expert as Expert,
             {
@@ -1215,40 +1216,48 @@ export class ExpertService {
               regenerationOfExistingContent: true,
             },
           );
+        } catch (enqueueError) {
+          try {
+            const existingValidation =
+              (updatedOrder.expertValidation as Record<string, unknown>) || {};
+            const rawMessage =
+              enqueueError instanceof Error ? enqueueError.message : String(enqueueError);
+            const sanitizedError = rawMessage.split('\n')[0].substring(0, 255);
 
-          const existingValidation =
-            (updatedOrder.expertValidation as Record<string, unknown>) || {};
-          updatedOrder = await this.prisma.order.update({
-            where: { id: dto.orderId },
-            data: {
-              expertValidation: {
-                ...existingValidation,
-                regeneration: 'QUEUED',
-                regenerationJobId: enqueueResult.jobId,
-                regenerationQueuedAt: new Date().toISOString(),
-              } as Prisma.InputJsonValue,
-            },
-          });
-        } catch (error) {
-          const existingValidation =
-            (updatedOrder.expertValidation as Record<string, unknown>) || {};
-          const rawMessage = error instanceof Error ? error.message : String(error);
-          const sanitizedError = rawMessage.split('\n')[0].substring(0, 255);
+            await this.prisma.order.update({
+              where: { id: dto.orderId },
+              data: {
+                expertValidation: {
+                  ...existingValidation,
+                  regeneration: 'QUEUE_FAILED',
+                  regenerationFailedAt: new Date().toISOString(),
+                  regenerationError: sanitizedError,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          } catch (metadataError) {
+            this.logger.error(
+              `Failed to write QUEUE_FAILED metadata for order ${order.orderNumber}: ${
+                metadataError instanceof Error ? metadataError.message : String(metadataError)
+              }`,
+            );
+          }
 
-          await this.prisma.order.update({
-            where: { id: dto.orderId },
-            data: {
-              expertValidation: {
-                ...existingValidation,
-                regeneration: 'QUEUE_FAILED',
-                regenerationFailedAt: new Date().toISOString(),
-                regenerationError: sanitizedError,
-              } as Prisma.InputJsonValue,
-            },
-          });
-
-          throw error;
+          throw enqueueError;
         }
+
+        const existingValidation = (updatedOrder.expertValidation as Record<string, unknown>) || {};
+        updatedOrder = await this.prisma.order.update({
+          where: { id: dto.orderId },
+          data: {
+            expertValidation: {
+              ...existingValidation,
+              regeneration: 'QUEUED',
+              regenerationJobId: enqueueResult.jobId,
+              regenerationQueuedAt: new Date().toISOString(),
+            } as Prisma.InputJsonValue,
+          },
+        });
       }
 
       this.logger.log(`❌ Order ${order.orderNumber} rejected: ${dto.rejectionReason}`);
