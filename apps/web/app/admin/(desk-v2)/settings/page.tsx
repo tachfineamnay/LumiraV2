@@ -180,10 +180,10 @@ interface ReadinessResponse {
   ready: boolean;
   verdict: 'GO' | 'CONDITIONAL_GO' | 'NO_GO';
   generatedAt: string;
-  summary: { failures: number; warnings: number; passes: number };
-  checks: ReadinessCheck[];
-  effectiveConfig: ModelConfig;
-  activePromptVersions: Array<{
+  summary?: { failures: number; warnings: number; passes: number };
+  checks?: ReadinessCheck[];
+  effectiveConfig?: ModelConfig;
+  activePromptVersions?: Array<{
     id: string;
     key: string;
     version: number;
@@ -191,16 +191,8 @@ interface ReadinessResponse {
     comment?: string | null;
     createdAt: string;
   }>;
-  activeRoutingRules: Array<{
-    id: string;
-    productLevel: string;
-    agent: string;
-    mission: string;
-    provider: string;
-    model: string;
-  }>;
-  recentRuns: AiRunRow[];
-  recentRunSummary: {
+  recentRuns?: AiRunRow[];
+  recentRunSummary?: {
     count: number;
     successes: number;
     errors: number;
@@ -869,28 +861,32 @@ export default function SettingsPage() {
 
       if (data.success === false) {
         setCandidateProbeResults(data.probeResults || []);
-        setActionError('Le test de configuration candidat a échoué. L’ancienne configuration a été conservée.');
+        setActionError(
+          'Le test de configuration candidat a échoué. L’ancienne configuration a été conservée.',
+        );
       } else {
         setSuccess(data.message || 'Configuration IA testée et appliquée.');
         await loadAll();
       }
     } catch (error) {
-      const errRes = (error as {
-        response?: {
-          data?: {
-            probeResults?: Array<{
-              provider: ProviderId;
-              model: string;
-              text: 'ok' | 'error' | 'not_tested';
-              multimodal?: 'ok' | 'error' | 'not_tested';
-              structured?: 'ok' | 'error' | 'not_tested';
-              error?: string;
-              errorCategory?: string;
-              location?: string;
-            }>;
+      const errRes = (
+        error as {
+          response?: {
+            data?: {
+              probeResults?: Array<{
+                provider: ProviderId;
+                model: string;
+                text: 'ok' | 'error' | 'not_tested';
+                multimodal?: 'ok' | 'error' | 'not_tested';
+                structured?: 'ok' | 'error' | 'not_tested';
+                error?: string;
+                errorCategory?: string;
+                location?: string;
+              }>;
+            };
           };
-        };
-      })?.response?.data;
+        }
+      )?.response?.data;
       if (errRes?.probeResults) {
         setCandidateProbeResults(errRes.probeResults);
       }
@@ -1083,25 +1079,25 @@ export default function SettingsPage() {
             <Card className="p-4">
               <p className="text-xs uppercase text-desk-muted">Validés</p>
               <p className="mt-1 text-2xl font-semibold text-emerald-700">
-                {readiness.summary.passes}
+                {readiness.summary?.passes ?? 0}
               </p>
             </Card>
             <Card className="p-4">
               <p className="text-xs uppercase text-desk-muted">À tester</p>
               <p className="mt-1 text-2xl font-semibold text-amber-700">
-                {readiness.summary.warnings}
+                {readiness.summary?.warnings ?? 0}
               </p>
             </Card>
             <Card className="p-4">
               <p className="text-xs uppercase text-desk-muted">Blocages</p>
               <p className="mt-1 text-2xl font-semibold text-red-600">
-                {readiness.summary.failures}
+                {readiness.summary?.failures ?? 0}
               </p>
             </Card>
           </div>
 
           <Card className="divide-y divide-desk-border">
-            {readiness.checks.map((check) => (
+            {(readiness.checks ?? []).map((check) => (
               <div
                 key={check.id}
                 className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -1129,18 +1125,18 @@ export default function SettingsPage() {
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl bg-desk-card p-3">
-                  <p className="text-xl font-semibold">{readiness.recentRunSummary.count}</p>
+                  <p className="text-xl font-semibold">{readiness.recentRunSummary?.count ?? 0}</p>
                   <p className="text-xs text-desk-muted">Appels</p>
                 </div>
                 <div className="rounded-xl bg-desk-card p-3">
                   <p className="text-xl font-semibold text-red-600">
-                    {readiness.recentRunSummary.errors}
+                    {readiness.recentRunSummary?.errors ?? 0}
                   </p>
                   <p className="text-xs text-desk-muted">Erreurs</p>
                 </div>
                 <div className="rounded-xl bg-desk-card p-3">
                   <p className="text-xl font-semibold text-amber-700">
-                    ${readiness.recentRunSummary.estimatedCost.toFixed(4)}
+                    ${(readiness.recentRunSummary?.estimatedCost ?? 0).toFixed(4)}
                   </p>
                   <p className="text-xs text-desk-muted">Coût</p>
                 </div>
@@ -1154,12 +1150,12 @@ export default function SettingsPage() {
                   <dd className="font-mono">per_agent</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-desk-muted">Règles héritées</dt>
-                  <dd className="font-mono">{readiness.activeRoutingRules.length}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
                   <dt className="text-desk-muted">Vérification</dt>
-                  <dd>{new Date(readiness.generatedAt).toLocaleString('fr-FR')}</dd>
+                  <dd>
+                    {readiness.generatedAt
+                      ? new Date(readiness.generatedAt).toLocaleString('fr-FR')
+                      : 'N/A'}
+                  </dd>
                 </div>
               </dl>
             </Card>
@@ -1209,8 +1205,10 @@ export default function SettingsPage() {
                             <br />
                             Runtime Vertex : global · Catalogue Model Garden : us-central1
                           </>
+                        ) : card.status.location ? (
+                          ` · région ${card.status.location}`
                         ) : (
-                          card.status.location ? ` · région ${card.status.location}` : ''
+                          ''
                         )}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -1372,11 +1370,15 @@ export default function SettingsPage() {
           {candidateProbeResults && candidateProbeResults.length > 0 && (
             <Card className="border-red-500/50 bg-red-500/10 p-5">
               <h3 className="font-semibold text-red-600">
-                Résultats du test de configuration candidat (échec — ancienne configuration conservée)
+                Résultats du test de configuration candidat (échec — ancienne configuration
+                conservée)
               </h3>
               <div className="mt-3 space-y-3">
                 {candidateProbeResults.map((candidate, idx) => (
-                  <div key={idx} className="rounded-xl border border-red-500/20 bg-desk-surface p-3 text-sm">
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-red-500/20 bg-desk-surface p-3 text-sm"
+                  >
                     <div className="font-semibold text-desk-text">
                       Fournisseur : {candidate.provider} · Modèle candidat : {candidate.model}
                     </div>
@@ -1393,7 +1395,12 @@ export default function SettingsPage() {
                               : 'warning'
                         }
                       >
-                        Vision : {candidate.multimodal === 'ok' ? 'OK' : candidate.multimodal === 'error' ? 'erreur' : 'non testé'}
+                        Vision :{' '}
+                        {candidate.multimodal === 'ok'
+                          ? 'OK'
+                          : candidate.multimodal === 'error'
+                            ? 'erreur'
+                            : 'non testé'}
                       </Pill>
                       <Pill
                         level={
@@ -1404,10 +1411,16 @@ export default function SettingsPage() {
                               : 'warning'
                         }
                       >
-                        JSON : {candidate.structured === 'ok' ? 'OK' : candidate.structured === 'error' ? 'erreur' : 'non testé'}
+                        JSON :{' '}
+                        {candidate.structured === 'ok'
+                          ? 'OK'
+                          : candidate.structured === 'error'
+                            ? 'erreur'
+                            : 'non testé'}
                       </Pill>
                       <span className="self-center font-mono text-desk-muted">
-                        Région : {candidate.location || (candidate.provider === 'vertex' ? 'global' : 'N/A')}
+                        Région :{' '}
+                        {candidate.location || (candidate.provider === 'vertex' ? 'global' : 'N/A')}
                       </span>
                     </div>
                     {candidate.error && (
