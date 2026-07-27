@@ -983,7 +983,21 @@ export class ExpertService {
         id: true,
         orderNumber: true,
         status: true,
-        _count: { select: { readingVersions: true, deliveries: true } },
+        paidAt: true,
+        paymentIntentId: true,
+        stripeSessionId: true,
+        expertReview: true,
+        readingIntake: { select: { id: true } },
+        _count: {
+          select: {
+            files: true,
+            readingVersions: true,
+            deliveries: true,
+            generatedSteps: true,
+            chatContexts: true,
+            aiRuns: true,
+          },
+        },
       },
     });
 
@@ -991,12 +1005,27 @@ export class ExpertService {
       throw new NotFoundException('Commande non trouvée');
     }
 
-    // Reading versions and delivery records are historical production evidence.
-    // Deleting their parent order would cascade-delete immutable client content.
+    const review = readExpertReview(order.expertReview);
+    const hasProductionHistory =
+      Boolean(readCurrentProduction(review)) ||
+      Boolean(review.productionHistory?.some((job) => typeof job?.id === 'string'));
+
+    // Files, intakes, versions and deliveries cascade. Path steps, chats and
+    // AI runs are retained with a NULL order id, so they too make this draft
+    // non-empty and its deletion unauditable.
     if (
       order.status !== 'PENDING' ||
+      order.paidAt ||
+      order.paymentIntentId ||
+      order.stripeSessionId ||
+      order.readingIntake ||
+      order._count.files > 0 ||
       order._count.readingVersions > 0 ||
-      order._count.deliveries > 0
+      order._count.deliveries > 0 ||
+      order._count.generatedSteps > 0 ||
+      order._count.chatContexts > 0 ||
+      order._count.aiRuns > 0 ||
+      hasProductionHistory
     ) {
       throw new ConflictException(
         'Seules les commandes brouillon non payées et sans historique peuvent être supprimées',
@@ -1151,21 +1180,39 @@ export class ExpertService {
         );
       }
     } else {
-      // Reject - increment revision count and reset status
+      // A rejected candidate remains the editable source of truth. Clearing it
+      // here used to destroy the Desk draft before a replacement existed.
+      const nextRevisionCount = order.revisionCount + 1;
       const updatedOrder = await this.prisma.order.update({
         where: { id: dto.orderId },
         data: {
-          status: 'PROCESSING',
+          status: 'AWAITING_VALIDATION',
           revisionCount: { increment: 1 },
-          generatedContent: null,
           expertValidation: {
             action: 'reject',
             rejectedBy: expert.id,
             rejectedAt: new Date().toISOString(),
             reason: dto.rejectionReason,
+            revisionCount: nextRevisionCount,
+            draftRevision:
+              typeof (order.generatedContent as Record<string, unknown> | null)?.readingRevision ===
+              'number'
+                ? ((order.generatedContent as Record<string, unknown>).readingRevision as number)
+                : 0,
+            regeneration: dto.regenerate ? 'QUEUED' : 'REQUIRES_EXPLICIT_ACTION',
           },
         },
       });
+
+      if (dto.regenerate) {
+        // This only records a durable job; the worker owns the long-running
+        // SCRIBE call and will preserve the source draft on failure/conflict.
+        await this.productionControl.enqueueReading(dto.orderId, expert as Expert, {
+          expertPrompt: order.expertPrompt || undefined,
+          expertInstructions: order.expertInstructions || undefined,
+          regenerationOfExistingContent: true,
+        });
+      }
 
       this.logger.log(`❌ Order ${order.orderNumber} rejected: ${dto.rejectionReason}`);
       return updatedOrder;
