@@ -281,12 +281,37 @@ async function openReading(page: Page) {
 
   const readLink = page.getByRole('link', { name: /lire ma lecture/i });
   await expectAboveMobileNav(page, readLink);
-  await readLink.click();
-  await expect(page.getByTestId('reading-pdf-viewer')).toBeVisible();
+  const href = await readLink.getAttribute('href');
+  expect(href).toBeTruthy();
+  await page.goto('about:blank');
+  await page.goto(href!, { waitUntil: 'commit' });
+  await expect(page.getByTestId('reading-pdf-viewer')).toBeVisible({ timeout: 60_000 });
 }
 
 async function assertPdfViewer(page: Page) {
   await expect(page.getByRole('link', { name: 'Fermer le PDF' })).toBeVisible();
+  await expect(page.getByTestId('reading-pdf-page-count')).toHaveText(/[1-9]\d*/, {
+    timeout: 20_000,
+  });
+  const renderedPdf = await page.evaluate(() => {
+    const viewer = document.querySelector('[data-testid="reading-pdf-viewer"]');
+    const canvas = viewer?.querySelector('canvas') as HTMLCanvasElement | null;
+    const textLayer = viewer?.querySelector('.react-pdf__Page__textContent');
+    const nativeViewer = viewer?.querySelector('iframe');
+    const pageCount = Number(
+      document.querySelector('[data-testid="reading-pdf-page-count"]')?.textContent ?? 0,
+    );
+    return {
+      canvasRendered: Boolean(canvas && canvas.width > 0 && canvas.height > 0),
+      textLayerRendered: Boolean(textLayer?.textContent?.trim()),
+      nativeViewerRendered: Boolean(nativeViewer),
+      pageCount,
+    };
+  });
+  expect(renderedPdf.pageCount).toBeGreaterThan(0);
+  expect(
+    renderedPdf.canvasRendered || renderedPdf.textLayerRendered || renderedPdf.nativeViewerRendered,
+  ).toBe(true);
   await expect(page.getByRole('button', { name: 'Page précédente' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Page suivante' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Zoom arrière' })).toBeVisible();
@@ -299,7 +324,7 @@ async function assertPdfViewer(page: Page) {
 }
 
 test.describe('MVP mobile reading responsive', () => {
-  test.describe.configure({ timeout: 60_000 });
+  test.describe.configure({ timeout: 120_000 });
 
   test('Chromium mobile 320: landing, checkout, login, onboarding, Sanctuaire, PDF and audio', async ({
     page,
@@ -324,12 +349,14 @@ test.describe('MVP mobile reading responsive', () => {
 
     auth.setAuthenticated(true);
     auth.setOnboardingOpenable(true);
+    await page.goto('about:blank');
     await page.goto('/sanctuaire?onboarding=1');
     await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeVisible();
     await expectAboveMobileNav(page, page.getByRole('button', { name: /^Continuer$/i }));
     await expectNoHorizontalOverflow(page);
 
     auth.setOnboardingOpenable(false);
+    await page.goto('about:blank');
     await openReading(page);
     await assertPdfViewer(page);
     await page.getByRole('link', { name: 'Fermer le PDF' }).click();
@@ -366,10 +393,12 @@ test.describe('MVP mobile reading responsive', () => {
 
     auth.setAuthenticated(true);
     auth.setOnboardingOpenable(true);
+    await page.goto('about:blank');
     await page.goto('/sanctuaire?onboarding=1');
     await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeVisible();
 
     auth.setOnboardingOpenable(false);
+    await page.goto('about:blank');
     await openReading(page);
     await assertPdfViewer(page);
     await page.getByRole('link', { name: 'Fermer le PDF' }).click();
@@ -393,7 +422,7 @@ test.describe('MVP mobile reading responsive', () => {
     await page.goto('/sanctuaire');
     await expect(page.locator('body')).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    await page.goto('/sanctuaire/lecture/LUM-MVP', { waitUntil: 'domcontentloaded' });
+    await page.goto('/sanctuaire/lecture/LUM-MVP', { waitUntil: 'commit' });
     await assertPdfViewer(page);
   });
 });

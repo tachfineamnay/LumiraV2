@@ -249,7 +249,7 @@ export function MysticAudioPlayer({
             <select
               value={speed}
               onChange={(event) => setSpeed(Number(event.target.value) as (typeof SPEEDS)[number])}
-              className="rounded-lg border border-white/10 bg-abyss-700 px-2 py-1 text-stellar-200"
+              className="rounded-lg border border-white/10 bg-abyss-700 px-2 py-1 text-base text-stellar-200 sm:text-xs"
             >
               {SPEEDS.map((value) => (
                 <option key={value} value={value}>

@@ -22,6 +22,14 @@ export function extractOrderNumberFromPdfUrl(pdfUrl: string): string | null {
   return match?.[1] ?? null;
 }
 
+function countPdfPages(blob: Blob): Promise<number> {
+  return blob.arrayBuffer().then((buffer) => {
+    const text = new TextDecoder('latin1').decode(buffer);
+    const matches = text.match(/\/Type\s*\/Page\b/g);
+    return Math.max(1, matches?.length ?? 0);
+  });
+}
+
 interface ReadingPdfViewerProps {
   orderNumber: string;
   title?: string;
@@ -38,6 +46,7 @@ export function ReadingPdfViewer({
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +92,7 @@ export function ReadingPdfViewer({
     const load = async () => {
       setIsLoading(true);
       setError(null);
+      setNumPages(0);
       setPageNumber(1);
       setBlobUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -94,8 +104,12 @@ export function ReadingPdfViewer({
           responseType: 'blob',
         });
         if (cancelled) return;
-        const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+        const blob = new Blob([data], { type: 'application/pdf' });
+        const pageCount = await countPdfPages(blob);
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
         revoked = url;
+        setNumPages(pageCount);
         setBlobUrl(url);
         setIsLoading(false);
       } catch {
@@ -117,7 +131,7 @@ export function ReadingPdfViewer({
   const handleZoomIn = () => setScale((s) => Math.min(Number((s + 0.15).toFixed(2)), 2.2));
   const handleZoomOut = () => setScale((s) => Math.max(Number((s - 0.15).toFixed(2)), 0.7));
   const goToPage = (nextPage: number) => {
-    setPageNumber(nextPage);
+    setPageNumber(Math.min(Math.max(nextPage, 1), Math.max(numPages, 1)));
     scrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
   };
 
@@ -167,8 +181,13 @@ export function ReadingPdfViewer({
               {title}
             </h1>
             <p className="text-xs text-[#385c7a]">
-              {blobUrl ? `Page ${pageNumber}` : 'Document PDF'}
+              {numPages > 0 ? `Page ${pageNumber} sur ${numPages}` : 'Document PDF'}
             </p>
+            {numPages > 0 && (
+              <span data-testid="reading-pdf-page-count" className="sr-only">
+                {numPages}
+              </span>
+            )}
           </div>
         </div>
 
@@ -221,7 +240,6 @@ export function ReadingPdfViewer({
             title={title}
             src={viewerUrl}
             className="h-full w-full border-0 bg-white"
-            onLoad={() => setIsLoading(false)}
           />
         )}
       </div>
@@ -232,19 +250,19 @@ export function ReadingPdfViewer({
             <button
               type="button"
               onClick={() => goToPage(Math.max(1, pageNumber - 1))}
-              disabled={pageNumber <= 1 || !blobUrl}
+              disabled={pageNumber <= 1 || numPages <= 0}
               className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Page précédente"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="min-w-[4.5rem] text-center text-xs tabular-nums text-[#385c7a]">
-              {blobUrl ? `Page ${pageNumber}` : 'PDF'}
+              {numPages > 0 ? `${pageNumber} / ${numPages}` : '-- / --'}
             </span>
             <button
               type="button"
-              onClick={() => goToPage(pageNumber + 1)}
-              disabled={!blobUrl}
+              onClick={() => goToPage(Math.min(numPages, pageNumber + 1))}
+              disabled={pageNumber >= numPages || numPages <= 0}
               className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Page suivante"
             >

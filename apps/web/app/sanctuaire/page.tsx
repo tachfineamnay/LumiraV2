@@ -139,7 +139,7 @@ function SanctuaireHome() {
   const audioPending = isReady && hasPdf && !audioUrl;
   const savedDraftStep =
     homeState.kind === 'RESUME'
-      ? Math.min(5, Math.max(1, (onboardingProgress?.currentStep ?? 0) + 1))
+      ? Math.min(4, Math.max(1, (onboardingProgress?.currentStep ?? 0) + 1))
       : null;
   const draftData = onboardingProgress?.data ?? {};
   const draftBirthPlace = typeof draftData.birthPlace === 'string' ? draftData.birthPlace : '';
@@ -216,12 +216,12 @@ function SanctuaireHome() {
         {savedDraftStep !== null && (
           <div
             className="mt-6 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-ivoire-500/[0.06] bg-brume-800/20 px-3 py-2 text-xs text-brume-200"
-            aria-label={`Brouillon sauvegardé à l’étape ${savedDraftStep} sur 5`}
+            aria-label={`Brouillon sauvegardé à l’étape ${savedDraftStep} sur 4`}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden />
             <span>Brouillon sauvegardé</span>
             <span aria-hidden>·</span>
-            <span>Étape {savedDraftStep} sur 5</span>
+            <span>Étape {savedDraftStep} sur 4</span>
           </div>
         )}
 
