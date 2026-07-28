@@ -112,12 +112,7 @@ export class S3Service {
 
   async deleteObject(key: string, bucket: S3BucketKind = 'readings'): Promise<void> {
     try {
-      await this.s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: this.resolveBucket(bucket),
-          Key: key,
-        }),
-      );
+      await this.deleteObjectStrict(key, bucket);
     } catch (error) {
       this.logger.warn(
         `S3 deleteObject failed (${bucket}/${key}): ${
@@ -125,6 +120,20 @@ export class S3Service {
         }`,
       );
     }
+  }
+
+  /**
+   * Delete an object and propagate storage failures.
+   * Account purge uses this method so database records are not removed while
+   * private files remain silently orphaned.
+   */
+  async deleteObjectStrict(key: string, bucket: S3BucketKind = 'readings'): Promise<void> {
+    await this.s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: this.resolveBucket(bucket),
+        Key: key,
+      }),
+    );
   }
 
   async headObject(key: string, bucket: S3BucketKind = 'uploads'): Promise<S3ObjectMetadata> {
