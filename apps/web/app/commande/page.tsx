@@ -545,7 +545,7 @@ function CheckoutContent() {
                       onPaymentAttemptStart={handlePaymentAttemptStart}
                       disabled={isLoading || isPaymentUncertain}
                     />
-                    {(isPaymentUncertain || paymentError) && paymentIntentId && (
+                    {isPaymentUncertain && paymentIntentId && (
                       <div className="mt-5 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-50">
                         <p className="leading-6">
                           Une seule tentative de paiement est active. Avant de recommencer,
