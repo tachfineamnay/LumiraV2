@@ -11,6 +11,8 @@ import {
     ExpertValidationContext
 } from './dto/send-email.dto';
 
+const PUBLIC_READING_VALIDATOR_NAME = 'Élise Moreau';
+
 @Injectable()
 export class NotificationsService {
     constructor(
@@ -97,11 +99,12 @@ export class NotificationsService {
         });
     }
 
-    async sendExpertValidation(order: Order, user: User, expertName: string) {
+    async sendExpertValidation(order: Order, user: User, _expertName: string) {
+        const expertName = PUBLIC_READING_VALIDATOR_NAME;
         const context: ExpertValidationContext = {
             firstName: user.firstName,
             orderNumber: order.orderNumber,
-            expertName: expertName,
+            expertName,
             levelName: 'Abonné',
             validatedAt: new Date().toLocaleString('fr-FR', {
                 day: 'numeric',
