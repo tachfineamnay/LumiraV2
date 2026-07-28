@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const scrollPositionRef = useRef(0);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -16,14 +17,37 @@ export function Header() {
 
   useEffect(() => {
     if (!mobileOpen) return;
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMobileOpen(false);
     };
-    document.body.style.overflow = 'hidden';
+
+    const bodyStyle = document.body.style;
+    const previousStyles = {
+      overflow: bodyStyle.overflow,
+      paddingRight: bodyStyle.paddingRight,
+      position: bodyStyle.position,
+      top: bodyStyle.top,
+      width: bodyStyle.width,
+    };
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    scrollPositionRef.current = window.scrollY;
+    bodyStyle.overflow = 'hidden';
+    bodyStyle.position = 'fixed';
+    bodyStyle.top = `-${scrollPositionRef.current}px`;
+    bodyStyle.width = '100%';
+    if (scrollbarWidth > 0) bodyStyle.paddingRight = `${scrollbarWidth}px`;
+
     window.addEventListener('keydown', onKey);
     return () => {
-      document.body.style.overflow = '';
+      bodyStyle.overflow = previousStyles.overflow;
+      bodyStyle.paddingRight = previousStyles.paddingRight;
+      bodyStyle.position = previousStyles.position;
+      bodyStyle.top = previousStyles.top;
+      bodyStyle.width = previousStyles.width;
       window.removeEventListener('keydown', onKey);
+      window.scrollTo(0, scrollPositionRef.current);
     };
   }, [mobileOpen]);
 
@@ -77,9 +101,10 @@ export function Header() {
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="lg:hidden p-2 text-white hover:text-cosmic-gold transition-colors"
+            className="lg:hidden min-h-[44px] min-w-[44px] p-2 text-white hover:text-cosmic-gold transition-colors"
             aria-label={mobileOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
             aria-expanded={mobileOpen}
+            aria-controls="mobile-menu"
           >
             {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -87,30 +112,36 @@ export function Header() {
       </nav>
 
       {mobileOpen && (
-        <div className="fixed inset-0 bg-void/98 z-40 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-8">
+        <div
+          id="mobile-menu"
+          className="fixed inset-0 z-40 flex min-h-[100dvh] items-start justify-center overflow-y-auto overscroll-contain bg-void/98 px-6 pt-[calc(env(safe-area-inset-top)+6.5rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation principale"
+        >
+          <div className="flex w-full max-w-md flex-col items-stretch gap-4 text-center">
             {navItems.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
-                className="font-playfair italic text-4xl text-white hover:text-cosmic-gold transition-colors"
+                className="flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 font-playfair text-3xl italic text-white transition-colors hover:text-cosmic-gold sm:text-4xl"
               >
                 {item.name}
               </Link>
             ))}
-            <div className="mt-8 flex flex-col gap-4 text-center">
+            <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-6 text-center">
               <Link
                 href="/sanctuaire/login"
                 onClick={() => setMobileOpen(false)}
-                className="text-white/60 text-sm uppercase tracking-widest"
+                className="flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm uppercase tracking-widest text-white/60"
               >
                 Connexion
               </Link>
               <Link
                 href="#niveaux"
                 onClick={() => setMobileOpen(false)}
-                className="text-cosmic-gold text-sm uppercase tracking-widest border-b border-cosmic-gold/30 pb-1"
+                className="flex min-h-[44px] items-center justify-center rounded-xl border border-cosmic-gold/30 px-3 py-2 text-sm uppercase tracking-widest text-cosmic-gold"
               >
                 Commencer l&apos;expérience
               </Link>

@@ -76,7 +76,7 @@ const InputField = ({
         placeholder={placeholder || label}
         className={`
                     w-full backdrop-blur-sm border rounded-xl pl-12 pr-12 py-4 
-                    text-white placeholder:text-blue-200/25
+                    text-base text-white placeholder:text-blue-200/25
                     focus:outline-none focus:ring-2 transition-all duration-300
                     ${
                       isFieldValid

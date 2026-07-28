@@ -25,8 +25,7 @@ export function StripePayment({
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentElementState, setPaymentElementState] =
-    useState<PaymentElementState>('loading');
+  const [paymentElementState, setPaymentElementState] = useState<PaymentElementState>('loading');
   const [paymentElementAttempt, setPaymentElementAttempt] = useState(0);
 
   useEffect(() => {
@@ -46,13 +45,7 @@ export function StripePayment({
   };
 
   const handleSubmit = async () => {
-    if (
-      !stripe ||
-      !elements ||
-      isProcessing ||
-      disabled ||
-      paymentElementState !== 'ready'
-    ) {
+    if (!stripe || !elements || isProcessing || disabled || paymentElementState !== 'ready') {
       return;
     }
 
@@ -102,7 +95,10 @@ export function StripePayment({
       transition={{ duration: 0.5, delay: 0.2 }}
       className="space-y-6"
     >
-      <div className="relative min-h-[150px] rounded-xl border border-white/10 bg-abyss-600/60 p-4 backdrop-blur-sm">
+      <div
+        data-testid="stripe-payment-element"
+        className="relative min-h-[150px] scroll-mt-4 rounded-xl border border-white/10 bg-abyss-600/60 p-4 backdrop-blur-sm"
+      >
         {paymentElementState === 'loading' && (
           <div
             className="absolute inset-0 z-10 grid place-items-center rounded-xl bg-abyss-700/95 px-4 text-center"
@@ -151,14 +147,10 @@ export function StripePayment({
         type="button"
         onClick={handleSubmit}
         disabled={
-          !stripe ||
-          !elements ||
-          isProcessing ||
-          disabled ||
-          paymentElementState !== 'ready'
+          !stripe || !elements || isProcessing || disabled || paymentElementState !== 'ready'
         }
         className={`
-          w-full rounded-xl py-4 text-lg font-bold transition-all duration-300
+          min-h-[52px] w-full rounded-xl py-4 text-lg font-bold transition-all duration-300
           flex items-center justify-center gap-3
           ${
             isProcessing || disabled || paymentElementState !== 'ready'

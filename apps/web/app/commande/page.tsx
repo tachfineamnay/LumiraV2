@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Shield, CreditCard, Crown, Sparkles, Check, ArrowRight } from 'lucide-react';
 import {
@@ -46,6 +46,7 @@ function CheckoutContent() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [step, setStep] = useState<'form' | 'payment'>('form');
+  const paymentSectionRef = useRef<HTMLDivElement>(null);
 
   // Try to fetch connected user from Sanctuaire session cookies on mount
   useEffect(() => {
@@ -67,6 +68,16 @@ function CheckoutContent() {
     fetchConnectedUser();
     trackInitiateCheckout(SUBSCRIPTION.price);
   }, []);
+
+  useEffect(() => {
+    if (step !== 'payment' || !clientSecret) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [clientSecret, step]);
 
   const handleFormValid = (data: CheckoutFormData) => {
     setFormData(data);
@@ -133,7 +144,7 @@ function CheckoutContent() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="relative min-h-[100dvh] overflow-x-clip">
       {/* Ciel crépusculaire — nuit qui s'ouvre vers l'aube */}
       <div
         className="fixed inset-0"
@@ -189,14 +200,14 @@ function CheckoutContent() {
       <div className="relative z-10">
         <CheckoutHeader />
 
-        <main className="max-w-5xl mx-auto px-6 pb-20">
+        <main className="mx-auto max-w-5xl px-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:px-6 md:pb-20">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
             {/* Product Summary - Left Column */}
             <div className="lg:col-span-5 order-2 lg:order-1">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="sticky top-8"
+                className="lg:sticky lg:top-8"
               >
                 {/* Subscription Card — seuil de lumière */}
                 <div
@@ -343,7 +354,8 @@ function CheckoutContent() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-rose-300 text-sm flex items-center gap-3"
+                    className="flex gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300"
+                    role="alert"
                   >
                     <Shield className="w-5 h-5 flex-shrink-0" />
                     {paymentError}
@@ -367,7 +379,7 @@ function CheckoutContent() {
                   <button
                     onClick={handleProceedToPayment}
                     disabled={!isFormValid || isLoading}
-                    className="w-full flex items-center justify-center gap-3 px-8 py-5 rounded-xl font-bold text-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 hover:scale-[1.02]"
+                    className="flex min-h-[52px] w-full items-center justify-center gap-3 rounded-xl px-8 py-5 text-lg font-bold transition-all duration-300 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
                     style={{
                       background: 'linear-gradient(135deg, #e8a838 0%, #f4b942 50%, #ffcc5c 100%)',
                       color: '#080c1a',
@@ -401,6 +413,7 @@ function CheckoutContent() {
               {/* Step 2: Embedded Stripe Payment */}
               {step === 'payment' && clientSecret && (
                 <motion.div
+                  ref={paymentSectionRef}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5 }}

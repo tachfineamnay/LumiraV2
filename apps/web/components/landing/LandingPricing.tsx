@@ -21,7 +21,7 @@ const GROUP_ICONS = [
 export function LandingPricing() {
   return (
     <section id="niveaux" className="py-16 md:py-24 relative z-10 content-visibility-auto">
-      <div className="max-w-5xl mx-auto px-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-16">
           <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">
             L&apos;offre de lancement
@@ -40,7 +40,7 @@ export function LandingPricing() {
         <div className="relative group">
           <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-amber-500/20 rounded-3xl blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
 
-          <div className="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-abyss-600/80 via-abyss-700/90 to-abyss-600/80">
+          <div className="relative rounded-3xl border border-amber-500/20 bg-gradient-to-br from-abyss-600/80 via-abyss-700/90 to-abyss-600/80">
             <div className="p-5 sm:p-8 md:p-12 pb-0 md:pb-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-10">
                 <div>
@@ -50,22 +50,24 @@ export function LandingPricing() {
                       {SUBSCRIPTION.name}
                     </span>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl text-white/30 line-through font-light">97€</span>
-                    <span className="text-5xl md:text-6xl font-playfair italic text-white">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="whitespace-nowrap text-2xl font-light text-white/30 line-through">
+                      97€
+                    </span>
+                    <span className="whitespace-nowrap text-5xl font-playfair italic text-white md:text-6xl">
                       {SUBSCRIPTION.price}€
                     </span>
-                    <span className="text-lg text-white/40">paiement unique</span>
+                    <span className="whitespace-nowrap text-lg text-white/40">paiement unique</span>
                   </div>
                   <p className="mt-2 text-white/50 text-sm">
                     Accès {SUBSCRIPTION.accessDurationMonths} mois · Aucun renouvellement · Offre
                     early
                   </p>
                 </div>
-                <div className="flex flex-col items-start md:items-end gap-3">
+                <div className="flex w-full flex-col items-stretch gap-3 md:w-auto md:items-end">
                   <Link
                     href="/commande"
-                    className="group/btn relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-abyss-900 font-bold text-base hover:from-amber-400 hover:to-amber-500 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)]"
+                    className="group/btn relative inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 text-center text-base font-bold text-abyss-900 transition-all duration-300 hover:from-amber-400 hover:to-amber-500 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)] md:w-auto md:px-8 md:hover:scale-105"
                   >
                     <Sparkles className="w-5 h-5" aria-hidden />
                     Commencer mon voyage — {SUBSCRIPTION.price}€

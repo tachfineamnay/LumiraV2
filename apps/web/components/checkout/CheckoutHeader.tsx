@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 
 export function CheckoutHeader() {
   return (
-    <header className="relative z-10 py-8 px-6">
+    <header className="relative z-10 px-4 pb-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] md:px-6 md:py-8">
       <div className="max-w-6xl mx-auto">
         <Link
           href="/"
