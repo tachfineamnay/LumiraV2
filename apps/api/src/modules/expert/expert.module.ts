@@ -5,9 +5,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ExpertController } from './expert.controller';
 import { ProductionControlController } from './production-control.controller';
 import { ClientControlController } from './client-control.controller';
+import { ClientPurgeController } from './client-purge.controller';
 import { AiProductionReadinessController } from './ai-production-readiness.controller';
 import { ReadingWorkspaceController } from './reading-workspace.controller';
 import { ExpertService } from './expert.service';
+import { ClientPurgeService } from './client-purge.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
 import { AiProductionReadinessService } from './ai-production-readiness.service';
@@ -49,11 +51,13 @@ import { ReadingWorkspaceService } from './reading-workspace.service';
     ExpertController,
     ProductionControlController,
     ClientControlController,
+    ClientPurgeController,
     AiProductionReadinessController,
     ReadingWorkspaceController,
   ],
   providers: [
     ExpertService,
+    ClientPurgeService,
     AdminSettingsService,
     AiProviderDiagnosticsService,
     AiProductionReadinessService,
