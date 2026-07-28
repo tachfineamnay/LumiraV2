@@ -19,6 +19,9 @@ describe('ClientPurgeService', () => {
     orders: [
       {
         id: 'order-1',
+        orderNumber: 'LUM-1',
+        generatedContent: {},
+        expertReview: {},
         files: [
           { key: 'audio/readings/LUM-1/lecture.mp3', type: 'AUDIO_READING' },
           { key: 'onboarding/client-1/face-c.jpg', type: 'FACE_PHOTO' },
@@ -53,6 +56,7 @@ describe('ClientPurgeService', () => {
       }),
     };
     const s3Service = {
+      listObjectKeys: jest.fn().mockResolvedValue([]),
       deleteObjectStrict: storageFailure
         ? jest.fn().mockRejectedValue(new Error('storage unavailable'))
         : jest.fn().mockResolvedValue(undefined),
@@ -74,6 +78,9 @@ describe('ClientPurgeService', () => {
       deletedStorageObjects: 8,
     });
 
+    expect(s3Service.listObjectKeys).toHaveBeenCalledWith('readings/LUM-1/', 'readings');
+    expect(s3Service.listObjectKeys).toHaveBeenCalledWith('audio/readings/LUM-1/', 'readings');
+    expect(s3Service.listObjectKeys).toHaveBeenCalledWith('audio/insights/LUM-1/', 'readings');
     expect(s3Service.deleteObjectStrict).toHaveBeenCalledWith(
       'onboarding/client-1/face-a.jpg',
       'uploads',
