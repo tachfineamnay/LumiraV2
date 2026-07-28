@@ -35,15 +35,17 @@ function createService() {
 }
 
 describe('NotificationsService expert validation', () => {
-  it('sends a traceable email before creating the in-app notification', async () => {
+  it('uses Élise Moreau as the public validator identity', async () => {
     const { service, emailService, prisma } = createService();
 
-    await service.sendExpertValidation(order, user, 'Maya');
+    await service.sendExpertValidation(order, user, 'Grégory Tordjman');
 
     expect(emailService.sendOrThrow).toHaveBeenCalledWith(expect.objectContaining({
       to: user.email,
+      subject: '👁️ Élise Moreau a validé votre lecture',
       messageId: '<lumira-delivery-order-1@oraclelumira.com>',
       context: expect.objectContaining({
+        expertName: 'Élise Moreau',
         sanctuaireLink: 'https://oraclelumira.com/sanctuaire',
       }),
     }));
@@ -52,6 +54,8 @@ describe('NotificationsService expert validation', () => {
       data: expect.objectContaining({
         userId: user.id,
         type: NotificationType.EXPERT_VALIDATION,
+        title: 'Élise Moreau a validé votre lecture',
+        metadata: expect.objectContaining({ expertName: 'Élise Moreau' }),
       }),
     });
   });
@@ -60,7 +64,7 @@ describe('NotificationsService expert validation', () => {
     const { service, emailService, prisma } = createService();
     emailService.sendOrThrow.mockRejectedValueOnce(new Error('SMTP unavailable'));
 
-    await expect(service.sendExpertValidation(order, user, 'Maya'))
+    await expect(service.sendExpertValidation(order, user, 'Grégory Tordjman'))
       .rejects.toThrow('SMTP unavailable');
     expect(prisma.notification.create).not.toHaveBeenCalled();
   });
