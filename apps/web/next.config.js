@@ -3,7 +3,14 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
-  transpilePackages: ['@packages/ui', '@packages/shared', '@packages/database', 'react-pdf'],
+  swcMinify: false,
+  transpilePackages: [
+    '@packages/ui',
+    '@packages/shared',
+    '@packages/database',
+    'react-pdf',
+    'pdfjs-dist',
+  ],
   output: 'standalone',
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion', 'date-fns'],
@@ -55,6 +62,7 @@ const nextConfig = {
   webpack: (config) => {
     // react-pdf / pdfjs — avoid bundling node canvas
     config.resolve.alias.canvas = false;
+    config.resolve.alias['pdfjs-dist'] = require.resolve('pdfjs-dist/legacy/build/pdf.mjs');
     return config;
   },
 };

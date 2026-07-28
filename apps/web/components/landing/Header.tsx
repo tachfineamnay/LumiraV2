@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
+import type { MouseEvent } from 'react';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
 
@@ -8,6 +9,26 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const scrollPositionRef = useRef(0);
+  const restoreScrollOnCloseRef = useRef(true);
+
+  const closeMobileMenu = useCallback((restoreScroll: boolean) => {
+    restoreScrollOnCloseRef.current = restoreScroll;
+    setMobileOpen(false);
+  }, []);
+
+  const handleAnchorClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+      event.preventDefault();
+      closeMobileMenu(false);
+      window.setTimeout(() => {
+        if (window.location.hash !== href) {
+          window.history.pushState(null, '', href);
+        }
+        document.querySelector(href)?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      }, 0);
+    },
+    [closeMobileMenu],
+  );
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -19,7 +40,7 @@ export function Header() {
     if (!mobileOpen) return;
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false);
+      if (e.key === 'Escape') closeMobileMenu(true);
     };
 
     const bodyStyle = document.body.style;
@@ -32,6 +53,7 @@ export function Header() {
     };
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 
+    restoreScrollOnCloseRef.current = true;
     scrollPositionRef.current = window.scrollY;
     bodyStyle.overflow = 'hidden';
     bodyStyle.position = 'fixed';
@@ -47,9 +69,11 @@ export function Header() {
       bodyStyle.top = previousStyles.top;
       bodyStyle.width = previousStyles.width;
       window.removeEventListener('keydown', onKey);
-      window.scrollTo(0, scrollPositionRef.current);
+      if (restoreScrollOnCloseRef.current) {
+        window.scrollTo(0, scrollPositionRef.current);
+      }
     };
-  }, [mobileOpen]);
+  }, [closeMobileMenu, mobileOpen]);
 
   const navItems = [
     { name: "L'Offre", href: '#niveaux' },
@@ -100,7 +124,13 @@ export function Header() {
 
           <button
             type="button"
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={() => {
+              if (mobileOpen) {
+                closeMobileMenu(true);
+              } else {
+                setMobileOpen(true);
+              }
+            }}
             className="lg:hidden min-h-[44px] min-w-[44px] p-2 text-white hover:text-cosmic-gold transition-colors"
             aria-label={mobileOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
             aria-expanded={mobileOpen}
@@ -124,7 +154,7 @@ export function Header() {
               <Link
                 key={item.name}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
+                onClick={(event) => handleAnchorClick(event, item.href)}
                 className="flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 font-playfair text-3xl italic text-white transition-colors hover:text-cosmic-gold sm:text-4xl"
               >
                 {item.name}
@@ -133,14 +163,14 @@ export function Header() {
             <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-6 text-center">
               <Link
                 href="/sanctuaire/login"
-                onClick={() => setMobileOpen(false)}
+                onClick={() => closeMobileMenu(true)}
                 className="flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm uppercase tracking-widest text-white/60"
               >
                 Connexion
               </Link>
               <Link
                 href="#niveaux"
-                onClick={() => setMobileOpen(false)}
+                onClick={(event) => handleAnchorClick(event, '#niveaux')}
                 className="flex min-h-[44px] items-center justify-center rounded-xl border border-cosmic-gold/30 px-3 py-2 text-sm uppercase tracking-widest text-cosmic-gold"
               >
                 Commencer l&apos;expérience

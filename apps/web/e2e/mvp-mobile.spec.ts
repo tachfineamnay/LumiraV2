@@ -296,22 +296,21 @@ async function assertPdfViewer(page: Page) {
   const renderedPdf = await page.evaluate(() => {
     const viewer = document.querySelector('[data-testid="reading-pdf-viewer"]');
     const canvas = viewer?.querySelector('canvas') as HTMLCanvasElement | null;
-    const textLayer = viewer?.querySelector('.react-pdf__Page__textContent');
-    const nativeViewer = viewer?.querySelector('iframe');
     const pageCount = Number(
       document.querySelector('[data-testid="reading-pdf-page-count"]')?.textContent ?? 0,
     );
     return {
       canvasRendered: Boolean(canvas && canvas.width > 0 && canvas.height > 0),
-      textLayerRendered: Boolean(textLayer?.textContent?.trim()),
-      nativeViewerRendered: Boolean(nativeViewer),
+      canvasWidth: canvas?.width ?? 0,
+      canvasHeight: canvas?.height ?? 0,
       pageCount,
     };
   });
   expect(renderedPdf.pageCount).toBeGreaterThan(0);
-  expect(
-    renderedPdf.canvasRendered || renderedPdf.textLayerRendered || renderedPdf.nativeViewerRendered,
-  ).toBe(true);
+  expect(renderedPdf.canvasRendered).toBe(true);
+  expect(renderedPdf.canvasWidth).toBeGreaterThan(0);
+  expect(renderedPdf.canvasHeight).toBeGreaterThan(0);
+  await expect(page.getByTestId('reading-pdf-viewer').locator('iframe')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Page précédente' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Page suivante' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Zoom arrière' })).toBeVisible();

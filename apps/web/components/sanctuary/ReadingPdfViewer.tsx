@@ -2,6 +2,9 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import {
   AlertCircle,
   ChevronLeft,
@@ -17,17 +20,11 @@ import {
 } from 'lucide-react';
 import sanctuaireApi from '@/lib/sanctuaireApi';
 
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
 export function extractOrderNumberFromPdfUrl(pdfUrl: string): string | null {
   const match = pdfUrl.match(/\/readings\/([^/]+)\/(download|file)/);
   return match?.[1] ?? null;
-}
-
-function countPdfPages(blob: Blob): Promise<number> {
-  return blob.arrayBuffer().then((buffer) => {
-    const text = new TextDecoder('latin1').decode(buffer);
-    const matches = text.match(/\/Type\s*\/Page\b/g);
-    return Math.max(1, matches?.length ?? 0);
-  });
 }
 
 interface ReadingPdfViewerProps {
@@ -53,6 +50,7 @@ export function ReadingPdfViewer({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [visualViewportHeight, setVisualViewportHeight] = useState<number | null>(null);
+  const [pageWidth, setPageWidth] = useState(280);
 
   const safeFilename = `${title.replace(/[^\w\-àâäéèêëïîôùûüç]+/gi, '_')}.pdf`;
 
@@ -86,6 +84,20 @@ export function ReadingPdfViewer({
   }, []);
 
   useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const updatePageWidth = () => {
+      setPageWidth(Math.max(280, Math.min(el.clientWidth - 24, 900)));
+    };
+
+    updatePageWidth();
+    const resizeObserver = new ResizeObserver(updatePageWidth);
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, [blobUrl]);
+
+  useEffect(() => {
     let revoked: string | null = null;
     let cancelled = false;
 
@@ -105,13 +117,9 @@ export function ReadingPdfViewer({
         });
         if (cancelled) return;
         const blob = new Blob([data], { type: 'application/pdf' });
-        const pageCount = await countPdfPages(blob);
-        if (cancelled) return;
         const url = URL.createObjectURL(blob);
         revoked = url;
-        setNumPages(pageCount);
         setBlobUrl(url);
-        setIsLoading(false);
       } catch {
         if (!cancelled) {
           setError('Impossible de charger votre lecture pour le moment.');
@@ -160,9 +168,18 @@ export function ReadingPdfViewer({
       }) as React.CSSProperties,
     [visualViewportHeight],
   );
-  const viewerUrl = blobUrl
-    ? `${blobUrl}#page=${pageNumber}&zoom=${Math.round(scale * 100)}`
-    : null;
+
+  const onDocumentLoadSuccess = ({ numPages: nextNumPages }: { numPages: number }) => {
+    setNumPages(nextNumPages);
+    setPageNumber((currentPage) => Math.min(Math.max(currentPage, 1), Math.max(nextNumPages, 1)));
+    setError(null);
+    setIsLoading(false);
+  };
+
+  const onDocumentLoadError = () => {
+    setError('Le document PDF est illisible ou corrompu.');
+    setIsLoading(false);
+  };
 
   return (
     <div
@@ -234,13 +251,25 @@ export function ReadingPdfViewer({
           </div>
         )}
 
-        {viewerUrl && !error && (
-          <iframe
-            key={viewerUrl}
-            title={title}
-            src={viewerUrl}
-            className="h-full w-full border-0 bg-white"
-          />
+        {blobUrl && !error && (
+          <div className="flex min-h-full items-start justify-center px-3 py-4">
+            <Document
+              file={blobUrl}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading={null}
+              className="flex flex-col items-center"
+            >
+              <Page
+                key={`${pageNumber}-${pageWidth}-${scale}`}
+                pageNumber={pageNumber}
+                width={pageWidth * scale}
+                renderTextLayer
+                renderAnnotationLayer
+                className="overflow-hidden rounded-sm bg-white shadow-xl"
+              />
+            </Document>
+          </div>
         )}
       </div>
 
@@ -251,7 +280,7 @@ export function ReadingPdfViewer({
               type="button"
               onClick={() => goToPage(Math.max(1, pageNumber - 1))}
               disabled={pageNumber <= 1 || numPages <= 0}
-              className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Page précédente"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -263,7 +292,7 @@ export function ReadingPdfViewer({
               type="button"
               onClick={() => goToPage(Math.min(numPages, pageNumber + 1))}
               disabled={pageNumber >= numPages || numPages <= 0}
-              className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Page suivante"
             >
               <ChevronRight className="h-4 w-4" />
@@ -275,7 +304,7 @@ export function ReadingPdfViewer({
               type="button"
               onClick={handleZoomOut}
               disabled={scale <= 0.7}
-              className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Zoom arrière"
             >
               <ZoomOut className="h-4 w-4" />
@@ -287,7 +316,7 @@ export function ReadingPdfViewer({
               type="button"
               onClick={handleZoomIn}
               disabled={scale >= 2.2}
-              className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Zoom avant"
             >
               <ZoomIn className="h-4 w-4" />
@@ -299,7 +328,7 @@ export function ReadingPdfViewer({
               type="button"
               onClick={handleDownload}
               disabled={!blobUrl}
-              className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Télécharger"
             >
               <Download className="h-4 w-4" />
@@ -308,7 +337,7 @@ export function ReadingPdfViewer({
               type="button"
               onClick={handleOpenExternal}
               disabled={!blobUrl}
-              className="grid h-10 w-10 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
               aria-label="Ouvrir dans un nouvel onglet"
             >
               <ExternalLink className="h-4 w-4" />

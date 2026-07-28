@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+test.describe.configure({ timeout: 60_000 });
+
 async function expectNoHorizontalOverflow(page: Page) {
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
@@ -18,6 +20,17 @@ async function expectInViewport(locator: Locator) {
   expect(box).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual((await locator.page().viewportSize())!.width);
+}
+
+async function expectIntersectsViewport(locator: Locator) {
+  const box = await locator.boundingBox();
+  const viewport = locator.page().viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeLessThanOrEqual(viewport!.width);
+  expect(box!.x + box!.width).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeLessThanOrEqual(viewport!.height);
+  expect(box!.y + box!.height).toBeGreaterThanOrEqual(0);
 }
 
 test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo) => {
@@ -46,6 +59,23 @@ test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo
   await expect(page.getByText('97€', { exact: true })).toBeVisible();
   await expect(page.getByText('paiement unique', { exact: true })).toBeVisible();
   await expectInViewport(page.locator('#niveaux a[href="/commande"]'));
+  await expectNoHorizontalOverflow(page);
+});
+
+test('mobile menu anchor keeps pricing section visible after closing', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'Chromium-only anchor regression check');
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/');
+
+  await page.evaluate(() => window.scrollTo(0, 680));
+  await page.getByRole('button', { name: 'Ouvrir le menu' }).click({ force: true });
+  const menu = page.getByRole('dialog', { name: 'Navigation principale' });
+  await expect(menu).toBeVisible();
+  await menu.getByRole('link', { name: "Commencer l'expérience" }).click();
+  await expect(menu).toBeHidden();
+  await expect(page).toHaveURL(/#niveaux$/);
+  await expect.poll(() => page.locator('#niveaux').boundingBox()).not.toBeNull();
+  await expectIntersectsViewport(page.locator('#niveaux'));
   await expectNoHorizontalOverflow(page);
 });
 
