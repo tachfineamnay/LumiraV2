@@ -45,7 +45,7 @@ function getDeleteClientError(error: unknown): { status?: number; message: strin
 
   return {
     status: response?.status,
-    message: 'La suppression n’a pas abouti. Réessayez dans un instant.',
+    message: 'La suppression complète n’a pas abouti. Réessayez dans un instant.',
   };
 }
 
@@ -156,24 +156,26 @@ export default function ClientDetailPage() {
         onConfirm={async () => {
           try {
             setIsDeletingClient(true);
-            await expertApi.delete(`/expert/clients/${clientId}`);
-            toast.success('Client supprimé définitivement');
+            await expertApi.delete(`/expert/clients/${clientId}/purge`);
+            toast.success('Client et toutes ses données ont été supprimés');
             router.replace('/admin/clients');
             router.refresh();
           } catch (err) {
             const failure = getDeleteClientError(err);
             toast.error(failure.message, { duration: 7000 });
-            console.error('Failed to delete client:', err);
-            if (failure.status === 409 || failure.status === 404) {
+            console.error('Failed to purge client:', err);
+            if (failure.status === 404) {
               setShowDeleteClient(false);
+              router.replace('/admin/clients');
+              router.refresh();
             }
           } finally {
             setIsDeletingClient(false);
           }
         }}
-        title="Supprimer le client"
-        description={`Supprimer définitivement ${client.firstName} ${client.lastName} et toutes ses données ? Cette action est irréversible et n’est possible que si aucun historique Lumira protégé n’est lié au compte.`}
-        confirmLabel="Supprimer"
+        title="Supprimer complètement le client"
+        description={`Supprimer définitivement ${client.firstName} ${client.lastName} ? Le compte, les commandes, lectures, versions, PDF, audios, photos privées, messages et données du Sanctuaire seront effacés. Cette personne pourra repasser une nouvelle commande avec la même adresse e-mail.`}
+        confirmLabel="Tout supprimer"
         variant="danger"
         isLoading={isDeletingClient}
       />
