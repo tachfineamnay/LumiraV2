@@ -6,6 +6,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
@@ -108,6 +109,27 @@ export class S3Service {
       this.logger.error(`S3 getObject failed (${bucket})`);
       throw error;
     }
+  }
+
+  async listObjectKeys(prefix: string, bucket: S3BucketKind = 'readings'): Promise<string[]> {
+    const keys: string[] = [];
+    let continuationToken: string | undefined;
+
+    do {
+      const response = await this.s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: this.resolveBucket(bucket),
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      for (const object of response.Contents ?? []) {
+        if (object.Key) keys.push(object.Key);
+      }
+      continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    return keys;
   }
 
   async deleteObject(key: string, bucket: S3BucketKind = 'readings'): Promise<void> {
