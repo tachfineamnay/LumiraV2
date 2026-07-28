@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Shield, CreditCard, Crown, Sparkles, Check, ArrowRight } from 'lucide-react';
 import {
@@ -16,6 +16,12 @@ import {
   buildSanctuairePostCheckoutUrl,
   completeCheckoutSession,
 } from '../../lib/completeCheckoutSession';
+import {
+  clearCheckoutAttempt,
+  paymentIntentIdFromClientSecret,
+  readCheckoutAttempt,
+  saveCheckoutAttempt,
+} from '../../lib/checkoutAttempt';
 import { trackInitiateCheckout, trackPurchase } from '../../lib/pixel';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -45,8 +51,13 @@ function CheckoutContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [step, setStep] = useState<'form' | 'payment'>('form');
+  const [isPreparationSlow, setIsPreparationSlow] = useState(false);
+  const [isPaymentUncertain, setIsPaymentUncertain] = useState(false);
   const paymentSectionRef = useRef<HTMLDivElement>(null);
+  const preparingIntentRef = useRef(false);
+  const finalizingPaymentRef = useRef(false);
 
   // Try to fetch connected user from Sanctuaire session cookies on mount
   useEffect(() => {
@@ -70,6 +81,26 @@ function CheckoutContent() {
   }, []);
 
   useEffect(() => {
+    const attempt = readCheckoutAttempt();
+    if (!attempt) return;
+
+    setClientSecret(attempt.clientSecret);
+    setPaymentIntentId(attempt.paymentIntentId);
+    setStep('payment');
+    setIsPaymentUncertain(attempt.phase !== 'payment_ready');
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading || step !== 'form') {
+      setIsPreparationSlow(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setIsPreparationSlow(true), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [isLoading, step]);
+
+  useEffect(() => {
     if (step !== 'payment' || !clientSecret) return;
 
     const frame = window.requestAnimationFrame(() => {
@@ -79,23 +110,53 @@ function CheckoutContent() {
     return () => window.cancelAnimationFrame(frame);
   }, [clientSecret, step]);
 
-  const handleFormValid = (data: CheckoutFormData) => {
+  const handleFormValid = useCallback((data: CheckoutFormData) => {
     setFormData(data);
     setIsFormValid(true);
-  };
+  }, []);
 
-  const handleFormInvalid = () => {
+  const handleFormInvalid = useCallback(() => {
     setIsFormValid(false);
-  };
+  }, []);
+
+  const finalizePaymentAccess = useCallback(async (intentId: string) => {
+    if (finalizingPaymentRef.current) return;
+
+    finalizingPaymentRef.current = true;
+    setIsLoading(true);
+    setIsPaymentUncertain(true);
+    setPaymentError(null);
+
+    try {
+      const attempt = readCheckoutAttempt();
+      const secret = clientSecret || attempt?.clientSecret;
+      if (secret) {
+        saveCheckoutAttempt({ clientSecret: secret, paymentIntentId: intentId, phase: 'finalizing' });
+      }
+      await completeCheckoutSession(intentId);
+      clearCheckoutAttempt();
+      trackPurchase(SUBSCRIPTION.price, intentId);
+      window.location.assign(buildSanctuairePostCheckoutUrl());
+    } catch (err) {
+      console.error('[Checkout] Post-payment session failed:', err);
+      setPaymentError(
+        "Votre paiement semble effectué, mais l'accès n'est pas encore finalisé. Ne payez pas une seconde fois : vérifiez à nouveau le paiement ou connectez-vous au Sanctuaire.",
+      );
+    } finally {
+      finalizingPaymentRef.current = false;
+      setIsLoading(false);
+    }
+  }, [clientSecret]);
 
   const handleProceedToPayment = async () => {
-    if (!formData) return;
+    if (!formData || preparingIntentRef.current) return;
 
+    preparingIntentRef.current = true;
     setIsLoading(true);
     setPaymentError(null);
 
     try {
-      // Create checkout intent — this creates User + Order + PaymentIntent on the backend
+      // The server remains authoritative for price, order and payment state.
       const response = await sanctuaireApi.post('/payments/checkout-intent', {
         email: formData.email,
         firstName: formData.firstName,
@@ -105,42 +166,50 @@ function CheckoutContent() {
       });
 
       const secret = response.data?.clientSecret;
-      if (!secret) {
+      const intentId =
+        (typeof response.data?.paymentIntentId === 'string' && response.data.paymentIntentId) ||
+        (typeof secret === 'string' ? paymentIntentIdFromClientSecret(secret) : null);
+      if (!secret || !intentId) {
         throw new Error('No client secret returned');
       }
 
       setClientSecret(secret);
+      setPaymentIntentId(intentId);
+      saveCheckoutAttempt({ clientSecret: secret, paymentIntentId: intentId, phase: 'payment_ready' });
       setStep('payment');
-    } catch (err: unknown) {
-      console.error('[Checkout] Error:', err);
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Impossible de préparer le paiement. Veuillez réessayer.';
-      setPaymentError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handlePaymentSuccess = async (paymentIntentId: string) => {
-    setIsLoading(true);
-    setPaymentError(null);
-
-    try {
-      await completeCheckoutSession(paymentIntentId);
-      trackPurchase(SUBSCRIPTION.price, paymentIntentId);
-      window.location.href = buildSanctuairePostCheckoutUrl();
     } catch (err) {
-      console.error('[Checkout] Post-payment session failed:', err);
+      console.error('[Checkout] Error:', err);
       setPaymentError(
-        "Paiement reçu, mais l'accès au Sanctuaire a échoué. Utilisez votre email de commande pour vous connecter.",
+        "Nous n'avons pas pu préparer le paiement. Aucun débit n'a été confirmé : vous pouvez réessayer une seule fois lorsque votre connexion est rétablie.",
       );
+    } finally {
+      preparingIntentRef.current = false;
       setIsLoading(false);
     }
   };
 
-  const handlePaymentError = (error: string) => {
-    setPaymentError(error);
+  const handlePaymentSuccess = async (intentId: string) => {
+    setPaymentIntentId(intentId);
+    await finalizePaymentAccess(intentId);
+  };
+
+  const handlePaymentAttemptStart = () => {
+    if (!clientSecret || !paymentIntentId) return;
+    saveCheckoutAttempt({ clientSecret, paymentIntentId, phase: 'confirming' });
+    setIsPaymentUncertain(true);
+    setPaymentError(null);
+  };
+
+  const handlePaymentError = (error: { message: string; paymentMayBePending: boolean }) => {
+    if (clientSecret && paymentIntentId) {
+      saveCheckoutAttempt({
+        clientSecret,
+        paymentIntentId,
+        phase: error.paymentMayBePending ? 'confirming' : 'payment_ready',
+      });
+    }
+    setIsPaymentUncertain(error.paymentMayBePending);
+    setPaymentError(error.message);
   };
 
   return (
@@ -200,7 +269,7 @@ function CheckoutContent() {
       <div className="relative z-10">
         <CheckoutHeader />
 
-        <main className="mx-auto max-w-5xl px-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:px-6 md:pb-20">
+        <main className="mx-auto min-w-0 max-w-5xl scroll-pb-32 px-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:px-6 md:pb-20">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
             {/* Product Summary - Left Column */}
             <div className="lg:col-span-5 order-2 lg:order-1">
@@ -340,6 +409,12 @@ function CheckoutContent() {
                           : undefined
                       }
                     />
+                    {connectedUser && (
+                      <p className="mt-5 text-sm leading-6 text-blue-100/75">
+                        Votre compte existe déjà. Votre accès actuel reste disponible dans le
+                        Sanctuaire : ne procédez à ce paiement que pour un nouvel achat.
+                      </p>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -369,7 +444,7 @@ function CheckoutContent() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.2 }}
-                  className="backdrop-blur-xl rounded-2xl p-6 md:p-8"
+                    className="scroll-mt-4 backdrop-blur-xl rounded-2xl p-6 md:p-8"
                   style={{
                     background:
                       'linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(80,130,220,0.03) 100%)',
@@ -406,7 +481,19 @@ function CheckoutContent() {
                         <ArrowRight className="w-5 h-5" />
                       </>
                     )}
-                  </button>
+                    </button>
+                    {isPreparationSlow && (
+                      <p className="mt-4 text-center text-sm leading-6 text-blue-100/75" role="status">
+                        La préparation prend plus de temps que prévu. Gardez cette page ouverte :
+                        ne cliquez pas une seconde fois, aucun paiement n&apos;est encore confirmé.
+                      </p>
+                    )}
+                    {!connectedUser && (
+                      <p className="mt-4 text-center text-sm leading-6 text-blue-100/75">
+                        Vous avez déjà un accès ? Connectez-vous au Sanctuaire avant de payer.
+                        Utiliser une adresse connue ne crée pas un second compte.
+                      </p>
+                    )}
                 </motion.div>
               )}
 
@@ -455,7 +542,25 @@ function CheckoutContent() {
                       amount={SUBSCRIPTION.price * 100}
                       onPaymentSuccess={handlePaymentSuccess}
                       onPaymentError={handlePaymentError}
+                      onPaymentAttemptStart={handlePaymentAttemptStart}
+                      disabled={isLoading || isPaymentUncertain}
                     />
+                    {(isPaymentUncertain || paymentError) && paymentIntentId && (
+                      <div className="mt-5 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-50">
+                        <p className="leading-6">
+                          Une seule tentative de paiement est active. Avant de recommencer,
+                          vérifiez cette tentative : cela ne crée aucun nouveau paiement.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void finalizePaymentAccess(paymentIntentId)}
+                          disabled={isLoading}
+                          className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-amber-200/50 px-4 py-2 font-semibold text-amber-50 transition-colors hover:bg-amber-100/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isLoading ? 'Vérification en cours…' : 'Vérifier mon paiement et accéder au Sanctuaire'}
+                        </button>
+                      </div>
+                    )}
                   </Elements>
                 </motion.div>
               )}

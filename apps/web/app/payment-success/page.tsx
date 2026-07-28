@@ -1,213 +1,194 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, CheckCircle, Sparkles, AlertCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, ShieldCheck } from 'lucide-react';
 import {
   buildSanctuairePostCheckoutUrl,
   completeCheckoutSession,
 } from '../../lib/completeCheckoutSession';
+import {
+  clearCheckoutAttempt,
+  readCheckoutAttempt,
+  saveCheckoutAttempt,
+} from '../../lib/checkoutAttempt';
 import { SUBSCRIPTION } from '../../lib/products';
 import { trackPurchase } from '../../lib/pixel';
+
+type PaymentStatus = 'processing' | 'confirmed' | 'needs_action';
+type RecoveryAction = 'verify' | 'return_to_payment' | 'login';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const paymentIntentId =
+  const queryPaymentIntentId =
     searchParams.get('payment_intent') || searchParams.get('payment_intent_id') || '';
   const redirectStatus = searchParams.get('redirect_status');
-
-  const [status, setStatus] = useState<'processing' | 'confirmed' | 'error'>('processing');
+  const [storedPaymentIntentId, setStoredPaymentIntentId] = useState('');
+  const [storageReady, setStorageReady] = useState(false);
+  const [status, setStatus] = useState<PaymentStatus>('processing');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [recoveryAction, setRecoveryAction] = useState<RecoveryAction>('login');
+  const [isRetrying, setIsRetrying] = useState(false);
   const startedRef = useRef(false);
+  const redirectTimerRef = useRef<number | null>(null);
+  const paymentIntentId = queryPaymentIntentId || storedPaymentIntentId;
 
   useEffect(() => {
-    if (startedRef.current) return;
+    const attempt = readCheckoutAttempt();
+    setStoredPaymentIntentId(attempt?.paymentIntentId || '');
+    setStorageReady(true);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current);
+    },
+    [],
+  );
+
+  const finalizeAccess = useCallback(async (intentId: string) => {
+    setStatus('processing');
+    setErrorMessage(null);
+
+    try {
+      await completeCheckoutSession(intentId);
+      clearCheckoutAttempt();
+      trackPurchase(SUBSCRIPTION.price, intentId);
+      setStatus('confirmed');
+      redirectTimerRef.current = window.setTimeout(() => {
+        window.location.assign(buildSanctuairePostCheckoutUrl());
+      }, 800);
+    } catch (err) {
+      console.error('[PaymentSuccess] confirm failed:', err);
+      setStatus('needs_action');
+      setRecoveryAction('verify');
+      setErrorMessage(
+        redirectStatus === 'succeeded'
+          ? "Votre paiement semble avoir été effectué, mais l'accès au Sanctuaire n'est pas encore finalisé. Ne payez pas une seconde fois : relancez uniquement cette vérification ou demandez votre lien d'accès."
+          : "Nous ne pouvons pas encore confirmer votre paiement. Il peut être en cours de validation : ne payez pas une seconde fois, vérifiez plutôt cet accès ou demandez votre lien d'accès.",
+      );
+    }
+  }, [redirectStatus]);
+
+  useEffect(() => {
+    if (!storageReady || startedRef.current) return;
     startedRef.current = true;
 
-    const finalize = async () => {
-      if (redirectStatus && redirectStatus !== 'succeeded') {
-        setStatus('error');
-        setErrorMessage("Le paiement n'a pas pu être confirmé. Veuillez réessayer.");
-        return;
+    if (redirectStatus && redirectStatus !== 'succeeded') {
+      const attempt = readCheckoutAttempt();
+      if (attempt) {
+        saveCheckoutAttempt({ ...attempt, phase: 'payment_ready' });
       }
+      setStatus('needs_action');
+      setRecoveryAction('return_to_payment');
+      setErrorMessage(
+        "Votre banque n'a pas confirmé le paiement. Aucun débit n'est confirmé : reprenez la même tentative au lieu d'en créer une nouvelle.",
+      );
+      return;
+    }
 
-      if (!paymentIntentId) {
-        setStatus('error');
-        setErrorMessage(
-          'Impossible de retrouver votre paiement. Connectez-vous avec votre email de commande.',
-        );
-        return;
-      }
+    if (!paymentIntentId) {
+      setStatus('needs_action');
+      setRecoveryAction('login');
+      setErrorMessage(
+        "Nous ne retrouvons pas de paiement à vérifier. Aucun débit n'est confirmé ici : demandez un lien d'accès si vous avez déjà acheté Lumira.",
+      );
+      return;
+    }
 
-      try {
-        await completeCheckoutSession(paymentIntentId);
-        trackPurchase(SUBSCRIPTION.price, paymentIntentId);
-        setStatus('confirmed');
-        setTimeout(() => {
-          // Hard nav ensures Set-Cookie from confirm is included on Sanctuaire load
-          window.location.href = buildSanctuairePostCheckoutUrl();
-        }, 800);
-      } catch (err) {
-        console.error('[PaymentSuccess] confirm failed:', err);
-        setStatus('error');
-        setErrorMessage(
-          "Paiement reçu, mais l'accès automatique a échoué. Connectez-vous avec votre email de commande.",
-        );
-      }
-    };
+    void finalizeAccess(paymentIntentId);
+  }, [finalizeAccess, paymentIntentId, redirectStatus, storageReady]);
 
-    void finalize();
-  }, [paymentIntentId, redirectStatus]);
+  const retryFinalization = async () => {
+    if (!paymentIntentId || isRetrying) return;
+    setIsRetrying(true);
+    await finalizeAccess(paymentIntentId);
+    setIsRetrying(false);
+  };
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex items-center justify-center">
-      {/* Cosmic Background */}
-      <div className="fixed inset-0 bg-gradient-to-b from-[#0A0514] via-[#1a0b2e] to-[#0A0514]" />
+    <main className="relative flex min-h-[100dvh] min-w-0 items-start justify-center overflow-x-clip px-4 py-8 sm:items-center sm:px-6">
+      <div className="fixed inset-0 -z-10 bg-[#0a1024]" />
+      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_at_50%_0%,rgba(45,104,180,0.28),transparent_55%),linear-gradient(180deg,#0a1024_0%,#10254a_100%)]" />
 
-      {/* Floating Blobs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-1/3 left-1/4 w-96 h-96 bg-cosmic-gold/20 rounded-full blur-[100px]"
-        />
-        <motion.div
-          animate={{
-            scale: [1, 1.15, 1],
-            opacity: [0.2, 0.4, 0.2],
-          }}
-          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-emerald-500/20 rounded-full blur-[80px]"
-        />
-      </div>
-
-      {/* Starfield */}
-      <div className="fixed inset-0 starfield pointer-events-none" />
-
-      {/* Content */}
-      <div className="relative z-10 text-center px-6">
-        <AnimatePresence mode="wait">
-          {status === 'processing' ? (
-            <motion.div
-              key="processing"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="flex flex-col items-center"
-            >
-              <motion.div className="relative w-24 h-24 mb-8">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                  className="absolute inset-0 border-4 border-transparent border-t-cosmic-gold border-r-cosmic-gold/50 rounded-full"
-                />
-                <motion.div
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                  className="absolute inset-2 border-4 border-transparent border-b-amber-400 border-l-amber-400/50 rounded-full"
-                />
-                <div className="absolute inset-4 bg-cosmic-gold/20 rounded-full blur-md" />
-                <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-cosmic-gold" />
-              </motion.div>
-
-              <h1 className="text-2xl md:text-3xl font-playfair italic text-cosmic-divine mb-4">
-                Préparation de votre Sanctuaire...
-              </h1>
-              <p className="text-cosmic-stardust text-sm max-w-md">
-                Nous finalisons votre accès. Cela ne prendra qu&apos;un instant.
-              </p>
-            </motion.div>
-          ) : status === 'error' ? (
-            <motion.div
-              key="error"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center max-w-md"
-            >
-              <div className="w-20 h-20 mb-6 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center">
-                <AlertCircle className="w-10 h-10 text-rose-400" />
-              </div>
-              <h1 className="text-2xl font-playfair italic text-cosmic-divine mb-3">
-                Accès à finaliser
-              </h1>
-              <p className="text-cosmic-stardust text-sm mb-6">{errorMessage}</p>
+      <AnimatePresence mode="wait">
+        {status === 'processing' ? (
+          <motion.section
+            key="processing"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex w-full max-w-md flex-col items-center text-center"
+            aria-live="polite"
+          >
+            <div className="mb-6 grid h-20 w-20 place-items-center rounded-full border border-horizon-300/30 bg-horizon-300/10">
+              <Loader2 className="h-9 w-9 animate-spin text-horizon-300" />
+            </div>
+            <h1 className="text-2xl font-playfair italic text-white">Vérification de votre accès</h1>
+            <p className="mt-4 text-sm leading-6 text-blue-100/80">
+              Nous vérifions le paiement avec Lumira avant d&apos;ouvrir votre Sanctuaire. Ne
+              relancez pas le paiement pendant cette étape.
+            </p>
+          </motion.section>
+        ) : status === 'confirmed' ? (
+          <motion.section
+            key="confirmed"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex w-full max-w-md flex-col items-center text-center"
+            aria-live="polite"
+          >
+            <div className="mb-6 grid h-20 w-20 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_0_40px_rgba(52,211,153,0.35)]">
+              <CheckCircle className="h-11 w-11" />
+            </div>
+            <h1 className="text-3xl font-playfair italic text-white">Paiement vérifié</h1>
+            <p className="mt-4 text-sm leading-6 text-blue-100/80">
+              Votre accès au Sanctuaire est prêt. Ouverture en cours.
+            </p>
+          </motion.section>
+        ) : (
+          <motion.section
+            key="needs-action"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-md rounded-2xl border border-white/15 bg-[#0c1a36]/85 p-6 text-center shadow-2xl backdrop-blur"
+            role="alert"
+          >
+            <AlertCircle className="mx-auto h-10 w-10 text-amber-300" />
+            <h1 className="mt-4 text-2xl font-playfair italic text-white">Accès à vérifier</h1>
+            <p className="mt-3 text-sm leading-6 text-blue-100/85">{errorMessage}</p>
+            {recoveryAction === 'verify' && (
               <button
-                onClick={() => router.push('/sanctuaire/login')}
-                className="px-6 py-3 rounded-xl bg-cosmic-gold/20 border border-cosmic-gold/40 text-cosmic-gold text-sm font-medium hover:bg-cosmic-gold/30 transition-colors"
+                type="button"
+                onClick={() => void retryFinalization()}
+                disabled={isRetrying}
+                className="mt-6 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-horizon-300 px-4 py-3 font-semibold text-abyss-900 transition-colors hover:bg-horizon-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Se connecter au Sanctuaire
+                {isRetrying ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+                {isRetrying ? 'Vérification en cours…' : 'Vérifier mon accès sans repayer'}
               </button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="confirmed"
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{
-                type: 'spring',
-                stiffness: 200,
-                damping: 15,
-              }}
-              className="flex flex-col items-center"
+            )}
+            {recoveryAction === 'return_to_payment' && (
+              <button
+                type="button"
+                onClick={() => router.push('/commande')}
+                className="mt-6 inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-horizon-300 px-4 py-3 font-semibold text-abyss-900 transition-colors hover:bg-horizon-200"
+              >
+                Revenir à ma tentative de paiement
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => router.push('/sanctuaire/login')}
+              className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-blue-100/30 px-4 py-2 text-sm font-semibold text-blue-50 transition-colors hover:bg-blue-100/10"
             >
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 200,
-                  damping: 12,
-                  delay: 0.2,
-                }}
-                className="relative w-24 h-24 mb-8"
-              >
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: [0.5, 0.8, 0.5] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="absolute inset-0 bg-emerald-500/30 rounded-full blur-xl"
-                />
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full shadow-[0_0_40px_rgba(52,211,153,0.4)]" />
-                <CheckCircle className="absolute inset-0 m-auto w-12 h-12 text-white" />
-              </motion.div>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="text-3xl md:text-4xl font-playfair italic text-cosmic-divine mb-4"
-              >
-                Paiement confirmé !
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="text-cosmic-stardust text-sm max-w-md mb-8"
-              >
-                Votre accès est prêt. Redirection vers votre Sanctuaire...
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="flex items-center gap-2 text-cosmic-gold text-xs"
-              >
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Redirection en cours...</span>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
+              Recevoir un lien pour le Sanctuaire
+            </button>
+          </motion.section>
+        )}
+      </AnimatePresence>
+    </main>
   );
 }
 
@@ -215,9 +196,9 @@ export default function PaymentSuccessPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0A0514] via-[#1a0b2e] to-[#0A0514]">
-          <Loader2 className="w-12 h-12 text-cosmic-gold animate-spin" />
-        </div>
+        <main className="grid min-h-[100dvh] place-items-center bg-[#0a1024]" aria-live="polite">
+          <Loader2 className="h-10 w-10 animate-spin text-horizon-300" />
+        </main>
       }
     >
       <PaymentSuccessContent />

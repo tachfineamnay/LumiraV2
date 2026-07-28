@@ -124,6 +124,67 @@ test('Pixel 5 reaches the visible payment step with a reduced viewport', async (
   await expectNoHorizontalOverflow(page);
 });
 
+test('checkout creates one intent for a double tap and resumes that same attempt after refresh', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Pixel 5-only checkout flow');
+  let intentCalls = 0;
+
+  await page.route('**/api/bff/users/profile', (route) => route.fulfill({ status: 401 }));
+  await page.route('**/api/bff/payments/checkout-intent', async (route) => {
+    intentCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ clientSecret: 'pi_test_resume_secret_mobile' }),
+    });
+  });
+
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/commande');
+  await page.getByPlaceholder('votre@email.com').fill('resume@example.com');
+  await page.getByPlaceholder('Prénom').fill('Maya');
+  await page.getByPlaceholder('Nom', { exact: true }).fill('Resume');
+
+  const startPayment = page.getByRole('button', { name: 'Payer 17€' });
+  await startPayment.evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+  await expect.poll(() => intentCalls).toBe(1);
+  await expect(page.getByTestId('stripe-payment-element')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('stripe-payment-element')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('payment return retries access finalization without creating another checkout intent', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'Chromium-only return state check');
+  let confirmCalls = 0;
+  let checkoutIntentCalls = 0;
+
+  await page.route('**/api/bff/payments/checkout-intent', async (route) => {
+    checkoutIntentCalls += 1;
+    await route.fulfill({ status: 500 });
+  });
+  await page.route('**/api/bff/payments/confirm-checkout', async (route) => {
+    confirmCalls += 1;
+    await route.fulfill({ status: 503, body: 'temporary failure' });
+  });
+
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/payment-success?payment_intent=pi_test_return');
+  await expect(page.getByRole('heading', { name: 'Accès à vérifier' })).toBeVisible();
+  await expect(page.getByText(/ne payez pas une seconde fois/i)).toBeVisible();
+  await page.getByRole('button', { name: /vérifier mon accès sans repayer/i }).click();
+  await expect.poll(() => confirmCalls).toBe(2);
+  expect(checkoutIntentCalls).toBe(0);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('landing stays usable in mobile WebKit', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-webkit', 'Mobile WebKit-only landing check');
   await page.goto('/');

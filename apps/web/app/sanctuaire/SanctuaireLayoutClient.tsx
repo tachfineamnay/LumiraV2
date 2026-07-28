@@ -42,10 +42,10 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <SanctuaireGuard>
-      <div className="sanctuaire-aube relative min-h-dvh overflow-x-clip text-ivoire-100 selection:bg-horizon-300/15">
+      <div className="sanctuaire-aube relative h-[100dvh] overflow-hidden text-ivoire-100 selection:bg-horizon-300/15">
         <SanctuaireSidebar />
-        <div className="relative z-10 flex h-dvh min-h-dvh min-w-0 flex-col lg:ml-64">
-          <header className="glass-header-aube sticky top-0 z-40 flex min-h-[64px] shrink-0 items-center justify-between px-3 py-3 sm:px-5">
+        <div className="relative z-10 flex h-full min-h-0 min-w-0 flex-col lg:ml-64">
+          <header className="glass-header-aube sticky top-0 z-40 flex min-h-[var(--sanctuaire-header-h)] shrink-0 items-center justify-between px-3 py-3 sm:px-5">
             <Link
               href="/sanctuaire"
               aria-label="Accueil du Sanctuaire Lumira"

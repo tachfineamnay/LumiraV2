@@ -411,6 +411,7 @@ export function ReadingPreparation({
 
   const current = STEPS[step];
   const positionProgress = Math.round(((step + 1) / STEPS.length) * 100);
+  const isCompactMobileViewport = Boolean(mobileViewportHeight && mobileViewportHeight < 400);
   const orderScopeQuery = orderIdRef.current
     ? `?orderId=${encodeURIComponent(orderIdRef.current)}`
     : '';
@@ -419,8 +420,8 @@ export function ReadingPreparation({
     if (!mobileViewportHeight) return undefined;
     if (isInline) {
       return {
-        height: `min(42rem, calc(${mobileViewportHeight}px - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 1rem))`,
-        maxHeight: `calc(${mobileViewportHeight}px - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 1rem)`,
+        height: `min(42rem, calc(${mobileViewportHeight}px - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 3rem))`,
+        maxHeight: `calc(${mobileViewportHeight}px - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 3rem)`,
       };
     }
     return { height: `${mobileViewportHeight}px` };
@@ -1218,13 +1219,24 @@ export function ReadingPreparation({
         }
         style={preparationViewportStyle}
       >
-        <header className="shrink-0 border-b border-white/[0.07] bg-abyss-700/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 lg:pt-3">
+        <header
+          className={`shrink-0 border-b border-white/[0.07] bg-abyss-700/95 px-3 sm:px-5 lg:pt-3 ${
+            isCompactMobileViewport
+              ? 'py-2 lg:py-3'
+              : 'pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
+          }`}
+        >
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-horizon-300">
                 Dossier de lecture
               </p>
-              <p className="mt-1 truncate text-xs text-stellar-500" aria-live="polite">
+              <p
+                className={`mt-1 truncate text-xs text-stellar-500 ${
+                  isCompactMobileViewport ? 'hidden' : ''
+                }`}
+                aria-live="polite"
+              >
                 {saveLabel}
               </p>
             </div>
@@ -1248,7 +1260,7 @@ export function ReadingPreparation({
               </button>
             )}
           </div>
-          <div className="mt-3 lg:hidden">
+          <div className={`mt-3 lg:hidden ${isCompactMobileViewport ? 'hidden' : ''}`}>
             <div className="flex items-center justify-between text-xs text-stellar-500">
               <span>
                 Étape {step + 1} sur {STEPS.length} · {current.label}
@@ -1507,7 +1519,13 @@ export function ReadingPreparation({
               </div>
             </div>
 
-            <footer className="shrink-0 border-t border-white/[0.07] bg-abyss-700/98 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-6 lg:pb-3">
+            <footer
+              className={`shrink-0 border-t border-white/[0.07] bg-abyss-700/98 px-3 backdrop-blur-xl sm:px-6 lg:pb-3 ${
+                isCompactMobileViewport
+                  ? 'pt-2 pb-[max(1.75rem,env(safe-area-inset-bottom))]'
+                  : 'pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
+              }`}
+            >
               <div className="mx-auto flex max-w-3xl items-center gap-2 sm:gap-3">
                 <button
                   type="button"
@@ -1529,7 +1547,9 @@ export function ReadingPreparation({
                   <button
                     type="submit"
                     disabled={isClosing || isPhotoBusy}
-                    className="inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-wait disabled:opacity-60"
+                    className={`inline-flex min-h-[48px] min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-wait disabled:opacity-60 ${
+                      isCompactMobileViewport ? '-translate-y-2' : ''
+                    }`}
                   >
                     {isPhotoBusy ? (
                       <>
@@ -1545,7 +1565,9 @@ export function ReadingPreparation({
                   <button
                     type="submit"
                     disabled={isSubmitting || isClosing || isPhotoBusy || !formValues.consent}
-                    className="inline-flex min-h-[50px] min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-3 py-3 text-sm font-bold text-abyss-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
+                    className={`inline-flex min-h-[50px] min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-horizon-300 px-3 py-3 text-sm font-bold text-abyss-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 ${
+                      isCompactMobileViewport ? '-translate-y-2' : ''
+                    }`}
                   >
                     {isSubmitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

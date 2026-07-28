@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Lock, Loader2, RefreshCw } from 'lucide-react';
@@ -8,7 +8,8 @@ import { Lock, Loader2, RefreshCw } from 'lucide-react';
 interface StripePaymentProps {
   amount: number;
   onPaymentSuccess: (paymentIntentId: string) => void;
-  onPaymentError: (error: string) => void;
+  onPaymentError: (error: { message: string; paymentMayBePending: boolean }) => void;
+  onPaymentAttemptStart: () => void;
   disabled?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function StripePayment({
   amount,
   onPaymentSuccess,
   onPaymentError,
+  onPaymentAttemptStart,
   disabled,
 }: StripePaymentProps) {
   const stripe = useStripe();
@@ -27,6 +29,7 @@ export function StripePayment({
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentElementState, setPaymentElementState] = useState<PaymentElementState>('loading');
   const [paymentElementAttempt, setPaymentElementAttempt] = useState(0);
+  const submitStartedRef = useRef(false);
 
   useEffect(() => {
     if (paymentElementState === 'ready') return;
@@ -45,11 +48,20 @@ export function StripePayment({
   };
 
   const handleSubmit = async () => {
-    if (!stripe || !elements || isProcessing || disabled || paymentElementState !== 'ready') {
+    if (
+      !stripe ||
+      !elements ||
+      isProcessing ||
+      submitStartedRef.current ||
+      disabled ||
+      paymentElementState !== 'ready'
+    ) {
       return;
     }
 
+    submitStartedRef.current = true;
     setIsProcessing(true);
+    onPaymentAttemptStart();
 
     try {
       // No PII in the return URL: /payment-success only needs payment_intent,
@@ -65,18 +77,31 @@ export function StripePayment({
       });
 
       if (error) {
-        onPaymentError(error.message || 'Une erreur est survenue lors du paiement');
+        onPaymentError({
+          message:
+            error.type === 'card_error'
+              ? "Votre banque a refusé le paiement. Aucun débit n'est confirmé : vous pouvez corriger le moyen de paiement et réessayer cette même tentative."
+              : error.message || 'Le paiement n’a pas pu être confirmé. Aucun débit n’est confirmé.',
+          paymentMayBePending: error.type === 'api_connection_error' || error.type === 'api_error',
+        });
         setIsProcessing(false);
+        submitStartedRef.current = false;
       } else if (paymentIntent?.status === 'succeeded' && paymentIntent.id) {
         onPaymentSuccess(paymentIntent.id);
       } else {
         // Payment requires redirect or additional action (3DS) —
         // Stripe will navigate to return_url.
         setIsProcessing(false);
+        submitStartedRef.current = false;
       }
     } catch {
-      onPaymentError('Une erreur inattendue est survenue');
+      onPaymentError({
+        message:
+          'La connexion a été interrompue pendant la vérification. Ne payez pas une seconde fois : vérifiez d’abord le paiement en cours.',
+        paymentMayBePending: true,
+      });
       setIsProcessing(false);
+      submitStartedRef.current = false;
     }
   };
 
@@ -93,7 +118,7 @@ export function StripePayment({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
-      className="space-y-6"
+      className="space-y-6 pb-20 md:pb-0"
     >
       <div
         data-testid="stripe-payment-element"
@@ -150,7 +175,7 @@ export function StripePayment({
           !stripe || !elements || isProcessing || disabled || paymentElementState !== 'ready'
         }
         className={`
-          min-h-[52px] w-full rounded-xl py-4 text-lg font-bold transition-all duration-300
+          sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 min-h-[52px] w-full rounded-xl py-4 text-lg font-bold transition-all duration-300 md:static
           flex items-center justify-center gap-3
           ${
             isProcessing || disabled || paymentElementState !== 'ready'

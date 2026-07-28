@@ -231,6 +231,22 @@ async function openOnboarding(page: Page) {
 }
 
 test.describe('Sanctuaire mobile connexion et onboarding', () => {
+  test('navigation basse et contenu restent accessibles en paysage court', async ({ page }) => {
+    await page.setViewportSize({ width: 568, height: 320 });
+    await installSanctuaireMocks(page);
+
+    await openOnboarding(page);
+    const navigation = page.getByRole('navigation', { name: /navigation principale/i });
+    await expect(navigation.getByRole('link')).toHaveCount(4);
+    await expectVisibleAboveBottomNav(page, /^Continuer$/i);
+    await expectNoHorizontalOverflow(page);
+
+    const documentScrolls = await page.evaluate(
+      () => document.documentElement.scrollHeight > window.innerHeight + 1,
+    );
+    expect(documentScrolls).toBe(false);
+  });
+
   test('connexion scrollable sur 320px et hauteur réduite clavier', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
     await installLoginMocks(page);

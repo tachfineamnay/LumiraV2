@@ -34,6 +34,19 @@
     }
   }
 
+  @media (max-height: 480px) and (orientation: landscape) {
+    :root {
+      --sanctuaire-header-h: 3.5rem;
+      --sanctuaire-bottom-nav-h: calc(4.875rem + env(safe-area-inset-bottom, 0px));
+      --sanctuaire-main-pb: calc(var(--sanctuaire-bottom-nav-h) + 0.5rem);
+    }
+  }
+
+  html {
+    min-height: 100%;
+    overflow-x: clip;
+  }
+
   body {
     background-color: #040610;
     background-image:
@@ -46,7 +59,7 @@
       /* Deep abyss gradient */
         linear-gradient(180deg, #040610 0%, #080c1a 25%, #0c1225 50%, #101830 100%);
     color: #f8fafc;
-    overflow-x: hidden;
+    overflow-x: clip;
     font-size: 16px;
     letter-spacing: -0.01em;
     min-height: 100vh;
@@ -404,6 +417,8 @@
   .sanctuaire-main {
     padding-bottom: var(--sanctuaire-main-pb);
     scroll-padding-bottom: var(--sanctuaire-main-pb);
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Visible thin scrollbar for chat, settings tabs, modals */

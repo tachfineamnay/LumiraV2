@@ -14,7 +14,7 @@ export function MobileBottomNav() {
       aria-label="Navigation principale du Sanctuaire"
     >
       <div className="absolute inset-0 border-t border-[rgba(90,148,205,0.14)] bg-[#EBF3FC]/92 shadow-[0_-8px_24px_rgba(70,125,185,0.10)] backdrop-blur-xl" />
-      <div className="relative grid grid-cols-4 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+      <div className="relative grid min-h-[var(--sanctuaire-bottom-nav-h)] grid-cols-4 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
         {MOBILE_NAV.map((item) => {
           const Icon = item.icon;
           const active = isNavActive(pathname, item.route);
