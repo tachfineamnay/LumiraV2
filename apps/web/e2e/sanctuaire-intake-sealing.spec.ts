@@ -278,4 +278,36 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
       page.getByRole('heading', { name: /votre lecture peut commencer/i }),
     ).toBeVisible();
   });
+
+  test('revient au champ invalide sans perdre le focus au profit du titre de l’étape', async ({
+    page,
+  }) => {
+    const calls = await installSanctuaireMocks(page, {
+      draft: {
+        currentStep: 3,
+        status: 'IN_PROGRESS',
+        data: {
+          schemaVersion: 2,
+          birthDate: '1990-03-21',
+          birthPlace: 'Casablanca, Maroc',
+          specificQuestion: '',
+          objective: '',
+          facePhoto: '',
+          palmPhoto: '',
+        },
+        completedAt: null,
+        revision: 12,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    await openIntake(page, 'Relecture et transmission');
+    await page.getByLabel(/j’ai relu.*je choisis.*transmettre/i).check();
+    await page.getByRole('button', { name: 'Confirmer et transmettre mon dossier' }).click();
+
+    const question = page.getByLabel(/éclairer une seule question/i);
+    await expect(page.getByRole('heading', { name: 'Ce qui vous amène' })).toBeVisible();
+    await expect(question).toBeFocused();
+    expect(calls.profilePatches).toHaveLength(0);
+  });
 });

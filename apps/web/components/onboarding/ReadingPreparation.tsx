@@ -45,6 +45,7 @@ type StepKey = 'identity' | 'intention' | 'photos' | 'review';
 type IntentionMode = 'question' | 'situation' | 'open';
 type LoadState = 'loading' | 'ready' | 'error' | 'sealed';
 type SaveState = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
+type OptionalSectionKey = 'lifeAreas' | 'support' | 'history' | 'preferences';
 
 type StepDefinition = {
   key: StepKey;
@@ -112,6 +113,20 @@ const STYLE_OPTIONS = [
   ['DIRECT_ET_CONCRET', 'Direct et concret', 'Des repères francs et immédiatement lisibles'],
   ['SYMBOLIQUE_ET_PROFOND', 'Symbolique et profond', 'Une lecture plus imagée et introspective'],
 ] as const;
+
+const OPTIONAL_SECTION_BY_FIELD: Partial<
+  Record<FieldPath<ReadingPreparationData>, OptionalSectionKey>
+> = {
+  lifeAreas: 'lifeAreas',
+  highs: 'support',
+  lows: 'support',
+  lifeEvents: 'history',
+  ailments: 'history',
+  fears: 'history',
+  rituals: 'preferences',
+  deliveryStyle: 'preferences',
+  pace: 'preferences',
+};
 
 const EMPTY_DATA: ReadingPreparationData = {
   usageName: '',
@@ -380,12 +395,16 @@ export function ReadingPreparation({
   const [isComplete, setIsComplete] = useState(false);
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
   const [draftLoadKey, setDraftLoadKey] = useState(0);
+  const [openOptionalSections, setOpenOptionalSections] = useState<OptionalSectionKey[]>([]);
+  const [pendingFocusField, setPendingFocusField] =
+    useState<FieldPath<ReadingPreparationData> | null>(null);
   const [photoStates, setPhotoStates] = useState<Record<'face' | 'palm', PhotoUploadState>>({
     face: 'idle',
     palm: 'idle',
   });
 
   const dialogRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const mountedRef = useRef(true);
@@ -402,6 +421,7 @@ export function ReadingPreparation({
   const lastSavedSignatureRef = useRef('');
   const failedSignatureRef = useRef('');
   const pendingPhotoUploadsRef = useRef<Set<Promise<string>>>(new Set());
+  const skipNextTitleFocusRef = useRef(false);
 
   const formValues = watch();
   if (JSON.stringify(formValuesRef.current) !== JSON.stringify(formValues)) {
@@ -426,30 +446,6 @@ export function ReadingPreparation({
     }
     return { height: `${mobileViewportHeight}px` };
   }, [isInline, mobileViewportHeight]);
-
-  const scrollIntoPreparationView = useCallback(
-    (element: HTMLElement, block: ScrollLogicalPosition = 'center') => {
-      const scroller = dialogRef.current?.querySelector<HTMLElement>('[data-onboarding-scroll]');
-      const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth';
-      if (scroller && scroller.scrollHeight > scroller.clientHeight + 2) {
-        const scrollerBox = scroller.getBoundingClientRect();
-        const elementBox = element.getBoundingClientRect();
-        const offset =
-          block === 'start'
-            ? elementBox.top - scrollerBox.top
-            : elementBox.top - scrollerBox.top - (scrollerBox.height - elementBox.height) / 2;
-        scroller.scrollTo({
-          top: Math.max(0, scroller.scrollTop + offset),
-          behavior,
-        });
-        return;
-      }
-      element.scrollIntoView({ block, behavior });
-    },
-    [],
-  );
 
   const queueDraftSave = useCallback(
     (snapshot: DraftSnapshot, options: { keepalive?: boolean; force?: boolean } = {}) => {
@@ -741,10 +737,13 @@ export function ReadingPreparation({
 
   useEffect(() => {
     if (loadState !== 'ready') return;
-    const scroller = dialogRef.current?.querySelector<HTMLElement>('.custom-scrollbar');
     const frame = window.requestAnimationFrame(() => {
-      scroller?.scrollTo({ top: 0 });
-      titleRef.current?.focus({ preventScroll: true });
+      scrollContainerRef.current?.scrollTo({ top: 0 });
+      if (skipNextTitleFocusRef.current) {
+        skipNextTitleFocusRef.current = false;
+      } else {
+        titleRef.current?.focus({ preventScroll: true });
+      }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [loadState, step]);
@@ -927,17 +926,6 @@ export function ReadingPreparation({
   const focusIssue = useCallback(
     (field: FieldPath<ReadingPreparationData>, message: string) => {
       setError(field, { type: 'manual', message });
-      const contextFields = [
-        'highs',
-        'lows',
-        'lifeEvents',
-        'lifeAreas',
-        'ailments',
-        'fears',
-        'rituals',
-        'deliveryStyle',
-        'pace',
-      ];
       const targetStep =
         field === 'birthDate' ||
         field === 'birthTime' ||
@@ -951,24 +939,35 @@ export function ReadingPreparation({
               : 3;
       setStep(targetStep);
       stepRef.current = targetStep;
-      window.setTimeout(() => {
-        if (contextFields.includes(field)) {
-          const details = dialogRef.current?.querySelector<HTMLDetailsElement>(
-            `details[data-fields~="${field}"]`,
-          );
-          if (details) details.open = true;
-        }
-        const target = dialogRef.current?.querySelector<HTMLElement>(`[name="${field}"]`);
-        if (target) {
-          target.focus({ preventScroll: true });
-          window.requestAnimationFrame(() => scrollIntoPreparationView(target, 'center'));
-        } else {
-          setFocus(field);
-        }
-      }, 0);
+      skipNextTitleFocusRef.current = true;
+      const optionalSection = OPTIONAL_SECTION_BY_FIELD[field];
+      if (optionalSection) {
+        setOpenOptionalSections((currentSections) =>
+          currentSections.includes(optionalSection)
+            ? currentSections
+            : [...currentSections, optionalSection],
+        );
+      }
+      setPendingFocusField(field);
     },
-    [scrollIntoPreparationView, setError, setFocus],
+    [setError],
   );
+
+  useEffect(() => {
+    if (!pendingFocusField || ![0, 1, 3].includes(step)) return;
+    setFocus(pendingFocusField);
+    setPendingFocusField(null);
+  }, [pendingFocusField, setFocus, step]);
+
+  const setOptionalSectionOpen = useCallback((section: OptionalSectionKey, open: boolean) => {
+    setOpenOptionalSections((currentSections) => {
+      const isOpen = currentSections.includes(section);
+      if (isOpen === open) return currentSections;
+      return open
+        ? [...currentSections, section]
+        : currentSections.filter((currentSection) => currentSection !== section);
+    });
+  }, []);
 
   const submit = useCallback(async () => {
     if (submittingRef.current || isSubmitting || isClosing) return;
@@ -1334,7 +1333,7 @@ export function ReadingPreparation({
             }}
           >
             <div
-              data-onboarding-scroll
+              ref={scrollContainerRef}
               className={
                 isInline
                   ? 'custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 [scroll-padding-bottom:7rem] sm:px-8 sm:py-7'
@@ -1513,6 +1512,8 @@ export function ReadingPreparation({
                         setValue('lifeAreas', next, { shouldDirty: true });
                         formValuesRef.current = { ...formValuesRef.current, lifeAreas: next };
                       }}
+                      openOptionalSections={openOptionalSections}
+                      onOptionalSectionOpenChange={setOptionalSectionOpen}
                     />
                   )}
                 </div>
@@ -1888,6 +1889,8 @@ function FinalStep({
   onEdit,
   onDeliveryStyleChange,
   onLifeAreasChange,
+  openOptionalSections,
+  onOptionalSectionOpenChange,
 }: {
   data: ReadingPreparationData;
   register: ReturnType<typeof useForm<ReadingPreparationData>>['register'];
@@ -1897,6 +1900,8 @@ function FinalStep({
   onEdit: (index: number) => void;
   onDeliveryStyleChange: (value: ReadingPreparationData['deliveryStyle']) => void;
   onLifeAreasChange: (next: LifeAreas) => void;
+  openOptionalSections: OptionalSectionKey[];
+  onOptionalSectionOpenChange: (section: OptionalSectionKey, open: boolean) => void;
 }) {
   const weatherComplete = LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key]));
   const supportComplete = hasText(data.highs) || hasText(data.lows);
@@ -1983,7 +1988,9 @@ function FinalStep({
             title="Ma situation actuelle"
             description="Une météo rapide de vos grands domaines de vie."
             complete={weatherComplete}
-            fields={['lifeAreas']}
+            section="lifeAreas"
+            open={openOptionalSections.includes('lifeAreas')}
+            onOpenChange={onOptionalSectionOpenChange}
           >
             <LifeWeatherSection value={data.lifeAreas || {}} onChange={onLifeAreasChange} />
           </OptionalDetails>
@@ -1992,7 +1999,9 @@ function FinalStep({
             title="Ce qui me porte et ce qui me pèse"
             description="Les ressources présentes et les schémas qui se répètent."
             complete={supportComplete}
-            fields={['highs', 'lows']}
+            section="support"
+            open={openOptionalSections.includes('support')}
+            onOpenChange={onOptionalSectionOpenChange}
           >
             <div className="grid gap-5 md:grid-cols-2">
               <TextareaField
@@ -2020,7 +2029,9 @@ function FinalStep({
             title="Mon histoire et mes sensibilités"
             description="Un passage marquant, un sujet délicat ou un contexte corporel."
             complete={historyComplete}
-            fields={['lifeEvents', 'fears', 'ailments']}
+            section="history"
+            open={openOptionalSections.includes('history')}
+            onOpenChange={onOptionalSectionOpenChange}
           >
             <div className="space-y-5">
               <TextareaField
@@ -2057,7 +2068,9 @@ function FinalStep({
             title="Mes préférences de lecture"
             description="Vos pratiques, le ton et le niveau de détail souhaités."
             complete={preferencesComplete}
-            fields={['rituals', 'deliveryStyle', 'pace']}
+            section="preferences"
+            open={openOptionalSections.includes('preferences')}
+            onOpenChange={onOptionalSectionOpenChange}
           >
             <div className="space-y-5">
               <TextareaField
@@ -2103,18 +2116,23 @@ function OptionalDetails({
   title,
   description,
   complete,
-  fields,
+  section,
+  open,
+  onOpenChange,
   children,
 }: {
   title: string;
   description: string;
   complete: boolean;
-  fields: string[];
+  section: OptionalSectionKey;
+  open: boolean;
+  onOpenChange: (section: OptionalSectionKey, open: boolean) => void;
   children: React.ReactNode;
 }) {
   return (
     <details
-      data-fields={fields.join(' ')}
+      open={open}
+      onToggle={(event) => onOpenChange(section, event.currentTarget.open)}
       className="group rounded-xl border border-white/[0.08] bg-abyss-700/45"
     >
       <summary className="flex min-h-[58px] cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 [&::-webkit-details-marker]:hidden">
