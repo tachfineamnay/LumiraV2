@@ -70,6 +70,15 @@ export class ClientPurgeService {
       this.collectPrivateUploadReferences(intake.data, clientId, uploads);
     }
 
+    // Include replaced or abandoned uploads that are no longer referenced by a
+    // profile or draft but still belong exclusively to this client.
+    await this.collectPrefixKeys(
+      `onboarding/${clientId}/`,
+      uploads,
+      'uploads',
+      clientId,
+    );
+
     for (const order of client.orders) {
       for (const file of order.files) {
         if (!file.key) continue;
@@ -88,9 +97,24 @@ export class ClientPurgeService {
 
       // Historical PDF/audio generations were not always represented by a
       // DeliveryRecord or OrderFile. Enumerate every known order-scoped prefix.
-      await this.collectPrefixKeys(`readings/${order.orderNumber}/`, readings, clientId);
-      await this.collectPrefixKeys(`audio/readings/${order.orderNumber}/`, readings, clientId);
-      await this.collectPrefixKeys(`audio/insights/${order.orderNumber}/`, readings, clientId);
+      await this.collectPrefixKeys(
+        `readings/${order.orderNumber}/`,
+        readings,
+        'readings',
+        clientId,
+      );
+      await this.collectPrefixKeys(
+        `audio/readings/${order.orderNumber}/`,
+        readings,
+        'readings',
+        clientId,
+      );
+      await this.collectPrefixKeys(
+        `audio/insights/${order.orderNumber}/`,
+        readings,
+        'readings',
+        clientId,
+      );
     }
 
     for (const insight of insights) {
@@ -163,14 +187,15 @@ export class ClientPurgeService {
   private async collectPrefixKeys(
     prefix: string,
     target: Set<string>,
+    bucket: S3BucketKind,
     clientId: string,
   ): Promise<void> {
     try {
-      const keys = await this.s3Service.listObjectKeys(prefix, 'readings');
+      const keys = await this.s3Service.listObjectKeys(prefix, bucket);
       for (const key of keys) target.add(key);
     } catch (error) {
       this.logger.error(
-        `Client purge storage listing failure: clientId=${clientId}, prefix=${prefix}`,
+        `Client purge storage listing failure: clientId=${clientId}, bucket=${bucket}, prefix=${prefix}`,
       );
       throw new ServiceUnavailableException(
         'La liste des fichiers privés n’a pas pu être vérifiée. Aucun compte n’a été supprimé ; réessayez dans un instant.',
