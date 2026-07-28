@@ -4,9 +4,9 @@ export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import dynamicComponent from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { ReadingPdfViewer } from '../../../../components/sanctuary/ReadingPdfViewer';
 import { useSanctuaireAuth } from '../../../../context/SanctuaireAuthContext';
 import sanctuaireApi from '../../../../lib/sanctuaireApi';
 
@@ -15,6 +15,19 @@ type ReadingMeta = {
   title: string;
   assets: { pdf?: string | null };
 };
+
+const ReadingPdfViewer = dynamicComponent(
+  () =>
+    import('../../../../components/sanctuary/ReadingPdfViewer').then((mod) => mod.ReadingPdfViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[22rem] items-center justify-center rounded-2xl border border-[rgba(90,148,205,0.18)] bg-[#E4EFF8]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#8a6820]" />
+      </div>
+    ),
+  },
+);
 
 export default function SanctuaireLecturePage() {
   const params = useParams<{ orderNumber: string }>();
@@ -71,24 +84,24 @@ export default function SanctuaireLecturePage() {
           Cette lecture n’est pas disponible depuis votre Sanctuaire pour le moment.
         </p>
         <Link
-          href="/sanctuaire"
+          href="/sanctuaire/draws"
           className="mt-6 inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-brume-800/20 px-5 py-3 text-sm font-semibold text-ivoire-100"
         >
-          <ArrowLeft className="h-4 w-4" /> Retour au Sanctuaire
+          <ArrowLeft className="h-4 w-4" /> Retour aux lectures
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-3 py-6 pb-24 sm:px-6 sm:py-8 lg:pb-10">
+    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-3 py-3 sm:px-6 sm:py-5">
       <Link
-        href="/sanctuaire"
+        href="/sanctuaire/draws"
         className="mb-4 inline-flex min-h-[40px] items-center gap-2 text-sm text-brume-200 hover:text-ivoire-400"
       >
-        <ArrowLeft className="h-4 w-4" /> Retour au Sanctuaire
+        <ArrowLeft className="h-4 w-4" /> Retour aux lectures
       </Link>
-      <ReadingPdfViewer orderNumber={orderNumber} title={title} />
+      <ReadingPdfViewer orderNumber={orderNumber} title={title} closeHref="/sanctuaire/draws" />
     </div>
   );
 }

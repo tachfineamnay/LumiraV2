@@ -381,7 +381,7 @@ test.describe('Brouillon du dossier de lecture', () => {
       page.getByRole('heading', { name: 'Vos informations déjà enregistrées' }),
     ).toBeVisible();
     await expect(page.getByText(draftData.specificQuestion, { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Modifier mon dossier' }).click();
+    await page.getByRole('button', { name: 'Reprendre mon dossier' }).click();
     await expect(page.getByRole('heading', { name: 'Relecture et transmission' })).toBeVisible();
     await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
     await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(draftData.lows);
@@ -396,7 +396,7 @@ test.describe('Brouillon du dossier de lecture', () => {
     await expect(
       page.getByRole('heading', { name: 'Vos informations déjà enregistrées' }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Modifier mon dossier' }).click();
+    await page.getByRole('button', { name: 'Reprendre mon dossier' }).click();
     await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
     await expect(page.getByLabel(/pèse ou se répète/i)).toHaveValue(changedLow);
 
@@ -498,7 +498,9 @@ test.describe('Brouillon du dossier de lecture', () => {
 
     await page.goto('/sanctuaire?onboarding=1');
     await expect(page.getByRole('heading', { name: 'Ce qui vous amène' })).toBeVisible();
-    await expect(page.getByLabel(/éclairer une seule question/i)).toHaveValue('Quelle est ma voie ?');
+    await expect(page.getByLabel(/éclairer une seule question/i)).toHaveValue(
+      'Quelle est ma voie ?',
+    );
     await expect(page.getByLabel(/comprendre, décider|voir autrement/i)).toHaveValue(
       'Clarté spirituelle',
     );
@@ -538,7 +540,7 @@ test.describe('Brouillon du dossier de lecture', () => {
     await expect(page.getByRole('heading', { name: 'Mon dossier de lecture' })).toBeVisible();
     await expect(page.getByText('Appelé(e) Amnay')).toBeVisible();
     await expect(page.getByText('Paris')).toBeVisible();
-    await expect(page.getByText('« Quelle est ma voie ? »')).toBeVisible();
+    await expect(page.getByText('Quelle est ma voie ?', { exact: true })).toBeVisible();
   });
 
   for (const viewport of [

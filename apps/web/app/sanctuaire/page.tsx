@@ -53,6 +53,7 @@ function SanctuaireHome() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isEditingDraft, setIsEditingDraft] = useState(false);
+  const [isFocusedOnboardingDismissed, setIsFocusedOnboardingDismissed] = useState(false);
 
   const homeState = resolveSanctuaireHomeState({
     profile,
@@ -63,6 +64,7 @@ function SanctuaireHome() {
   const isResumingDraft = homeState.kind === 'RESUME';
 
   useEffect(() => {
+    if (isFocusedOnboardingDismissed) return;
     if (searchParams.get('onboarding') === '1' && isPreparation) {
       if (isResumingDraft) {
         setIsEditingDraft(true);
@@ -71,7 +73,7 @@ function SanctuaireHome() {
       const el = document.getElementById('dossier-preparation');
       el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [isPreparation, isResumingDraft, searchParams]);
+  }, [isFocusedOnboardingDismissed, isPreparation, isResumingDraft, searchParams]);
 
   const refreshReadings = useCallback(async () => {
     if (!profile?.profileCompleted) {
@@ -146,9 +148,33 @@ function SanctuaireHome() {
   const draftObjective = typeof draftData.objective === 'string' ? draftData.objective : '';
   const hasFacePhoto = Boolean(draftData.facePhoto || draftData.facePhotoUrl);
   const hasPalmPhoto = Boolean(draftData.palmPhoto || draftData.palmPhotoUrl);
+  const showFocusedOnboarding =
+    isPreparation &&
+    (isEditingDraft ||
+      (searchParams.get('onboarding') === '1' &&
+        !isFocusedOnboardingDismissed &&
+        !isResumingDraft));
+
+  if (showFocusedOnboarding) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-3 py-3 sm:px-6 sm:py-6">
+        <ReadingPreparation
+          variant="inline"
+          onClose={() => {
+            setIsFocusedOnboardingDismissed(true);
+            void refetchData().finally(() => setIsEditingDraft(false));
+          }}
+          onCompleted={async () => {
+            await refetchData();
+            await refreshReadings();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
+    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="max-w-2xl">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
           Sanctuaire Lumira

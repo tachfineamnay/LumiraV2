@@ -165,59 +165,62 @@ export function MysticAudioPlayer({
   return (
     <div
       id="audio"
+      data-testid="audio-player"
       className={cn(
-        'rounded-xl border border-white/[0.07] bg-abyss-800/60',
+        'max-w-full overflow-hidden rounded-xl border border-white/[0.07] bg-abyss-800/60',
         compact ? 'p-2.5' : 'p-4',
         className,
       )}
     >
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={togglePlay}
-          aria-label={isPlaying ? 'Mettre l’audio en pause' : 'Lire l’audio'}
-          className={cn(
-            'grid shrink-0 place-items-center rounded-full bg-horizon-400 text-abyss-900 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-200',
-            compact ? 'h-9 w-9' : 'h-12 w-12',
-          )}
-        >
-          {isPlaying ? (
-            <Pause className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
-          ) : (
-            <Play className={cn(compact ? 'ml-0.5 h-4 w-4' : 'ml-0.5 h-5 w-5')} />
-          )}
-        </button>
+      <div className="flex min-w-0 flex-col gap-3 min-[380px]:flex-row min-[380px]:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <button
+            type="button"
+            onClick={togglePlay}
+            aria-label={isPlaying ? 'Mettre l’audio en pause' : 'Lire l’audio'}
+            className={cn(
+              'grid shrink-0 place-items-center rounded-full bg-horizon-400 text-abyss-900 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-200',
+              compact ? 'h-9 w-9' : 'h-12 w-12',
+            )}
+          >
+            {isPlaying ? (
+              <Pause className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
+            ) : (
+              <Play className={cn(compact ? 'ml-0.5 h-4 w-4' : 'ml-0.5 h-5 w-5')} />
+            )}
+          </button>
 
-        <div className="min-w-0 flex-1">
-          <input
-            type="range"
-            min="0"
-            max={duration || 0}
-            step="0.1"
-            value={currentTime}
-            onChange={(event) => seek(Number(event.target.value))}
-            aria-label="Progression audio"
-            className="h-2 w-full cursor-pointer accent-horizon-400"
-          />
-          {!compact && (
-            <div className="mt-2 flex h-4 items-end gap-0.5" aria-hidden>
-              {waveform.map((height, index) => (
-                <span
-                  key={index}
-                  className={cn(
-                    'flex-1 rounded-full',
-                    (index / waveform.length) * 100 < progress ? 'bg-horizon-400' : 'bg-white/10',
-                  )}
-                  style={{ height: `${height}%` }}
-                />
-              ))}
-            </div>
-          )}
+          <div className="min-w-0 flex-1">
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={currentTime}
+              onChange={(event) => seek(Number(event.target.value))}
+              aria-label="Progression audio"
+              className="h-2 w-full cursor-pointer accent-horizon-400"
+            />
+            {!compact && (
+              <div className="mt-2 flex h-4 items-end gap-0.5" aria-hidden>
+                {waveform.map((height, index) => (
+                  <span
+                    key={index}
+                    className={cn(
+                      'flex-1 rounded-full',
+                      (index / waveform.length) * 100 < progress ? 'bg-horizon-400' : 'bg-white/10',
+                    )}
+                    style={{ height: `${height}%` }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <span
           className={cn(
-            'shrink-0 tabular-nums text-stellar-400',
+            'shrink-0 self-end whitespace-nowrap tabular-nums text-stellar-400 min-[380px]:self-auto',
             compact ? 'text-[10px]' : 'text-xs',
           )}
         >
@@ -226,8 +229,8 @@ export function MysticAudioPlayer({
       </div>
 
       {!compact && (
-        <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-3">
-          <label className="flex items-center gap-2 text-xs text-stellar-400">
+        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/[0.05] pt-3">
+          <label className="flex min-w-0 items-center gap-2 text-xs text-stellar-400">
             <Volume2 className="h-4 w-4" aria-hidden />
             <span className="sr-only">Volume</span>
             <input
@@ -238,7 +241,7 @@ export function MysticAudioPlayer({
               value={volume}
               onChange={(event) => setVolume(Number(event.target.value))}
               aria-label="Volume"
-              className="w-24 accent-horizon-400"
+              className="w-24 max-w-[45vw] accent-horizon-400"
             />
           </label>
           <label className="flex items-center gap-2 text-xs text-stellar-400">
@@ -255,7 +258,7 @@ export function MysticAudioPlayer({
               ))}
             </select>
           </label>
-          <span className="text-xs text-stellar-600">
+          <span className="min-w-0 text-xs text-stellar-600">
             La reprise est mémorisée sur cet appareil.
           </span>
         </div>

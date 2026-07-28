@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 
 const IMPORTANT_ERROR_FRAGMENTS = [
@@ -22,10 +22,6 @@ function findReadingForm(): HTMLFormElement | null {
   return title?.closest('form') ?? null;
 }
 
-function findScrollContainer(form: HTMLFormElement): HTMLElement | null {
-  return form.querySelector<HTMLElement>('.custom-scrollbar.overflow-y-auto');
-}
-
 function isImportantAlert(element: Element): element is HTMLElement {
   const text = element.textContent?.trim() ?? '';
   return IMPORTANT_ERROR_FRAGMENTS.some((fragment) => text.includes(fragment));
@@ -37,39 +33,14 @@ function normalizedMessage(message: string): string {
 
 export function OnboardingMobileEnhancer() {
   const [message, setMessage] = useState<string | null>(null);
-  const lastTitleRef = useRef('');
 
   useEffect(() => {
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
     const inspect = () => {
       const title = document.getElementById('reading-preparation-title');
       const form = findReadingForm();
       if (!title || !form) {
-        lastTitleRef.current = '';
         setMessage(null);
         return;
-      }
-
-      const titleText = title.textContent?.trim() ?? '';
-      if (titleText && titleText !== lastTitleRef.current) {
-        lastTitleRef.current = titleText;
-        window.requestAnimationFrame(() => {
-          const scrollContainer = findScrollContainer(form);
-          const behavior: ScrollBehavior = prefersReducedMotion.matches ? 'auto' : 'smooth';
-          const hasIndependentScroll = Boolean(
-            scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight + 2,
-          );
-
-          if (hasIndependentScroll) {
-            scrollContainer?.scrollTo({ top: 0, behavior });
-          } else {
-            title.scrollIntoView({ block: 'start', behavior });
-          }
-
-          title.setAttribute('tabindex', '-1');
-          title.focus({ preventScroll: true });
-        });
       }
 
       const alert = Array.from(form.querySelectorAll('[role="alert"]')).find(isImportantAlert);
@@ -77,22 +48,7 @@ export function OnboardingMobileEnhancer() {
       const rawMessage = messageNode?.textContent?.trim() || alert?.textContent?.trim() || '';
       const nextMessage = rawMessage ? normalizedMessage(rawMessage) : null;
 
-      if (alert && messageNode && nextMessage && nextMessage !== rawMessage) {
-        messageNode.textContent = nextMessage;
-      }
       setMessage(nextMessage);
-
-      if (alert && alert.dataset.mobileErrorSeen !== 'true') {
-        alert.dataset.mobileErrorSeen = 'true';
-        alert.setAttribute('tabindex', '-1');
-        window.requestAnimationFrame(() => {
-          alert.scrollIntoView({
-            block: 'center',
-            behavior: prefersReducedMotion.matches ? 'auto' : 'smooth',
-          });
-          alert.focus({ preventScroll: true });
-        });
-      }
     };
 
     inspect();
@@ -108,9 +64,9 @@ export function OnboardingMobileEnhancer() {
 
   const retry = () => {
     const form = findReadingForm();
-    const existingRetryButton = Array.from(form?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
-      (button) => button.textContent?.includes('Réessayer'),
-    );
+    const existingRetryButton = Array.from(
+      form?.querySelectorAll<HTMLButtonElement>('button') ?? [],
+    ).find((button) => button.textContent?.includes('Réessayer'));
     const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
     setMessage(null);
     (existingRetryButton ?? submitButton)?.click();

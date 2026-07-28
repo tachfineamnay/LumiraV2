@@ -89,14 +89,14 @@ function LoginContent() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-abyss-700">
+      <div className="flex min-h-dvh items-center justify-center bg-abyss-700">
         <Loader2 className="w-12 h-12 text-horizon-400 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex items-center justify-center starfield">
+    <div className="relative flex min-h-dvh items-start justify-center overflow-x-clip overflow-y-auto px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] starfield sm:items-center sm:py-8">
       {/* Background */}
       <div className="fixed inset-0 bg-gradient-to-b from-abyss-900 via-abyss-700 to-abyss-800" />
 
@@ -121,12 +121,12 @@ function LoginContent() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 w-full max-w-md mx-4">
+      <div className="relative z-10 w-full max-w-md">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="bg-abyss-600/80 backdrop-blur-xl border border-white/[0.08] rounded-3xl p-8 shadow-abyss"
+          className="rounded-3xl border border-white/[0.08] bg-abyss-600/80 p-5 shadow-abyss backdrop-blur-xl min-[360px]:p-6 sm:p-8"
         >
           {/* Header */}
           <div className="text-center mb-8">
@@ -134,17 +134,17 @@ function LoginContent() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', delay: 0.2 }}
-              className="w-20 h-20 mx-auto mb-6 relative"
+              className="relative mx-auto mb-5 h-16 w-16 sm:mb-6 sm:h-20 sm:w-20"
             >
               {/* Outer glow */}
               <div className="absolute inset-0 bg-horizon-400/20 rounded-full blur-xl" />
               {/* Icon container */}
               <div className="relative w-full h-full bg-gradient-to-br from-horizon-400 to-horizon-500 rounded-full flex items-center justify-center shadow-gold-glow">
-                <Sparkles className="w-10 h-10 text-abyss-800" />
+                <Sparkles className="h-8 w-8 text-abyss-800 sm:h-10 sm:w-10" />
               </div>
             </motion.div>
 
-            <h1 className="text-3xl font-playfair italic text-gradient-gold mb-3">
+            <h1 className="mb-3 font-playfair text-2xl italic text-gradient-gold sm:text-3xl">
               Sanctuaire Lumira
             </h1>
             <p className="text-stellar-400 text-sm">Accédez à vos lectures personnalisées</p>
@@ -170,9 +170,8 @@ function LoginContent() {
                   }}
                   placeholder="votre@email.com"
                   disabled={isSubmitting || isCoolingDown}
-                  className="w-full pl-12 pr-4 py-4 bg-abyss-500/50 border border-white/[0.08] rounded-xl text-stellar-100 placeholder:text-stellar-600 focus:outline-none focus:border-horizon-400/50 focus:ring-2 focus:ring-horizon-400/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-xl border border-white/[0.08] bg-abyss-500/50 py-4 pl-12 pr-4 text-base text-stellar-100 placeholder:text-stellar-600 transition-all focus:border-horizon-400/50 focus:outline-none focus:ring-2 focus:ring-horizon-400/20 disabled:cursor-not-allowed disabled:opacity-50"
                   autoComplete="email"
-                  autoFocus
                 />
               </div>
             </div>
@@ -276,7 +275,7 @@ export default function SanctuaireLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-abyss-700">
+        <div className="flex min-h-dvh items-center justify-center bg-abyss-700">
           <Loader2 className="w-12 h-12 text-horizon-400 animate-spin" />
         </div>
       }

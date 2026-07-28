@@ -119,7 +119,7 @@ export default function DrawsPage() {
   if (isLoading) return <ReadingsSkeleton />;
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
@@ -307,7 +307,7 @@ export default function DrawsPage() {
 
 function ReadingsSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-4xl animate-pulse px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
+    <div className="mx-auto w-full max-w-4xl animate-pulse px-4 py-8 sm:px-6 sm:py-12">
       <div className="h-3 w-32 rounded-full bg-brume-700/20" />
       <div className="mt-4 h-9 w-48 rounded-xl bg-brume-700/20" />
       <div className="mt-3 h-4 w-full max-w-lg rounded-full bg-brume-800/25" />

@@ -9,8 +9,8 @@
     --background-end-rgb: 12, 18, 37;
     /* Sanctuaire shell chrome — consumed by layout, chat, FAB */
     --sanctuaire-header-h: 3.75rem;
-    --sanctuaire-bottom-nav-h: calc(4.25rem + env(safe-area-inset-bottom, 0px));
-    --sanctuaire-main-pb: calc(var(--sanctuaire-bottom-nav-h) + 1.5rem);
+    --sanctuaire-bottom-nav-h: calc(4.875rem + env(safe-area-inset-bottom, 0px));
+    --sanctuaire-main-pb: calc(var(--sanctuaire-bottom-nav-h) + 1rem);
     --sanctuaire-main-pad-x: 0.5rem;
   }
 
@@ -403,6 +403,7 @@
   /* Sanctuaire main content clears fixed bottom nav */
   .sanctuaire-main {
     padding-bottom: var(--sanctuaire-main-pb);
+    scroll-padding-bottom: var(--sanctuaire-main-pb);
   }
 
   /* Visible thin scrollbar for chat, settings tabs, modals */

@@ -101,7 +101,8 @@ const STEPS: StepDefinition[] = [
     key: 'review',
     label: 'Transmission',
     title: 'Relecture et transmission',
-    description: 'Votre dossier essentiel est prêt. Relisez-le ou personnalisez davantage la lecture.',
+    description:
+      'Votre dossier essentiel est prêt. Relisez-le ou personnalisez davantage la lecture.',
     icon: LockKeyhole,
   },
 ];
@@ -162,14 +163,14 @@ function normalizeLifeAreas(value: unknown): LifeAreas {
 function hasOptionalContext(data: Partial<ReadingPreparationData>): boolean {
   return Boolean(
     hasText(data.highs) ||
-      hasText(data.lows) ||
-      hasText(data.lifeEvents) ||
-      hasText(data.ailments) ||
-      hasText(data.fears) ||
-      hasText(data.rituals) ||
-      LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key])) ||
-      (data.deliveryStyle && data.deliveryStyle !== 'DOUX_ET_CLAIR') ||
-      (typeof data.pace === 'number' && data.pace !== 50),
+    hasText(data.lows) ||
+    hasText(data.lifeEvents) ||
+    hasText(data.ailments) ||
+    hasText(data.fears) ||
+    hasText(data.rituals) ||
+    LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key])) ||
+    (data.deliveryStyle && data.deliveryStyle !== 'DOUX_ET_CLAIR') ||
+    (typeof data.pace === 'number' && data.pace !== 50),
   );
 }
 
@@ -296,6 +297,8 @@ function normalizeSavedStep(value: unknown, rawData: Record<string, unknown>): n
     }
   }
 
+  if (saved <= 3) return Math.max(0, Math.floor(saved));
+
   // Six-step legacy flow: intro, identity, intention, photos, context, review.
   const legacyMap = [0, 0, 1, 2, 3, 3];
   return legacyMap[Math.min(Math.max(Math.floor(saved), 0), legacyMap.length - 1)] ?? 0;
@@ -412,6 +415,40 @@ export function ReadingPreparation({
     ? `?orderId=${encodeURIComponent(orderIdRef.current)}`
     : '';
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const preparationViewportStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!mobileViewportHeight) return undefined;
+    if (isInline) {
+      return {
+        height: `min(42rem, calc(${mobileViewportHeight}px - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 1rem))`,
+        maxHeight: `calc(${mobileViewportHeight}px - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 1rem)`,
+      };
+    }
+    return { height: `${mobileViewportHeight}px` };
+  }, [isInline, mobileViewportHeight]);
+
+  const scrollIntoPreparationView = useCallback(
+    (element: HTMLElement, block: ScrollLogicalPosition = 'center') => {
+      const scroller = dialogRef.current?.querySelector<HTMLElement>('[data-onboarding-scroll]');
+      const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth';
+      if (scroller && scroller.scrollHeight > scroller.clientHeight + 2) {
+        const scrollerBox = scroller.getBoundingClientRect();
+        const elementBox = element.getBoundingClientRect();
+        const offset =
+          block === 'start'
+            ? elementBox.top - scrollerBox.top
+            : elementBox.top - scrollerBox.top - (scrollerBox.height - elementBox.height) / 2;
+        scroller.scrollTo({
+          top: Math.max(0, scroller.scrollTop + offset),
+          behavior,
+        });
+        return;
+      }
+      element.scrollIntoView({ block, behavior });
+    },
+    [],
+  );
 
   const queueDraftSave = useCallback(
     (snapshot: DraftSnapshot, options: { keepalive?: boolean; force?: boolean } = {}) => {
@@ -703,11 +740,11 @@ export function ReadingPreparation({
 
   useEffect(() => {
     if (loadState !== 'ready') return;
-    const frame = window.requestAnimationFrame(() =>
-      titleRef.current?.focus({ preventScroll: true }),
-    );
     const scroller = dialogRef.current?.querySelector<HTMLElement>('.custom-scrollbar');
-    scroller?.scrollTo({ top: 0 });
+    const frame = window.requestAnimationFrame(() => {
+      scroller?.scrollTo({ top: 0 });
+      titleRef.current?.focus({ preventScroll: true });
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [loadState, step]);
 
@@ -920,10 +957,16 @@ export function ReadingPreparation({
           );
           if (details) details.open = true;
         }
-        setFocus(field);
+        const target = dialogRef.current?.querySelector<HTMLElement>(`[name="${field}"]`);
+        if (target) {
+          target.focus({ preventScroll: true });
+          window.requestAnimationFrame(() => scrollIntoPreparationView(target, 'center'));
+        } else {
+          setFocus(field);
+        }
       }, 0);
     },
-    [setError, setFocus],
+    [scrollIntoPreparationView, setError, setFocus],
   );
 
   const submit = useCallback(async () => {
@@ -1057,8 +1100,8 @@ export function ReadingPreparation({
       Boolean(formValues.birthDate && stringValue(formValues.birthPlace).trim()),
       Boolean(
         hasText(formValues.specificQuestion) ||
-          hasText(formValues.objective) ||
-          formValues.openReading,
+        hasText(formValues.objective) ||
+        formValues.openReading,
       ),
       Boolean(formValues.facePhoto || formValues.palmPhoto),
       formValues.consent,
@@ -1170,12 +1213,10 @@ export function ReadingPreparation({
       <div
         className={
           isInline
-            ? 'mx-auto flex w-full max-w-5xl flex-col'
+            ? 'mx-auto flex w-full max-w-5xl flex-col overflow-hidden'
             : 'mx-auto flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-abyss-800 lg:h-[min(760px,calc(100dvh-3rem))] lg:rounded-3xl lg:border lg:border-white/[0.08] lg:shadow-abyss'
         }
-        style={
-          !isInline && mobileViewportHeight ? { height: `${mobileViewportHeight}px` } : undefined
-        }
+        style={preparationViewportStyle}
       >
         <header className="shrink-0 border-b border-white/[0.07] bg-abyss-700/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 lg:pt-3">
           <div className="flex min-w-0 items-center justify-between gap-3">
@@ -1226,7 +1267,7 @@ export function ReadingPreparation({
         <div
           className={
             isInline
-              ? 'grid lg:grid-cols-[220px_minmax(0,1fr)]'
+              ? 'grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]'
               : 'grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]'
           }
         >
@@ -1281,9 +1322,10 @@ export function ReadingPreparation({
             }}
           >
             <div
+              data-onboarding-scroll
               className={
                 isInline
-                  ? 'custom-scrollbar overflow-y-auto overscroll-contain px-4 py-5 sm:px-8 sm:py-7'
+                  ? 'custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 [scroll-padding-bottom:7rem] sm:px-8 sm:py-7'
                   : 'custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 [scroll-padding-bottom:7rem] sm:px-8 sm:py-7'
               }
             >
@@ -1651,9 +1693,21 @@ function IntentionStep({
   };
 
   const choices: Array<[IntentionMode, string, string]> = [
-    ['question', 'J’ai une question précise', 'Un sujet ou une décision que vous souhaitez éclairer.'],
-    ['situation', 'Je traverse une période particulière', 'Décrivez simplement ce qui se passe en ce moment.'],
-    ['open', 'Je préfère une lecture ouverte', 'Laissez Lumira partir de vos repères sans question imposée.'],
+    [
+      'question',
+      'J’ai une question précise',
+      'Un sujet ou une décision que vous souhaitez éclairer.',
+    ],
+    [
+      'situation',
+      'Je traverse une période particulière',
+      'Décrivez simplement ce qui se passe en ce moment.',
+    ],
+    [
+      'open',
+      'Je préfère une lecture ouverte',
+      'Laissez Lumira partir de vos repères sans question imposée.',
+    ],
   ];
 
   return (
@@ -1780,7 +1834,11 @@ function DossierStatusBanner({ data }: { data: ReadingPreparationData }) {
               : 'bg-horizon-400/12 text-horizon-300'
           }`}
         >
-          {essentialsReady ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+          {essentialsReady ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
         </span>
         <div>
           <p className="text-sm font-semibold text-stellar-100">
@@ -1820,8 +1878,7 @@ function FinalStep({
 }) {
   const weatherComplete = LIFE_AREA_KEYS.some((key) => Boolean(data.lifeAreas?.[key]));
   const supportComplete = hasText(data.highs) || hasText(data.lows);
-  const historyComplete =
-    hasText(data.lifeEvents) || hasText(data.fears) || hasText(data.ailments);
+  const historyComplete = hasText(data.lifeEvents) || hasText(data.fears) || hasText(data.ailments);
   const preferencesComplete =
     hasText(data.rituals) || data.deliveryStyle !== 'DOUX_ET_CLAIR' || data.pace !== 50;
   const optionalCount = [
@@ -1893,7 +1950,8 @@ function FinalStep({
             </h2>
             <p className="mt-1 text-xs leading-5 text-stellar-500">
               Facultatif · environ 3 à 5 minutes. Ouvrez uniquement les thèmes qui vous parlent.
-              {optionalCount > 0 && ` ${optionalCount} thème${optionalCount > 1 ? 's' : ''} enrichi${optionalCount > 1 ? 's' : ''}.`}
+              {optionalCount > 0 &&
+                ` ${optionalCount} thème${optionalCount > 1 ? 's' : ''} enrichi${optionalCount > 1 ? 's' : ''}.`}
             </p>
           </div>
         </div>
@@ -2155,7 +2213,8 @@ function LifeWeatherSection({
         Votre météo de vie, domaine par domaine
       </h3>
       <p className="mt-1 text-xs leading-5 text-stellar-500">
-        Indiquez seulement les domaines que vous souhaitez situer. Vous pouvez laisser le reste vide.
+        Indiquez seulement les domaines que vous souhaitez situer. Vous pouvez laisser le reste
+        vide.
       </p>
       <div className="mt-4 space-y-4">
         {LIFE_AREA_KEYS.map((key) => {

@@ -172,6 +172,12 @@ async function continueTo(page: Page, heading: string) {
   await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 }
 
+async function openOptionalSection(page: Page, name: RegExp) {
+  const summary = page.getByText(name).first();
+  await expect(summary).toBeVisible();
+  await summary.click();
+}
+
 test.describe('Relecture et scellement du dossier de lecture', () => {
   test('relit chaque réponse puis transmet exactement la version confirmée', async ({ page }) => {
     const calls = await installSanctuaireMocks(page);
@@ -183,38 +189,29 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
     await continueTo(page, 'Ce qui vous amène');
 
     await page.getByLabel(/éclairer une seule question/i).fill(COMPLETE_DATA.specificQuestion);
+    await page.getByRole('button', { name: /ajouter ce que j’aimerais comprendre/i }).click();
     await page.getByLabel(/comprendre, décider|voir autrement/i).fill(COMPLETE_DATA.objective);
-    await continueTo(page, 'Votre contexte personnel');
-
-    await page.getByLabel(/soutient actuellement/i).fill(COMPLETE_DATA.highs);
-    await page.getByLabel(/pèse ou se répète/i).fill(COMPLETE_DATA.lows);
-    await page.getByLabel(/contexte corporel/i).fill(COMPLETE_DATA.ailments);
-    await page.getByLabel(/abordions avec douceur/i).fill(COMPLETE_DATA.fears);
-    await page.getByLabel(/pratiques qui comptent/i).fill(COMPLETE_DATA.rituals);
-    await page.getByLabel(/direct et concret/i).check();
-    await page.getByLabel(/niveau de détail souhaité/i).evaluate((element, pace) => {
-      const input = element as HTMLInputElement;
-      input.value = String(pace);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    }, COMPLETE_DATA.pace);
     await continueTo(page, 'Vos photos privées');
 
-    await continueTo(page, 'Relire et confirmer');
+    await continueTo(page, 'Relecture et transmission');
+    await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
+    await page.getByLabel(/soutient actuellement/i).fill(COMPLETE_DATA.highs);
+    await page.getByLabel(/pèse ou se répète/i).fill(COMPLETE_DATA.lows);
+    await openOptionalSection(page, /Mon histoire et mes sensibilités/i);
+    await page.getByLabel(/contexte corporel/i).fill(COMPLETE_DATA.ailments);
+    await page.getByLabel(/abordions avec douceur/i).fill(COMPLETE_DATA.fears);
+    await openOptionalSection(page, /Mes préférences de lecture/i);
+    await page.getByLabel(/pratiques qui comptent/i).fill(COMPLETE_DATA.rituals);
+    await page.getByRole('radio', { name: /Direct et concret/i }).click();
+    await page.getByLabel(/niveau de détail souhaité/i).fill(String(COMPLETE_DATA.pace));
     for (const answer of [
       COMPLETE_DATA.birthPlace,
       COMPLETE_DATA.specificQuestion,
       COMPLETE_DATA.objective,
-      COMPLETE_DATA.highs,
-      COMPLETE_DATA.lows,
-      COMPLETE_DATA.ailments,
-      COMPLETE_DATA.fears,
-      COMPLETE_DATA.rituals,
     ]) {
       await expect(page.getByText(answer, { exact: true })).toBeVisible();
     }
     await expect(page.getByText(/direct et concret/i)).toBeVisible();
-    await expect(page.getByText('très détaillé', { exact: true })).toBeVisible();
 
     await page.getByLabel(/j’ai relu.*je choisis.*transmettre/i).check();
     await page.getByRole('button', { name: 'Confirmer et transmettre mon dossier' }).click();
@@ -259,7 +256,7 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
       onProfilePatch: () => profilePatchGate,
     });
 
-    await openIntake(page, 'Relire et confirmer');
+    await openIntake(page, 'Relecture et transmission');
     await page.getByLabel(/j’ai relu.*je choisis.*transmettre/i).check();
     const submit = page.getByRole('button', {
       name: 'Confirmer et transmettre mon dossier',

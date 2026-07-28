@@ -258,7 +258,7 @@ export default function ReadingDossierPage() {
   if (!sealed) {
     if (isEditingDraft || !hasDraftContent) {
       return (
-        <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
+        <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
           <header className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
               Votre transmission
@@ -291,7 +291,7 @@ export default function ReadingDossierPage() {
     }
 
     return (
-      <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
         <header className="max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
             Votre transmission
@@ -423,7 +423,7 @@ export default function ReadingDossierPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 sm:px-6 sm:py-12 lg:pb-12">
+    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="max-w-3xl">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
           Votre transmission
