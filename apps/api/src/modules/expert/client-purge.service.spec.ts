@@ -78,6 +78,10 @@ describe('ClientPurgeService', () => {
       deletedStorageObjects: 8,
     });
 
+    expect(s3Service.listObjectKeys).toHaveBeenCalledWith(
+      'onboarding/client-1/',
+      'uploads',
+    );
     expect(s3Service.listObjectKeys).toHaveBeenCalledWith('readings/LUM-1/', 'readings');
     expect(s3Service.listObjectKeys).toHaveBeenCalledWith('audio/readings/LUM-1/', 'readings');
     expect(s3Service.listObjectKeys).toHaveBeenCalledWith('audio/insights/LUM-1/', 'readings');
