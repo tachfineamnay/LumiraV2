@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { FileType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3BucketKind, S3Service } from '../uploads/s3.service';
@@ -36,6 +41,9 @@ export class ClientPurgeService {
         orders: {
           select: {
             id: true,
+            orderNumber: true,
+            generatedContent: true,
+            expertReview: true,
             files: { select: { key: true, type: true } },
             deliveries: { select: { pdfKey: true } },
           },
@@ -74,6 +82,15 @@ export class ClientPurgeService {
       for (const delivery of order.deliveries) {
         if (delivery.pdfKey) readings.add(this.stripS3Scheme(delivery.pdfKey));
       }
+
+      this.collectReadingReferences(order.generatedContent, readings);
+      this.collectReadingReferences(order.expertReview, readings);
+
+      // Historical PDF/audio generations were not always represented by a
+      // DeliveryRecord or OrderFile. Enumerate every known order-scoped prefix.
+      await this.collectPrefixKeys(`readings/${order.orderNumber}/`, readings, clientId);
+      await this.collectPrefixKeys(`audio/readings/${order.orderNumber}/`, readings, clientId);
+      await this.collectPrefixKeys(`audio/insights/${order.orderNumber}/`, readings, clientId);
     }
 
     for (const insight of insights) {
@@ -81,6 +98,8 @@ export class ClientPurgeService {
       if (key) readings.add(key);
     }
 
+    // Storage is deleted before the database. If S3 is unavailable, the client
+    // record remains intact and the purge can be retried safely.
     await this.deleteStorageObjects(uploads, 'uploads', clientId);
     await this.deleteStorageObjects(readings, 'readings', clientId);
 
@@ -141,6 +160,25 @@ export class ClientPurgeService {
     };
   }
 
+  private async collectPrefixKeys(
+    prefix: string,
+    target: Set<string>,
+    clientId: string,
+  ): Promise<void> {
+    try {
+      const keys = await this.s3Service.listObjectKeys(prefix, 'readings');
+      for (const key of keys) target.add(key);
+    } catch (error) {
+      this.logger.error(
+        `Client purge storage listing failure: clientId=${clientId}, prefix=${prefix}`,
+      );
+      throw new ServiceUnavailableException(
+        'La liste des fichiers privés n’a pas pu être vérifiée. Aucun compte n’a été supprimé ; réessayez dans un instant.',
+        { cause: error },
+      );
+    }
+  }
+
   private async deleteStorageObjects(
     keys: Set<string>,
     bucket: S3BucketKind,
@@ -184,12 +222,35 @@ export class ClientPurgeService {
     }
   }
 
+  private collectReadingReferences(value: unknown, target: Set<string>): void {
+    if (typeof value === 'string') {
+      const key = this.readingKeyFromUrl(value);
+      if (key) target.add(key);
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      for (const entry of value) this.collectReadingReferences(entry, target);
+      return;
+    }
+
+    if (value && typeof value === 'object') {
+      for (const entry of Object.values(value as Record<string, unknown>)) {
+        this.collectReadingReferences(entry, target);
+      }
+    }
+  }
+
   private readingKeyFromUrl(value: string | null): string | null {
     if (!value) return null;
     const trimmed = value.trim();
-    const marker = '/api/readings/audio/';
-    const markerIndex = trimmed.indexOf(marker);
-    if (markerIndex >= 0) return trimmed.slice(markerIndex + marker.length);
+    const audioMarker = '/api/readings/audio/';
+    const audioMarkerIndex = trimmed.indexOf(audioMarker);
+    if (audioMarkerIndex >= 0) return trimmed.slice(audioMarkerIndex + audioMarker.length);
+
+    const amazonMarker = '.amazonaws.com/';
+    const amazonMarkerIndex = trimmed.indexOf(amazonMarker);
+    if (amazonMarkerIndex >= 0) return trimmed.slice(amazonMarkerIndex + amazonMarker.length);
 
     const key = this.stripS3Scheme(trimmed);
     if (key.startsWith('audio/') || key.startsWith('readings/') || key.startsWith('pdf/')) {
