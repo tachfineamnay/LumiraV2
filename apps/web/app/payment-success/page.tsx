@@ -26,6 +26,8 @@ function PaymentSuccessContent() {
     searchParams.get('payment_intent') || searchParams.get('payment_intent_id') || '';
   const redirectStatus = searchParams.get('redirect_status');
   const [storedPaymentIntentId, setStoredPaymentIntentId] = useState('');
+  const [storedClientSecret, setStoredClientSecret] = useState('');
+  const [storedCheckoutAttemptId, setStoredCheckoutAttemptId] = useState('');
   const [storageReady, setStorageReady] = useState(false);
   const [status, setStatus] = useState<PaymentStatus>('processing');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -38,6 +40,8 @@ function PaymentSuccessContent() {
   useEffect(() => {
     const attempt = readCheckoutAttempt();
     setStoredPaymentIntentId(attempt?.paymentIntentId || '');
+    setStoredClientSecret(attempt?.clientSecret || '');
+    setStoredCheckoutAttemptId(attempt?.checkoutAttemptId || '');
     setStorageReady(true);
   }, []);
 
@@ -48,29 +52,40 @@ function PaymentSuccessContent() {
     [],
   );
 
-  const finalizeAccess = useCallback(async (intentId: string) => {
-    setStatus('processing');
-    setErrorMessage(null);
+  const finalizeAccess = useCallback(
+    async (intentId: string) => {
+      if (!storedClientSecret || !storedCheckoutAttemptId) {
+        setStatus('needs_action');
+        setRecoveryAction('login');
+        setErrorMessage(
+          "Votre paiement peut être en cours de confirmation, mais cette session ne peut pas prouver la tentative. Ne payez pas une seconde fois : demandez votre lien d'accès au Sanctuaire.",
+        );
+        return;
+      }
+      setStatus('processing');
+      setErrorMessage(null);
 
-    try {
-      await completeCheckoutSession(intentId);
-      clearCheckoutAttempt();
-      trackPurchase(SUBSCRIPTION.price, intentId);
-      setStatus('confirmed');
-      redirectTimerRef.current = window.setTimeout(() => {
-        window.location.assign(buildSanctuairePostCheckoutUrl());
-      }, 800);
-    } catch (err) {
-      console.error('[PaymentSuccess] confirm failed:', err);
-      setStatus('needs_action');
-      setRecoveryAction('verify');
-      setErrorMessage(
-        redirectStatus === 'succeeded'
-          ? "Votre paiement semble avoir été effectué, mais l'accès au Sanctuaire n'est pas encore finalisé. Ne payez pas une seconde fois : relancez uniquement cette vérification ou demandez votre lien d'accès."
-          : "Nous ne pouvons pas encore confirmer votre paiement. Il peut être en cours de validation : ne payez pas une seconde fois, vérifiez plutôt cet accès ou demandez votre lien d'accès.",
-      );
-    }
-  }, [redirectStatus]);
+      try {
+        await completeCheckoutSession(intentId, storedClientSecret);
+        clearCheckoutAttempt();
+        trackPurchase(SUBSCRIPTION.price, intentId);
+        setStatus('confirmed');
+        redirectTimerRef.current = window.setTimeout(() => {
+          window.location.assign(buildSanctuairePostCheckoutUrl());
+        }, 800);
+      } catch (err) {
+        console.error('[PaymentSuccess] confirm failed:', err);
+        setStatus('needs_action');
+        setRecoveryAction('verify');
+        setErrorMessage(
+          redirectStatus === 'succeeded'
+            ? "Votre paiement semble avoir été effectué, mais l'accès au Sanctuaire n'est pas encore finalisé. Ne payez pas une seconde fois : relancez uniquement cette vérification ou demandez votre lien d'accès."
+            : "Nous ne pouvons pas encore confirmer votre paiement. Il peut être en cours de validation : ne payez pas une seconde fois, vérifiez plutôt cet accès ou demandez votre lien d'accès.",
+        );
+      }
+    },
+    [redirectStatus, storedCheckoutAttemptId, storedClientSecret],
+  );
 
   useEffect(() => {
     if (!storageReady || startedRef.current) return;
@@ -89,7 +104,7 @@ function PaymentSuccessContent() {
       return;
     }
 
-    if (!paymentIntentId) {
+    if (!paymentIntentId || !storedClientSecret) {
       setStatus('needs_action');
       setRecoveryAction('login');
       setErrorMessage(
@@ -99,7 +114,7 @@ function PaymentSuccessContent() {
     }
 
     void finalizeAccess(paymentIntentId);
-  }, [finalizeAccess, paymentIntentId, redirectStatus, storageReady]);
+  }, [finalizeAccess, paymentIntentId, redirectStatus, storageReady, storedClientSecret]);
 
   const retryFinalization = async () => {
     if (!paymentIntentId || isRetrying) return;
@@ -125,7 +140,9 @@ function PaymentSuccessContent() {
             <div className="mb-6 grid h-20 w-20 place-items-center rounded-full border border-horizon-300/30 bg-horizon-300/10">
               <Loader2 className="h-9 w-9 animate-spin text-horizon-300" />
             </div>
-            <h1 className="text-2xl font-playfair italic text-white">Vérification de votre accès</h1>
+            <h1 className="text-2xl font-playfair italic text-white">
+              Vérification de votre accès
+            </h1>
             <p className="mt-4 text-sm leading-6 text-blue-100/80">
               Nous vérifions le paiement avec Lumira avant d&apos;ouvrir votre Sanctuaire. Ne
               relancez pas le paiement pendant cette étape.
@@ -165,7 +182,11 @@ function PaymentSuccessContent() {
                 disabled={isRetrying}
                 className="mt-6 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-horizon-300 px-4 py-3 font-semibold text-abyss-900 transition-colors hover:bg-horizon-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isRetrying ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+                {isRetrying ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-5 w-5" />
+                )}
                 {isRetrying ? 'Vérification en cours…' : 'Vérifier mon accès sans repayer'}
               </button>
             )}

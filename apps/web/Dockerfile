@@ -55,6 +55,15 @@ RUN if [ -z "$NEXT_PUBLIC_API_URL" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KE
       exit 1; \
     fi
 
+# The public production API creates live PaymentIntents. Refuse a browser
+# bundle with a test publishable key instead of shipping a permanently loading
+# Payment Element.
+RUN if [ "$NEXT_PUBLIC_API_URL" = "https://api.oraclelumira.com" ] && ! echo "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" | grep -q '^pk_live_'; then \
+      echo "ERROR: production API requires a NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY starting with pk_live_."; \
+      echo "Set the variable as a Coolify build variable, then rebuild the web image."; \
+      exit 1; \
+    fi
+
 # Generate Prisma Client (Explicitly)
 RUN pnpm turbo run db:generate --filter=@packages/database
 

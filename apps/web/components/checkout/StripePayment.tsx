@@ -28,7 +28,6 @@ export function StripePayment({
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentElementState, setPaymentElementState] = useState<PaymentElementState>('loading');
-  const [paymentElementAttempt, setPaymentElementAttempt] = useState(0);
   const submitStartedRef = useRef(false);
 
   useEffect(() => {
@@ -39,12 +38,13 @@ export function StripePayment({
     }, PAYMENT_ELEMENT_TIMEOUT_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [paymentElementAttempt, paymentElementState]);
+  }, [paymentElementState]);
 
   const retryPaymentElement = () => {
     if (isProcessing) return;
-    setPaymentElementState('loading');
-    setPaymentElementAttempt((attempt) => attempt + 1);
+    // Elements cannot replace a mismatched publishable key in place. The active
+    // attempt is already in session storage, so a reload is safe and retries it.
+    window.location.reload();
   };
 
   const handleSubmit = async () => {
@@ -81,7 +81,8 @@ export function StripePayment({
           message:
             error.type === 'card_error'
               ? "Votre banque a refusé le paiement. Aucun débit n'est confirmé : vous pouvez corriger le moyen de paiement et réessayer cette même tentative."
-              : error.message || 'Le paiement n’a pas pu être confirmé. Aucun débit n’est confirmé.',
+              : error.message ||
+                'Le paiement n’a pas pu être confirmé. Aucun débit n’est confirmé.',
           paymentMayBePending: error.type === 'api_connection_error' || error.type === 'api_error',
         });
         setIsProcessing(false);
@@ -158,10 +159,16 @@ export function StripePayment({
         )}
 
         <PaymentElement
-          key={`payment-element-${paymentElementAttempt}`}
           onLoaderStart={() => setPaymentElementState('loading')}
           onReady={() => setPaymentElementState('ready')}
-          onLoadError={() => setPaymentElementState('error')}
+          onLoadError={() => {
+            setPaymentElementState('error');
+            onPaymentError({
+              message:
+                "Le module Stripe n'a pas pu charger cette tentative. Aucun débit n'est confirmé : rechargez cette même tentative au lieu d'en créer une nouvelle.",
+              paymentMayBePending: false,
+            });
+          }}
           options={{
             layout: 'tabs',
           }}
@@ -195,6 +202,8 @@ export function StripePayment({
               <Loader2 className="h-5 w-5 animate-spin" />
               <span>Traitement en cours…</span>
             </>
+          ) : paymentElementUnavailable ? (
+            <span>Module de paiement indisponible</span>
           ) : paymentElementState !== 'ready' ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />

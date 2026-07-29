@@ -240,6 +240,8 @@ model Order {
   currency           String          @default("eur")
   status             OrderStatus     @default(PENDING)
   paymentIntentId    String?
+  /// Opaque browser-generated key used to resume a single Stripe checkout safely.
+  checkoutAttemptId  String?         @unique
   stripeSessionId    String?
   paidAt             DateTime?
   formData           Json

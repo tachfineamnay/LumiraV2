@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import Stripe from 'stripe';
 import { OrdersService } from '../orders/orders.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -17,6 +18,7 @@ import { CheckoutIntentDto } from './dto/checkout-intent.dto';
 import {
   EARLY_CHECKOUT_ALIASES,
   getEarlyAccessExpiresAt,
+  isEarlyCheckoutAlias,
   LUMIRA_EARLY_OFFER,
 } from '@packages/shared';
 
@@ -32,6 +34,22 @@ const CHECKOUT_CATALOG: Record<string, { amountCents: number; name: string }> = 
     },
   ]),
 );
+
+type CheckoutPaymentStatus =
+  | 'requires_payment_method'
+  | 'requires_confirmation'
+  | 'requires_action'
+  | 'processing'
+  | 'succeeded'
+  | 'canceled';
+
+const CHECKOUT_RESUMABLE_STATUSES = new Set<CheckoutPaymentStatus>([
+  'requires_payment_method',
+  'requires_confirmation',
+  'requires_action',
+  'processing',
+  'succeeded',
+]);
 
 export interface UpsellAddon {
   type: string;
@@ -92,49 +110,104 @@ export class PaymentsService {
    * Verifies the PI with Stripe, fulfills the order (idempotent with webhook),
    * and returns a Sanctuaire JWT so the buyer enters without re-login.
    */
-  async confirmCheckout(paymentIntentId: string) {
+  async confirmCheckout(paymentIntentId: string, clientSecret: string) {
     const trimmedId = paymentIntentId?.trim();
     if (!trimmedId || !trimmedId.startsWith('pi_')) {
       throw new BadRequestException('Invalid paymentIntentId');
     }
 
     const paymentIntent = await this.stripe.paymentIntents.retrieve(trimmedId);
+    await this.assertCheckoutPaymentProof(paymentIntent, clientSecret);
 
     if (paymentIntent.status !== 'succeeded') {
       throw new BadRequestException(`Payment not confirmed. Status: ${paymentIntent.status}`);
     }
 
     // Fulfill order + activate subscription (safe if webhook already ran)
-    await this.handlePaymentSucceeded(paymentIntent);
+    const fulfilledOrder = await this.fulfillEarlyCheckout(paymentIntent);
 
-    const email =
-      paymentIntent.metadata?.email?.toLowerCase().trim() ||
-      (await this.resolveEmailFromPaymentIntent(paymentIntent));
-
-    if (!email) {
-      throw new BadRequestException('Unable to resolve buyer email from payment');
-    }
-
-    return this.authService.issueSanctuaireSessionForVerifiedPayment(email);
+    return this.authService.issueSanctuaireSessionForVerifiedPayment(fulfilledOrder.userEmail);
   }
 
-  private async resolveEmailFromPaymentIntent(
+  async getCheckoutStatus(paymentIntentId: string, clientSecret: string) {
+    const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId.trim());
+    await this.assertCheckoutPaymentProof(paymentIntent, clientSecret);
+
+    return {
+      status: paymentIntent.status,
+      paymentIntentId: paymentIntent.id,
+      stripeMode: this.getStripeMode(),
+      paymentMayBePending:
+        paymentIntent.status === 'processing' || paymentIntent.status === 'requires_action',
+    };
+  }
+
+  private getStripeMode(): 'live' | 'test' {
+    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY') || '';
+    return secretKey.startsWith('sk_live_') ? 'live' : 'test';
+  }
+
+  private paymentIntentRef(paymentIntentId: string): string {
+    return paymentIntentId.length > 10 ? `pi_***${paymentIntentId.slice(-6)}` : 'pi_***';
+  }
+
+  private clientSecretMatches(expected: string | null, received: string): boolean {
+    if (!expected || !received) return false;
+    const expectedBuffer = Buffer.from(expected);
+    const receivedBuffer = Buffer.from(received);
+    return (
+      expectedBuffer.length === receivedBuffer.length &&
+      timingSafeEqual(expectedBuffer, receivedBuffer)
+    );
+  }
+
+  private async assertCheckoutPaymentProof(
     paymentIntent: Stripe.PaymentIntent,
-  ): Promise<string | null> {
-    const orderId = paymentIntent.metadata?.orderId;
-    if (orderId) {
-      const order = await this.prisma.order.findUnique({
-        where: { id: orderId },
-        select: { userEmail: true },
-      });
-      if (order?.userEmail) return order.userEmail.toLowerCase().trim();
+    clientSecret: string,
+  ) {
+    if (!this.clientSecretMatches(paymentIntent.client_secret, clientSecret)) {
+      this.logger.warn(
+        `checkout_proof_rejected payment_intent=${this.paymentIntentRef(paymentIntent.id)}`,
+      );
+      throw new ForbiddenException('Checkout attempt proof is invalid');
     }
 
-    const byPi = await this.prisma.order.findFirst({
-      where: { paymentIntentId: paymentIntent.id },
-      select: { userEmail: true },
+    return this.getValidatedEarlyCheckoutOrder(paymentIntent);
+  }
+
+  private async getValidatedEarlyCheckoutOrder(paymentIntent: Stripe.PaymentIntent) {
+    const productLevel = paymentIntent.metadata?.productLevel?.toLowerCase().trim();
+    const orderId = paymentIntent.metadata?.orderId;
+    const expectedAmount = Number(paymentIntent.metadata?.expectedAmount);
+
+    if (
+      !orderId ||
+      !productLevel ||
+      !isEarlyCheckoutAlias(productLevel) ||
+      paymentIntent.amount !== LUMIRA_EARLY_OFFER.amountCents ||
+      paymentIntent.currency.toLowerCase() !== 'eur' ||
+      expectedAmount !== LUMIRA_EARLY_OFFER.amountCents
+    ) {
+      this.logger.error(
+        `checkout_validation_failed payment_intent=${this.paymentIntentRef(paymentIntent.id)}`,
+      );
+      throw new BadRequestException('Payment does not match the Lumira early offer');
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { user: true },
     });
-    return byPi?.userEmail?.toLowerCase().trim() ?? null;
+    if (
+      !order ||
+      order.paymentIntentId !== paymentIntent.id ||
+      order.amount !== LUMIRA_EARLY_OFFER.amountCents ||
+      order.currency.toLowerCase() !== 'eur'
+    ) {
+      throw new BadRequestException('PaymentIntent is not bound to the expected order');
+    }
+
+    return order;
   }
 
   async createPaymentIntent(orderId: string, currency: string = 'eur') {
@@ -180,10 +253,9 @@ export class PaymentsService {
       throw new BadRequestException(`Unknown productLevel: ${dto.productLevel}`);
     }
     const amountCents = catalogEntry.amountCents;
+    const checkoutAttemptId = dto.checkoutAttemptId || randomUUID();
 
-    this.logger.log(
-      `[CheckoutIntent] Starting for email: ${normalizedEmail}, amount=${amountCents}`,
-    );
+    this.logger.log(`checkout_intent_requested attempt=${checkoutAttemptId}`);
 
     // 1. Create user if missing — never overwrite PII on existing accounts
     const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -199,63 +271,156 @@ export class PaymentsService {
         },
       }));
 
-    this.logger.log(`[CheckoutIntent] User ready: ${user.id} for email: ${normalizedEmail}`);
+    let order = await this.prisma.order.findUnique({ where: { checkoutAttemptId } });
+    if (order) {
+      if (
+        order.userId !== user.id ||
+        order.amount !== amountCents ||
+        order.currency.toLowerCase() !== 'eur' ||
+        order.status !== 'PENDING'
+      ) {
+        throw new ForbiddenException('Checkout attempt does not match this purchase');
+      }
 
-    const orderNumber = await this.generateOrderNumber();
-
-    // 2. Create PaymentIntent first — only persist order after Stripe accepts
-    let paymentIntent: Stripe.PaymentIntent;
-    try {
-      paymentIntent = await this.stripe.paymentIntents.create({
-        amount: amountCents,
-        currency: 'eur',
-        automatic_payment_methods: { enabled: true },
-        metadata: {
-          email: normalizedEmail,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          phone: dto.phone || '',
-          productLevel: productKey,
-          expectedAmount: String(amountCents),
-        },
-      });
-    } catch (err) {
-      this.logger.error(
-        `[CheckoutIntent] Stripe PI creation failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      throw new BadRequestException('Unable to create payment intent');
+      if (order.paymentIntentId) {
+        const existingIntent = await this.stripe.paymentIntents.retrieve(order.paymentIntentId);
+        if (!CHECKOUT_RESUMABLE_STATUSES.has(existingIntent.status as CheckoutPaymentStatus)) {
+          throw new BadRequestException('This payment attempt can no longer be resumed');
+        }
+        this.logger.log(
+          `checkout_intent_resumed attempt=${checkoutAttemptId} payment_intent=${this.paymentIntentRef(existingIntent.id)}`,
+        );
+        return {
+          clientSecret: existingIntent.client_secret,
+          paymentIntentId: existingIntent.id,
+          paymentStatus: existingIntent.status,
+          amountCents,
+          stripeMode: this.getStripeMode(),
+        };
+      }
+    } else {
+      const orderNumber = await this.generateOrderNumber();
+      try {
+        order = await this.prisma.order.create({
+          data: {
+            orderNumber,
+            userId: user.id,
+            userEmail: normalizedEmail,
+            userName: `${dto.firstName} ${dto.lastName}`.trim(),
+            amount: amountCents,
+            currency: 'eur',
+            status: 'PENDING',
+            intakeRequired: true,
+            checkoutAttemptId,
+            formData: {
+              phone: dto.phone || '',
+              productLevel: LUMIRA_EARLY_OFFER.code,
+            } as Prisma.JsonObject,
+          },
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+          throw error;
+        }
+        order = await this.prisma.order.findUnique({ where: { checkoutAttemptId } });
+        if (!order) throw error;
+      }
     }
 
-    // 3. Create Order linked to PI
-    const order = await this.prisma.order.create({
-      data: {
-        orderNumber,
-        userId: user.id,
-        userEmail: normalizedEmail,
-        userName: `${dto.firstName} ${dto.lastName}`.trim(),
-        amount: amountCents,
-        currency: 'eur',
-        status: 'PENDING',
-        intakeRequired: true,
-        paymentIntentId: paymentIntent.id,
-        formData: { phone: dto.phone || '' } as Prisma.JsonObject,
-      },
+    if (!order) {
+      throw new BadRequestException('Unable to prepare payment');
+    }
+
+    // The order is durable before Stripe is called. The same idempotency key is
+    // reused after a slow request, reload, or client retry.
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      paymentIntent = await this.stripe.paymentIntents.create(
+        {
+          amount: amountCents,
+          currency: 'eur',
+          automatic_payment_methods: { enabled: true },
+          metadata: {
+            orderId: order.id,
+            productLevel: LUMIRA_EARLY_OFFER.code,
+            expectedAmount: String(amountCents),
+          },
+        },
+        { idempotencyKey: `checkout-intent:${checkoutAttemptId}` },
+      );
+    } catch {
+      this.logger.error(`checkout_intent_create_failed attempt=${checkoutAttemptId}`);
+      throw new BadRequestException('Unable to prepare payment');
+    }
+
+    if (!paymentIntent.client_secret) {
+      throw new BadRequestException('Unable to prepare payment');
+    }
+
+    order = await this.prisma.order.update({
+      where: { id: order.id },
+      data: { paymentIntentId: paymentIntent.id },
     });
 
-    // 4. Attach orderId to PI metadata
-    await this.stripe.paymentIntents.update(paymentIntent.id, {
-      metadata: {
-        ...paymentIntent.metadata,
-        orderId: order.id,
-      },
-    });
-
-    this.logger.log(`[CheckoutIntent] Order created: ${order.id}, PI: ${paymentIntent.id}`);
+    this.logger.log(
+      `checkout_intent_ready attempt=${checkoutAttemptId} payment_intent=${this.paymentIntentRef(paymentIntent.id)}`,
+    );
 
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
+      paymentStatus: paymentIntent.status,
       amountCents,
+      stripeMode: this.getStripeMode(),
+    };
+  }
+
+  private safeWebhookData(event: Stripe.Event): Prisma.InputJsonValue {
+    const object = event.data.object as { id?: unknown; status?: unknown };
+    return {
+      objectId: typeof object.id === 'string' ? object.id : null,
+      status: typeof object.status === 'string' ? object.status : null,
+      livemode: event.livemode,
+    };
+  }
+
+  /**
+   * Read-only by default reconciliation for paid Stripe intents that may have
+   * missed a webhook. `apply` only runs the existing idempotent fulfillment.
+   */
+  async reconcileEarlyCheckoutPayments(apply = false) {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        amount: LUMIRA_EARLY_OFFER.amountCents,
+        currency: 'eur',
+        paymentIntentId: { not: null },
+      },
+      select: { paymentIntentId: true },
+    });
+    const states: Record<string, number> = {};
+    let fulfilled = 0;
+    let failures = 0;
+
+    for (const order of orders) {
+      if (!order.paymentIntentId) continue;
+      try {
+        const paymentIntent = await this.stripe.paymentIntents.retrieve(order.paymentIntentId);
+        states[paymentIntent.status] = (states[paymentIntent.status] || 0) + 1;
+        if (apply && paymentIntent.status === 'succeeded') {
+          await this.fulfillEarlyCheckout(paymentIntent);
+          fulfilled += 1;
+        }
+      } catch {
+        failures += 1;
+      }
+    }
+
+    return {
+      apply,
+      scanned: orders.length,
+      fulfilled,
+      failures,
+      states,
     };
   }
 
@@ -285,6 +450,16 @@ export class PaymentsService {
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
           await this.handlePaymentSucceeded(paymentIntent);
+          break;
+        }
+
+        case 'payment_intent.processing':
+        case 'payment_intent.payment_failed':
+        case 'payment_intent.canceled': {
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          this.logger.log(
+            `checkout_payment_state event=${event.type} payment_intent=${this.paymentIntentRef(paymentIntent.id)}`,
+          );
           break;
         }
 
@@ -327,7 +502,7 @@ export class PaymentsService {
           data: {
             eventId: event.id,
             eventType: event.type,
-            data: event.data.object as unknown as Prisma.InputJsonValue,
+            data: this.safeWebhookData(event),
           },
         });
       } catch (err: unknown) {
@@ -574,6 +749,77 @@ export class PaymentsService {
   // Legacy one-shot payment handlers
   // =========================================================================
 
+  /**
+   * Fulfill the only public one-time offer. This is deliberately repeatable:
+   * a webhook retry or a browser return after a successful charge always
+   * repairs the fixed-term Sanctuaire entitlement.
+   */
+  private async fulfillEarlyCheckout(paymentIntent: Stripe.PaymentIntent) {
+    const validatedOrder = await this.getValidatedEarlyCheckoutOrder(paymentIntent);
+    const paidAt = new Date();
+    const transition = await this.prisma.order.updateMany({
+      where: {
+        id: validatedOrder.id,
+        status: { notIn: ['PAID', 'COMPLETED'] },
+      },
+      data: {
+        status: 'PAID',
+        intakeRequired: true,
+        paidAt,
+      },
+    });
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: validatedOrder.id },
+      include: { user: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found after payment fulfillment');
+    }
+
+    const accessStartsAt = order.paidAt || paidAt;
+    await this.prisma.subscription.upsert({
+      where: { userId: order.userId },
+      create: {
+        userId: order.userId,
+        stripeSubscriptionId: paymentIntent.id,
+        stripeCustomerId: typeof paymentIntent.customer === 'string' ? paymentIntent.customer : '',
+        // This legacy-required column identifies a one-time early offer, not a Stripe subscription.
+        stripePriceId: LUMIRA_EARLY_OFFER.code,
+        status: 'ACTIVE',
+        currentPeriodStart: accessStartsAt,
+        currentPeriodEnd: getEarlyAccessExpiresAt(accessStartsAt),
+        cancelAtPeriodEnd: false,
+      },
+      update: {
+        stripeSubscriptionId: paymentIntent.id,
+        status: 'ACTIVE',
+        currentPeriodStart: accessStartsAt,
+        currentPeriodEnd: getEarlyAccessExpiresAt(accessStartsAt),
+        cancelAtPeriodEnd: false,
+      },
+    });
+    await this.prisma.user.update({
+      where: { id: order.userId },
+      data: { subscriptionStatus: 'ACTIVE' },
+    });
+
+    if (transition.count > 0) {
+      try {
+        await this.notificationsService.sendOrderConfirmation(order, order.user);
+      } catch {
+        this.logger.error(
+          `checkout_confirmation_notification_failed payment_intent=${this.paymentIntentRef(paymentIntent.id)}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `checkout_fulfilled payment_intent=${this.paymentIntentRef(paymentIntent.id)} transitioned=${transition.count > 0}`,
+    );
+    return order;
+  }
+
   private async handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
     const {
       orderId,
@@ -594,6 +840,11 @@ export class PaymentsService {
         `[Upsell Webhook] Processing upsell for order ${orderId}, type: ${upsellType}`,
       );
       await this.confirmUpsell(orderId, upsellType, paymentIntent.id);
+      return;
+    }
+
+    if (productLevel && isEarlyCheckoutAlias(productLevel.toLowerCase().trim())) {
+      await this.fulfillEarlyCheckout(paymentIntent);
       return;
     }
 

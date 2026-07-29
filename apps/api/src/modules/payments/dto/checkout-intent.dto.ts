@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
 
 export class CheckoutIntentDto {
   @IsEmail()
@@ -22,4 +22,19 @@ export class CheckoutIntentDto {
   @IsNotEmpty()
   @Matches(/^(lumira_early_v1|lumira_lifetime_v1|1|2|3|4|initie|subscription)$/i)
   productLevel: string;
+
+  /** Opaque id persisted by the browser before the network request starts. */
+  @IsUUID()
+  @IsOptional()
+  checkoutAttemptId?: string;
+}
+
+export class CheckoutPaymentProofDto {
+  @IsString()
+  @Matches(/^pi_[A-Za-z0-9]+$/)
+  paymentIntentId: string;
+
+  @IsString()
+  @Matches(/^pi_[A-Za-z0-9]+_secret_[A-Za-z0-9]+$/)
+  clientSecret: string;
 }

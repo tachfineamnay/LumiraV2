@@ -62,7 +62,9 @@ test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo
   await expectNoHorizontalOverflow(page);
 });
 
-test('mobile menu anchor keeps pricing section visible after closing', async ({ page }, testInfo) => {
+test('mobile menu anchor keeps pricing section visible after closing', async ({
+  page,
+}, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'Chromium-only anchor regression check');
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto('/');
@@ -173,6 +175,19 @@ test('payment return retries access finalization without creating another checko
   await page.route('**/api/bff/payments/confirm-checkout', async (route) => {
     confirmCalls += 1;
     await route.fulfill({ status: 503, body: 'temporary failure' });
+  });
+
+  await page.addInitScript(() => {
+    sessionStorage.setItem(
+      'lumira_checkout_attempt_v1',
+      JSON.stringify({
+        checkoutAttemptId: '11111111-1111-4111-8111-111111111111',
+        clientSecret: 'pi_test_return_secret_checkout',
+        paymentIntentId: 'pi_test_return',
+        phase: 'finalizing',
+        updatedAt: new Date().toISOString(),
+      }),
+    );
   });
 
   await page.setViewportSize({ width: 320, height: 568 });

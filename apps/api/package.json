@@ -15,7 +15,8 @@
     "test:e2e": "npx jest --config ./test/jest-e2e.json --passWithNoTests",
     "typecheck": "npx tsc --noEmit",
     "type-check": "npx tsc --noEmit",
-    "migrate:subscriptions": "npx tsx src/scripts/migrate-subscriptions.ts"
+    "migrate:subscriptions": "npx tsx src/scripts/migrate-subscriptions.ts",
+    "reconcile:stripe-payments": "npx tsx src/scripts/reconcile-stripe-payments.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.957.0",

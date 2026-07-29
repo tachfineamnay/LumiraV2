@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PaymentsService, CreateUpsellIntentDto } from './payments.service';
-import { CheckoutIntentDto } from './dto/checkout-intent.dto';
+import { CheckoutIntentDto, CheckoutPaymentProofDto } from './dto/checkout-intent.dto';
 import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -48,11 +48,17 @@ export class PaymentsController {
    * so the client can enter directly without re-entering their email.
    */
   @Post('confirm-checkout')
-  async confirmCheckout(@Body() body: { paymentIntentId: string }) {
-    if (!body?.paymentIntentId || typeof body.paymentIntentId !== 'string') {
-      throw new HttpException('paymentIntentId is required', HttpStatus.BAD_REQUEST);
-    }
-    return this.paymentsService.confirmCheckout(body.paymentIntentId);
+  async confirmCheckout(@Body() body: CheckoutPaymentProofDto) {
+    return this.paymentsService.confirmCheckout(body.paymentIntentId, body.clientSecret);
+  }
+
+  /**
+   * Resolves a persisted browser attempt without issuing access or creating a
+   * second PaymentIntent. The client secret proves possession of the attempt.
+   */
+  @Post('checkout-status')
+  async checkoutStatus(@Body() body: CheckoutPaymentProofDto) {
+    return this.paymentsService.getCheckoutStatus(body.paymentIntentId, body.clientSecret);
   }
 
   @Post('webhook')

@@ -7,13 +7,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Check, AlertCircle, User, Mail, Phone } from 'lucide-react';
 
+const isInternationalPhone = (value: string) => {
+  const normalized = value.replace(/[\s().-]/g, '');
+  return normalized === '' || /^(?:\+[1-9]\d{6,14}|0[1-9]\d{8,9})$/.test(normalized);
+};
+
 const formSchema = z.object({
   email: z.string().email('Email invalide'),
-  phone: z
-    .string()
-    .regex(/^0[67]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{2}$/, 'Numéro de téléphone invalide')
-    .optional()
-    .or(z.literal('')),
+  phone: z.string().refine(isInternationalPhone, 'Numéro de téléphone invalide').optional(),
   firstName: z.string().min(2, 'Prénom requis (min 2 caractères)'),
   lastName: z.string().min(2, 'Nom requis (min 2 caractères)'),
 });
@@ -148,16 +149,11 @@ export function CheckoutForm({ onFormValid, onFormInvalid, initialValues }: Chec
 
   const watchedFields = watch();
 
-  // Format phone number as user types
+  // Keep international prefixes such as +33, +52 and +212 intact.
   const formatPhone = (value: string) => {
-    const cleaned = value.replace(/\D/g, '').slice(0, 10);
-    if (cleaned.length <= 2) return cleaned;
-    if (cleaned.length <= 4) return `${cleaned.slice(0, 2)} ${cleaned.slice(2)}`;
-    if (cleaned.length <= 6)
-      return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4)}`;
-    if (cleaned.length <= 8)
-      return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6)}`;
-    return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6, 8)} ${cleaned.slice(8)}`;
+    const hasPrefix = value.trimStart().startsWith('+');
+    const digits = value.replace(/\D/g, '').slice(0, 15);
+    return `${hasPrefix ? '+' : ''}${digits}`;
   };
 
   useEffect(() => {
@@ -189,7 +185,7 @@ export function CheckoutForm({ onFormValid, onFormInvalid, initialValues }: Chec
         name="phone"
         label="Téléphone"
         type="tel"
-        placeholder="06 12 34 56 78"
+        placeholder="+33 6 12 34 56 78"
         icon={Phone}
         formatter={formatPhone}
         register={register}

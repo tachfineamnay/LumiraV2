@@ -15,6 +15,7 @@ import sanctuaireApi from '../../lib/sanctuaireApi';
 import {
   buildSanctuairePostCheckoutUrl,
   completeCheckoutSession,
+  getCheckoutPaymentStatus,
 } from '../../lib/completeCheckoutSession';
 import {
   clearCheckoutAttempt,
@@ -33,6 +34,13 @@ function getStripe() {
     stripePromise = key ? loadStripe(key) : Promise.resolve(null);
   }
   return stripePromise;
+}
+
+function getPublishableKeyMode(): 'live' | 'test' | null {
+  const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
+  if (key.startsWith('pk_live_')) return 'live';
+  if (key.startsWith('pk_test_')) return 'test';
+  return null;
 }
 
 // Type for connected user from Sanctuaire
@@ -55,9 +63,11 @@ function CheckoutContent() {
   const [step, setStep] = useState<'form' | 'payment'>('form');
   const [isPreparationSlow, setIsPreparationSlow] = useState(false);
   const [isPaymentUncertain, setIsPaymentUncertain] = useState(false);
+  const [stripeConfigurationError, setStripeConfigurationError] = useState<string | null>(null);
   const paymentSectionRef = useRef<HTMLDivElement>(null);
   const preparingIntentRef = useRef(false);
   const finalizingPaymentRef = useRef(false);
+  const checkoutAttemptIdRef = useRef<string | null>(null);
 
   // Try to fetch connected user from Sanctuaire session cookies on mount
   useEffect(() => {
@@ -83,6 +93,14 @@ function CheckoutContent() {
   useEffect(() => {
     const attempt = readCheckoutAttempt();
     if (!attempt) return;
+
+    checkoutAttemptIdRef.current = attempt.checkoutAttemptId;
+    if (!attempt.clientSecret || !attempt.paymentIntentId) {
+      setPaymentError(
+        'La préparation a été interrompue. Reprenez le formulaire : Lumira réutilisera la même tentative et ne créera pas de second paiement.',
+      );
+      return;
+    }
 
     setClientSecret(attempt.clientSecret);
     setPaymentIntentId(attempt.paymentIntentId);
@@ -110,6 +128,28 @@ function CheckoutContent() {
     return () => window.cancelAnimationFrame(frame);
   }, [clientSecret, step]);
 
+  useEffect(() => {
+    if (step !== 'payment' || !clientSecret || !paymentIntentId) return;
+
+    let cancelled = false;
+    void getCheckoutPaymentStatus(paymentIntentId, clientSecret)
+      .then((result) => {
+        const publishableKeyMode = getPublishableKeyMode();
+        if (!cancelled && (!publishableKeyMode || result.stripeMode !== publishableKeyMode)) {
+          setStripeConfigurationError(
+            "Le module de paiement est configuré dans un environnement différent de votre commande. Aucun paiement n'a été effectué : ne recommencez pas le paiement, contactez Lumira ou réessayez après la correction du service.",
+          );
+        }
+      })
+      .catch(() => {
+        // The Element remains usable when a status probe is temporarily unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientSecret, paymentIntentId, step]);
+
   const handleFormValid = useCallback((data: CheckoutFormData) => {
     setFormData(data);
     setIsFormValid(true);
@@ -119,34 +159,43 @@ function CheckoutContent() {
     setIsFormValid(false);
   }, []);
 
-  const finalizePaymentAccess = useCallback(async (intentId: string) => {
-    if (finalizingPaymentRef.current) return;
+  const finalizePaymentAccess = useCallback(
+    async (intentId: string) => {
+      if (finalizingPaymentRef.current) return;
 
-    finalizingPaymentRef.current = true;
-    setIsLoading(true);
-    setIsPaymentUncertain(true);
-    setPaymentError(null);
+      finalizingPaymentRef.current = true;
+      setIsLoading(true);
+      setIsPaymentUncertain(true);
+      setPaymentError(null);
 
-    try {
-      const attempt = readCheckoutAttempt();
-      const secret = clientSecret || attempt?.clientSecret;
-      if (secret) {
-        saveCheckoutAttempt({ clientSecret: secret, paymentIntentId: intentId, phase: 'finalizing' });
+      try {
+        const attempt = readCheckoutAttempt();
+        const secret = clientSecret || attempt?.clientSecret;
+        if (!secret || !checkoutAttemptIdRef.current) {
+          throw new Error('Missing checkout attempt proof');
+        }
+        saveCheckoutAttempt({
+          checkoutAttemptId: checkoutAttemptIdRef.current,
+          clientSecret: secret,
+          paymentIntentId: intentId,
+          phase: 'finalizing',
+        });
+        await completeCheckoutSession(intentId, secret);
+        clearCheckoutAttempt();
+        trackPurchase(SUBSCRIPTION.price, intentId);
+        window.location.assign(buildSanctuairePostCheckoutUrl());
+      } catch (err) {
+        console.error('[Checkout] Post-payment session failed:', err);
+        setPaymentError(
+          "Votre paiement semble effectué, mais l'accès n'est pas encore finalisé. Ne payez pas une seconde fois : vérifiez à nouveau le paiement ou connectez-vous au Sanctuaire.",
+        );
+      } finally {
+        finalizingPaymentRef.current = false;
+        setIsLoading(false);
       }
-      await completeCheckoutSession(intentId);
-      clearCheckoutAttempt();
-      trackPurchase(SUBSCRIPTION.price, intentId);
-      window.location.assign(buildSanctuairePostCheckoutUrl());
-    } catch (err) {
-      console.error('[Checkout] Post-payment session failed:', err);
-      setPaymentError(
-        "Votre paiement semble effectué, mais l'accès n'est pas encore finalisé. Ne payez pas une seconde fois : vérifiez à nouveau le paiement ou connectez-vous au Sanctuaire.",
-      );
-    } finally {
-      finalizingPaymentRef.current = false;
-      setIsLoading(false);
-    }
-  }, [clientSecret]);
+    },
+    [clientSecret],
+  );
 
   const handleProceedToPayment = async () => {
     if (!formData || preparingIntentRef.current) return;
@@ -154,8 +203,15 @@ function CheckoutContent() {
     preparingIntentRef.current = true;
     setIsLoading(true);
     setPaymentError(null);
+    setStripeConfigurationError(null);
 
     try {
+      const storedAttempt = readCheckoutAttempt();
+      const checkoutAttemptId =
+        storedAttempt?.checkoutAttemptId || checkoutAttemptIdRef.current || crypto.randomUUID();
+      checkoutAttemptIdRef.current = checkoutAttemptId;
+      saveCheckoutAttempt({ checkoutAttemptId, phase: 'preparing' });
+
       // The server remains authoritative for price, order and payment state.
       const response = await sanctuaireApi.post('/payments/checkout-intent', {
         email: formData.email,
@@ -163,6 +219,7 @@ function CheckoutContent() {
         lastName: formData.lastName,
         phone: formData.phone || undefined,
         productLevel: 'lumira_early_v1',
+        checkoutAttemptId,
       });
 
       const secret = response.data?.clientSecret;
@@ -172,11 +229,34 @@ function CheckoutContent() {
       if (!secret || !intentId) {
         throw new Error('No client secret returned');
       }
+      const publishableKeyMode = getPublishableKeyMode();
+      if (!publishableKeyMode) {
+        const message =
+          "Le paiement sécurisé n'est pas configuré correctement. Aucun paiement n'a été effectué : réessayez plus tard ou contactez Lumira sans recommencer le paiement.";
+        setStripeConfigurationError(message);
+        setPaymentError(message);
+        return;
+      }
+      if (response.data?.stripeMode && response.data.stripeMode !== publishableKeyMode) {
+        const message =
+          "Le module de paiement est configuré dans un environnement différent de celui de votre commande. Aucun paiement n'a été effectué : ne recommencez pas le paiement, contactez Lumira ou réessayez après la correction du service.";
+        setStripeConfigurationError(message);
+        setPaymentError(message);
+        return;
+      }
 
       setClientSecret(secret);
       setPaymentIntentId(intentId);
-      saveCheckoutAttempt({ clientSecret: secret, paymentIntentId: intentId, phase: 'payment_ready' });
+      saveCheckoutAttempt({
+        checkoutAttemptId,
+        clientSecret: secret,
+        paymentIntentId: intentId,
+        phase: 'payment_ready',
+      });
       setStep('payment');
+      if (response.data?.paymentStatus === 'succeeded') {
+        await finalizePaymentAccess(intentId);
+      }
     } catch (err) {
       console.error('[Checkout] Error:', err);
       setPaymentError(
@@ -194,15 +274,21 @@ function CheckoutContent() {
   };
 
   const handlePaymentAttemptStart = () => {
-    if (!clientSecret || !paymentIntentId) return;
-    saveCheckoutAttempt({ clientSecret, paymentIntentId, phase: 'confirming' });
+    if (!clientSecret || !paymentIntentId || !checkoutAttemptIdRef.current) return;
+    saveCheckoutAttempt({
+      checkoutAttemptId: checkoutAttemptIdRef.current,
+      clientSecret,
+      paymentIntentId,
+      phase: 'confirming',
+    });
     setIsPaymentUncertain(true);
     setPaymentError(null);
   };
 
   const handlePaymentError = (error: { message: string; paymentMayBePending: boolean }) => {
-    if (clientSecret && paymentIntentId) {
+    if (clientSecret && paymentIntentId && checkoutAttemptIdRef.current) {
       saveCheckoutAttempt({
+        checkoutAttemptId: checkoutAttemptIdRef.current,
         clientSecret,
         paymentIntentId,
         phase: error.paymentMayBePending ? 'confirming' : 'payment_ready',
@@ -210,6 +296,45 @@ function CheckoutContent() {
     }
     setIsPaymentUncertain(error.paymentMayBePending);
     setPaymentError(error.message);
+  };
+
+  const verifyPaymentAttempt = async () => {
+    if (!clientSecret || !paymentIntentId || isLoading || finalizingPaymentRef.current) return;
+    setIsLoading(true);
+    setPaymentError(null);
+    try {
+      const result = await getCheckoutPaymentStatus(paymentIntentId, clientSecret);
+      if (result.status === 'succeeded') {
+        await finalizePaymentAccess(paymentIntentId);
+        return;
+      }
+      if (result.status === 'requires_action' || result.status === 'requires_payment_method') {
+        if (checkoutAttemptIdRef.current) {
+          saveCheckoutAttempt({
+            checkoutAttemptId: checkoutAttemptIdRef.current,
+            clientSecret,
+            paymentIntentId,
+            phase: 'payment_ready',
+          });
+        }
+        setIsPaymentUncertain(false);
+        setPaymentError(
+          "Votre paiement n'est pas confirmé. Reprenez la même tentative ci-dessous : aucun nouveau paiement ne sera créé.",
+        );
+        return;
+      }
+      setIsPaymentUncertain(true);
+      setPaymentError(
+        "Votre paiement est encore en cours de validation. Ne payez pas une seconde fois : vérifiez à nouveau dans un instant ou demandez votre lien d'accès.",
+      );
+    } catch {
+      setIsPaymentUncertain(true);
+      setPaymentError(
+        'Nous ne pouvons pas vérifier le paiement pour le moment. Ne payez pas une seconde fois : réessayez cette vérification lorsque la connexion est rétablie.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -444,7 +569,7 @@ function CheckoutContent() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.2 }}
-                    className="scroll-mt-4 backdrop-blur-xl rounded-2xl p-6 md:p-8"
+                  className="scroll-mt-4 backdrop-blur-xl rounded-2xl p-6 md:p-8"
                   style={{
                     background:
                       'linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(80,130,220,0.03) 100%)',
@@ -481,19 +606,22 @@ function CheckoutContent() {
                         <ArrowRight className="w-5 h-5" />
                       </>
                     )}
-                    </button>
-                    {isPreparationSlow && (
-                      <p className="mt-4 text-center text-sm leading-6 text-blue-100/75" role="status">
-                        La préparation prend plus de temps que prévu. Gardez cette page ouverte :
-                        ne cliquez pas une seconde fois, aucun paiement n&apos;est encore confirmé.
-                      </p>
-                    )}
-                    {!connectedUser && (
-                      <p className="mt-4 text-center text-sm leading-6 text-blue-100/75">
-                        Vous avez déjà un accès ? Connectez-vous au Sanctuaire avant de payer.
-                        Utiliser une adresse connue ne crée pas un second compte.
-                      </p>
-                    )}
+                  </button>
+                  {isPreparationSlow && (
+                    <p
+                      className="mt-4 text-center text-sm leading-6 text-blue-100/75"
+                      role="status"
+                    >
+                      La préparation prend plus de temps que prévu. Gardez cette page ouverte : ne
+                      cliquez pas une seconde fois, aucun paiement n&apos;est encore confirmé.
+                    </p>
+                  )}
+                  {!connectedUser && (
+                    <p className="mt-4 text-center text-sm leading-6 text-blue-100/75">
+                      Vous avez déjà un accès ? Connectez-vous au Sanctuaire avant de payer.
+                      Utiliser une adresse connue ne crée pas un second compte.
+                    </p>
+                  )}
                 </motion.div>
               )}
 
@@ -523,45 +651,56 @@ function CheckoutContent() {
                     <h2 className="text-xl font-playfair italic text-white">Paiement sécurisé</h2>
                   </div>
 
-                  <Elements
-                    stripe={getStripe()}
-                    options={{
-                      clientSecret,
-                      appearance: {
-                        theme: 'night',
-                        variables: {
-                          colorPrimary: '#e8a838',
-                          colorBackground: '#0f1e42',
-                          colorText: '#c8dcff',
-                          borderRadius: '12px',
+                  {stripeConfigurationError ? (
+                    <div
+                      className="rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm leading-6 text-amber-50"
+                      role="alert"
+                    >
+                      {stripeConfigurationError}
+                    </div>
+                  ) : (
+                    <Elements
+                      stripe={getStripe()}
+                      options={{
+                        clientSecret,
+                        appearance: {
+                          theme: 'night',
+                          variables: {
+                            colorPrimary: '#e8a838',
+                            colorBackground: '#0f1e42',
+                            colorText: '#c8dcff',
+                            borderRadius: '12px',
+                          },
                         },
-                      },
-                    }}
-                  >
-                    <StripePayment
-                      amount={SUBSCRIPTION.price * 100}
-                      onPaymentSuccess={handlePaymentSuccess}
-                      onPaymentError={handlePaymentError}
-                      onPaymentAttemptStart={handlePaymentAttemptStart}
-                      disabled={isLoading || isPaymentUncertain}
-                    />
-                    {isPaymentUncertain && paymentIntentId && (
-                      <div className="mt-5 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-50">
-                        <p className="leading-6">
-                          Une seule tentative de paiement est active. Avant de recommencer,
-                          vérifiez cette tentative : cela ne crée aucun nouveau paiement.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void finalizePaymentAccess(paymentIntentId)}
-                          disabled={isLoading}
-                          className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-amber-200/50 px-4 py-2 font-semibold text-amber-50 transition-colors hover:bg-amber-100/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isLoading ? 'Vérification en cours…' : 'Vérifier mon paiement et accéder au Sanctuaire'}
-                        </button>
-                      </div>
-                    )}
-                  </Elements>
+                      }}
+                    >
+                      <StripePayment
+                        amount={SUBSCRIPTION.price * 100}
+                        onPaymentSuccess={handlePaymentSuccess}
+                        onPaymentError={handlePaymentError}
+                        onPaymentAttemptStart={handlePaymentAttemptStart}
+                        disabled={isLoading || isPaymentUncertain}
+                      />
+                      {isPaymentUncertain && paymentIntentId && (
+                        <div className="mt-5 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-50">
+                          <p className="leading-6">
+                            Une seule tentative de paiement est active. Avant de recommencer,
+                            vérifiez cette tentative : cela ne crée aucun nouveau paiement.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => void verifyPaymentAttempt()}
+                            disabled={isLoading}
+                            className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-amber-200/50 px-4 py-2 font-semibold text-amber-50 transition-colors hover:bg-amber-100/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isLoading
+                              ? 'Vérification en cours…'
+                              : 'Vérifier mon paiement et accéder au Sanctuaire'}
+                          </button>
+                        </div>
+                      )}
+                    </Elements>
+                  )}
                 </motion.div>
               )}
 

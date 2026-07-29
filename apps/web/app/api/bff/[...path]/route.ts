@@ -16,6 +16,7 @@ const ALLOWED_PREFIXES = [
   'dreams',
   'subscriptions/',
   'payments/checkout-intent',
+  'payments/checkout-status',
   'payments/confirm-checkout',
   'payments/orders/',
   'chat/',

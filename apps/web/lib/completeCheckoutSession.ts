@@ -24,9 +24,13 @@ async function persistSanctuaireSession(token: string) {
  * 3. Mark first visit for onboarding
  * Returns the buyer email for analytics and UI only.
  */
-export async function completeCheckoutSession(paymentIntentId: string): Promise<{ email: string }> {
+export async function completeCheckoutSession(
+  paymentIntentId: string,
+  clientSecret: string,
+): Promise<{ email: string }> {
   const response = await sanctuaireApi.post('/payments/confirm-checkout', {
     paymentIntentId,
+    clientSecret,
   });
 
   const { token, user } = response.data;
@@ -38,6 +42,19 @@ export async function completeCheckoutSession(paymentIntentId: string): Promise<
   sessionStorage.setItem(FIRST_VISIT_KEY, 'true');
 
   return { email: user.email as string };
+}
+
+export async function getCheckoutPaymentStatus(paymentIntentId: string, clientSecret: string) {
+  const response = await sanctuaireApi.post('/payments/checkout-status', {
+    paymentIntentId,
+    clientSecret,
+  });
+  return response.data as {
+    paymentIntentId: string;
+    paymentMayBePending: boolean;
+    status: string;
+    stripeMode: 'live' | 'test';
+  };
 }
 
 /**
