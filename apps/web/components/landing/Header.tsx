@@ -19,13 +19,16 @@ export function Header() {
   const handleAnchorClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>, href: string) => {
       event.preventDefault();
+      const target = document.querySelector(href) as HTMLElement | null;
       closeMobileMenu(false);
-      window.setTimeout(() => {
-        if (window.location.hash !== href) {
-          window.history.pushState(null, '', href);
-        }
-        document.querySelector(href)?.scrollIntoView({ block: 'start', inline: 'nearest' });
-      }, 0);
+      const bodyStyle = document.body.style;
+      bodyStyle.overflow = '';
+      bodyStyle.paddingRight = '';
+      bodyStyle.position = '';
+      bodyStyle.top = '';
+      bodyStyle.width = '';
+      if (window.location.hash !== href) window.history.pushState(null, '', href);
+      if (target) window.scrollTo({ top: target.offsetTop, behavior: 'auto' });
     },
     [closeMobileMenu],
   );
