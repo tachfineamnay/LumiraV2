@@ -76,8 +76,12 @@ test('mobile menu anchor keeps pricing section visible after closing', async ({
   await menu.getByRole('link', { name: "Commencer l'expérience" }).click();
   await expect(menu).toBeHidden();
   await expect(page).toHaveURL(/#niveaux$/);
-  await expect.poll(() => page.locator('#niveaux').boundingBox()).not.toBeNull();
-  await expectIntersectsViewport(page.locator('#niveaux'));
+  await expect
+    .poll(async () => {
+      const box = await page.locator('#niveaux').boundingBox();
+      return box ? box.y <= (page.viewportSize()?.height ?? 0) && box.y + box.height >= 0 : false;
+    })
+    .toBe(true);
   await expectNoHorizontalOverflow(page);
 });
 

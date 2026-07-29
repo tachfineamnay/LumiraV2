@@ -19,16 +19,8 @@ export function Header() {
   const handleAnchorClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>, href: string) => {
       event.preventDefault();
-      const target = document.querySelector(href) as HTMLElement | null;
       closeMobileMenu(false);
-      const bodyStyle = document.body.style;
-      bodyStyle.overflow = '';
-      bodyStyle.paddingRight = '';
-      bodyStyle.position = '';
-      bodyStyle.top = '';
-      bodyStyle.width = '';
-      if (window.location.hash !== href) window.history.pushState(null, '', href);
-      if (target) window.scrollTo({ top: target.offsetTop, behavior: 'auto' });
+      window.location.assign(href);
     },
     [closeMobileMenu],
   );
@@ -37,6 +29,23 @@ export function Header() {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const scrollToHash = () => {
+      const hash = window.location.hash;
+      if (!hash) return;
+      window.requestAnimationFrame(() => {
+        document.querySelector(hash)?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      });
+    };
+
+    const timeout = window.setTimeout(scrollToHash, 500);
+    window.addEventListener('hashchange', scrollToHash);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener('hashchange', scrollToHash);
+    };
   }, []);
 
   useEffect(() => {
