@@ -1,6 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense, useCallback } from 'react';
+import {
+  Component,
+  useState,
+  useEffect,
+  useRef,
+  Suspense,
+  useCallback,
+  type ReactNode,
+} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Shield, CreditCard, Crown, Sparkles, Check, ArrowRight } from 'lucide-react';
 import {
@@ -41,6 +49,30 @@ function getPublishableKeyMode(): 'live' | 'test' | null {
   if (key.startsWith('pk_live_')) return 'live';
   if (key.startsWith('pk_test_')) return 'test';
   return null;
+}
+
+class StripeElementsBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div
+          data-testid="stripe-payment-element"
+          className="rounded-xl border border-rose-300/30 bg-rose-300/10 p-4 text-sm leading-6 text-rose-50"
+          role="alert"
+        >
+          Le module de paiement n&apos;a pas pu se charger. Aucun paiement n&apos;a été effectué :
+          rechargez cette même tentative ou revenez plus tard sans créer un second paiement.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // Type for connected user from Sanctuaire
@@ -659,47 +691,49 @@ function CheckoutContent() {
                       {stripeConfigurationError}
                     </div>
                   ) : (
-                    <Elements
-                      stripe={getStripe()}
-                      options={{
-                        clientSecret,
-                        appearance: {
-                          theme: 'night',
-                          variables: {
-                            colorPrimary: '#e8a838',
-                            colorBackground: '#0f1e42',
-                            colorText: '#c8dcff',
-                            borderRadius: '12px',
+                    <StripeElementsBoundary>
+                      <Elements
+                        stripe={getStripe()}
+                        options={{
+                          clientSecret,
+                          appearance: {
+                            theme: 'night',
+                            variables: {
+                              colorPrimary: '#e8a838',
+                              colorBackground: '#0f1e42',
+                              colorText: '#c8dcff',
+                              borderRadius: '12px',
+                            },
                           },
-                        },
-                      }}
-                    >
-                      <StripePayment
-                        amount={SUBSCRIPTION.price * 100}
-                        onPaymentSuccess={handlePaymentSuccess}
-                        onPaymentError={handlePaymentError}
-                        onPaymentAttemptStart={handlePaymentAttemptStart}
-                        disabled={isLoading || isPaymentUncertain}
-                      />
-                      {isPaymentUncertain && paymentIntentId && (
-                        <div className="mt-5 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-50">
-                          <p className="leading-6">
-                            Une seule tentative de paiement est active. Avant de recommencer,
-                            vérifiez cette tentative : cela ne crée aucun nouveau paiement.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => void verifyPaymentAttempt()}
-                            disabled={isLoading}
-                            className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-amber-200/50 px-4 py-2 font-semibold text-amber-50 transition-colors hover:bg-amber-100/10 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {isLoading
-                              ? 'Vérification en cours…'
-                              : 'Vérifier mon paiement et accéder au Sanctuaire'}
-                          </button>
-                        </div>
-                      )}
-                    </Elements>
+                        }}
+                      >
+                        <StripePayment
+                          amount={SUBSCRIPTION.price * 100}
+                          onPaymentSuccess={handlePaymentSuccess}
+                          onPaymentError={handlePaymentError}
+                          onPaymentAttemptStart={handlePaymentAttemptStart}
+                          disabled={isLoading || isPaymentUncertain}
+                        />
+                        {isPaymentUncertain && paymentIntentId && (
+                          <div className="mt-5 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-50">
+                            <p className="leading-6">
+                              Une seule tentative de paiement est active. Avant de recommencer,
+                              vérifiez cette tentative : cela ne crée aucun nouveau paiement.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => void verifyPaymentAttempt()}
+                              disabled={isLoading}
+                              className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-amber-200/50 px-4 py-2 font-semibold text-amber-50 transition-colors hover:bg-amber-100/10 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isLoading
+                                ? 'Vérification en cours…'
+                                : 'Vérifier mon paiement et accéder au Sanctuaire'}
+                            </button>
+                          </div>
+                        )}
+                      </Elements>
+                    </StripeElementsBoundary>
                   )}
                 </motion.div>
               )}
