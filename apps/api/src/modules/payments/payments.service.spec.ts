@@ -31,9 +31,14 @@ function createService() {
         user: { id: 'user_checkout' },
       }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      create: jest.fn(),
     },
     subscription: { upsert: jest.fn().mockResolvedValue({}) },
-    user: { update: jest.fn().mockResolvedValue({}) },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'user_checkout' }),
+      create: jest.fn(),
+      update: jest.fn().mockResolvedValue({}),
+    },
   };
   const notifications = { sendOrderConfirmation: jest.fn().mockResolvedValue(undefined) };
   const auth = {
@@ -47,8 +52,13 @@ function createService() {
     { generateOrderNumber: jest.fn() } as never,
     auth as never,
   );
-  (service as unknown as { stripe: { paymentIntents: { retrieve: jest.Mock } } }).stripe = {
-    paymentIntents: { retrieve: jest.fn().mockResolvedValue(paymentIntent) },
+  (
+    service as unknown as { stripe: { paymentIntents: { retrieve: jest.Mock; create: jest.Mock } } }
+  ).stripe = {
+    paymentIntents: {
+      retrieve: jest.fn().mockResolvedValue(paymentIntent),
+      create: jest.fn(),
+    },
   };
   return { service, prisma, auth };
 }
@@ -80,5 +90,41 @@ describe('PaymentsService.confirmCheckout', () => {
     expect(auth.issueSanctuaireSessionForVerifiedPayment).toHaveBeenCalledWith(
       'buyer@example.test',
     );
+  });
+
+  it('reuses a resumable PaymentIntent for the same browser checkout attempt', async () => {
+    const { service, prisma } = createService();
+    const resumableIntent = {
+      ...paymentIntent,
+      status: 'requires_payment_method',
+    } as Stripe.PaymentIntent;
+    prisma.order.findUnique.mockResolvedValue({
+      id: 'order_checkout',
+      userId: 'user_checkout',
+      amount: 1700,
+      currency: 'eur',
+      status: 'PENDING',
+      paymentIntentId: 'pi_checkout',
+    });
+    (
+      service as unknown as { stripe: { paymentIntents: { retrieve: jest.Mock } } }
+    ).stripe.paymentIntents.retrieve.mockResolvedValue(resumableIntent);
+
+    await expect(
+      service.createCheckoutIntent({
+        email: 'buyer@example.test',
+        firstName: 'Buyer',
+        lastName: 'Example',
+        productLevel: 'lumira_early_v1',
+        checkoutAttemptId: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        clientSecret: CLIENT_SECRET,
+        paymentIntentId: 'pi_checkout',
+        paymentStatus: 'requires_payment_method',
+      }),
+    );
+    expect(prisma.order.create).not.toHaveBeenCalled();
   });
 });
