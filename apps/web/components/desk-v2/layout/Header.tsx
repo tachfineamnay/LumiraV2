@@ -25,9 +25,11 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
     <header className="flex h-12 flex-shrink-0 items-center justify-between gap-2 border-b border-desk-border bg-desk-surface px-3 sm:px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <button
+          id="desk-mobile-menu-button"
           onClick={onMenuClick}
           aria-label={mobileNavOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
           aria-expanded={mobileNavOpen}
+          aria-controls="desk-mobile-navigation"
           className="-ml-1 flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center rounded-lg p-2 text-desk-muted transition-colors hover:bg-desk-hover hover:text-desk-text lg:hidden"
         >
           {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -36,7 +38,7 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
         <button
           onClick={handleSearchClick}
           aria-label="Rechercher"
-          className="flex min-h-[36px] max-w-md flex-1 items-center gap-2 rounded-lg border border-desk-border bg-desk-card px-2.5 py-1.5 text-desk-muted transition-all hover:text-desk-text sm:w-48 sm:flex-initial sm:min-w-0 sm:px-3 md:w-64"
+          className="flex min-h-[44px] max-w-md flex-1 items-center gap-2 rounded-lg border border-desk-border bg-desk-card px-2.5 py-1.5 text-desk-muted transition-all hover:text-desk-text sm:min-h-[36px] sm:w-48 sm:flex-initial sm:min-w-0 sm:px-3 md:w-64"
         >
           <Search className="h-4 w-4 flex-shrink-0" />
           <span className="hidden truncate text-sm sm:inline">Rechercher...</span>
@@ -83,7 +85,7 @@ export function Header({ onMenuClick, mobileNavOpen }: HeaderProps) {
           href="/admin/messages"
           title={unreadCount > 0 ? `${unreadCount} demande(s) non lue(s)` : 'Demandes d’éclairage'}
           aria-label="Demandes d’éclairage"
-          className="relative flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-desk-hover"
+          className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-desk-hover sm:min-h-[40px] sm:min-w-[40px]"
         >
           <Bell className="h-5 w-5 text-desk-muted" />
           {unreadCount > 0 && (

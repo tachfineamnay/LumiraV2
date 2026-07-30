@@ -45,7 +45,7 @@ export function DeskLayout({ children }: DeskLayoutProps) {
   }, [closeMobileNav]);
 
   return (
-    <div className="flex h-dvh min-h-0 bg-desk-bg text-desk-text overflow-hidden">
+    <div className="flex h-dvh min-h-0 overflow-hidden bg-desk-bg text-desk-text [padding-bottom:env(safe-area-inset-bottom)] [padding-left:env(safe-area-inset-left)] [padding-right:env(safe-area-inset-right)] [padding-top:env(safe-area-inset-top)]">
       <CommandPalette />
 
       <Sidebar mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} />

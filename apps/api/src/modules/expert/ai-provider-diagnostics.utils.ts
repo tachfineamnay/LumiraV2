@@ -135,13 +135,14 @@ export const IDENTIFIABLE_VISION_PROBE_BASE64 =
 
 export const DEFAULT_AI_TEST_TIMEOUT_MS = 30_000;
 export const AI_HEALTH_CACHE_TTL_MS = 5 * 60 * 1000;
-const CONTROL_CHARACTERS = new RegExp(
-  String.raw`[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]`,
-  'g',
-);
 
 export function sanitizeVisionResponsePreview(text?: string): string {
   if (!text) return '';
-  const cleaned = text.replace(CONTROL_CHARACTERS, '').replace(/\s+/g, ' ').trim();
+  const withoutControls = Array.from(text, (character) => {
+    const code = character.charCodeAt(0);
+    const isPreservedWhitespace = code === 9 || code === 10 || code === 13;
+    return (code >= 32 && code !== 127) || isPreservedWhitespace ? character : '';
+  }).join('');
+  const cleaned = withoutControls.replace(/\s+/g, ' ').trim();
   return cleaned.length > 200 ? cleaned.slice(0, 200) : cleaned;
 }

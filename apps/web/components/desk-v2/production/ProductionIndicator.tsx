@@ -12,7 +12,7 @@ export function ProductionIndicator() {
     <Link
       href="/admin/production"
       title="Ouvrir le centre de production"
-      className="flex min-h-[36px] items-center gap-1.5 rounded-full border border-desk-border bg-desk-card px-2.5 py-1.5 text-xs transition-colors hover:bg-desk-hover sm:px-3"
+      className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-desk-border bg-desk-card px-2.5 py-1.5 text-xs transition-colors hover:bg-desk-hover sm:min-h-[36px] sm:px-3"
     >
       {isLoading ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-desk-muted" />

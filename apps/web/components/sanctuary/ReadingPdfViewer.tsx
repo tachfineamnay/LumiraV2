@@ -2,9 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
 import {
   AlertCircle,
   ChevronLeft,
@@ -19,8 +16,12 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import sanctuaireApi from '@/lib/sanctuaireApi';
-
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+import {
+  loadPdfJs,
+  type PdfDocumentProxy,
+  type PdfPageProxy,
+  type PdfRenderTask,
+} from '@/lib/pdfjs-client';
 
 export function extractOrderNumberFromPdfUrl(pdfUrl: string): string | null {
   const match = pdfUrl.match(/\/readings\/([^/]+)\/(download|file)/);
@@ -42,12 +43,15 @@ export function ReadingPdfViewer({
 }: ReadingPdfViewerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [scale, setScale] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [pdfDocument, setPdfDocument] = useState<PdfDocumentProxy | null>(null);
+  const [isRendering, setIsRendering] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [visualViewportHeight, setVisualViewportHeight] = useState<number | null>(null);
   const [pageWidth, setPageWidth] = useState(280);
@@ -100,12 +104,15 @@ export function ReadingPdfViewer({
   useEffect(() => {
     let revoked: string | null = null;
     let cancelled = false;
+    let loadedDocument: PdfDocumentProxy | null = null;
 
     const load = async () => {
       setIsLoading(true);
+      setIsRendering(false);
       setError(null);
       setNumPages(0);
       setPageNumber(1);
+      setPdfDocument(null);
       setBlobUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -117,8 +124,19 @@ export function ReadingPdfViewer({
         });
         if (cancelled) return;
         const blob = new Blob([data], { type: 'application/pdf' });
+        const pdfjs = await loadPdfJs();
+        const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) });
+        const documentProxy = await loadingTask.promise;
+        if (cancelled) {
+          await documentProxy.destroy();
+          return;
+        }
+
         const url = URL.createObjectURL(blob);
         revoked = url;
+        loadedDocument = documentProxy;
+        setNumPages(documentProxy.numPages);
+        setPdfDocument(documentProxy);
         setBlobUrl(url);
       } catch {
         if (!cancelled) {
@@ -133,8 +151,64 @@ export function ReadingPdfViewer({
     return () => {
       cancelled = true;
       if (revoked) URL.revokeObjectURL(revoked);
+      if (loadedDocument) void loadedDocument.destroy();
     };
   }, [orderNumber, reloadKey]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!pdfDocument || !canvas) return;
+
+    let cancelled = false;
+    let pageProxy: PdfPageProxy | null = null;
+    let renderTask: PdfRenderTask | null = null;
+
+    const renderPage = async () => {
+      setIsRendering(true);
+      try {
+        pageProxy = await pdfDocument.getPage(pageNumber);
+        if (cancelled) return;
+
+        const baseViewport = pageProxy.getViewport({ scale: 1 });
+        const cssScale = (pageWidth * scale) / baseViewport.width;
+        const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+        const renderViewport = pageProxy.getViewport({ scale: cssScale * outputScale });
+        const context = canvas.getContext('2d', { alpha: false });
+        if (!context) throw new Error('Canvas indisponible');
+
+        canvas.width = Math.max(1, Math.floor(renderViewport.width));
+        canvas.height = Math.max(1, Math.floor(renderViewport.height));
+        canvas.style.width = `${Math.max(1, Math.floor(baseViewport.width * cssScale))}px`;
+        canvas.style.height = `${Math.max(1, Math.floor(baseViewport.height * cssScale))}px`;
+
+        renderTask = pageProxy.render({
+          canvas,
+          canvasContext: context,
+          viewport: renderViewport,
+        });
+        await renderTask.promise;
+        if (!cancelled) {
+          setError(null);
+          setIsLoading(false);
+          setIsRendering(false);
+        }
+      } catch (renderError) {
+        if (cancelled || (renderError instanceof Error && renderError.name === 'RenderingCancelledException')) {
+          return;
+        }
+        setError('Le document PDF est illisible ou corrompu.');
+        setIsLoading(false);
+        setIsRendering(false);
+      }
+    };
+
+    void renderPage();
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+      pageProxy?.cleanup();
+    };
+  }, [pageNumber, pageWidth, pdfDocument, scale]);
 
   const handleZoomIn = () => setScale((s) => Math.min(Number((s + 0.15).toFixed(2)), 2.2));
   const handleZoomOut = () => setScale((s) => Math.max(Number((s - 0.15).toFixed(2)), 0.7));
@@ -168,18 +242,6 @@ export function ReadingPdfViewer({
       }) as React.CSSProperties,
     [visualViewportHeight],
   );
-
-  const onDocumentLoadSuccess = ({ numPages: nextNumPages }: { numPages: number }) => {
-    setNumPages(nextNumPages);
-    setPageNumber((currentPage) => Math.min(Math.max(currentPage, 1), Math.max(nextNumPages, 1)));
-    setError(null);
-    setIsLoading(false);
-  };
-
-  const onDocumentLoadError = () => {
-    setError('Le document PDF est illisible ou corrompu.');
-    setIsLoading(false);
-  };
 
   return (
     <div
@@ -224,7 +286,7 @@ export function ReadingPdfViewer({
         data-testid="reading-pdf-scroll"
         className="relative min-h-0 flex-1 overflow-auto bg-[#D8E9F4]"
       >
-        {isLoading && (
+        {(isLoading || isRendering) && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(232,245,252,0.85)] backdrop-blur-sm">
             <div className="px-4 text-center">
               <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-[#8a6820]" />
@@ -251,24 +313,13 @@ export function ReadingPdfViewer({
           </div>
         )}
 
-        {blobUrl && !error && (
+        {blobUrl && pdfDocument && !error && (
           <div className="flex min-h-full items-start justify-center px-3 py-4">
-            <Document
-              file={blobUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={null}
-              className="flex flex-col items-center"
-            >
-              <Page
-                key={`${pageNumber}-${pageWidth}-${scale}`}
-                pageNumber={pageNumber}
-                width={pageWidth * scale}
-                renderTextLayer
-                renderAnnotationLayer
-                className="overflow-hidden rounded-sm bg-white shadow-xl"
-              />
-            </Document>
+            <canvas
+              ref={canvasRef}
+              aria-label={`Page ${pageNumber} sur ${numPages} de ${title}`}
+              className="overflow-hidden rounded-sm bg-white shadow-xl"
+            />
           </div>
         )}
       </div>

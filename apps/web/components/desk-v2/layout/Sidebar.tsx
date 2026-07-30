@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -119,11 +119,63 @@ function NavContent({
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+  const mobileDialogRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusAfterNavigationRef = useRef(false);
 
   useEffect(() => {
     onMobileClose?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    if (!restoreFocusAfterNavigationRef.current) return;
+
+    restoreFocusAfterNavigationRef.current = false;
+    const focusFrame = window.requestAnimationFrame(() => {
+      document.getElementById('desk-mobile-menu-button')?.focus();
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [onMobileClose, pathname]);
+
+  const handleMobileNavigate = () => {
+    restoreFocusAfterNavigationRef.current = true;
+    onMobileClose?.();
+  };
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const dialog = mobileDialogRef.current;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const focusableSelector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+        (element) => !element.hasAttribute('hidden') && element.getClientRects().length > 0,
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    dialog?.addEventListener('keydown', trapFocus);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      dialog?.removeEventListener('keydown', trapFocus);
+      previouslyFocused?.focus();
+    };
+  }, [mobileOpen]);
 
   return (
     <>
@@ -180,6 +232,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
               aria-hidden="true"
             />
             <motion.aside
+              ref={mobileDialogRef}
+              id="desk-mobile-navigation"
               role="dialog"
               aria-modal="true"
               aria-label="Navigation"
@@ -187,7 +241,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col border-r border-desk-border bg-desk-surface shadow-xl lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col border-r border-desk-border bg-desk-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl lg:hidden"
             >
               <div className="flex h-12 items-center justify-between border-b border-desk-border px-3">
                 <Link href="/admin" onClick={onMobileClose} className="flex items-center gap-3">
@@ -197,6 +251,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                   <span className="text-sm font-semibold text-desk-text">Oracle Desk</span>
                 </Link>
                 <button
+                  ref={closeButtonRef}
                   onClick={onMobileClose}
                   aria-label="Fermer le menu"
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-desk-muted hover:bg-desk-hover"
@@ -205,7 +260,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                 </button>
               </div>
 
-              <NavContent showLabels onNavigate={onMobileClose} layoutId="sidebar-active-mobile" />
+              <NavContent
+                showLabels
+                onNavigate={handleMobileNavigate}
+                layoutId="sidebar-active-mobile"
+              />
             </motion.aside>
           </>
         )}

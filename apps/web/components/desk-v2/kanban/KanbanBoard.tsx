@@ -147,7 +147,13 @@ export function KanbanBoard() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-x-auto p-3 sm:p-6">
+      <div
+        data-testid="desk-kanban-scroll"
+        role="region"
+        aria-label="Colonnes des lectures"
+        tabIndex={0}
+        className="flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500 sm:p-6"
+      >
         <div className="flex h-full min-w-max gap-3 sm:gap-4">
           {KANBAN_COLUMNS.map((column) => (
             <KanbanColumn

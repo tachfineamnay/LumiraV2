@@ -8,8 +8,6 @@ const nextConfig = {
     '@packages/ui',
     '@packages/shared',
     '@packages/database',
-    'react-pdf',
-    'pdfjs-dist',
   ],
   output: 'standalone',
   experimental: {
@@ -57,12 +55,20 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: '/pdf.min.mjs',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
     ];
   },
   webpack: (config) => {
     // react-pdf / pdfjs — avoid bundling node canvas
     config.resolve.alias.canvas = false;
-    config.resolve.alias['pdfjs-dist'] = require.resolve('pdfjs-dist/legacy/build/pdf.mjs');
     return config;
   },
 };

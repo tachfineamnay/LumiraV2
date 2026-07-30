@@ -100,6 +100,9 @@ export class NotificationsService {
     }
 
     async sendExpertValidation(order: Order, user: User, _expertName: string) {
+        // The internal expert identity must never leak into client-facing messages.
+        void _expertName;
+
         const expertName = PUBLIC_READING_VALIDATOR_NAME;
         const context: ExpertValidationContext = {
             firstName: user.firstName,
