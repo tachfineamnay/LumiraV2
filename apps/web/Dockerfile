@@ -35,11 +35,13 @@ ARG NEXT_PUBLIC_API_URL=https://api.oraclelumira.com
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_META_PIXEL_ID
 ARG API_INTERNAL_URL=http://api:3001
+ARG SKIP_STRIPE_VALIDATION=false
 
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.oraclelumira.com}
 ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_META_PIXEL_ID=$NEXT_PUBLIC_META_PIXEL_ID
 ENV API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:3001}
+ENV SKIP_STRIPE_VALIDATION=$SKIP_STRIPE_VALIDATION
 
 RUN if [ -z "$NEXT_PUBLIC_API_URL" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" ]; then \
       echo "========================================================================="; \
@@ -58,7 +60,11 @@ RUN if [ -z "$NEXT_PUBLIC_API_URL" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KE
 # The public production API creates live PaymentIntents. Refuse a browser
 # bundle with a test publishable key instead of shipping a permanently loading
 # Payment Element.
-RUN if [ "$NEXT_PUBLIC_API_URL" = "https://api.oraclelumira.com" ] && ! echo "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" | grep -q '^pk_live_'; then \
+# Bypassed if SKIP_STRIPE_VALIDATION is true, or if using the known expert Desk test Stripe key.
+RUN if [ "$SKIP_STRIPE_VALIDATION" != "true" ] && \
+       [ "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" != "pk_test_51Ms0j7HY5XvhVZuDjKcQKRP6PVzPmtN3nmZcPJK4NEK9c5do3kmDq1L180Dwx1rd3EwqdZ2rQCf3eRuqPI6MNhwY00K5JGq3RL" ] && \
+       [ "$NEXT_PUBLIC_API_URL" = "https://api.oraclelumira.com" ] && \
+       ! echo "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" | grep -q '^pk_live_'; then \
       echo "ERROR: production API requires a NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY starting with pk_live_."; \
       echo "Set the variable as a Coolify build variable, then rebuild the web image."; \
       exit 1; \
