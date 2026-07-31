@@ -94,6 +94,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: SEO public contract
+        run: pnpm seo:check
+
       - name: Build API Docker image and smoke sharp
         run: docker build --file apps/api/Dockerfile --tag lumira-api-ci:${{ github.sha }} .
 
