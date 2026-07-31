@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { MetaPixel } from '../components/analytics/MetaPixel';
+import { GoogleAnalytics } from '../components/analytics/GoogleAnalytics';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -53,13 +54,14 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: 'cover',
-};
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={`h-full ${inter.variable} ${playfair.variable}`}>
       <body className="font-sans h-full bg-void text-divine selection:bg-gold/30 antialiased">
         <MetaPixel />
+        <GoogleAnalytics />
         {children}
       </body>
     </html>
