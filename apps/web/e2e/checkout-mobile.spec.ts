@@ -96,6 +96,17 @@ test('landing carousel is controllable at 360 × 800 without horizontal escape',
   await expectNoHorizontalOverflow(page);
 });
 
+test('mobile menu uses an opaque full-page background', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'Chromium-only menu style check');
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Ouvrir le menu' }).click({ force: true });
+  const menu = page.getByRole('dialog', { name: 'Navigation principale' });
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveCSS('background-color', 'rgb(12, 18, 37)');
+});
+
 test('mobile menu anchor keeps pricing section visible after closing', async ({
   page,
 }, testInfo) => {
