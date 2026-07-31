@@ -51,9 +51,6 @@ export function LandingPricing() {
                     </span>
                   </div>
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="whitespace-nowrap text-2xl font-light text-white/30 line-through">
-                      97€
-                    </span>
                     <span className="whitespace-nowrap text-5xl font-playfair italic text-white md:text-6xl">
                       {SUBSCRIPTION.price}€
                     </span>
@@ -131,7 +128,7 @@ export function LandingPricing() {
               <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
               <div className="flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-emerald-400/60" aria-hidden />
-                <span>Lecture livrée sous 24h</span>
+                <span>Livraison annoncée sous 24 à 48h après scellement</span>
               </div>
               <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
               <div className="flex items-center gap-1.5">

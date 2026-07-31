@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { LegalPage } from '../../components/legal/LegalPage';
+import { noindexPageMetadata } from '../../lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Conditions Générales de Vente | Oracle Lumira',
+export const metadata: Metadata = noindexPageMetadata({
+  path: '/cgv',
+  title: 'Conditions générales de vente',
   description: 'Conditions générales de vente Oracle Lumira.',
-  robots: { index: false },
-};
+});
 
 export default function CgvPage() {
   return (

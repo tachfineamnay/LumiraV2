@@ -1,8 +1,9 @@
-import type { Metadata, Viewport } from 'next';
+import type { Viewport } from 'next';
 import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { MetaPixel } from '../components/analytics/MetaPixel';
 import { GoogleAnalytics } from '../components/analytics/GoogleAnalytics';
+import { rootMetadata } from '../lib/seo';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -21,32 +22,7 @@ const playfair = Playfair_Display({
   fallback: ['Georgia', 'Times New Roman', 'serif'],
 });
 
-const SITE_URL = 'https://oraclelumira.com';
-const SITE_TITLE = 'Oracle Lumira | Votre lecture d’âme personnalisée';
-const SITE_DESCRIPTION =
-  'Lecture personnalisée révisée par un expert : dossier sécurisé, PDF et audio privés, accès Sanctuaire 3 mois (early). Livraison sous 24 à 48h après scellement. 17€, paiement unique.';
-
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: {
-    default: SITE_TITLE,
-    template: '%s | Oracle Lumira',
-  },
-  description: SITE_DESCRIPTION,
-  openGraph: {
-    type: 'website',
-    url: SITE_URL,
-    siteName: 'Oracle Lumira',
-    title: SITE_TITLE,
-    description: SITE_DESCRIPTION,
-    locale: 'fr_FR',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: SITE_TITLE,
-    description: SITE_DESCRIPTION,
-  },
-};
+export const metadata = rootMetadata;
 
 export const viewport: Viewport = {
   themeColor: '#040610',
@@ -54,7 +30,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: 'cover',
-}
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -77,8 +77,8 @@ export function HowItWorks() {
                 L&apos;Oracle vous analyse
               </h3>
               <p className="text-white/50 text-sm font-light leading-relaxed mt-3">
-                47 paramètres astraux. Une IA avancée. Un expert humain qui vérifie. Résultat : une
-                lecture d&apos;une précision troublante.
+                Votre dossier scellé sert à préparer une lecture interprétative. L&apos;IA assiste
+                la préparation, puis un expert humain relit et valide le contenu.
               </p>
             </div>
 
@@ -93,9 +93,10 @@ export function HowItWorks() {
                 Votre révélation arrive
               </h3>
               <p className="text-white/65 text-sm font-light leading-relaxed mt-3">
-                PDF, audio, mandala, chat Lumira, parcours 30 jours.{' '}
-                <span className="text-amber-300/80 font-medium">Tout, sous 24h.</span> Dans votre
-                sanctuaire personnel.
+                PDF privé, narration audio privée et accès au Sanctuaire pendant 3 mois.{' '}
+                <span className="text-amber-300/80 font-medium">
+                  Livraison annoncée sous 24 à 48h après scellement.
+                </span>
               </p>
               <ArrowRight
                 className="absolute bottom-10 right-10 text-cosmic-gold opacity-40 w-6 h-6 -rotate-45 group-hover:opacity-80 transition-opacity duration-500"
@@ -107,7 +108,7 @@ export function HowItWorks() {
 
         <div className="mt-16 border-t border-white/5 pt-10 flex flex-wrap justify-center gap-x-12 gap-y-4 text-white/25 text-[10px] uppercase tracking-widest">
           <span>🔒 Paiement sécurisé Stripe</span>
-          <span>⚡ Livraison sous 24h garantie</span>
+          <span>⚡ Livraison annoncée sous 24 à 48h après scellement</span>
           <span>💎 Expert humain inclus</span>
           <span>↩️ Satisfait ou remboursé 14 jours</span>
         </div>

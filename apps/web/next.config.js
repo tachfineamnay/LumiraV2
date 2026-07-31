@@ -4,11 +4,7 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   swcMinify: false,
-  transpilePackages: [
-    '@packages/ui',
-    '@packages/shared',
-    '@packages/database',
-  ],
+  transpilePackages: ['@packages/ui', '@packages/shared', '@packages/database'],
   output: 'standalone',
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion', 'date-fns'],
@@ -45,6 +41,26 @@ const nextConfig = {
             value: 'public, max-age=31536000, immutable',
           },
         ],
+      },
+      {
+        source: '/api/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
+      {
+        source: '/admin/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
+      {
+        source: '/sanctuaire/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
+      {
+        source: '/commande',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
+      {
+        source: '/payment-success',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
       },
       {
         source: '/pdf.worker.min.mjs',

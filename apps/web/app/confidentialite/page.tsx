@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { LegalPage } from '../../components/legal/LegalPage';
+import { noindexPageMetadata } from '../../lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Politique de confidentialité | Oracle Lumira',
+export const metadata: Metadata = noindexPageMetadata({
+  path: '/confidentialite',
+  title: 'Politique de confidentialité',
   description: 'Politique de confidentialité et protection des données personnelles Oracle Lumira.',
-  robots: { index: false },
-};
+});
 
 export default function ConfidentialitePage() {
   return (

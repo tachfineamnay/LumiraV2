@@ -11,19 +11,9 @@ export function LandingHero() {
       <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none mix-blend-overlay" />
 
       <div className="relative max-w-[1600px] mx-auto w-full flex flex-col items-center motion-safe:animate-hero-enter">
-        <div className="mb-8 md:mb-12 flex items-center gap-3">
-          <div className="flex -space-x-3" aria-hidden>
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/20"
-              />
-            ))}
-          </div>
-          <p className="text-cosmic-ethereal/60 text-[10px] md:text-xs tracking-[0.15em] md:tracking-[0.2em] uppercase font-medium">
-            2 500+ âmes éveillées · 4.9/5
-          </p>
-        </div>
+        <p className="mb-8 md:mb-12 text-cosmic-ethereal/60 text-[10px] md:text-xs tracking-[0.15em] md:tracking-[0.2em] uppercase font-medium">
+          Lecture interprétative · IA · Révision humaine
+        </p>
 
         <div className="relative">
           <h1 className="text-[clamp(3rem,13vw,10rem)] leading-[0.85] font-playfair italic tracking-[-0.05em] select-none">
@@ -35,13 +25,13 @@ export function LandingHero() {
 
           <div className="mt-8 md:mt-12 max-w-xl mx-auto px-2">
             <p className="text-base md:text-xl lg:text-2xl text-white/85 font-light leading-relaxed tracking-wide">
-              Ce que les autres mettent des années à comprendre sur eux-mêmes —
+              Explorez vos repères personnels avec une lecture
             </p>
             <p className="text-base md:text-xl lg:text-2xl text-cosmic-gold/90 font-light leading-relaxed tracking-wide mt-2">
-              Lumira vous le révèle en 24 heures.
+              préparée avec soin, puis révisée par un expert humain.
             </p>
             <p className="text-white/40 text-[11px] md:text-sm mt-4 md:mt-5 uppercase tracking-[0.15em] md:tracking-[0.2em]">
-              Analyse vibratoire · Intelligence IA · Expert humain
+              Aucun diagnostic · Aucune prédiction certaine
             </p>
           </div>
         </div>
@@ -62,16 +52,9 @@ export function LandingHero() {
 
           <div className="flex items-center gap-5 md:gap-8 mt-4 md:mt-6 opacity-50">
             <div className="flex flex-col items-center">
-              <span className="text-white font-playfair text-lg md:text-xl italic">4.9</span>
+              <span className="text-white font-playfair text-lg md:text-xl italic">24–48h</span>
               <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">
-                Note
-              </span>
-            </div>
-            <div className="w-px h-6 md:h-8 bg-white/10" />
-            <div className="flex flex-col items-center">
-              <span className="text-white font-playfair text-lg md:text-xl italic">24h</span>
-              <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">
-                Livraison
+                Après scellement
               </span>
             </div>
             <div className="w-px h-6 md:h-8 bg-white/10" />

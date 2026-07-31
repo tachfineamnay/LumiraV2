@@ -23,6 +23,7 @@ export function Header() {
 
   const handleAnchorClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+      if (!href.startsWith('#')) return;
       event.preventDefault();
       const target = document.querySelector<HTMLElement>(href);
       if (!target) {
@@ -168,9 +169,9 @@ export function Header() {
   }, [closeMobileMenu, mobileOpen]);
 
   const navItems = [
-    { name: "L'Offre", href: '#niveaux' },
-    { name: 'Comment ça marche', href: '#comment-ca-marche' },
-    { name: 'Témoignages', href: '#temoignages' },
+    { name: "L'offre", href: '/#niveaux' },
+    { name: 'Notre approche', href: '/notre-approche' },
+    { name: 'Questions fréquentes', href: '/faq' },
   ];
 
   return (
@@ -210,7 +211,7 @@ export function Header() {
           </Link>
 
           <Link
-            href="#niveaux"
+            href="/#niveaux"
             className="hidden md:flex items-center justify-center px-6 py-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-cosmic-gold/30 text-white text-xs uppercase tracking-widest font-bold transition-all duration-500 group"
           >
             <span className="group-hover:text-cosmic-gold transition-colors">Commencer</span>
@@ -265,8 +266,7 @@ export function Header() {
                 Connexion
               </Link>
               <Link
-                href="#niveaux"
-                onClick={(event) => handleAnchorClick(event, '#niveaux')}
+                href="/#niveaux"
                 className="flex min-h-[44px] items-center justify-center rounded-xl border border-cosmic-gold/30 px-3 py-2 text-sm uppercase tracking-widest text-cosmic-gold"
               >
                 Commencer l&apos;expérience
