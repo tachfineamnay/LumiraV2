@@ -58,8 +58,8 @@ test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo
   await expect(menu.getByRole('link', { name: "Commencer l'expérience" })).toBeFocused();
   for (const name of [
     "L'Offre",
-    'Comment ça marche',
-    'Témoignages',
+    'Notre approche',
+    'Questions fréquentes',
     'Connexion',
     "Commencer l'expérience",
   ]) {
@@ -69,30 +69,9 @@ test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(600);
 
   await scrollIntoView(page.locator('#niveaux'));
-  await expect(page.getByText('97€', { exact: true })).toBeVisible();
+  await expect(page.getByText('17€', { exact: true })).toBeVisible();
   await expect(page.getByText('paiement unique', { exact: true })).toBeVisible();
   await expectInViewport(page.locator('#niveaux a[href="/commande"]'));
-  await expectNoHorizontalOverflow(page);
-});
-
-test('landing carousel is controllable at 360 × 800 without horizontal escape', async ({
-  page,
-}, testInfo) => {
-  test.skip(testInfo.project.name !== 'mobile-chromium', 'Mobile Chromium carousel check');
-  await page.setViewportSize({ width: 360, height: 800 });
-  await page.goto('/');
-  const carousel = page.locator('#temoignages');
-  await scrollIntoView(carousel);
-
-  const next = page.getByRole('button', { name: 'Témoignage suivant' });
-  const nextBox = await next.boundingBox();
-  expect(nextBox).not.toBeNull();
-  expect(nextBox!.height).toBeGreaterThanOrEqual(44);
-  await next.click();
-  await expect(page.getByRole('tab', { name: 'Témoignage Jean-Pierre D.' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
   await expectNoHorizontalOverflow(page);
 });
 
@@ -263,7 +242,7 @@ test('landing stays usable in mobile WebKit', async ({ page }, testInfo) => {
   await expect(page.getByRole('dialog', { name: 'Navigation principale' })).toBeVisible();
   await page.getByRole('button', { name: 'Fermer le menu' }).click({ force: true });
   await scrollIntoView(page.locator('#niveaux'));
-  await expect(page.getByText('97€', { exact: true })).toBeVisible();
+  await expect(page.getByText('17€', { exact: true })).toBeVisible();
   await expectInViewport(page.locator('#niveaux a[href="/commande"]'));
   await expectNoHorizontalOverflow(page);
 });

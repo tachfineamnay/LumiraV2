@@ -51,7 +51,7 @@ function buildClientFull(overrides: {
       totalOrders: 1,
       completedOrders: 1,
       totalSpent: 97,
-      totalSpentFormatted: '97 €',
+      totalSpentFormatted: '17 €',
       favoriteLevel: null,
       highestLevel: null,
       highestLevelNumber: 1,
