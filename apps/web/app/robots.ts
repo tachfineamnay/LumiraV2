@@ -7,10 +7,11 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/admin/', '/api/', '/commande', '/payment-success', '/sanctuaire/'],
+        // HTML private routes stay crawlable only long enough for crawlers to
+        // receive their noindex header. API endpoints do not need crawling.
+        disallow: ['/api/'],
       },
     ],
     sitemap: absoluteUrl('/sitemap.xml'),
-    host: 'oraclelumira.com',
   };
 }

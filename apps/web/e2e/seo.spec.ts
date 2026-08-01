@@ -55,7 +55,8 @@ test.describe('SEO production search contract', () => {
     const robotsText = await robots.text();
     const sitemapText = await sitemap.text();
     expect(robotsText).toContain('Sitemap: https://oraclelumira.com/sitemap.xml');
-    expect(robotsText).toContain('Disallow: /sanctuaire/');
+    expect(robotsText).toContain('Disallow: /api/');
+    expect(robotsText).not.toContain('Disallow: /sanctuaire/');
 
     const locations = await page.evaluate((xml) => {
       const document = new DOMParser().parseFromString(xml, 'application/xml');
