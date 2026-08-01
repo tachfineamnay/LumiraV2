@@ -110,7 +110,7 @@ export default function NotreApprochePage() {
             <li>Dossier client sécurisé</li>
           </ul>
           <p className="mt-7 text-sm leading-6 text-white/55">
-            L&apos;offre ne garantit ni mandala, ni chat illimité, ni accompagnement de 30 jours.
+            Les livrables de cette offre sont limités à ceux détaillés ci-dessus.
           </p>
         </section>
 

@@ -3,7 +3,6 @@ import { LegalPage } from '../../components/legal/LegalPage';
 import { noindexPageMetadata } from '../../lib/seo';
 
 export const metadata: Metadata = noindexPageMetadata({
-  path: '/confidentialite',
   title: 'Politique de confidentialité',
   description: 'Politique de confidentialité et protection des données personnelles Oracle Lumira.',
 });

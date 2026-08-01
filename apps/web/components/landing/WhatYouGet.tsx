@@ -88,8 +88,7 @@ export function WhatYouGet() {
               </span>
             </h2>
             <p className="text-white/40 max-w-sm text-base font-light leading-relaxed">
-              Pas de mandala, pas de chat illimité, pas de journal des rêves dans la V1. Une lecture
-              complète, révisée, livrée — avec 3 mois d&apos;accès Sanctuaire.
+              Une lecture complète, révisée, livrée — avec 3 mois d&apos;accès Sanctuaire.
             </p>
           </div>
         </div>

@@ -3,7 +3,6 @@ import { LegalPage } from '../../components/legal/LegalPage';
 import { noindexPageMetadata } from '../../lib/seo';
 
 export const metadata: Metadata = noindexPageMetadata({
-  path: '/mentions-legales',
   title: 'Mentions légales',
   description: 'Mentions légales du site Oracle Lumira.',
 });
