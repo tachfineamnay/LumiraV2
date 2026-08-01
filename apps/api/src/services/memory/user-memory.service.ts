@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MemoryConfigService } from './memory-config.service';
 import { MemoryBankError, MemoryCategory, SanitizedMemoryCandidate } from './memory.types';
@@ -67,6 +68,10 @@ export class UserMemoryService {
         confidence: candidate.confidence,
         status: activeStatus ? ('ACTIVE' as const) : ('PENDING' as const),
         ...(activeStatus ? { approvedAt: now } : {}),
+        ...(activeStatus ? { pendingOperation: 'UPSERT' as const } : {}),
+        ...(activeStatus && !this.memoryConfig.isWriteEnabled()
+          ? { lastSyncError: 'write_disabled' }
+          : {}),
         ...(potentialConflict ? { lastSyncError: 'potential_conflict' } : {}),
       };
     });
@@ -118,12 +123,13 @@ export class UserMemoryService {
     });
     if (!memory) return;
 
+    if (!this.memoryConfig.isWriteEnabled()) return;
+
     if (memory.pendingOperation === 'DELETE' || memory.pendingOperation === 'SUPERSEDE') {
       await this.convergeDelete(memory);
       return;
     }
     if (!['ACTIVE', 'SYNC_FAILED'].includes(memory.status)) return;
-    if (!this.memoryConfig.isWriteEnabled()) return;
 
     try {
       const remote = memory.vertexMemoryName
@@ -136,6 +142,9 @@ export class UserMemoryService {
           });
       if (remote.scope.user_id !== memory.userId) {
         throw new MemoryBankError('invalid_argument', 'Memory Bank scope mismatch.', false);
+      }
+      if (remote.fact !== memory.fact) {
+        throw new MemoryBankError('invalid_argument', 'Memory Bank fact mismatch.', false);
       }
       await this.prisma.userMemory.update({
         where: { id: memory.id },
@@ -161,9 +170,19 @@ export class UserMemoryService {
    */
   async deleteRemoteForUser(userId: string): Promise<{ deleted: number }> {
     const local = await this.prisma.userMemory.findMany({
-      where: { userId, vertexMemoryName: { not: null }, status: { not: 'DELETED' } },
+      where: { userId, vertexMemoryName: { not: null } },
       select: { vertexMemoryName: true },
     });
+    if (!this.memoryConfig.isWriteEnabled()) {
+      if (local.length > 0) {
+        throw new MemoryBankError(
+          'not_configured',
+          'Vertex Memory writing must be enabled before a referenced memory can be purged.',
+          false,
+        );
+      }
+      return { deleted: 0 };
+    }
     const configured = await this.bank.isConfigured();
     if (!configured) {
       if (local.length > 0) {
@@ -177,7 +196,7 @@ export class UserMemoryService {
     }
 
     for (const memory of local) {
-      if (memory.vertexMemoryName) await this.bank.deleteMemory(memory.vertexMemoryName);
+      if (memory.vertexMemoryName) await this.bank.deleteMemory(memory.vertexMemoryName, userId);
     }
     const deleted = await this.bank.deleteAllUserMemories(userId);
     return { deleted: Math.max(deleted, local.length) };
@@ -271,6 +290,9 @@ export class UserMemoryService {
     const conflict = memory.lastSyncError === 'potential_conflict';
     let resolution: ConflictResolution | undefined;
     let supersededId: string | undefined;
+    let supersededMemory:
+      | { id: string; status: string; vertexMemoryName: string | null }
+      | undefined;
 
     if (conflict) {
       resolution = input.conflictResolution;
@@ -294,8 +316,8 @@ export class UserMemoryService {
         if (superseded.status !== 'ACTIVE') {
           throw new BadRequestException('Seule une mémoire active peut être remplacée.');
         }
-        await this.prepareTerminalMutation(superseded, 'SUPERSEDED', expertId, 'SUPERSEDE');
         supersededId = superseded.id;
+        supersededMemory = superseded;
       }
     } else if (input.conflictResolution || input.supersedeMemoryId || input.confirmKeepBoth) {
       throw new BadRequestException(
@@ -304,26 +326,41 @@ export class UserMemoryService {
     }
 
     const writing = this.memoryConfig.isWriteEnabled();
-    const approved = await this.prisma.userMemory.update({
-      where: { id: memoryId },
-      data: {
-        status: writing ? 'SYNC_FAILED' : 'ACTIVE',
-        approvedAt: new Date(),
-        approvedByExpertId: expertId,
-        pendingOperation: 'UPSERT',
-        lastSyncError: writing ? 'upsert_pending' : 'write_disabled',
-        ...(resolution
-          ? {
-              conflictResolution: resolution,
-              conflictResolvedAt: new Date(),
-              conflictResolvedByExpertId: expertId,
-            }
-          : {}),
-      },
-      select: { id: true, status: true, pendingOperation: true, syncedAt: true },
-    });
-    if (supersededId) await this.syncMemory(supersededId);
-    if (writing) await this.syncMemory(approved.id);
+    const approvalData = {
+      status: writing ? 'SYNC_FAILED' : 'ACTIVE',
+      approvedAt: new Date(),
+      approvedByExpertId: expertId,
+      pendingOperation: 'UPSERT',
+      lastSyncError: writing ? 'upsert_pending' : 'write_disabled',
+      ...(resolution
+        ? {
+            conflictResolution: resolution,
+            conflictResolvedAt: new Date(),
+            conflictResolvedByExpertId: expertId,
+          }
+        : {}),
+    } satisfies Prisma.UserMemoryUpdateInput;
+    const approved = supersededMemory
+      ? await this.prisma.$transaction((tx) =>
+          this.applySupersedeAndUpdate(
+            tx,
+            supersededMemory,
+            memoryId,
+            expertId,
+            approvalData,
+            { id: true, status: true, pendingOperation: true, syncedAt: true },
+          ),
+        )
+      : await this.prisma.userMemory.update({
+          where: { id: memoryId },
+          data: approvalData,
+          select: { id: true, status: true, pendingOperation: true, syncedAt: true },
+        });
+    if (writing && supersededId) {
+      await this.convergeSupersedePair(supersededId, approved.id);
+    } else if (writing) {
+      await this.syncMemory(approved.id);
+    }
     return this.publicMutationResult(approved.id);
   }
 
@@ -365,6 +402,9 @@ export class UserMemoryService {
     if (duplicate) throw new ConflictException('Une mémoire identique existe déjà pour ce client.');
 
     let supersededId: string | undefined;
+    let supersededMemory:
+      | { id: string; status: string; vertexMemoryName: string | null }
+      | undefined;
     if (input.supersedeMemoryId || input.conflictResolution || input.confirmKeepBoth) {
       if (input.conflictResolution !== 'SUPERSEDE' || !input.supersedeMemoryId) {
         throw new BadRequestException('Un remplacement exige une résolution SUPERSEDE explicite.');
@@ -376,39 +416,56 @@ export class UserMemoryService {
       if (superseded.status !== 'ACTIVE') {
         throw new BadRequestException('Seule une mémoire active peut être remplacée.');
       }
-      await this.prepareTerminalMutation(superseded, 'SUPERSEDED', expertId, 'SUPERSEDE');
       supersededId = superseded.id;
+      supersededMemory = superseded;
     }
 
-    const mustConverge = Boolean(memory.vertexMemoryName || memory.status === 'ACTIVE');
-    const updated = await this.prisma.userMemory.update({
-      where: { id: memoryId },
-      data: {
-        category: editable.category,
-        fact: editable.fact,
-        contentHash: editable.contentHash,
-        sourceType: 'EXPERT_CORRECTION',
-        approvedByExpertId: expertId,
-        approvedAt: new Date(),
-        status: mustConverge ? 'SYNC_FAILED' : memory.status,
-        pendingOperation: mustConverge ? 'UPSERT' : null,
-        lastSyncError: mustConverge
-          ? this.memoryConfig.isWriteEnabled()
-            ? 'upsert_pending'
-            : 'write_disabled'
-          : null,
-        ...(input.conflictResolution
-          ? {
-              conflictResolution: input.conflictResolution,
-              conflictResolvedAt: new Date(),
-              conflictResolvedByExpertId: expertId,
-            }
-          : {}),
-      },
-      select: { id: true },
-    });
-    if (supersededId) await this.syncMemory(supersededId);
-    if (mustConverge && this.memoryConfig.isWriteEnabled()) await this.syncMemory(updated.id);
+    const mustConverge = Boolean(
+      memory.vertexMemoryName || memory.status === 'ACTIVE' || supersededId,
+    );
+    const editData = {
+      category: editable.category,
+      fact: editable.fact,
+      contentHash: editable.contentHash,
+      sourceType: 'EXPERT_CORRECTION',
+      approvedByExpertId: expertId,
+      approvedAt: new Date(),
+      status: mustConverge ? 'SYNC_FAILED' : memory.status,
+      pendingOperation: mustConverge ? 'UPSERT' : null,
+      lastSyncError: mustConverge
+        ? this.memoryConfig.isWriteEnabled()
+          ? 'upsert_pending'
+          : 'write_disabled'
+        : null,
+      ...(input.conflictResolution
+        ? {
+            conflictResolution: input.conflictResolution,
+            conflictResolvedAt: new Date(),
+            conflictResolvedByExpertId: expertId,
+          }
+        : {}),
+    } satisfies Prisma.UserMemoryUpdateInput;
+    const updated = supersededMemory
+      ? await this.prisma.$transaction((tx) =>
+          this.applySupersedeAndUpdate(
+            tx,
+            supersededMemory,
+            memoryId,
+            expertId,
+            editData,
+            { id: true },
+          ),
+        )
+      : await this.prisma.userMemory.update({
+          where: { id: memoryId },
+          data: editData,
+          select: { id: true },
+        });
+    if (this.memoryConfig.isWriteEnabled() && supersededId) {
+      await this.convergeSupersedePair(supersededId, updated.id);
+    } else if (mustConverge && this.memoryConfig.isWriteEnabled()) {
+      await this.syncMemory(updated.id);
+    }
     return this.publicMutationResult(updated.id);
   }
 
@@ -420,13 +477,39 @@ export class UserMemoryService {
     if (memory.status === 'PENDING' && !memory.pendingOperation) {
       throw new BadRequestException('Cette mémoire doit être approuvée avant synchronisation.');
     }
-    if (!this.memoryConfig.isWriteEnabled() && memory.pendingOperation !== 'DELETE') {
+    if (!this.memoryConfig.isWriteEnabled()) {
       throw new BadRequestException(
         'L’écriture Vertex est désactivée : aucune resynchronisation distante n’a été lancée.',
       );
     }
     await this.syncMemory(memory.id);
     return this.publicMutationResult(memory.id);
+  }
+
+  /**
+   * Shadow-mode approvals persist an intent without touching Vertex. Once the
+   * operator enables writing, the worker drains this bounded oldest-first set.
+   * Every remote operation remains idempotent through syncMemory.
+   */
+  async convergePendingMutations(limit: number): Promise<{ processed: number; failed: number }> {
+    if (!this.memoryConfig.isWriteEnabled()) return { processed: 0, failed: 0 };
+    const pending = await this.prisma.userMemory.findMany({
+      where: { pendingOperation: { in: ['UPSERT', 'DELETE', 'SUPERSEDE'] } },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
+      select: { id: true },
+    });
+    let processed = 0;
+    let failed = 0;
+    for (const memory of pending) {
+      try {
+        await this.syncMemory(memory.id);
+        processed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { processed, failed };
   }
 
   async runIsolationDiagnostic(label?: string) {
@@ -508,9 +591,9 @@ export class UserMemoryService {
       };
     } finally {
       if (createdName) {
-        await this.bank.deleteMemory(createdName);
+        await this.bank.deleteMemory(createdName, users.userAId);
         const remaining = await this.bank.listUserMemories(users.userAId);
-        if (remaining.some((memory) => memory.name === createdName)) {
+        if (remaining.length > 0) {
           cleanupVerified = false;
         }
       }
@@ -570,25 +653,67 @@ export class UserMemoryService {
     // safely repeat DELETE (NOT_FOUND is idempotent).
     await this.prisma.userMemory.update({
       where: { id: memory.id },
-      data: {
-        status,
-        approvedAt: expertId ? new Date() : undefined,
-        approvedByExpertId: expertId,
-        pendingOperation: operation,
-        lastSyncError: 'delete_pending',
-      },
+      data: this.terminalMutationData(status, expertId, operation),
     });
+  }
+
+  private terminalMutationData(
+    status: 'REJECTED' | 'DELETED' | 'SUPERSEDED',
+    expertId: string | undefined,
+    operation: 'DELETE' | 'SUPERSEDE',
+  ) {
+    return {
+      status,
+      approvedAt: expertId ? new Date() : undefined,
+      approvedByExpertId: expertId,
+      pendingOperation: operation,
+      lastSyncError: 'delete_pending',
+    };
+  }
+
+  private async applySupersedeAndUpdate<T extends Prisma.UserMemorySelect>(
+    tx: Prisma.TransactionClient,
+    superseded: { id: string },
+    memoryId: string,
+    expertId: string,
+    data: Prisma.UserMemoryUpdateInput,
+    select: T,
+  ) {
+    await tx.userMemory.update({
+      where: { id: superseded.id },
+      data: this.terminalMutationData('SUPERSEDED', expertId, 'SUPERSEDE'),
+    });
+    return tx.userMemory.update({ where: { id: memoryId }, data, select });
+  }
+
+  private async convergeSupersedePair(
+    supersededMemoryId: string,
+    replacementMemoryId: string,
+  ): Promise<void> {
+    let firstError: unknown;
+    try {
+      await this.syncMemory(supersededMemoryId);
+    } catch (error) {
+      firstError = error;
+    }
+    try {
+      await this.syncMemory(replacementMemoryId);
+    } catch (error) {
+      firstError ??= error;
+    }
+    if (firstError) throw firstError;
   }
 
   private async convergeDelete(memory: {
     id: string;
+    userId: string;
     status: string;
     vertexMemoryName: string | null;
   }): Promise<void> {
     try {
       if (memory.vertexMemoryName) {
         await this.ensureBankConfigured();
-        await this.bank.deleteMemory(memory.vertexMemoryName);
+        await this.bank.deleteMemory(memory.vertexMemoryName, memory.userId);
       }
       await this.prisma.userMemory.update({
         where: { id: memory.id },
@@ -660,13 +785,10 @@ export class UserMemoryService {
     return `lumira-diag-${createHash('sha256').update(`${userId}:${nonce}`).digest('hex').slice(0, 32)}`;
   }
 
-  private async deleteRemoteReference(vertexMemoryName: string | null): Promise<void> {
-    if (!vertexMemoryName) return;
-    await this.ensureBankConfigured();
-    await this.bank.deleteMemory(vertexMemoryName);
-  }
-
   private async ensureBankConfigured(): Promise<void> {
+    if (!this.memoryConfig.isWriteEnabled()) {
+      throw new MemoryBankError('not_configured', 'Vertex Memory writing is disabled.', false);
+    }
     if (!(await this.bank.isConfigured())) {
       throw new MemoryBankError('not_configured', 'Vertex Memory is not configured.', false);
     }

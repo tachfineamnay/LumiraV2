@@ -22,6 +22,7 @@ describe('VertexMemoryBankClient deletion', () => {
   it('treats NOT_FOUND as an idempotent completed deletion', async () => {
     const { service } = setup();
     (service as unknown as { client: unknown }).client = {
+      getMemory: jest.fn().mockRejectedValue(Object.assign(new Error('not found'), { code: 5 })),
       deleteMemory: jest.fn().mockResolvedValue([
         {
           promise: jest.fn().mockRejectedValue(Object.assign(new Error('not found'), { code: 5 })),
@@ -32,6 +33,7 @@ describe('VertexMemoryBankClient deletion', () => {
     await expect(
       service.deleteMemory(
         'projects/test/locations/global/reasoningEngines/lumira/memories/memory-a',
+        'user-a',
       ),
     ).resolves.toBeUndefined();
   });
@@ -69,6 +71,7 @@ describe('VertexMemoryBankClient deletion', () => {
 
   it('reconciles ALREADY_EXISTS by reading the deterministic resource', async () => {
     const { service } = setup();
+    const updateMemory = jest.fn();
     const getMemory = jest.fn().mockResolvedValue([
       {
         name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
@@ -79,6 +82,7 @@ describe('VertexMemoryBankClient deletion', () => {
     (service as unknown as { client: unknown }).client = {
       createMemory: jest.fn().mockRejectedValue(Object.assign(new Error('exists'), { code: 6 })),
       getMemory,
+      updateMemory,
     };
 
     await expect(
@@ -93,6 +97,76 @@ describe('VertexMemoryBankClient deletion', () => {
       { name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123' },
       { timeout: 1_000 },
     );
+    expect(updateMemory).not.toHaveBeenCalled();
+  });
+
+  it('updates a stale deterministic resource before reporting ALREADY_EXISTS as synchronized', async () => {
+    const { service } = setup();
+    const updateMemory = jest.fn().mockResolvedValue([
+      {
+        promise: jest.fn().mockResolvedValue([
+          {
+            name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+            fact: 'Fait actuel',
+            scope: { user_id: 'user-a' },
+          },
+        ]),
+      },
+    ]);
+    (service as unknown as { client: unknown }).client = {
+      createMemory: jest.fn().mockRejectedValue(Object.assign(new Error('exists'), { code: 6 })),
+      getMemory: jest.fn().mockResolvedValue([
+        {
+          name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+          fact: 'Fait ancien',
+          scope: { user_id: 'user-a' },
+        },
+      ]),
+      updateMemory,
+    };
+
+    await expect(
+      service.createMemory({
+        memoryId: 'lumira-abc123',
+        userId: 'user-a',
+        fact: 'Fait actuel',
+        category: 'PREFERENCE',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ fact: 'Fait actuel' }));
+    expect(updateMemory).toHaveBeenCalledWith(
+      {
+        memory: {
+          name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+          fact: 'Fait actuel',
+        },
+        updateMask: { paths: ['fact'] },
+      },
+      { timeout: 1_000 },
+    );
+  });
+
+  it('keeps ALREADY_EXISTS recoverable when the required fact update fails', async () => {
+    const { service } = setup();
+    (service as unknown as { client: unknown }).client = {
+      createMemory: jest.fn().mockRejectedValue(Object.assign(new Error('exists'), { code: 6 })),
+      getMemory: jest.fn().mockResolvedValue([
+        {
+          name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+          fact: 'Fait ancien',
+          scope: { user_id: 'user-a' },
+        },
+      ]),
+      updateMemory: jest.fn().mockRejectedValue(Object.assign(new Error('offline'), { code: 14 })),
+    };
+
+    await expect(
+      service.createMemory({
+        memoryId: 'lumira-abc123',
+        userId: 'user-a',
+        fact: 'Fait actuel',
+        category: 'PREFERENCE',
+      }),
+    ).rejects.toEqual(expect.objectContaining({ code: 'unavailable' }));
   });
 
   it('refuses an existing deterministic resource with a different user scope', async () => {
@@ -165,5 +239,28 @@ describe('VertexMemoryBankClient deletion', () => {
     await expect(service.deleteAllUserMemories('user-a')).resolves.toBe(2);
     expect(remove).toHaveBeenCalledTimes(2);
     expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses to delete a resource owned by another user before the delete RPC', async () => {
+    const { service } = setup();
+    const deleteMemory = jest.fn();
+    (service as unknown as { client: unknown }).client = {
+      getMemory: jest.fn().mockResolvedValue([
+        {
+          name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+          fact: 'Fait prudent',
+          scope: { user_id: 'user-b' },
+        },
+      ]),
+      deleteMemory,
+    };
+
+    await expect(
+      service.deleteMemory(
+        'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+        'user-a',
+      ),
+    ).rejects.toEqual(expect.objectContaining({ code: 'invalid_argument' }));
+    expect(deleteMemory).not.toHaveBeenCalled();
   });
 });

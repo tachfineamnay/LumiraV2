@@ -72,7 +72,20 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
       return mapped;
     } catch (error) {
       if (this.isAlreadyExists(error)) {
-        return this.getExistingMemory(parent, input.memoryId, input.userId);
+        const existing = await this.getExistingMemory(parent, input.memoryId, input.userId);
+        if (existing.fact === input.fact) return existing;
+
+        const updated = await this.updateMemory(existing.name, input.fact);
+        this.assertOwned(updated.name);
+        this.assertScope(updated.scope, input.userId);
+        if (updated.fact !== input.fact) {
+          throw new MemoryBankError(
+            'invalid_argument',
+            'Memory Bank did not persist the requested fact.',
+            false,
+          );
+        }
+        return updated;
       }
       throw this.normalize(error);
     }
@@ -147,9 +160,12 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
     }
   }
 
-  async deleteMemory(name: string): Promise<void> {
+  async deleteMemory(name: string, expectedUserId: string): Promise<void> {
     this.assertOwned(name);
     try {
+      const existing = await this.getMemory(name);
+      this.assertOwned(existing.name);
+      this.assertScope(existing.scope, expectedUserId);
       const [operation] = await (await this.getClient()).deleteMemory({ name }, this.callOptions());
       await this.awaitOperation(operation as unknown as MemoryOperation);
     } catch (error) {
@@ -162,7 +178,7 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
 
   async deleteAllUserMemories(userId: string): Promise<number> {
     const memories = await this.listUserMemories(userId);
-    for (const memory of memories) await this.deleteMemory(memory.name);
+    for (const memory of memories) await this.deleteMemory(memory.name, userId);
 
     const remaining = await this.listUserMemories(userId);
     if (remaining.length > 0) {
@@ -223,16 +239,18 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
     userId: string,
   ): Promise<VertexMemory> {
     try {
-      const [memory] = await (
-        await this.getClient()
-      ).getMemory({ name: `${parent}/memories/${memoryId}` }, this.callOptions());
-      const mapped = this.map(memory);
+      const mapped = await this.getMemory(`${parent}/memories/${memoryId}`);
       this.assertOwned(mapped.name);
       this.assertScope(mapped.scope, userId);
       return mapped;
     } catch (error) {
       throw this.normalize(error);
     }
+  }
+
+  private async getMemory(name: string): Promise<VertexMemory> {
+    const [memory] = await (await this.getClient()).getMemory({ name }, this.callOptions());
+    return this.map(memory);
   }
 
   private isAlreadyExists(error: unknown): boolean {

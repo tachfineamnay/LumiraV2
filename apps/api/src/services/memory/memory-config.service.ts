@@ -72,6 +72,10 @@ export class MemoryConfigService {
     return this.number('MEMORY_RECOVERY_LIMIT', 10, 1, 100);
   }
 
+  pendingMutationLimit(): number {
+    return this.number('MEMORY_PENDING_MUTATION_LIMIT', 10, 1, 100);
+  }
+
   diagnosticUsers(): { userAId: string; userBId: string } | null {
     const userAId = this.config.get<string>('VERTEX_MEMORY_DIAGNOSTIC_USER_A')?.trim() || '';
     const userBId = this.config.get<string>('VERTEX_MEMORY_DIAGNOSTIC_USER_B')?.trim() || '';

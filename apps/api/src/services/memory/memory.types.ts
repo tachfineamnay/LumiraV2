@@ -44,7 +44,7 @@ export interface VertexMemoryBank {
   retrieveMemories(userId: string, query: string, topK?: number): Promise<VertexMemory[]>;
   listUserMemories(userId: string): Promise<VertexMemory[]>;
   updateMemory(name: string, fact: string): Promise<VertexMemory>;
-  deleteMemory(name: string): Promise<void>;
+  deleteMemory(name: string, expectedUserId: string): Promise<void>;
   deleteAllUserMemories(userId: string): Promise<number>;
   diagnoseIsolation(userId: string): Promise<{ count: number; isolated: boolean }>;
   close(): Promise<void>;

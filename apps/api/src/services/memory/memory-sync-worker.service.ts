@@ -49,6 +49,9 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
       // therefore cannot make sealing or client-facing generation slower.
       await this.sync.enqueueRecentMissingJobs();
       await Promise.all(Array.from({ length: this.config.concurrency() }, () => this.processOne()));
+      if (this.config.isWriteEnabled()) {
+        await this.userMemory.convergePendingMutations(this.config.pendingMutationLimit());
+      }
     } catch (error) {
       this.logger.warn(
         `Memory worker tick failed: ${error instanceof Error ? error.name : 'unknown'}`,

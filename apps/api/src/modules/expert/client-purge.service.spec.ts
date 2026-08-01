@@ -130,9 +130,11 @@ describe('ClientPurgeService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('does not touch S3 or PostgreSQL when remote memory verification fails', async () => {
+  it('keeps S3 and PostgreSQL intact when terminal remote-memory purge is refused', async () => {
     const { service, prisma, s3Service, userMemoryService } = setup();
-    userMemoryService.deleteRemoteForUser.mockRejectedValue(new Error('vertex unavailable'));
+    userMemoryService.deleteRemoteForUser.mockRejectedValue(
+      new Error('deleted memory still has an unconfigured Vertex reference'),
+    );
 
     await expect(service.purge('client-1')).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(s3Service.deleteObjectStrict).not.toHaveBeenCalled();

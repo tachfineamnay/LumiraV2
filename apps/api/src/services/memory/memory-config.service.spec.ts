@@ -33,6 +33,7 @@ describe('MemoryConfigService', () => {
         VERTEX_MEMORY_LRO_TIMEOUT_MS: '70000',
         MEMORY_RECOVERY_LOOKBACK_MS: '7200000',
         MEMORY_RECOVERY_LIMIT: '12',
+        MEMORY_PENDING_MUTATION_LIMIT: '7',
       }),
     );
 
@@ -40,5 +41,6 @@ describe('MemoryConfigService', () => {
     expect(config.lroTimeoutMs()).toBe(70000);
     expect(config.recoveryLookbackMs()).toBe(7200000);
     expect(config.recoveryLimit()).toBe(12);
+    expect(config.pendingMutationLimit()).toBe(7);
   });
 });

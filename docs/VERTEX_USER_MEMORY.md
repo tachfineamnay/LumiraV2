@@ -29,6 +29,8 @@ MEMORY_JOB_STALE_MS=900000
 # Le scanner automatique ne récupère qu'un enqueue récent manqué.
 MEMORY_RECOVERY_LOOKBACK_MS=3600000
 MEMORY_RECOVERY_LIMIT=10
+# Après activation de l’écriture, nombre maximum d’intentions durables convergées par tick.
+MEMORY_PENDING_MUTATION_LIMIT=10
 # Délai du RPC initial, puis délai séparé d'attente de l'opération longue.
 VERTEX_MEMORY_REQUEST_TIMEOUT_MS=8000
 VERTEX_MEMORY_LRO_TIMEOUT_MS=60000
@@ -55,10 +57,11 @@ Avant un déploiement Coolify : exécuter les migrations sur une copie contrôl�
 5. Activer le shadow mode (`VERTEX_MEMORY_ENABLED=true`, worker actif, lecture/écriture/auto-approbation à `false`). Tant que l’agent n’est pas prêt, le worker ne crée, ne claim ni ne modifie aucun job ; le Desk affiche le motif assaini.
 6. Lancer explicitement un backfill `dryRun=true`, limité et expliqué.
 7. Approuver quelques mémoires dans le Desk. Un conflit potentiel impose « remplacer » ou « conserver les deux » avec confirmation ; la décision est auditée.
-8. Activer `VERTEX_MEMORY_WRITE_ENABLED=true` pour l’écriture contrôlée.
-9. Lancer le diagnostic A/B réel avec les deux comptes techniques vides.
-10. Activer `VERTEX_MEMORY_READ_ENABLED=true` pour un compte test. SCRIBE reçoit au plus 8 faits locaux `ACTIVE` et déjà convergés, ordonnés par pertinence Vertex quand disponible, dans un bloc secondaire de 5 000 caractères maximum.
-11. Envisager l’auto-approbation seulement après revue des faux positifs (seuil actuel 0,8) et augmenter la concurrence uniquement après observation des quotas.
+8. En shadow mode, revoir explicitement les mémoires `PENDING`, notamment celles approuvées avec l’état `write_disabled`.
+9. Activer `VERTEX_MEMORY_WRITE_ENABLED=true` pour l’écriture contrôlée. À chaque tick, le worker converge alors au plus `MEMORY_PENDING_MUTATION_LIMIT` intentions `UPSERT`, `DELETE` ou `SUPERSEDE`, de la plus ancienne à la plus récente.
+10. Lancer le diagnostic A/B réel avec les deux comptes techniques vides.
+11. Activer `VERTEX_MEMORY_READ_ENABLED=true` pour un compte test. SCRIBE reçoit au plus 8 faits locaux `ACTIVE` et déjà convergés, ordonnés par pertinence Vertex quand disponible, dans un bloc secondaire de 5 000 caractères maximum.
+12. Envisager l’auto-approbation seulement après revue des faux positifs (seuil actuel 0,8) et augmenter la concurrence uniquement après observation des quotas.
 
 SCRIBE est fail-open : une erreur PostgreSQL, une mauvaise configuration Vertex, un timeout ou une erreur de retrieval produit `memoryContext=''`. Aucun retry synchrone, statut de commande, contenu scellé, PDF, audio ou e-mail n’est modifié. Les logs ne contiennent que la classe technique de l’erreur.
 
@@ -66,7 +69,7 @@ SCRIBE est fail-open : une erreur PostgreSQL, une mauvaise configuration Vertex,
 
 `POST /api/expert/memories/backfill` est réservé à `ADMIN`. Le body est vide par défaut : `dryRun=true`, `limit=10`. Il accepte facultativement `userId` ou `orderId`. Son historique est volontairement manuel : aucun démarrage du worker ne le déclenche. Un backfill non dry-run exige l’agent MEMORY prêt et ne contacte jamais Vertex directement.
 
-Le worker ne scanne que les versions `SEALED` sans job dont `sealedAt >= now - MEMORY_RECOVERY_LOOKBACK_MS`, avec `MEMORY_RECOVERY_LIMIT`. Il sert uniquement à récupérer un enqueue récent manqué, jamais à rejouer l’historique. Il reprend les jobs `RUNNING` dont heartbeat est expiré avec une mise à jour atomique : un seul worker peut gagner le claim. Les erreurs temporaires (`RESOURCE_EXHAUSTED`, `DEADLINE_EXCEEDED`, `UNAVAILABLE`) reçoivent un backoff exponentiel. Les erreurs d’autorisation, credentials, parent, contenu ou argument sont terminales (`CANCELLED`) et ne sont jamais reprises automatiquement. Un ADMIN peut relancer manuellement un job `FAILED` ou `CANCELLED` depuis le client concerné.
+Le worker ne scanne que les versions `SEALED` sans job dont `sealedAt >= now - MEMORY_RECOVERY_LOOKBACK_MS`, avec `MEMORY_RECOVERY_LIMIT`. Il sert uniquement à récupérer un enqueue récent manqué, jamais à rejouer l’historique. Après les jobs de lecture, et seulement si l’écriture Vertex est active et que MEMORY est prêt, il converge au plus `MEMORY_PENDING_MUTATION_LIMIT` intentions persistées (`UPSERT`, `DELETE`, `SUPERSEDE`) dans l’ordre de leur ancienneté. Il reprend les jobs `RUNNING` dont heartbeat est expiré avec une mise à jour atomique : un seul worker peut gagner le claim. Les erreurs temporaires (`RESOURCE_EXHAUSTED`, `DEADLINE_EXCEEDED`, `UNAVAILABLE`) reçoivent un backoff exponentiel. Les erreurs d’autorisation, credentials, parent, contenu ou argument sont terminales (`CANCELLED`) et ne sont jamais reprises automatiquement. Un ADMIN peut relancer manuellement un job `FAILED` ou `CANCELLED` depuis le client concerné.
 
 ## Conflits, validation et assainissement
 
@@ -82,7 +85,7 @@ Après avoir configuré deux comptes techniques vides et distincts, l’ADMIN la
 
 ## Purge et rollback
 
-Une purge client identifie d’abord les références locales et distantes. Elle supprime et re-liste Vertex avant toute suppression S3, puis supprime les objets S3, puis marque la mémoire locale `DELETED` dans la transaction de suppression PostgreSQL. `NOT_FOUND` est un succès idempotent. Une référence locale Vertex sans configuration bloque la purge ; un compte ancien sans trace mémoire reste supprimable. Une erreur Vertex laisse S3 et PostgreSQL intacts.
+Une purge client identifie d’abord toutes les références locales Vertex, y compris celles déjà `DELETED`, `REJECTED`, `SUPERSEDED` ou en convergence. Avec écriture activée, elle supprime puis re-liste le scope Vertex avant toute suppression S3, puis supprime les objets S3, puis marque la mémoire locale `DELETED` dans la transaction de suppression PostgreSQL. Chaque suppression nominative relit et vérifie le scope utilisateur exact avant son RPC ; `NOT_FOUND` est un succès idempotent. Une référence locale Vertex sans configuration ou avec écriture désactivée bloque la purge ; un compte ancien sans trace mémoire reste supprimable. Une erreur Vertex laisse S3 et PostgreSQL intacts.
 
 Pour arrêter la fonctionnalité, basculer `VERTEX_MEMORY_ENABLED=false` et `MEMORY_WORKER_ENABLED=false`, puis redéployer. Les lignes et jobs locaux ne sont pas supprimés par ce rollback ; aucun nouvel appel Vertex ni contexte SCRIBE n’est alors produit. Pour réactiver, reprendre par shadow mode et relancer un backfill dry-run.
 

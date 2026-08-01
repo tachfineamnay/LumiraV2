@@ -4,8 +4,10 @@ describe('MemorySyncWorkerService', () => {
   function setup() {
     const config = {
       isWorkerEnabled: jest.fn().mockReturnValue(true),
+      isWriteEnabled: jest.fn().mockReturnValue(true),
       pollMs: jest.fn().mockReturnValue(5_000),
       concurrency: jest.fn().mockReturnValue(1),
+      pendingMutationLimit: jest.fn().mockReturnValue(10),
     };
     const readiness = { getStatus: jest.fn().mockResolvedValue({ ready: true, code: 'ready' }) };
     const sync = {
@@ -21,6 +23,7 @@ describe('MemorySyncWorkerService', () => {
     const userMemory = {
       persistSealedCandidates: jest.fn().mockResolvedValue({ accepted: 0, active: 0 }),
       syncActiveForReading: jest.fn().mockResolvedValue({ synced: 0, failed: 0 }),
+      convergePendingMutations: jest.fn().mockResolvedValue({ processed: 0, failed: 0 }),
     };
     const oracle = { extractMemoryCandidates: jest.fn().mockResolvedValue([]) };
     const service = new MemorySyncWorkerService(
@@ -52,7 +55,7 @@ describe('MemorySyncWorkerService', () => {
   });
 
   it('does not recover, scan, claim, or fail a job while MEMORY is not ready', async () => {
-    const { service, readiness, sync } = setup();
+    const { service, readiness, sync, userMemory } = setup();
     readiness.getStatus.mockResolvedValue({ ready: false, code: 'memory_validation_missing' });
 
     await (service as unknown as { tick(): Promise<void> }).tick();
@@ -61,6 +64,7 @@ describe('MemorySyncWorkerService', () => {
     expect(sync.enqueueRecentMissingJobs).not.toHaveBeenCalled();
     expect(sync.claimNext).not.toHaveBeenCalled();
     expect(sync.fail).not.toHaveBeenCalled();
+    expect(userMemory.convergePendingMutations).not.toHaveBeenCalled();
   });
 
   it('prevents simultaneous ticks and only invokes the recent recovery scan', async () => {
@@ -80,6 +84,22 @@ describe('MemorySyncWorkerService', () => {
     expect(readiness.getStatus).toHaveBeenCalledTimes(2); // tick + one process slot
     expect(sync.enqueueRecentMissingJobs).toHaveBeenCalledTimes(1);
     expect(sync.enqueueMissingJobs).not.toHaveBeenCalled();
+  });
+
+  it('converges bounded pending mutations after reading jobs only when writing is enabled', async () => {
+    const { service, config, sync, userMemory } = setup();
+
+    await (service as unknown as { tick(): Promise<void> }).tick();
+
+    expect(userMemory.convergePendingMutations).toHaveBeenCalledWith(10);
+    expect(sync.claimNext.mock.invocationCallOrder[0]).toBeLessThan(
+      userMemory.convergePendingMutations.mock.invocationCallOrder[0],
+    );
+
+    userMemory.convergePendingMutations.mockClear();
+    config.isWriteEnabled.mockReturnValue(false);
+    await (service as unknown as { tick(): Promise<void> }).tick();
+    expect(userMemory.convergePendingMutations).not.toHaveBeenCalled();
   });
 
   it('claims, heartbeats and completes a valid sealed job', async () => {

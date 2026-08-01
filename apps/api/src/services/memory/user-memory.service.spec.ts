@@ -15,6 +15,7 @@ describe('UserMemoryService ownership and purge', () => {
         groupBy: jest.fn(),
       },
       user: { count: jest.fn().mockResolvedValue(0) },
+      $transaction: jest.fn(),
     };
     const sanitizer = { sanitize: jest.fn(), hash: jest.fn() };
     const config = {
@@ -29,6 +30,9 @@ describe('UserMemoryService ownership and purge', () => {
       createMemory: jest.fn(),
       updateMemory: jest.fn(),
     };
+    prisma.$transaction.mockImplementation(
+      async (callback: (transaction: typeof prisma) => Promise<unknown>) => callback(prisma),
+    );
     return {
       service: new UserMemoryService(
         prisma as never,
@@ -37,6 +41,7 @@ describe('UserMemoryService ownership and purge', () => {
         bank as never,
       ),
       prisma,
+      config,
       bank,
     };
   }
@@ -121,7 +126,7 @@ describe('UserMemoryService ownership and purge', () => {
         data: expect.objectContaining({ status: 'REJECTED', pendingOperation: 'DELETE' }),
       }),
     );
-    expect(bank.deleteMemory).toHaveBeenCalledWith('remote-a');
+    expect(bank.deleteMemory).toHaveBeenCalledWith('remote-a', 'user-a');
     expect(prisma.userMemory.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ vertexMemoryName: null, pendingOperation: null }),
@@ -132,15 +137,21 @@ describe('UserMemoryService ownership and purge', () => {
     );
   });
 
-  it('blocks a purge when a local remote reference exists but Vertex is unavailable', async () => {
+  it('blocks a purge when a terminal local memory still references Vertex but configuration is unavailable', async () => {
     const { service, prisma, bank } = setup();
-    prisma.userMemory.findMany.mockResolvedValue([{ vertexMemoryName: 'remote-a' }]);
+    prisma.userMemory.findMany.mockResolvedValue([
+      { vertexMemoryName: 'remote-a', status: 'DELETED', pendingOperation: 'DELETE' },
+    ]);
     bank.isConfigured.mockResolvedValue(false);
 
     await expect(service.deleteRemoteForUser('user-a')).rejects.toEqual(
       expect.objectContaining({ code: 'not_configured' }),
     );
     expect(bank.deleteMemory).not.toHaveBeenCalled();
+    expect(prisma.userMemory.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-a', vertexMemoryName: { not: null } },
+      select: { vertexMemoryName: true },
+    });
   });
 
   it('keeps a durable delete operation visible when remote deletion fails', async () => {
@@ -174,6 +185,48 @@ describe('UserMemoryService ownership and purge', () => {
     expect(prisma.userMemory.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ lastSyncError: 'unavailable' }) }),
     );
+  });
+
+  it('keeps an UPSERT intent recoverable when reconciliation fails after ALREADY_EXISTS', async () => {
+    const { service, prisma, bank } = setup();
+    prisma.userMemory.findUnique.mockResolvedValue({
+      id: 'memory-a',
+      userId: 'user-a',
+      category: 'PREFERENCE',
+      fact: 'Fait actuel',
+      status: 'SYNC_FAILED',
+      vertexMemoryName: null,
+      pendingOperation: 'UPSERT',
+    });
+    bank.createMemory.mockRejectedValue(
+      new MemoryBankError('unavailable', 'ALREADY_EXISTS update failed', true),
+    );
+
+    await expect(service.syncMemory('memory-a')).rejects.toEqual(
+      expect.objectContaining({ code: 'unavailable' }),
+    );
+    expect(prisma.userMemory.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SYNC_FAILED', lastSyncError: 'unavailable' }),
+      }),
+    );
+  });
+
+  it('does not delete remotely through syncMemory while writing is disabled', async () => {
+    const { service, prisma, config, bank } = setup();
+    config.isWriteEnabled.mockReturnValue(false);
+    prisma.userMemory.findUnique.mockResolvedValue({
+      id: 'memory-a',
+      userId: 'user-a',
+      category: 'PREFERENCE',
+      fact: 'Fait prudent',
+      status: 'DELETED',
+      vertexMemoryName: 'remote-a',
+      pendingOperation: 'DELETE',
+    });
+
+    await expect(service.syncMemory('memory-a')).resolves.toBeUndefined();
+    expect(bank.deleteMemory).not.toHaveBeenCalled();
   });
 
   it('uses the same non-personal deterministic Vertex id on a retry', async () => {
@@ -303,6 +356,7 @@ describe('UserMemoryService ownership and purge', () => {
     ).toHaveBeenNthCalledWith(2, 'LUMIRA-MEMORY-TEST-A', expect.any(String), 8);
     expect(bank.deleteMemory).toHaveBeenCalledWith(
       'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-diag-a',
+      'lumira-memory-test-a',
     );
   });
 
@@ -312,5 +366,139 @@ describe('UserMemoryService ownership and purge', () => {
     bank.isConfigured.mockResolvedValue(false);
 
     await expect(service.deleteRemoteForUser('user-a')).resolves.toEqual({ deleted: 0 });
+  });
+
+  it('does not scan or call Vertex for pending mutations while remote writing is disabled', async () => {
+    const { service, prisma, config, bank } = setup();
+    config.isWriteEnabled.mockReturnValue(false);
+
+    await expect(service.convergePendingMutations(10)).resolves.toEqual({ processed: 0, failed: 0 });
+
+    expect(prisma.userMemory.findMany).not.toHaveBeenCalled();
+    expect(bank.createMemory).not.toHaveBeenCalled();
+    expect(bank.deleteMemory).not.toHaveBeenCalled();
+  });
+
+  it('converges the oldest bounded set of durable pending mutations after writing is enabled', async () => {
+    const { service, prisma } = setup();
+    prisma.userMemory.findMany.mockResolvedValue([{ id: 'memory-old' }, { id: 'memory-new' }]);
+    const syncMemory = jest.spyOn(service, 'syncMemory').mockResolvedValue(undefined);
+
+    await expect(service.convergePendingMutations(2)).resolves.toEqual({ processed: 2, failed: 0 });
+
+    expect(prisma.userMemory.findMany).toHaveBeenCalledWith({
+      where: { pendingOperation: { in: ['UPSERT', 'DELETE', 'SUPERSEDE'] } },
+      orderBy: { updatedAt: 'asc' },
+      take: 2,
+      select: { id: true },
+    });
+    expect(syncMemory).toHaveBeenNthCalledWith(1, 'memory-old');
+    expect(syncMemory).toHaveBeenNthCalledWith(2, 'memory-new');
+  });
+
+  it('writes both sides of a SUPERSEDE approval in one local transaction before Vertex', async () => {
+    const { service, prisma, config, bank } = setup();
+    config.isWriteEnabled.mockReturnValue(false);
+    prisma.userMemory.findUnique
+      .mockResolvedValueOnce({
+        id: 'memory-new',
+        userId: 'user-a',
+        category: 'LIFE_CONTEXT',
+        status: 'PENDING',
+        vertexMemoryName: null,
+        lastSyncError: 'potential_conflict',
+      })
+      .mockResolvedValueOnce({
+        id: 'memory-old',
+        userId: 'user-a',
+        category: 'LIFE_CONTEXT',
+        status: 'ACTIVE',
+        vertexMemoryName: 'remote-old',
+        lastSyncError: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'memory-new',
+        status: 'ACTIVE',
+        syncedAt: null,
+        vertexMemoryName: null,
+        pendingOperation: 'UPSERT',
+        lastSyncError: 'write_disabled',
+      });
+    const transaction = {
+      userMemory: {
+        update: jest
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockResolvedValueOnce({ id: 'memory-new', status: 'ACTIVE', pendingOperation: 'UPSERT', syncedAt: null }),
+      },
+    };
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction),
+    );
+
+    await expect(
+      service.approve('memory-new', 'user-a', 'expert-a', {
+        conflictResolution: 'SUPERSEDE',
+        supersedeMemoryId: 'memory-old',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ id: 'memory-new', pendingOperation: 'UPSERT' }));
+
+    expect(transaction.userMemory.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { id: 'memory-old' },
+        data: expect.objectContaining({ status: 'SUPERSEDED', pendingOperation: 'SUPERSEDE' }),
+      }),
+    );
+    expect(transaction.userMemory.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'memory-new' },
+        data: expect.objectContaining({ status: 'ACTIVE', pendingOperation: 'UPSERT' }),
+      }),
+    );
+    expect(bank.deleteMemory).not.toHaveBeenCalled();
+    expect(bank.createMemory).not.toHaveBeenCalled();
+  });
+
+  it('does not call Vertex when a SUPERSEDE transaction fails locally', async () => {
+    const { service, prisma, bank } = setup();
+    prisma.userMemory.findUnique
+      .mockResolvedValueOnce({
+        id: 'memory-new',
+        userId: 'user-a',
+        category: 'LIFE_CONTEXT',
+        status: 'PENDING',
+        vertexMemoryName: null,
+        lastSyncError: 'potential_conflict',
+      })
+      .mockResolvedValueOnce({
+        id: 'memory-old',
+        userId: 'user-a',
+        category: 'LIFE_CONTEXT',
+        status: 'ACTIVE',
+        vertexMemoryName: 'remote-old',
+        lastSyncError: null,
+      });
+    const transaction = {
+      userMemory: {
+        update: jest
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(new Error('transaction rolled back')),
+      },
+    };
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction),
+    );
+
+    await expect(
+      service.approve('memory-new', 'user-a', 'expert-a', {
+        conflictResolution: 'SUPERSEDE',
+        supersedeMemoryId: 'memory-old',
+      }),
+    ).rejects.toThrow('transaction rolled back');
+    expect(bank.deleteMemory).not.toHaveBeenCalled();
+    expect(bank.createMemory).not.toHaveBeenCalled();
   });
 });
