@@ -2,9 +2,10 @@
 
 ## Pré-déploiement
 
-1. Exécuter `pnpm seo:check` après le build : il démarre le bundle standalone et contrôle HTML serveur, sitemap, robots, canonicals, JSON-LD, `noindex`, cache et budget JavaScript initial.
-2. Exécuter les contrôles de release habituels (`pnpm db:generate`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, Playwright).
-3. Vérifier que l'offre dans `packages/shared/src/constants/offer.ts` reste la seule source du prix et des livrables publics avant tout changement de copy.
+1. Exécuter `pnpm seo:check` : la commande reconstruit le Web puis lance les contrôles Playwright contre `next start`, jamais contre `next dev`.
+2. En CI, après le build unique du Web, exécuter `pnpm seo:check:built` pour contrôler ce même build sans le reconstruire.
+3. Exécuter les contrôles de release habituels (`pnpm db:generate`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, Playwright).
+4. Vérifier que l'offre dans `packages/shared/src/constants/offer.ts` reste la seule source du prix et des livrables publics avant tout changement de copy.
 
 ## Après déploiement
 
@@ -18,7 +19,11 @@ https://oraclelumira.com/robots.txt
 https://oraclelumira.com/sitemap.xml
 ```
 
-Vérifier les statuts `200`, la canonical absolue, le JSON-LD et les images Open Graph. Vérifier séparément que `/commande`, `/payment-success`, `/sanctuaire/login` et `/admin/login` renvoient `X-Robots-Tag: noindex` et un `Cache-Control` privé. Ne jamais faire ce contrôle avec une URL signée, un token ou une donnée client dans l'historique, les captures ou les logs.
+Vérifier les statuts `200`, la canonical absolue et le JSON-LD public. Vérifier séparément que `/commande`, `/payment-success`, `/sanctuaire/login`, `/admin/login` et `/api/health` renvoient `X-Robots-Tag: noindex` et un `Cache-Control: private, no-store`. Vérifier enfin que `https://desk.oraclelumira.com/robots.txt` contient uniquement `Disallow: /`, que son sitemap retourne `404` et que ses pages n'ont ni canonical publique ni JSON-LD. Ne jamais faire ce contrôle avec une URL signée, un token ou une donnée client dans l'historique, les captures ou les logs.
+
+## Révision et déploiement Coolify
+
+Le service Web expose `GET /api/version`, qui ne contient que `revision` et `service`, avec `noindex` et `no-store`. Dans Coolify, définir `APP_REVISION` comme variable de build et de runtime avec le SHA du commit réellement construit (par exemple la variable de commit fournie par Coolify). Le workflow GitHub refuse le déploiement si cette valeur ne correspond pas à `github.sha`, même si le webhook Coolify a accepté la demande.
 
 ## Search Console et Bing Webmaster Tools
 
@@ -38,12 +43,11 @@ Vérifier les statuts `200`, la canonical absolue, le JSON-LD et les images Open
 | Refonte ou suppression | Cartographier anciennes/nouvelles URLs                             | Ajouter une redirection 308 ciblée ou renvoyer 410 pour une suppression définitive |
 | Régression CWV         | CrUX/Search Console et Lighthouse mobile en environnement réaliste | Identifier LCP, INP ou CLS ; ne pas publier de score non mesuré                    |
 
-## Budgets et suivi performance
+## Suivi performance
 
-- Budget CI actuel : JavaScript initial public transféré ≤ 1,5 MB, contrôlé dans `seo.spec.ts`.
 - Objectifs terrain au 75e percentile mobile : LCP ≤ 2,5 s, INP ≤ 200 ms, CLS ≤ 0,1.
-- Le Meta Pixel est chargé en `lazyOnload` et Google Analytics après l'interactivité. Ne pas déplacer ces scripts sur le chemin critique sans mesure comparée.
+- Le Meta Pixel est chargé en `lazyOnload` et Google Analytics après l'interactivité. Ne pas déplacer ces scripts sur le chemin critique sans mesure comparée ; aucune dépendance Lighthouse n'est intégrée sans une mesure reproductible.
 
 ## Lors d'une future migration Next.js
 
-Revalider : Metadata API, fichiers `robots.ts`/`sitemap.ts`, conventions d'images Open Graph, middleware Edge, règles de cache, `next/image`, bundle standalone, transfert des assets dans Playwright et les tests de cette documentation. Cette migration ne fait pas partie du sprint SEO actuel.
+Revalider : Metadata API, fichiers `robots.ts`/`sitemap.ts`, middleware Edge, règles de cache, `next/image`, bundle standalone, transfert des assets dans Playwright et les tests de cette documentation. Cette migration ne fait pas partie du sprint SEO actuel.

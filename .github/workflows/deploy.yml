@@ -18,12 +18,15 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   deploy:
-    name: Trigger Coolify production deployment
+    name: Deploy and verify Coolify production revision
     needs: ci
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
 
     steps:
+      - name: Checkout deployment verification
+        uses: actions/checkout@v4
+
       - name: Validate deployment secrets
         env:
           COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
@@ -49,4 +52,13 @@ jobs:
             --request GET "$COOLIFY_WEBHOOK_URL" \
             --header "Authorization: Bearer $COOLIFY_TOKEN"
 
-          echo "Coolify deployment accepted."
+          echo "Coolify deployment accepted; waiting for the deployed revision."
+
+      - name: Verify deployed revision and production search contract
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
+          PUBLIC_BASE_URL: https://oraclelumira.com
+          DESK_BASE_URL: https://desk.oraclelumira.com
+          MAX_ATTEMPTS: '36'
+          RETRY_DELAY_SECONDS: '10'
+        run: bash scripts/verify-production-release.sh

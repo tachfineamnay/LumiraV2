@@ -37,6 +37,7 @@ ARG NEXT_PUBLIC_META_PIXEL_ID
 ARG NEXT_PUBLIC_GA_ID
 ARG API_INTERNAL_URL=http://api:3001
 ARG SKIP_STRIPE_VALIDATION=false
+ARG APP_REVISION=unknown
 
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.oraclelumira.com}
 ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -44,6 +45,7 @@ ENV NEXT_PUBLIC_META_PIXEL_ID=$NEXT_PUBLIC_META_PIXEL_ID
 ENV NEXT_PUBLIC_GA_ID=$NEXT_PUBLIC_GA_ID
 ENV API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:3001}
 ENV SKIP_STRIPE_VALIDATION=$SKIP_STRIPE_VALIDATION
+ENV APP_REVISION=$APP_REVISION
 
 RUN if [ -z "$NEXT_PUBLIC_API_URL" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" ]; then \
       echo "========================================================================="; \
@@ -91,9 +93,11 @@ RUN ls -la /app/apps/web/.next/ && \
 FROM base AS runner
 RUN apk add --no-cache curl
 WORKDIR /app
+ARG APP_REVISION=unknown
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV APP_REVISION=$APP_REVISION
 
 # Optimization: Don't install dependencies in runner.
 # Use Next.js standalone output which includes necessary node_modules.

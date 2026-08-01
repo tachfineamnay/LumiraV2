@@ -94,8 +94,39 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: SEO public contract
-        run: pnpm seo:check
+      - name: Install Playwright Chromium for production SEO contract
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: SEO production contract against the build above
+        run: pnpm seo:check:built
+
+      - name: Build Web Docker image
+        run: >-
+          docker build --file apps/web/Dockerfile --tag lumira-web-ci:${{ github.sha }}
+          --build-arg NEXT_PUBLIC_API_URL=http://127.0.0.1:3100
+          --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_ci_placeholder_not_real
+          --build-arg SKIP_STRIPE_VALIDATION=true
+          --build-arg APP_REVISION=${{ github.sha }} .
+
+      - name: Smoke Web Docker image
+        run: |
+          set -euo pipefail
+          container_name="lumira-web-ci-${GITHUB_RUN_ID}"
+          trap 'docker rm -f "$container_name" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --rm --name "$container_name" --publish 3101:3000 \
+            --env APP_REVISION="${GITHUB_SHA}" lumira-web-ci:${{ github.sha }}
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3101/api/version >/tmp/lumira-version.json; then break; fi
+            if [ "$attempt" = 30 ]; then exit 1; fi
+            sleep 2
+          done
+          node -e "const value=require('/tmp/lumira-version.json'); if(value.revision !== process.env.GITHUB_SHA || value.service !== 'web') process.exit(1)"
+          curl --fail --silent --show-error http://127.0.0.1:3101/robots.txt | grep -F 'Sitemap: https://oraclelumira.com/sitemap.xml'
+          curl --fail --silent --show-error http://127.0.0.1:3101/sitemap.xml | grep -F '<loc>https://oraclelumira.com/faq</loc>'
+          curl --silent --show-error --dump-header /tmp/lumira-desk.headers --output /dev/null \
+            --header 'Host: desk.oraclelumira.com' http://127.0.0.1:3101/
+          grep -qi '^x-robots-tag:.*noindex' /tmp/lumira-desk.headers
+          grep -qi '^cache-control:.*no-store' /tmp/lumira-desk.headers
 
       - name: Build API Docker image and smoke sharp
         run: docker build --file apps/api/Dockerfile --tag lumira-api-ci:${{ github.sha }} .
