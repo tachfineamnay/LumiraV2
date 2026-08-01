@@ -15,11 +15,13 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: `pnpm exec next start -p ${port}`,
+    command: 'node .next/standalone/apps/web/server.js',
     url: `${baseURL}/api/version`,
     reuseExistingServer: false,
     timeout: 180_000,
     env: {
+      PORT: String(port),
+      HOSTNAME: '127.0.0.1',
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_seo_contract',
     },
   },

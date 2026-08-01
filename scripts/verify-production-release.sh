@@ -75,7 +75,13 @@ for path in / /faq /notre-approche; do
   name="public$(echo "$path" | tr '/' '_')"
   canonical="${PUBLIC_BASE_URL}${path}"
   [ "$path" = / ] && canonical="${PUBLIC_BASE_URL}/"
-  grep -F "rel=\"canonical\" href=\"$canonical\"" "$work_dir/$name.body" >/dev/null
+  node -e '
+    const fs = require("fs");
+    const [bodyPath, expected] = process.argv.slice(1);
+    const body = fs.readFileSync(bodyPath, "utf8");
+    const match = body.match(/<link[^>]+rel="canonical"[^>]+href="([^"]+)"/i);
+    if (!match || new URL(match[1]).toString() !== new URL(expected).toString()) process.exit(1);
+  ' "$work_dir/$name.body" "$canonical"
   grep -F '<h1' "$work_dir/$name.body" >/dev/null
   grep -F '<title>' "$work_dir/$name.body" | grep -F 'Oracle Lumira' >/dev/null
 done

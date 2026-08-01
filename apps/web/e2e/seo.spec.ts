@@ -85,7 +85,8 @@ test.describe('SEO production search contract', () => {
 
       await expect(page).toHaveTitle(entry.title);
       expect(description).toBeTruthy();
-      expect(canonical).toBe(entry.canonical);
+      expect(canonical).toBeTruthy();
+      expect(new URL(canonical!).toString()).toBe(entry.canonical);
       expect(robots || '').toContain('index');
       await expect(page.locator('h1')).toHaveCount(1);
       expect(seenDescriptions.has(description!)).toBe(false);
@@ -180,7 +181,7 @@ test.describe('SEO production search contract', () => {
 
     const upperCase = await request.get('/FAQ?fbclid=tracking', { maxRedirects: 0 });
     expect(upperCase.status()).toBe(308);
-    const upperCaseLocation = new URL(upperCase.headers().location || '');
+    const upperCaseLocation = new URL(upperCase.headers().location || '', page.url());
     expect(upperCaseLocation.pathname).toBe('/faq');
     expect(upperCaseLocation.search).toBe('?fbclid=tracking');
   });
