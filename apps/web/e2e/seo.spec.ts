@@ -67,9 +67,11 @@ test.describe('SEO production search contract', () => {
     }, sitemapText);
 
     expect(locations).toEqual(publicPages.map(({ canonical }) => canonical));
-    expect(sitemapText).not.toMatch(
-      /(?:admin|api|commande|payment-success|sanctuaire|desk|\?|www\.)/i,
-    );
+    for (const location of locations) {
+      expect(location).not.toMatch(
+        /(?:admin|api|commande|payment-success|sanctuaire|desk|\?|www\.)/i,
+      );
+    }
   });
 
   test('public pages have canonical, indexable, branded metadata and one H1', async ({ page }) => {
@@ -173,7 +175,7 @@ test.describe('SEO production search contract', () => {
     });
     expect(www.status()).toBe(308);
     const wwwLocation = new URL(www.headers().location || '');
-    expect(wwwLocation.host).toBe('oraclelumira.com');
+    expect(wwwLocation.hostname).toBe('oraclelumira.com');
     expect(wwwLocation.search).toBe('?utm_campaign=launch');
 
     const upperCase = await request.get('/FAQ?fbclid=tracking', { maxRedirects: 0 });

@@ -36,7 +36,9 @@ export function pageMetadata({
   const canonical = absoluteUrl(path);
 
   return {
-    title,
+    // A page title does not inherit the root template in every App Router
+    // metadata composition path, so make the public brand suffix explicit.
+    title: { absolute: `${title} | ${SITE_NAME}` },
     description,
     alternates: { canonical },
     robots: DEFAULT_ROBOTS,
