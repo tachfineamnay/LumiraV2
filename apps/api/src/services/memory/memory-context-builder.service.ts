@@ -21,7 +21,7 @@ export class MemoryContextBuilder {
     if (!this.config.isReadEnabled()) return '';
     try {
       const local = await this.prisma.userMemory.findMany({
-        where: { userId, status: 'ACTIVE' },
+        where: { userId, status: 'ACTIVE', pendingOperation: null },
         orderBy: [{ updatedAt: 'desc' }, { confidence: 'desc' }],
         take: 8,
         select: { id: true, fact: true, vertexMemoryName: true },
@@ -41,6 +41,7 @@ export class MemoryContextBuilder {
             where: {
               userId,
               status: 'ACTIVE',
+              pendingOperation: null,
               vertexMemoryName: { in: orderedNames },
             },
             select: { fact: true, vertexMemoryName: true },

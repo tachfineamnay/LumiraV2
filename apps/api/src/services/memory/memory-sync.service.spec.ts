@@ -19,8 +19,16 @@ describe('MemorySyncService', () => {
       isEnabled: jest.fn().mockReturnValue(true),
       maxAttempts: jest.fn().mockReturnValue(9),
       staleMs: jest.fn().mockReturnValue(60_000),
+      recoveryLimit: jest.fn().mockReturnValue(10),
+      recoveryLookbackMs: jest.fn().mockReturnValue(3_600_000),
     };
-    return { service: new MemorySyncService(prisma as never, config as never), prisma, config };
+    const readiness = { getStatus: jest.fn().mockResolvedValue({ ready: true, code: 'ready' }) };
+    return {
+      service: new MemorySyncService(prisma as never, config as never, readiness as never),
+      prisma,
+      config,
+      readiness,
+    };
   }
 
   it('cancels terminal errors without scheduling automatic retries', async () => {
@@ -95,5 +103,72 @@ describe('MemorySyncService', () => {
         where: expect.objectContaining({ status: 'SEALED', memorySyncJob: null }),
       }),
     );
+  });
+
+  it('does not claim or recover jobs when MEMORY is not Desk-ready', async () => {
+    const { service, prisma, readiness } = setup();
+    readiness.getStatus.mockResolvedValue({ ready: false, code: 'memory_validation_missing' });
+
+    await expect(service.claimNext()).resolves.toBeNull();
+    await service.recoverStaleJobs();
+
+    expect(prisma.memorySyncJob.findFirst).not.toHaveBeenCalled();
+    expect(prisma.memorySyncJob.findMany).not.toHaveBeenCalled();
+  });
+
+  it('limits automatic recovery to recently sealed versions', async () => {
+    const { service, prisma, config } = setup();
+    const before = Date.now();
+
+    await service.enqueueRecentMissingJobs();
+
+    expect(prisma.readingVersion.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 10,
+        where: expect.objectContaining({
+          status: 'SEALED',
+          memorySyncJob: null,
+          sealedAt: { gte: expect.any(Date) },
+        }),
+      }),
+    );
+    const date = prisma.readingVersion.findMany.mock.calls[0][0].where.sealedAt.gte as Date;
+    expect(date.getTime()).toBeGreaterThanOrEqual(before - 3_600_100);
+    expect(config.recoveryLookbackMs).toHaveBeenCalled();
+  });
+
+  it('keeps manual dry-run historical backfill explicit and side-effect free', async () => {
+    const { service, prisma } = setup();
+
+    await service.enqueueMissingJobs({ dryRun: true, limit: 10 });
+
+    const where = prisma.readingVersion.findMany.mock.calls[0][0].where;
+    expect(where.sealedAt).toBeUndefined();
+    expect(prisma.memorySyncJob.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks a non-dry-run historical backfill until MEMORY is ready', async () => {
+    const { service, prisma, readiness } = setup();
+    readiness.getStatus.mockResolvedValue({ ready: false, code: 'memory_validation_missing' });
+
+    await expect(service.enqueueMissingJobs({ dryRun: false, limit: 10 })).resolves.toEqual(
+      expect.objectContaining({
+        ready: false,
+        enqueued: 0,
+        readiness: 'memory_validation_missing',
+      }),
+    );
+    expect(prisma.readingVersion.findMany).not.toHaveBeenCalled();
+    expect(prisma.memorySyncJob.create).not.toHaveBeenCalled();
+  });
+
+  it('does not select user ids or content hashes for the Desk job list', async () => {
+    const { service, prisma } = setup();
+
+    await service.listForUser('user-a');
+
+    const select = prisma.memorySyncJob.findMany.mock.calls[0][0].select;
+    expect(select.userId).toBeUndefined();
+    expect(select.contentHash).toBeUndefined();
   });
 });

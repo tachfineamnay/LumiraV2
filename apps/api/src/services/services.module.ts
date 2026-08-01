@@ -29,6 +29,7 @@ import { GeminiTtsProvider } from './factory/tts/GeminiTtsProvider';
 import { GoogleCloudTtsProvider } from './factory/tts/GoogleCloudTtsProvider';
 import { UploadsModule } from '../modules/uploads/uploads.module';
 import { MemoryConfigService } from './memory/memory-config.service';
+import { MemoryReadinessService } from './memory/memory-readiness.service';
 import { MemorySanitizerService } from './memory/memory-sanitizer.service';
 import { VertexMemoryBankClient } from './memory/vertex-memory-bank.client';
 import { UserMemoryService } from './memory/user-memory.service';
@@ -43,6 +44,7 @@ import { MemoryContextBuilder } from './memory/memory-context-builder.service';
     AiExecutionResolverService,
     AiRunService,
     MemoryConfigService,
+    MemoryReadinessService,
     MemorySanitizerService,
     VertexMemoryBankClient,
     UserMemoryService,
@@ -65,6 +67,7 @@ import { MemoryContextBuilder } from './memory/memory-context-builder.service';
     AiExecutionResolverService,
     AiRunService,
     MemoryConfigService,
+    MemoryReadinessService,
     VertexMemoryBankClient,
     UserMemoryService,
     MemorySyncService,

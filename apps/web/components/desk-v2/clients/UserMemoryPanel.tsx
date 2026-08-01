@@ -28,7 +28,9 @@ interface UserMemory {
   approvedAt?: string | null;
   syncedAt?: string | null;
   lastSyncError?: string | null;
-  vertexMemoryName?: string | null;
+  vertexSynced: boolean;
+  pendingOperation?: 'UPSERT' | 'DELETE' | 'SUPERSEDE' | null;
+  conflictResolution?: 'SUPERSEDE' | 'KEEP_BOTH' | null;
   readingVersion?: { orderId: string; version: number } | null;
   conflictsWith?: Array<{ id: string; fact: string }>;
 }
@@ -46,6 +48,7 @@ interface MemoryDashboard {
   memories: UserMemory[];
   counts: Record<string, number>;
   jobs: MemoryJob[];
+  readiness: { ready: boolean; code: string };
 }
 
 function errorMessage(error: unknown): string {
@@ -158,6 +161,12 @@ export function UserMemoryPanel({ clientId }: { clientId: string }) {
           {Object.keys(dashboard.counts).length === 0 && (
             <span className="text-xs text-desk-muted">Aucune mémoire locale.</span>
           )}
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs ${dashboard.readiness.ready ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700'}`}
+          >
+            Agent MEMORY :{' '}
+            {dashboard.readiness.ready ? 'prêt' : `bloqué (${dashboard.readiness.code})`}
+          </span>
         </div>
       )}
 
@@ -201,7 +210,8 @@ export function UserMemoryPanel({ clientId }: { clientId: string }) {
                 </span>
               </div>
               <p className="mt-2 text-xs text-desk-muted">
-                Vertex : {memory.vertexMemoryName ? 'synchronisée' : 'absente'}
+                Vertex : {memory.vertexSynced ? 'synchronisée' : 'en attente ou absente'}
+                {memory.pendingOperation ? ` · convergence ${memory.pendingOperation}` : ''}
                 {memory.lastSyncError ? ` · erreur ${memory.lastSyncError}` : ''}
                 {memory.approvedAt
                   ? ` · validée le ${new Date(memory.approvedAt).toLocaleDateString('fr-FR')}`
@@ -214,7 +224,7 @@ export function UserMemoryPanel({ clientId }: { clientId: string }) {
                 </p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
-                {memory.status === 'PENDING' && (
+                {memory.status === 'PENDING' && memory.lastSyncError !== 'potential_conflict' && (
                   <Action
                     label="Approuver"
                     icon={<Check className="h-3.5 w-3.5" />}
@@ -238,6 +248,7 @@ export function UserMemoryPanel({ clientId }: { clientId: string }) {
                         ask('Remplacer la mémoire active conflictuelle par ce fait ?', () =>
                           expertApi
                             .post(`/expert/clients/${clientId}/memories/${memory.id}/approve`, {
+                              conflictResolution: 'SUPERSEDE',
                               supersedeMemoryId: conflict.id,
                             })
                             .then(() => undefined),
@@ -246,6 +257,25 @@ export function UserMemoryPanel({ clientId }: { clientId: string }) {
                       disabled={running}
                     />
                   ))}
+                {memory.status === 'PENDING' && memory.lastSyncError === 'potential_conflict' && (
+                  <Action
+                    label="Conserver les deux"
+                    icon={<Check className="h-3.5 w-3.5" />}
+                    onClick={() =>
+                      ask(
+                        'Conserver explicitement les deux faits malgré le conflit potentiel ?',
+                        () =>
+                          expertApi
+                            .post(`/expert/clients/${clientId}/memories/${memory.id}/approve`, {
+                              conflictResolution: 'KEEP_BOTH',
+                              confirmKeepBoth: true,
+                            })
+                            .then(() => undefined),
+                      )
+                    }
+                    disabled={running}
+                  />
+                )}
                 {editing === memory.id ? (
                   <>
                     <Action
@@ -308,7 +338,10 @@ export function UserMemoryPanel({ clientId }: { clientId: string }) {
                         .then(() => undefined),
                     )
                   }
-                  disabled={running || !['ACTIVE', 'SYNC_FAILED'].includes(memory.status)}
+                  disabled={
+                    running ||
+                    (!['ACTIVE', 'SYNC_FAILED'].includes(memory.status) && !memory.pendingOperation)
+                  }
                 />
                 <Action
                   label="Supprimer"

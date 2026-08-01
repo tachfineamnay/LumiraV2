@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MemoryConfigService } from './memory-config.service';
+import { MemoryReadinessService } from './memory-readiness.service';
 import { MemoryBankError } from './memory.types';
 
 type Transaction = Prisma.TransactionClient;
@@ -17,6 +18,7 @@ export class MemorySyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly memoryConfig: MemoryConfigService,
+    private readonly readiness: MemoryReadinessService,
   ) {}
 
   async enqueueForSealedReading(
@@ -24,9 +26,11 @@ export class MemorySyncService {
     input: EnqueueInput,
   ): Promise<void> {
     if (!this.memoryConfig.isEnabled()) return;
+    if (!(await this.readiness.getStatus()).ready) return;
     await this.createJob(tx, input);
   }
 
+  /** Historical backfill is ADMIN-only. The worker never calls this method. */
   async enqueueMissingJobs(input: {
     dryRun: boolean;
     limit: number;
@@ -34,9 +38,49 @@ export class MemorySyncService {
     orderId?: string;
   }) {
     if (!this.memoryConfig.isEnabled()) return { enabled: false, candidates: [], enqueued: 0 };
+    const readiness = input.dryRun ? null : await this.readiness.getStatus();
+    if (readiness && !readiness.ready) {
+      return {
+        enabled: true,
+        ready: false,
+        readiness: readiness.code,
+        candidates: [],
+        enqueued: 0,
+      };
+    }
+    return this.enqueueByWhere(input, {});
+  }
+
+  /**
+   * Recovery deliberately has a short temporal window. It only fills an
+   * enqueue gap for a newly sealed reading, never replays the history.
+   */
+  async enqueueRecentMissingJobs() {
+    if (!this.memoryConfig.isEnabled()) return { enabled: false, candidates: [], enqueued: 0 };
+    const readiness = await this.readiness.getStatus();
+    if (!readiness.ready) {
+      return {
+        enabled: true,
+        ready: false,
+        readiness: readiness.code,
+        candidates: [],
+        enqueued: 0,
+      };
+    }
+    return this.enqueueByWhere(
+      { dryRun: false, limit: this.memoryConfig.recoveryLimit() },
+      { sealedAt: { gte: new Date(Date.now() - this.memoryConfig.recoveryLookbackMs()) } },
+    );
+  }
+
+  private async enqueueByWhere(
+    input: { dryRun: boolean; limit: number; userId?: string; orderId?: string },
+    extraWhere: Prisma.ReadingVersionWhereInput,
+  ) {
     const where: Prisma.ReadingVersionWhereInput = {
       status: 'SEALED',
       memorySyncJob: null,
+      ...extraWhere,
       ...(input.userId || input.orderId
         ? {
             order: {
@@ -73,6 +117,7 @@ export class MemorySyncService {
   }
 
   async recoverStaleJobs(): Promise<void> {
+    if (!(await this.readiness.getStatus()).ready) return;
     const staleAt = new Date(Date.now() - this.memoryConfig.staleMs());
     const jobs = await this.prisma.memorySyncJob.findMany({
       where: {
@@ -106,6 +151,7 @@ export class MemorySyncService {
   }
 
   async claimNext() {
+    if (!(await this.readiness.getStatus()).ready) return null;
     const now = new Date();
     const candidate = await this.prisma.memorySyncJob.findFirst({
       where: {
@@ -189,10 +235,8 @@ export class MemorySyncService {
       take: limit,
       select: {
         id: true,
-        userId: true,
         orderId: true,
         readingVersionId: true,
-        contentHash: true,
         status: true,
         attempts: true,
         maxAttempts: true,
@@ -230,7 +274,7 @@ export class MemorySyncService {
         nextAttemptAt: new Date(),
         lastError: null,
       },
-      select: { id: true, userId: true, status: true, attempts: true, maxAttempts: true },
+      select: { id: true, status: true, attempts: true, maxAttempts: true },
     });
   }
 

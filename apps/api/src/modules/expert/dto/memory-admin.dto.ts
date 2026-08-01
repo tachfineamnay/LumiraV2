@@ -79,6 +79,14 @@ export class EditMemoryDto {
   @MinLength(8)
   @MaxLength(128)
   supersedeMemoryId?: string;
+
+  @IsOptional()
+  @IsIn(['SUPERSEDE', 'KEEP_BOTH'])
+  conflictResolution?: 'SUPERSEDE' | 'KEEP_BOTH';
+
+  @IsOptional()
+  @IsBoolean()
+  confirmKeepBoth?: boolean;
 }
 
 export class ApproveMemoryDto {
@@ -87,6 +95,14 @@ export class ApproveMemoryDto {
   @MinLength(8)
   @MaxLength(128)
   supersedeMemoryId?: string;
+
+  @IsOptional()
+  @IsIn(['SUPERSEDE', 'KEEP_BOTH'])
+  conflictResolution?: 'SUPERSEDE' | 'KEEP_BOTH';
+
+  @IsOptional()
+  @IsBoolean()
+  confirmKeepBoth?: boolean;
 }
 
 export class ListMemoryJobsDto {

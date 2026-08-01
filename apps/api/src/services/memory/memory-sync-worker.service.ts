@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { MemoryBankError } from './memory.types';
 import { MemoryConfigService } from './memory-config.service';
+import { MemoryReadinessService } from './memory-readiness.service';
 import { MemorySyncService } from './memory-sync.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserMemoryService } from './user-memory.service';
@@ -11,9 +12,11 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MemorySyncWorkerService.name);
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private lastReadinessCode: string | null = null;
 
   constructor(
     private readonly config: MemoryConfigService,
+    private readonly readiness: MemoryReadinessService,
     private readonly sync: MemorySyncService,
     private readonly prisma: PrismaService,
     private readonly userMemory: UserMemoryService,
@@ -35,10 +38,16 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
     if (this.running || !this.config.isWorkerEnabled()) return;
     this.running = true;
     try {
+      const readiness = await this.readiness.getStatus();
+      if (!readiness.ready) {
+        this.logNotReady(readiness.code);
+        return;
+      }
+      this.lastReadinessCode = null;
       await this.sync.recoverStaleJobs();
       // Recovery is local PostgreSQL work only. It never invokes Vertex and
       // therefore cannot make sealing or client-facing generation slower.
-      await this.sync.enqueueMissingJobs({ dryRun: false, limit: 10 });
+      await this.sync.enqueueRecentMissingJobs();
       await Promise.all(Array.from({ length: this.config.concurrency() }, () => this.processOne()));
     } catch (error) {
       this.logger.warn(
@@ -50,6 +59,11 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async processOne(): Promise<void> {
+    const readiness = await this.readiness.getStatus();
+    if (!readiness.ready) {
+      this.logNotReady(readiness.code);
+      return;
+    }
     const job = await this.sync.claimNext();
     if (!job) return;
     try {
@@ -102,6 +116,13 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
       await this.sync.fail(job, normalized);
       this.logger.warn(`Memory job failed: code=${normalized.code}`);
     }
+  }
+
+  private logNotReady(code: string): void {
+    if (this.lastReadinessCode === code) return;
+    this.lastReadinessCode = code;
+    // Keep this operational signal free of config values, user ids and content.
+    this.logger.warn(`Memory worker blocked: readiness=${code}`);
   }
 
   private normalizeError(error: unknown): MemoryBankError {

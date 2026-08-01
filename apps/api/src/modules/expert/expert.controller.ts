@@ -28,6 +28,7 @@ import {
 import { S3Service } from '../uploads/s3.service';
 import { UserMemoryService } from '../../services/memory/user-memory.service';
 import { MemorySyncService } from '../../services/memory/memory-sync.service';
+import { MemoryReadinessService } from '../../services/memory/memory-readiness.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
@@ -66,6 +67,7 @@ export class ExpertController {
     private readonly s3Service: S3Service,
     private readonly userMemoryService: UserMemoryService,
     private readonly memorySyncService: MemorySyncService,
+    private readonly memoryReadinessService: MemoryReadinessService,
   ) {}
 
   // ========================
@@ -112,12 +114,13 @@ export class ExpertController {
     @Query() query: ListMemoryJobsDto,
   ) {
     const limit = query.limit ?? 20;
-    const [memories, counts, jobs] = await Promise.all([
+    const [memories, counts, jobs, readiness] = await Promise.all([
       this.userMemoryService.listForExpert(params.clientId),
       this.userMemoryService.countersForExpert(params.clientId),
       this.memorySyncService.listForUser(params.clientId, limit),
+      this.memoryReadinessService.getStatus(),
     ]);
-    return { memories, counts, jobs };
+    return { memories, counts, jobs, readiness };
   }
 
   @Post('clients/:clientId/memories/:memoryId/approve')
@@ -127,12 +130,7 @@ export class ExpertController {
     @Body() dto: ApproveMemoryDto,
     @CurrentExpert() expert: Expert,
   ) {
-    return this.userMemoryService.approve(
-      params.memoryId,
-      params.clientId,
-      expert.id,
-      dto.supersedeMemoryId,
-    );
+    return this.userMemoryService.approve(params.memoryId, params.clientId, expert.id, dto);
   }
 
   @Patch('clients/:clientId/memories/:memoryId')

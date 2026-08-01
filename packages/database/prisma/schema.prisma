@@ -113,6 +113,17 @@ enum MemorySyncJobStatus {
   CANCELLED
 }
 
+enum MemoryMutationOperation {
+  UPSERT
+  DELETE
+  SUPERSEDE
+}
+
+enum MemoryConflictResolution {
+  KEEP_BOTH
+  SUPERSEDE
+}
+
 enum OnboardingStatus {
   IN_PROGRESS
   COMPLETED
@@ -425,6 +436,10 @@ model UserMemory {
   approvedAt         DateTime?
   syncedAt           DateTime?
   lastSyncError      String?          @db.Text
+  pendingOperation   MemoryMutationOperation?
+  conflictResolution MemoryConflictResolution?
+  conflictResolvedAt DateTime?
+  conflictResolvedByExpertId String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
@@ -433,6 +448,7 @@ model UserMemory {
   @@index([sourceType, sourceId])
   @@index([sourceVersionId])
   @@index([createdAt(sort: Desc)])
+  @@index([pendingOperation])
 }
 
 /// A separate PostgreSQL-backed queue. It never shares the order production

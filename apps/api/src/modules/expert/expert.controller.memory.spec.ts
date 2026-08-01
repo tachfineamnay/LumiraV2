@@ -13,6 +13,7 @@ describe('ExpertController memory authorization', () => {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
   const guard = new RolesGuard(new Reflector());
 

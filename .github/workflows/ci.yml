@@ -82,8 +82,11 @@ jobs:
           modules/expert/ai-production-readiness.service.spec.ts
           modules/uploads/private-onboarding-photo.service.spec.ts
           services/memory/memory-sanitizer.service.spec.ts
+          services/memory/memory-config.service.spec.ts
+          services/memory/memory-readiness.service.spec.ts
           services/memory/memory-context-builder.service.spec.ts
           services/memory/memory-sync.service.spec.ts
+          services/memory/memory-sync-worker.service.spec.ts
           services/memory/user-memory.service.spec.ts
           services/memory/vertex-memory-bank.client.spec.ts
           --runInBand --silent

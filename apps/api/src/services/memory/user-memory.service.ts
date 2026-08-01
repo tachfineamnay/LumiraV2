@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MemoryConfigService } from './memory-config.service';
 import { MemoryBankError, MemoryCategory, SanitizedMemoryCandidate } from './memory.types';
@@ -16,6 +17,8 @@ type EditableMemory = {
   fact: string;
   contentHash: string;
 };
+
+type ConflictResolution = 'SUPERSEDE' | 'KEEP_BOTH';
 
 @Injectable()
 export class UserMemoryService {
@@ -101,7 +104,6 @@ export class UserMemoryService {
   }
 
   async syncMemory(memoryId: string): Promise<void> {
-    if (!this.memoryConfig.isWriteEnabled()) return;
     const memory = await this.prisma.userMemory.findUnique({
       where: { id: memoryId },
       select: {
@@ -111,14 +113,23 @@ export class UserMemoryService {
         category: true,
         status: true,
         vertexMemoryName: true,
+        pendingOperation: true,
       },
     });
-    if (!memory || !['ACTIVE', 'SYNC_FAILED'].includes(memory.status)) return;
+    if (!memory) return;
+
+    if (memory.pendingOperation === 'DELETE' || memory.pendingOperation === 'SUPERSEDE') {
+      await this.convergeDelete(memory);
+      return;
+    }
+    if (!['ACTIVE', 'SYNC_FAILED'].includes(memory.status)) return;
+    if (!this.memoryConfig.isWriteEnabled()) return;
 
     try {
       const remote = memory.vertexMemoryName
         ? await this.bank.updateMemory(memory.vertexMemoryName, memory.fact)
         : await this.bank.createMemory({
+            memoryId: this.vertexMemoryId(memory.id),
             userId: memory.userId,
             fact: memory.fact,
             category: memory.category as MemoryCategory,
@@ -133,14 +144,12 @@ export class UserMemoryService {
           vertexMemoryName: remote.name,
           syncedAt: new Date(),
           lastSyncError: null,
+          pendingOperation: null,
         },
       });
     } catch (error) {
       const normalized = this.asMemoryError(error);
-      await this.prisma.userMemory.update({
-        where: { id: memory.id },
-        data: { status: 'SYNC_FAILED', lastSyncError: normalized.code },
-      });
+      await this.markConvergenceFailure(memory, normalized.code);
       this.logger.warn(`Memory sync failed: code=${normalized.code}`);
       throw normalized;
     }
@@ -177,7 +186,13 @@ export class UserMemoryService {
   async markAllDeleted(userId: string): Promise<void> {
     await this.prisma.userMemory.updateMany({
       where: { userId },
-      data: { status: 'DELETED', vertexMemoryName: null, syncedAt: null },
+      data: {
+        status: 'DELETED',
+        vertexMemoryName: null,
+        syncedAt: null,
+        pendingOperation: null,
+        lastSyncError: null,
+      },
     });
   }
 
@@ -187,20 +202,19 @@ export class UserMemoryService {
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
-        userId: true,
         sourceType: true,
-        sourceId: true,
         sourceVersionId: true,
         category: true,
         fact: true,
         status: true,
-        contentHash: true,
         vertexMemoryName: true,
         confidence: true,
-        approvedByExpertId: true,
         approvedAt: true,
         syncedAt: true,
         lastSyncError: true,
+        pendingOperation: true,
+        conflictResolution: true,
+        conflictResolvedAt: true,
         createdAt: true,
         updatedAt: true,
         readingVersion: { select: { orderId: true, version: true } },
@@ -214,8 +228,14 @@ export class UserMemoryService {
         { id: memory.id, fact: memory.fact },
       ]);
     }
-    return memories.map((memory) => ({
+    return memories.map(({ vertexMemoryName, ...memory }) => ({
       ...memory,
+      vertexSynced: Boolean(
+        vertexMemoryName &&
+        memory.syncedAt &&
+        !memory.pendingOperation &&
+        memory.status === 'ACTIVE',
+      ),
       conflictsWith:
         memory.status === 'PENDING'
           ? (activeByCategory.get(memory.category) ?? []).filter(
@@ -237,64 +257,101 @@ export class UserMemoryService {
     }, {});
   }
 
-  async approve(memoryId: string, userId: string, expertId: string, supersedeMemoryId?: string) {
-    await this.assertOwned(memoryId, userId);
-    if (supersedeMemoryId) {
-      if (supersedeMemoryId === memoryId) {
-        throw new BadRequestException('Une mémoire ne peut pas se remplacer elle-même.');
+  async approve(
+    memoryId: string,
+    userId: string,
+    expertId: string,
+    input: {
+      conflictResolution?: ConflictResolution;
+      supersedeMemoryId?: string;
+      confirmKeepBoth?: boolean;
+    },
+  ) {
+    const memory = await this.assertOwned(memoryId, userId);
+    const conflict = memory.lastSyncError === 'potential_conflict';
+    let resolution: ConflictResolution | undefined;
+    let supersededId: string | undefined;
+
+    if (conflict) {
+      resolution = input.conflictResolution;
+      if (!resolution) {
+        throw new BadRequestException(
+          'Un conflit potentiel exige de choisir remplacer ou conserver les deux.',
+        );
       }
-      const superseded = await this.assertOwned(supersedeMemoryId, userId);
-      await this.deleteRemoteReference(superseded.vertexMemoryName);
-      await this.prisma.userMemory.update({
-        where: { id: superseded.id },
-        data: { status: 'SUPERSEDED', vertexMemoryName: null, syncedAt: null },
-      });
+      if (resolution === 'KEEP_BOTH' && input.confirmKeepBoth !== true) {
+        throw new BadRequestException(
+          'La conservation des deux faits doit être confirmée explicitement.',
+        );
+      }
+      if (resolution === 'SUPERSEDE') {
+        if (!input.supersedeMemoryId || input.supersedeMemoryId === memoryId) {
+          throw new BadRequestException(
+            'Choisissez une mémoire existante du même client à remplacer.',
+          );
+        }
+        const superseded = await this.assertOwned(input.supersedeMemoryId, userId);
+        if (superseded.status !== 'ACTIVE') {
+          throw new BadRequestException('Seule une mémoire active peut être remplacée.');
+        }
+        await this.prepareTerminalMutation(superseded, 'SUPERSEDED', expertId, 'SUPERSEDE');
+        supersededId = superseded.id;
+      }
+    } else if (input.conflictResolution || input.supersedeMemoryId || input.confirmKeepBoth) {
+      throw new BadRequestException(
+        'Aucune résolution de conflit n’est attendue pour cette mémoire.',
+      );
     }
-    const memory = await this.prisma.userMemory.update({
+
+    const writing = this.memoryConfig.isWriteEnabled();
+    const approved = await this.prisma.userMemory.update({
       where: { id: memoryId },
       data: {
-        status: 'ACTIVE',
+        status: writing ? 'SYNC_FAILED' : 'ACTIVE',
         approvedAt: new Date(),
         approvedByExpertId: expertId,
-        lastSyncError: null,
+        pendingOperation: 'UPSERT',
+        lastSyncError: writing ? 'upsert_pending' : 'write_disabled',
+        ...(resolution
+          ? {
+              conflictResolution: resolution,
+              conflictResolvedAt: new Date(),
+              conflictResolvedByExpertId: expertId,
+            }
+          : {}),
       },
-      select: { id: true, userId: true },
+      select: { id: true, status: true, pendingOperation: true, syncedAt: true },
     });
-    await this.syncMemory(memory.id);
-    return memory;
+    if (supersededId) await this.syncMemory(supersededId);
+    if (writing) await this.syncMemory(approved.id);
+    return this.publicMutationResult(approved.id);
   }
 
   async reject(memoryId: string, userId: string, expertId: string) {
     const memory = await this.assertOwned(memoryId, userId);
-    await this.deleteRemoteReference(memory.vertexMemoryName);
-    return this.prisma.userMemory.update({
-      where: { id: memoryId },
-      data: {
-        status: 'REJECTED',
-        approvedAt: new Date(),
-        approvedByExpertId: expertId,
-        vertexMemoryName: null,
-        syncedAt: null,
-      },
-      select: { id: true, userId: true, status: true },
-    });
+    await this.prepareTerminalMutation(memory, 'REJECTED', expertId, 'DELETE');
+    await this.syncMemory(memory.id);
+    return this.publicMutationResult(memory.id);
   }
 
   async delete(memoryId: string, userId: string) {
     const memory = await this.assertOwned(memoryId, userId);
-    await this.deleteRemoteReference(memory.vertexMemoryName);
-    return this.prisma.userMemory.update({
-      where: { id: memoryId },
-      data: { status: 'DELETED', vertexMemoryName: null, syncedAt: null },
-      select: { id: true, userId: true, status: true },
-    });
+    await this.prepareTerminalMutation(memory, 'DELETED', undefined, 'DELETE');
+    await this.syncMemory(memory.id);
+    return this.publicMutationResult(memory.id);
   }
 
   async edit(
     memoryId: string,
     userId: string,
     expertId: string,
-    input: { fact: string; category?: string; supersedeMemoryId?: string },
+    input: {
+      fact: string;
+      category?: string;
+      conflictResolution?: ConflictResolution;
+      supersedeMemoryId?: string;
+      confirmKeepBoth?: boolean;
+    },
   ) {
     const memory = await this.assertOwned(memoryId, userId);
     if (['DELETED', 'REJECTED', 'SUPERSEDED'].includes(memory.status)) {
@@ -307,22 +364,23 @@ export class UserMemoryService {
     });
     if (duplicate) throw new ConflictException('Une mémoire identique existe déjà pour ce client.');
 
-    if (input.supersedeMemoryId) {
+    let supersededId: string | undefined;
+    if (input.supersedeMemoryId || input.conflictResolution || input.confirmKeepBoth) {
+      if (input.conflictResolution !== 'SUPERSEDE' || !input.supersedeMemoryId) {
+        throw new BadRequestException('Un remplacement exige une résolution SUPERSEDE explicite.');
+      }
       if (input.supersedeMemoryId === memoryId) {
         throw new BadRequestException('Une mémoire ne peut pas se remplacer elle-même.');
       }
       const superseded = await this.assertOwned(input.supersedeMemoryId, userId);
-      await this.deleteRemoteReference(superseded.vertexMemoryName);
-      await this.prisma.userMemory.update({
-        where: { id: superseded.id },
-        data: { status: 'SUPERSEDED', vertexMemoryName: null, syncedAt: null },
-      });
+      if (superseded.status !== 'ACTIVE') {
+        throw new BadRequestException('Seule une mémoire active peut être remplacée.');
+      }
+      await this.prepareTerminalMutation(superseded, 'SUPERSEDED', expertId, 'SUPERSEDE');
+      supersededId = superseded.id;
     }
 
-    if (memory.vertexMemoryName) {
-      await this.ensureBankConfigured();
-      await this.bank.updateMemory(memory.vertexMemoryName, editable.fact);
-    }
+    const mustConverge = Boolean(memory.vertexMemoryName || memory.status === 'ACTIVE');
     const updated = await this.prisma.userMemory.update({
       where: { id: memoryId },
       data: {
@@ -332,27 +390,43 @@ export class UserMemoryService {
         sourceType: 'EXPERT_CORRECTION',
         approvedByExpertId: expertId,
         approvedAt: new Date(),
-        lastSyncError: null,
+        status: mustConverge ? 'SYNC_FAILED' : memory.status,
+        pendingOperation: mustConverge ? 'UPSERT' : null,
+        lastSyncError: mustConverge
+          ? this.memoryConfig.isWriteEnabled()
+            ? 'upsert_pending'
+            : 'write_disabled'
+          : null,
+        ...(input.conflictResolution
+          ? {
+              conflictResolution: input.conflictResolution,
+              conflictResolvedAt: new Date(),
+              conflictResolvedByExpertId: expertId,
+            }
+          : {}),
       },
-      select: { id: true, userId: true, status: true, vertexMemoryName: true },
+      select: { id: true },
     });
-    if (!updated.vertexMemoryName && updated.status === 'ACTIVE') await this.syncMemory(updated.id);
-    return updated;
+    if (supersededId) await this.syncMemory(supersededId);
+    if (mustConverge && this.memoryConfig.isWriteEnabled()) await this.syncMemory(updated.id);
+    return this.publicMutationResult(updated.id);
   }
 
   async resync(memoryId: string, userId: string) {
     const memory = await this.assertOwned(memoryId, userId);
-    if (['DELETED', 'REJECTED', 'SUPERSEDED'].includes(memory.status)) {
+    if (['DELETED', 'REJECTED', 'SUPERSEDED'].includes(memory.status) && !memory.pendingOperation) {
       throw new BadRequestException('Cette mémoire ne peut pas être resynchronisée.');
     }
-    if (memory.status === 'PENDING') {
+    if (memory.status === 'PENDING' && !memory.pendingOperation) {
       throw new BadRequestException('Cette mémoire doit être approuvée avant synchronisation.');
     }
+    if (!this.memoryConfig.isWriteEnabled() && memory.pendingOperation !== 'DELETE') {
+      throw new BadRequestException(
+        'L’écriture Vertex est désactivée : aucune resynchronisation distante n’a été lancée.',
+      );
+    }
     await this.syncMemory(memory.id);
-    return this.prisma.userMemory.findUnique({
-      where: { id: memory.id },
-      select: { id: true, userId: true, status: true, vertexMemoryName: true, syncedAt: true },
-    });
+    return this.publicMutationResult(memory.id);
   }
 
   async runIsolationDiagnostic(label?: string) {
@@ -363,11 +437,26 @@ export class UserMemoryService {
       );
     }
     await this.ensureBankConfigured();
-    const [existingA, existingB] = await Promise.all([
+    const caseVariantA = users.userAId.toUpperCase();
+    if (caseVariantA === users.userAId || caseVariantA === users.userBId) {
+      throw new BadRequestException(
+        'Le compte technique A doit permettre un test de variante de casse distinct.',
+      );
+    }
+    const realAccounts = await this.prisma.user.count({
+      where: { id: { in: [users.userAId, users.userBId, caseVariantA] } },
+    });
+    if (realAccounts > 0) {
+      throw new ConflictException(
+        'Les comptes techniques de diagnostic ne doivent correspondre à aucun client Lumira.',
+      );
+    }
+    const [existingA, existingB, existingCaseVariant] = await Promise.all([
       this.bank.listUserMemories(users.userAId),
       this.bank.listUserMemories(users.userBId),
+      this.bank.listUserMemories(caseVariantA),
     ]);
-    if (existingA.length > 0 || existingB.length > 0) {
+    if (existingA.length > 0 || existingB.length > 0 || existingCaseVariant.length > 0) {
       throw new ConflictException(
         'Les comptes techniques de diagnostic doivent être vides avant le test.',
       );
@@ -375,46 +464,61 @@ export class UserMemoryService {
 
     const fact = `Diagnostic technique Lumira ${label?.trim().slice(0, 40) || Date.now().toString(36)}`;
     let createdName: string | null = null;
-    let diagnosticError: unknown;
-    let result: {
-      created: true;
-      retrievedForA: true;
-      absentFromB: true;
-      scopeBreakRejected: true;
-    } | null = null;
+    let result:
+      | {
+          created: true;
+          retrievedForA: true;
+          absentFromB: true;
+          absentFromCaseVariant: true;
+          scopeBreakRejected: true;
+        }
+      | undefined;
+    let cleanupVerified = true;
     try {
       const created = await this.bank.createMemory({
+        memoryId: this.diagnosticMemoryId(users.userAId, fact),
         userId: users.userAId,
         fact,
         category: 'READING_CONTINUITY',
       });
       createdName = created.name;
-      const [retrievedA, listedB] = await Promise.all([
+      const [retrievedA, listedB, listedCaseVariant] = await Promise.all([
         this.bank.retrieveMemories(users.userAId, fact, 8),
         this.bank.listUserMemories(users.userBId),
+        this.bank.retrieveMemories(caseVariantA, fact, 8),
       ]);
       const foundA = retrievedA.some((memory) => memory.name === created.name);
       const absentFromB = listedB.every((memory) => memory.name !== created.name);
-      if (!foundA || !absentFromB) {
+      const absentFromCaseVariant = listedCaseVariant.every(
+        (memory) => memory.name !== created.name,
+      );
+      if (!foundA || !absentFromB || !absentFromCaseVariant) {
         throw new MemoryBankError(
           'invalid_argument',
           'Vertex Memory isolation diagnostic failed.',
           false,
         );
       }
-      result = { created: true, retrievedForA: true, absentFromB: true, scopeBreakRejected: true };
-    } catch (error) {
-      diagnosticError = error;
-    }
-    if (createdName) {
-      await this.bank.deleteMemory(createdName);
-      const remaining = await this.bank.listUserMemories(users.userAId);
-      if (remaining.some((memory) => memory.name === createdName)) {
-        throw new MemoryBankError('unavailable', 'Diagnostic cleanup could not be verified.', true);
+      result = {
+        created: true,
+        retrievedForA: true,
+        absentFromB: true,
+        absentFromCaseVariant: true,
+        scopeBreakRejected: true,
+      };
+    } finally {
+      if (createdName) {
+        await this.bank.deleteMemory(createdName);
+        const remaining = await this.bank.listUserMemories(users.userAId);
+        if (remaining.some((memory) => memory.name === createdName)) {
+          cleanupVerified = false;
+        }
       }
     }
-    if (diagnosticError) throw diagnosticError;
-    return result!;
+    if (!cleanupVerified) {
+      throw new MemoryBankError('unavailable', 'Diagnostic cleanup could not be verified.', true);
+    }
+    return { ...result!, deleted: true, absentAfterDeletion: true };
   }
 
   private sanitizeEdit(fact: string, category: string): EditableMemory {
@@ -442,12 +546,118 @@ export class UserMemoryService {
         category: true,
         status: true,
         vertexMemoryName: true,
+        lastSyncError: true,
+        pendingOperation: true,
       },
     });
     if (!memory || memory.userId !== userId) {
       throw new NotFoundException('Mémoire introuvable pour ce client.');
     }
     return memory;
+  }
+
+  private async prepareTerminalMutation(
+    memory: {
+      id: string;
+      vertexMemoryName: string | null;
+    },
+    status: 'REJECTED' | 'DELETED' | 'SUPERSEDED',
+    expertId: string | undefined,
+    operation: 'DELETE' | 'SUPERSEDE',
+  ): Promise<void> {
+    // This is intentionally the first write. If Vertex succeeds and the final
+    // local cleanup fails, the durable operation remains visible and resync can
+    // safely repeat DELETE (NOT_FOUND is idempotent).
+    await this.prisma.userMemory.update({
+      where: { id: memory.id },
+      data: {
+        status,
+        approvedAt: expertId ? new Date() : undefined,
+        approvedByExpertId: expertId,
+        pendingOperation: operation,
+        lastSyncError: 'delete_pending',
+      },
+    });
+  }
+
+  private async convergeDelete(memory: {
+    id: string;
+    status: string;
+    vertexMemoryName: string | null;
+  }): Promise<void> {
+    try {
+      if (memory.vertexMemoryName) {
+        await this.ensureBankConfigured();
+        await this.bank.deleteMemory(memory.vertexMemoryName);
+      }
+      await this.prisma.userMemory.update({
+        where: { id: memory.id },
+        data: {
+          vertexMemoryName: null,
+          syncedAt: null,
+          pendingOperation: null,
+          lastSyncError: null,
+        },
+      });
+    } catch (error) {
+      const normalized = this.asMemoryError(error);
+      await this.markConvergenceFailure(memory, normalized.code);
+      this.logger.warn(`Memory delete convergence failed: code=${normalized.code}`);
+      throw normalized;
+    }
+  }
+
+  private async markConvergenceFailure(
+    memory: { id: string; status: string; pendingOperation?: string | null },
+    code: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.userMemory.update({
+        where: { id: memory.id },
+        data: {
+          ...(memory.pendingOperation === 'DELETE' || memory.pendingOperation === 'SUPERSEDE'
+            ? {}
+            : { status: 'SYNC_FAILED' }),
+          lastSyncError: code,
+        },
+      });
+    } catch {
+      // The operation was already persisted before the remote call. Do not mask
+      // the original failure with a second best-effort persistence error.
+    }
+  }
+
+  private async publicMutationResult(memoryId: string) {
+    const memory = await this.prisma.userMemory.findUnique({
+      where: { id: memoryId },
+      select: {
+        id: true,
+        status: true,
+        syncedAt: true,
+        vertexMemoryName: true,
+        pendingOperation: true,
+        lastSyncError: true,
+      },
+    });
+    if (!memory) throw new NotFoundException('Mémoire introuvable.');
+    const { vertexMemoryName, ...publicMemory } = memory;
+    return {
+      ...publicMemory,
+      vertexSynced: Boolean(
+        vertexMemoryName &&
+        memory.syncedAt &&
+        !memory.pendingOperation &&
+        memory.status === 'ACTIVE',
+      ),
+    };
+  }
+
+  private vertexMemoryId(memoryId: string): string {
+    return `lumira-${createHash('sha256').update(memoryId).digest('hex').slice(0, 40)}`;
+  }
+
+  private diagnosticMemoryId(userId: string, nonce: string): string {
+    return `lumira-diag-${createHash('sha256').update(`${userId}:${nonce}`).digest('hex').slice(0, 32)}`;
   }
 
   private async deleteRemoteReference(vertexMemoryName: string | null): Promise<void> {

@@ -60,6 +60,18 @@ export class MemoryConfigService {
     return this.number('VERTEX_MEMORY_REQUEST_TIMEOUT_MS', 8_000, 500, 30_000);
   }
 
+  lroTimeoutMs(): number {
+    return this.number('VERTEX_MEMORY_LRO_TIMEOUT_MS', 60_000, 1_000, 300_000);
+  }
+
+  recoveryLookbackMs(): number {
+    return this.number('MEMORY_RECOVERY_LOOKBACK_MS', 3_600_000, 60_000, 604_800_000);
+  }
+
+  recoveryLimit(): number {
+    return this.number('MEMORY_RECOVERY_LIMIT', 10, 1, 100);
+  }
+
   diagnosticUsers(): { userAId: string; userBId: string } | null {
     const userAId = this.config.get<string>('VERTEX_MEMORY_DIAGNOSTIC_USER_A')?.trim() || '';
     const userBId = this.config.get<string>('VERTEX_MEMORY_DIAGNOSTIC_USER_B')?.trim() || '';

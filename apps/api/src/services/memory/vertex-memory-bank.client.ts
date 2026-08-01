@@ -43,6 +43,7 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
   }
 
   async createMemory(input: {
+    memoryId: string;
     userId: string;
     fact: string;
     category: MemoryCategory;
@@ -54,8 +55,9 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
       ).createMemory(
         {
           parent,
+          memoryId: input.memoryId,
           memory: {
-            displayName: `lumira-${input.category.toLowerCase()}`,
+            displayName: input.memoryId,
             description: 'Lumira continuity memory',
             fact: input.fact,
             scope: { user_id: input.userId },
@@ -69,6 +71,9 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
       this.assertScope(mapped.scope, input.userId);
       return mapped;
     } catch (error) {
+      if (this.isAlreadyExists(error)) {
+        return this.getExistingMemory(parent, input.memoryId, input.userId);
+      }
       throw this.normalize(error);
     }
   }
@@ -192,24 +197,47 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
   }
 
   private async awaitOperation(operation: MemoryOperation): Promise<[unknown, ...unknown[]]> {
-    return this.withDeadline(operation.promise());
+    return this.withLroDeadline(operation.promise());
   }
 
-  private async withDeadline<T>(promise: Promise<T>): Promise<T> {
+  private async withLroDeadline<T>(promise: Promise<T>): Promise<T> {
     let timeout: NodeJS.Timeout | undefined;
     try {
       return await Promise.race([
         promise,
         new Promise<T>((_, reject) => {
           timeout = setTimeout(
-            () => reject(new MemoryBankError('timeout', 'Memory Bank request timed out.', true)),
-            this.memoryConfig.requestTimeoutMs(),
+            () => reject(new MemoryBankError('timeout', 'Memory Bank operation timed out.', true)),
+            this.memoryConfig.lroTimeoutMs(),
           );
         }),
       ]);
     } finally {
       if (timeout) clearTimeout(timeout);
     }
+  }
+
+  private async getExistingMemory(
+    parent: string,
+    memoryId: string,
+    userId: string,
+  ): Promise<VertexMemory> {
+    try {
+      const [memory] = await (
+        await this.getClient()
+      ).getMemory({ name: `${parent}/memories/${memoryId}` }, this.callOptions());
+      const mapped = this.map(memory);
+      this.assertOwned(mapped.name);
+      this.assertScope(mapped.scope, userId);
+      return mapped;
+    } catch (error) {
+      throw this.normalize(error);
+    }
+  }
+
+  private isAlreadyExists(error: unknown): boolean {
+    const code = String((error as { code?: unknown })?.code ?? '').toLowerCase();
+    return code === '6' || code === 'already_exists';
   }
 
   private async getClient(): Promise<MemoryBankClient> {

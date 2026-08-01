@@ -36,6 +36,7 @@ export interface VertexMemoryBank {
   isConfigured(): Promise<boolean>;
   isEnabled(): boolean;
   createMemory(input: {
+    memoryId: string;
     userId: string;
     fact: string;
     category: MemoryCategory;
@@ -47,6 +48,23 @@ export interface VertexMemoryBank {
   deleteAllUserMemories(userId: string): Promise<number>;
   diagnoseIsolation(userId: string): Promise<{ count: number; isolated: boolean }>;
   close(): Promise<void>;
+}
+
+export type MemoryReadinessCode =
+  | 'ready'
+  | 'memory_disabled'
+  | 'model_config_unavailable'
+  | 'model_config_missing'
+  | 'model_config_invalid'
+  | 'provider_mode_invalid'
+  | 'memory_agent_disabled'
+  | 'memory_provider_invalid'
+  | 'memory_model_invalid'
+  | 'memory_validation_missing';
+
+export interface MemoryReadiness {
+  ready: boolean;
+  code: MemoryReadinessCode;
 }
 
 export type NormalizedMemoryErrorCode =

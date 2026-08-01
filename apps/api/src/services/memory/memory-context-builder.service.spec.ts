@@ -34,7 +34,10 @@ describe('MemoryContextBuilder', () => {
     expect(result).toContain('SOURCE SECONDAIRE');
     expect(prisma.userMemory.findMany).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ where: { userId: 'user-a', status: 'ACTIVE' }, take: 8 }),
+      expect.objectContaining({
+        where: { userId: 'user-a', status: 'ACTIVE', pendingOperation: null },
+        take: 8,
+      }),
     );
   });
 
