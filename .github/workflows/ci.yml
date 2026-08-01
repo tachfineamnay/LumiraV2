@@ -77,8 +77,15 @@ jobs:
           modules/expert/production-control.service.spec.ts
           modules/expert/reading-workspace.service.spec.ts
           modules/expert/expert.service.seal-journey.spec.ts
+          modules/expert/expert.controller.memory.spec.ts
+          modules/expert/client-purge.service.spec.ts
           modules/expert/ai-production-readiness.service.spec.ts
           modules/uploads/private-onboarding-photo.service.spec.ts
+          services/memory/memory-sanitizer.service.spec.ts
+          services/memory/memory-context-builder.service.spec.ts
+          services/memory/memory-sync.service.spec.ts
+          services/memory/user-memory.service.spec.ts
+          services/memory/vertex-memory-bank.client.spec.ts
           --runInBand --silent
 
       - name: Build

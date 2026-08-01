@@ -14,7 +14,6 @@ import {
   Res,
   StreamableFile,
   BadRequestException,
-  Optional,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
@@ -28,6 +27,7 @@ import {
 } from '../uploads/private-onboarding-photo.service';
 import { S3Service } from '../uploads/s3.service';
 import { UserMemoryService } from '../../services/memory/user-memory.service';
+import { MemorySyncService } from '../../services/memory/memory-sync.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
@@ -44,6 +44,14 @@ import {
   FinalizeOrderDto,
   ChatOrderDto,
   ClientsQueryDto,
+  MemoryClientParamsDto,
+  MemoryScopedParamsDto,
+  MemoryScopedJobParamsDto,
+  EditMemoryDto,
+  ApproveMemoryDto,
+  ListMemoryJobsDto,
+  BackfillMemoryJobsDto,
+  CreateDiagnosticMemoryDto,
 } from './dto';
 
 @Controller('expert')
@@ -56,7 +64,8 @@ export class ExpertController {
     private readonly audioGenerationService: AudioGenerationService,
     private readonly privateOnboardingPhotoService: PrivateOnboardingPhotoService,
     private readonly s3Service: S3Service,
-    @Optional() private readonly userMemoryService?: UserMemoryService,
+    private readonly userMemoryService: UserMemoryService,
+    private readonly memorySyncService: MemorySyncService,
   ) {}
 
   // ========================
@@ -94,28 +103,94 @@ export class ExpertController {
     return { valid: true, expert: { id: expert.id, email: expert.email, role: expert.role } };
   }
 
+  // Memory is a cross-reading, sensitive continuity surface. Every route is
+  // deliberately ADMIN-only and scopes both memory and job ids to clientId.
   @Get('clients/:clientId/memories')
-  async listClientMemories(@Param('clientId') clientId: string) {
-    return this.userMemoryService?.listForExpert(clientId) ?? [];
+  @Roles('ADMIN')
+  async listClientMemories(
+    @Param() params: MemoryClientParamsDto,
+    @Query() query: ListMemoryJobsDto,
+  ) {
+    const limit = query.limit ?? 20;
+    const [memories, counts, jobs] = await Promise.all([
+      this.userMemoryService.listForExpert(params.clientId),
+      this.userMemoryService.countersForExpert(params.clientId),
+      this.memorySyncService.listForUser(params.clientId, limit),
+    ]);
+    return { memories, counts, jobs };
   }
 
-  @Post('memories/:memoryId/approve')
-  async approveMemory(@Param('memoryId') memoryId: string, @CurrentExpert() expert: Expert) {
-    if (!this.userMemoryService) throw new BadRequestException('Mémoire indisponible.');
-    return this.userMemoryService.approve(memoryId, expert.id);
+  @Post('clients/:clientId/memories/:memoryId/approve')
+  @Roles('ADMIN')
+  async approveMemory(
+    @Param() params: MemoryScopedParamsDto,
+    @Body() dto: ApproveMemoryDto,
+    @CurrentExpert() expert: Expert,
+  ) {
+    return this.userMemoryService.approve(
+      params.memoryId,
+      params.clientId,
+      expert.id,
+      dto.supersedeMemoryId,
+    );
   }
 
-  @Post('memories/:memoryId/reject')
-  async rejectMemory(@Param('memoryId') memoryId: string, @CurrentExpert() expert: Expert) {
-    if (!this.userMemoryService) throw new BadRequestException('Mémoire indisponible.');
-    return this.userMemoryService.reject(memoryId, expert.id);
+  @Patch('clients/:clientId/memories/:memoryId')
+  @Roles('ADMIN')
+  async editMemory(
+    @Param() params: MemoryScopedParamsDto,
+    @Body() dto: EditMemoryDto,
+    @CurrentExpert() expert: Expert,
+  ) {
+    return this.userMemoryService.edit(params.memoryId, params.clientId, expert.id, dto);
   }
 
-  @Delete('memories/:memoryId')
+  @Post('clients/:clientId/memories/:memoryId/reject')
+  @Roles('ADMIN')
+  async rejectMemory(@Param() params: MemoryScopedParamsDto, @CurrentExpert() expert: Expert) {
+    return this.userMemoryService.reject(params.memoryId, params.clientId, expert.id);
+  }
+
+  @Delete('clients/:clientId/memories/:memoryId')
+  @Roles('ADMIN')
   @HttpCode(HttpStatus.OK)
-  async deleteMemory(@Param('memoryId') memoryId: string) {
-    if (!this.userMemoryService) throw new BadRequestException('Mémoire indisponible.');
-    return this.userMemoryService.delete(memoryId);
+  async deleteMemory(@Param() params: MemoryScopedParamsDto) {
+    return this.userMemoryService.delete(params.memoryId, params.clientId);
+  }
+
+  @Post('clients/:clientId/memories/:memoryId/resync')
+  @Roles('ADMIN')
+  async resyncMemory(@Param() params: MemoryScopedParamsDto) {
+    return this.userMemoryService.resync(params.memoryId, params.clientId);
+  }
+
+  @Get('clients/:clientId/memory-jobs')
+  @Roles('ADMIN')
+  async listMemoryJobs(@Param() params: MemoryClientParamsDto, @Query() query: ListMemoryJobsDto) {
+    return this.memorySyncService.listForUser(params.clientId, query.limit ?? 20);
+  }
+
+  @Post('clients/:clientId/memory-jobs/:jobId/retry')
+  @Roles('ADMIN')
+  async retryMemoryJob(@Param() params: MemoryScopedJobParamsDto) {
+    return this.memorySyncService.retryForUser(params.jobId, params.clientId);
+  }
+
+  @Post('memories/backfill')
+  @Roles('ADMIN')
+  async backfillMemoryJobs(@Body() dto: BackfillMemoryJobsDto) {
+    return this.memorySyncService.enqueueMissingJobs({
+      dryRun: dto.dryRun ?? true,
+      limit: dto.limit ?? 10,
+      userId: dto.userId,
+      orderId: dto.orderId,
+    });
+  }
+
+  @Post('memories/diagnostic')
+  @Roles('ADMIN')
+  async runMemoryDiagnostic(@Body() dto: CreateDiagnosticMemoryDto) {
+    return this.userMemoryService.runIsolationDiagnostic(dto.label);
   }
 
   @Post('refresh')

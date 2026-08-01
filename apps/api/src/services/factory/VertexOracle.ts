@@ -1093,10 +1093,20 @@ export class VertexOracle implements OnModuleInit {
       scribeResolved,
       visualAssets,
     );
-    const memoryContext = await this.memoryContextBuilder?.build(
-      userProfile.userId,
-      userProfile.specificQuestion,
-    );
+    let memoryContext = '';
+    try {
+      memoryContext =
+        (await this.memoryContextBuilder?.build(
+          userProfile.userId,
+          userProfile.specificQuestion,
+        )) ?? '';
+    } catch (error) {
+      // Continuity is an optional secondary source. A dependency or mock must
+      // never cancel SCRIBE, queue a retry, or change an order's lifecycle.
+      this.logger.warn(
+        `Memory context skipped: ${error instanceof Error ? error.name : 'unknown'}`,
+      );
+    }
 
     let scribeResult = await this.callJson<{
       pdf_content: PdfContent;

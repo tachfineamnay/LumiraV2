@@ -56,6 +56,16 @@ export class MemoryConfigService {
     return this.number('MEMORY_JOB_STALE_MS', 900_000, 60_000, 86_400_000);
   }
 
+  requestTimeoutMs(): number {
+    return this.number('VERTEX_MEMORY_REQUEST_TIMEOUT_MS', 8_000, 500, 30_000);
+  }
+
+  diagnosticUsers(): { userAId: string; userBId: string } | null {
+    const userAId = this.config.get<string>('VERTEX_MEMORY_DIAGNOSTIC_USER_A')?.trim() || '';
+    const userBId = this.config.get<string>('VERTEX_MEMORY_DIAGNOSTIC_USER_B')?.trim() || '';
+    return userAId && userBId && userAId !== userBId ? { userAId, userBId } : null;
+  }
+
   private bool(key: string): boolean {
     const raw = this.config.get<string>(key)?.trim().toLowerCase();
     return raw === 'true' || raw === '1';

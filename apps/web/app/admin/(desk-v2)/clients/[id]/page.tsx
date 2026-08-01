@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { ClientIdentityHeader } from '@/components/desk-v2/clients/ClientIdentityHeader';
 import { ClientTabs } from '@/components/desk-v2/clients/ClientTabs';
 import { ClientControlOverview } from '@/components/desk-v2/clients/ClientControlOverview';
+import { UserMemoryPanel } from '@/components/desk-v2/clients/UserMemoryPanel';
 import { ConfirmModal } from '@/components/desk-v2/shared/ConfirmModal';
 import { ClientFullData } from '@/components/desk-v2/clients/types';
 
@@ -35,7 +36,8 @@ function getDeleteClientError(error: unknown): { status?: number; message: strin
   if (response?.status === 403) {
     return {
       status: 403,
-      message: 'Votre session Desk ne permet pas cette suppression. Reconnectez-vous puis réessayez.',
+      message:
+        'Votre session Desk ne permet pas cette suppression. Reconnectez-vous puis réessayez.',
     };
   }
 
@@ -147,6 +149,8 @@ export default function ClientDetailPage() {
       />
 
       <ClientControlOverview clientId={clientId} />
+
+      <UserMemoryPanel clientId={clientId} />
 
       <ClientTabs client={client} onRefresh={fetchClient} />
 

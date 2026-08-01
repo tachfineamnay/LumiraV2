@@ -1709,7 +1709,7 @@ MESSAGE DE L'EXPERT:`;
     const sealedAt = new Date();
     const currentGenerated = (order.generatedContent as Record<string, unknown>) || {};
 
-    return this.prisma.$transaction(async (tx) => {
+    const version = await this.prisma.$transaction(async (tx) => {
       const latest = await tx.readingVersion.findFirst({
         where: { orderId: order.id },
         orderBy: { version: 'desc' },
@@ -1727,15 +1727,6 @@ MESSAGE DE L'EXPERT:`;
           sealedAt,
         },
       });
-      // Queue only a SEALED immutable version. The worker is deliberately
-      // separate and makes no network call inside this transaction.
-      await this.memorySyncService?.enqueueForSealedReading(tx, {
-        userId: order.userId,
-        orderId: order.id,
-        readingVersionId: version.id,
-        contentHash: version.contentHash,
-      });
-
       // GUIDE stays inside the DRAFT payload until this point. A sealed
       // reading receives its own journey, so prior completed steps and dreams
       // are never rewritten by a new reading or regeneration.
@@ -1779,6 +1770,22 @@ MESSAGE DE L'EXPERT:`;
 
       return version;
     });
+    // Queueing is deliberately after the immutable seal. A local PostgreSQL
+    // outage in the optional memory lane must never roll back a delivered
+    // reading; the bounded worker scanner will recover a missing job later.
+    try {
+      await this.memorySyncService?.enqueueForSealedReading(this.prisma, {
+        userId: order.userId,
+        orderId: order.id,
+        readingVersionId: version.id,
+        contentHash: version.contentHash,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Memory job enqueue skipped after sealing: ${error instanceof Error ? error.name : 'unknown'}`,
+      );
+    }
+    return version;
   }
 
   private toPathActionType(value: string | undefined): PathActionType {

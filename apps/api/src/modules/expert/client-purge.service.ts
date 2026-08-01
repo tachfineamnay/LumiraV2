@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  Optional,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { FileType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3BucketKind, S3Service } from '../uploads/s3.service';
@@ -23,7 +17,7 @@ export class ClientPurgeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3Service: S3Service,
-    @Optional() private readonly userMemoryService?: UserMemoryService,
+    private readonly userMemoryService: UserMemoryService,
   ) {}
 
   async purge(clientId: string): Promise<ClientPurgeResult> {
@@ -120,17 +114,33 @@ export class ClientPurgeService {
       if (key) readings.add(key);
     }
 
+    // Remote Memory Bank deletion is verified before S3 and PostgreSQL. A
+    // referenced local memory with no Vertex configuration blocks the purge;
+    // an older account with no memory trace remains safely purgeable.
+    try {
+      await this.userMemoryService.deleteRemoteForUser(clientId);
+    } catch (error) {
+      this.logger.error(`Client purge memory failure: clientId=${clientId}`);
+      throw new ServiceUnavailableException(
+        'La suppression de la mémoire de continuité n’a pas pu être vérifiée. Aucun fichier ni compte n’a été supprimé ; réessayez dans un instant.',
+        { cause: error },
+      );
+    }
+
     // Storage is deleted before the database. If S3 is unavailable, the client
     // record remains intact and the purge can be retried safely.
     await this.deleteStorageObjects(uploads, 'uploads', clientId);
     await this.deleteStorageObjects(readings, 'readings', clientId);
-    // Remote deletion precedes the local transaction. A failed external purge
-    // leaves the customer record intact so an expert can retry safely.
-    await this.userMemoryService?.deleteAllForUser(clientId);
 
     const orderIds = client.orders.map((order) => order.id);
 
     await this.prisma.$transaction(async (tx) => {
+      // Preserve the audited terminal state until the user cascade removes the
+      // account. This happens only after remote verification and S3 deletion.
+      await tx.userMemory.updateMany({
+        where: { userId: clientId },
+        data: { status: 'DELETED', vertexMemoryName: null, syncedAt: null },
+      });
       if (orderIds.length > 0) {
         await tx.deliveryRecord.deleteMany({ where: { orderId: { in: orderIds } } });
         await tx.orderFile.deleteMany({ where: { orderId: { in: orderIds } } });

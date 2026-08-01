@@ -36,7 +36,14 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       await this.sync.recoverStaleJobs();
+      // Recovery is local PostgreSQL work only. It never invokes Vertex and
+      // therefore cannot make sealing or client-facing generation slower.
+      await this.sync.enqueueMissingJobs({ dryRun: false, limit: 10 });
       await Promise.all(Array.from({ length: this.config.concurrency() }, () => this.processOne()));
+    } catch (error) {
+      this.logger.warn(
+        `Memory worker tick failed: ${error instanceof Error ? error.name : 'unknown'}`,
+      );
     } finally {
       this.running = false;
     }
@@ -81,7 +88,7 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
       });
       const synced = await this.userMemory.syncActiveForReading(job.readingVersionId);
       if (synced.failed > 0) {
-        throw new MemoryBankError('unavailable', 'one or more memory writes failed', true);
+        throw synced.error ?? new MemoryBankError('unavailable', 'memory write failed', true);
       }
       await this.sync.succeed(job.id, {
         candidateCount: Array.isArray(candidates) ? candidates.length : 0,
@@ -91,15 +98,34 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
         syncFailed: synced.failed,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : '';
-      const normalized =
-        error instanceof MemoryBankError
-          ? error
-          : /unavailable|timeout|quota|rate limit|network/.test(message)
-            ? new MemoryBankError('unavailable', 'memory job temporarily unavailable', true)
-            : new MemoryBankError('non_retryable', 'memory job failed', false);
-      await this.sync.fail(job.id, job.attempts, normalized.code, normalized.retryable);
+      const normalized = this.normalizeError(error);
+      await this.sync.fail(job, normalized);
       this.logger.warn(`Memory job failed: code=${normalized.code}`);
     }
+  }
+
+  private normalizeError(error: unknown): MemoryBankError {
+    if (error instanceof MemoryBankError) return error;
+    const code = String((error as { code?: unknown })?.code ?? '').toLowerCase();
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    if (code === '8' || /quota|resource exhausted|rate limit/.test(message)) {
+      return new MemoryBankError('quota', 'memory job quota limited', true);
+    }
+    if (code === '4' || /timeout|deadline/.test(message)) {
+      return new MemoryBankError('timeout', 'memory job timed out', true);
+    }
+    if (code === '14' || /unavailable|network/.test(message)) {
+      return new MemoryBankError('unavailable', 'memory job temporarily unavailable', true);
+    }
+    if (code === '7' || /permission/.test(message)) {
+      return new MemoryBankError('permission_denied', 'memory job permission denied', false);
+    }
+    if (code === '16' || /credential|unauthenticated/.test(message)) {
+      return new MemoryBankError('invalid_credentials', 'memory job credentials invalid', false);
+    }
+    if (code === '3' || /invalid parent|invalid argument|sealed version/.test(message)) {
+      return new MemoryBankError('invalid_argument', 'memory job input invalid', false);
+    }
+    return new MemoryBankError('non_retryable', 'memory job failed', false);
   }
 }

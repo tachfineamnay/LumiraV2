@@ -52,8 +52,11 @@ export interface VertexMemoryBank {
 export type NormalizedMemoryErrorCode =
   | 'not_configured'
   | 'invalid_parent'
+  | 'not_found'
   | 'permission_denied'
+  | 'unauthenticated'
   | 'invalid_credentials'
+  | 'invalid_argument'
   | 'outside_parent'
   | 'unavailable'
   | 'quota'

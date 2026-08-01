@@ -19,6 +19,8 @@ describe('ExpertController private photos', () => {
     {} as AudioGenerationService,
     photoService,
     {} as S3Service,
+    {} as import('../../services/memory/user-memory.service').UserMemoryService,
+    {} as import('../../services/memory/memory-sync.service').MemorySyncService,
   );
 
   beforeEach(() => jest.clearAllMocks());

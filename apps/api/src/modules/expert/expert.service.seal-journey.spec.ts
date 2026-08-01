@@ -58,6 +58,52 @@ function deliverableReading(): CanonicalReadingContent {
 }
 
 describe('ExpertService sealed journey promotion', () => {
+  it('keeps the immutable seal when optional memory enqueue fails', async () => {
+    const tx = {
+      readingVersion: {
+        findFirst: jest.fn().mockResolvedValue({ version: 2 }),
+        create: jest.fn().mockResolvedValue({ id: 'version-3', contentHash: 'hash-3' }),
+      },
+      spiritualPath: { create: jest.fn() },
+      order: { update: jest.fn() },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    };
+    const memorySync = {
+      enqueueForSealedReading: jest.fn().mockRejectedValue(new Error('queue unavailable')),
+    };
+    const service = new ExpertService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      memorySync as never,
+    );
+    const order = { id: 'order-1', userId: 'user-1', generatedContent: {}, orderNumber: 'LUM-001' };
+
+    await expect(
+      (
+        service as unknown as { sealReadingVersion: (...args: unknown[]) => Promise<unknown> }
+      ).sealReadingVersion(order, deliverableReading(), expert, 'TEST'),
+    ).resolves.toEqual(expect.objectContaining({ id: 'version-3' }));
+
+    expect(tx.readingVersion.create).toHaveBeenCalled();
+    expect(tx.order.update).toHaveBeenCalled();
+    expect(memorySync.enqueueForSealedReading).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ readingVersionId: 'version-3' }),
+    );
+  });
+
   it('keeps a rejected draft and leaves sealed versions untouched', async () => {
     const currentDraft = {
       lecture: 'Draft expert',

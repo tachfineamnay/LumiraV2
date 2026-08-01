@@ -13,9 +13,7 @@ describe('ClientPurgeService', () => {
     onboardingProgress: {
       data: { facePhoto: 's3://onboarding/client-1/face-b.jpg' },
     },
-    readingIntakes: [
-      { data: { palmPhoto: 's3://onboarding/client-1/palm-b.jpg' } },
-    ],
+    readingIntakes: [{ data: { palmPhoto: 's3://onboarding/client-1/palm-b.jpg' } }],
     orders: [
       {
         id: 'order-1',
@@ -37,6 +35,7 @@ describe('ClientPurgeService', () => {
       orderFile: { deleteMany: jest.fn() },
       aiRun: { deleteMany: jest.fn() },
       readingVersion: { updateMany: jest.fn(), deleteMany: jest.fn() },
+      userMemory: { updateMany: jest.fn() },
       readingIntake: { deleteMany: jest.fn() },
       order: { deleteMany: jest.fn() },
       insight: { deleteMany: jest.fn() },
@@ -61,16 +60,22 @@ describe('ClientPurgeService', () => {
         ? jest.fn().mockRejectedValue(new Error('storage unavailable'))
         : jest.fn().mockResolvedValue(undefined),
     };
+    const userMemoryService = { deleteRemoteForUser: jest.fn().mockResolvedValue({ deleted: 0 }) };
     return {
-      service: new ClientPurgeService(prisma as never, s3Service as never),
+      service: new ClientPurgeService(
+        prisma as never,
+        s3Service as never,
+        userMemoryService as never,
+      ),
       prisma,
       s3Service,
+      userMemoryService,
       tx,
     };
   }
 
-  it('deletes private assets, all order history and the user account', async () => {
-    const { service, s3Service, tx } = setup();
+  it('deletes Vertex memory before private assets, then database history and the account', async () => {
+    const { service, s3Service, tx, userMemoryService } = setup();
 
     await expect(service.purge('client-1')).resolves.toEqual({
       clientId: 'client-1',
@@ -78,16 +83,17 @@ describe('ClientPurgeService', () => {
       deletedStorageObjects: 8,
     });
 
-    expect(s3Service.listObjectKeys).toHaveBeenCalledWith(
-      'onboarding/client-1/',
-      'uploads',
-    );
+    expect(s3Service.listObjectKeys).toHaveBeenCalledWith('onboarding/client-1/', 'uploads');
     expect(s3Service.listObjectKeys).toHaveBeenCalledWith('readings/LUM-1/', 'readings');
     expect(s3Service.listObjectKeys).toHaveBeenCalledWith('audio/readings/LUM-1/', 'readings');
     expect(s3Service.listObjectKeys).toHaveBeenCalledWith('audio/insights/LUM-1/', 'readings');
     expect(s3Service.deleteObjectStrict).toHaveBeenCalledWith(
       'onboarding/client-1/face-a.jpg',
       'uploads',
+    );
+    expect(userMemoryService.deleteRemoteForUser).toHaveBeenCalledWith('client-1');
+    expect(userMemoryService.deleteRemoteForUser.mock.invocationCallOrder[0]).toBeLessThan(
+      s3Service.deleteObjectStrict.mock.invocationCallOrder[0],
     );
     expect(s3Service.deleteObjectStrict).toHaveBeenCalledWith(
       'audio/readings/LUM-1/lecture.mp3',
@@ -111,6 +117,9 @@ describe('ClientPurgeService', () => {
     expect(tx.order.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['order-1'] } } });
     expect(tx.insight.deleteMany).toHaveBeenCalledWith({ where: { userId: 'client-1' } });
     expect(tx.userProfile.deleteMany).toHaveBeenCalledWith({ where: { userId: 'client-1' } });
+    expect(tx.userMemory.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'client-1' } }),
+    );
     expect(tx.user.delete).toHaveBeenCalledWith({ where: { id: 'client-1' } });
   });
 
@@ -118,6 +127,15 @@ describe('ClientPurgeService', () => {
     const { service, prisma } = setup(true);
 
     await expect(service.purge('client-1')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('does not touch S3 or PostgreSQL when remote memory verification fails', async () => {
+    const { service, prisma, s3Service, userMemoryService } = setup();
+    userMemoryService.deleteRemoteForUser.mockRejectedValue(new Error('vertex unavailable'));
+
+    await expect(service.purge('client-1')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(s3Service.deleteObjectStrict).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
