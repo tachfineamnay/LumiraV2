@@ -85,6 +85,34 @@ enum ReadingVersionStatus {
   REOPENED
 }
 
+/// Origin of a short, reviewed continuity fact. Only SEALED_READING is used
+/// by the first Memory Bank rollout; the other values reserve audited sources.
+enum MemorySourceType {
+  CLIENT_DECLARATION
+  SEALED_READING
+  EXPERT_CORRECTION
+  CHAT
+  DREAM
+  SYSTEM
+}
+
+enum UserMemoryStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUPERSEDED
+  DELETED
+  SYNC_FAILED
+}
+
+enum MemorySyncJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 enum OnboardingStatus {
   IN_PROGRESS
   COMPLETED
@@ -147,6 +175,8 @@ model User {
   consents      ConsentRecord[]
   onboardingProgress OnboardingProgress?
   readingIntakes ReadingIntake[]
+  memories      UserMemory[]
+  memorySyncJobs MemorySyncJob[]
 
   @@index([email])
   @@index([refId])
@@ -366,11 +396,73 @@ model ReadingVersion {
   updatedAt       DateTime             @updatedAt
   deliveries      DeliveryRecord[]
   spiritualPath   SpiritualPath?
+  memorySyncJob   MemorySyncJob?
+  memories        UserMemory[]
 
   @@unique([orderId, version])
   @@index([orderId, status, version(sort: Desc)])
   @@index([parentVersionId])
   @@index([contentHash])
+}
+
+/// Local source of truth for every continuity fact. The fact is deliberately
+/// short and sanitized; sealed reading text itself is never copied here.
+model UserMemory {
+  id                 String           @id @default(cuid())
+  userId             String
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceType         MemorySourceType
+  sourceId           String
+  sourceVersionId    String?
+  readingVersion     ReadingVersion?  @relation(fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  category           String
+  fact               String           @db.Text
+  status             UserMemoryStatus @default(PENDING)
+  contentHash        String
+  vertexMemoryName   String?          @unique
+  confidence         Float
+  approvedByExpertId String?
+  approvedAt         DateTime?
+  syncedAt           DateTime?
+  lastSyncError      String?          @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([userId, contentHash])
+  @@index([userId, status])
+  @@index([sourceType, sourceId])
+  @@index([sourceVersionId])
+  @@index([createdAt(sort: Desc)])
+}
+
+/// A separate PostgreSQL-backed queue. It never shares the order production
+/// worker and therefore cannot affect sealing, PDF, email or audio delivery.
+model MemorySyncJob {
+  id               String              @id @default(cuid())
+  userId           String
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId          String
+  readingVersionId String              @unique
+  readingVersion   ReadingVersion      @relation(fields: [readingVersionId], references: [id], onDelete: Cascade)
+  contentHash      String
+  status           MemorySyncJobStatus @default(QUEUED)
+  attempts         Int                 @default(0)
+  maxAttempts      Int                 @default(5)
+  queuedAt         DateTime            @default(now())
+  startedAt        DateTime?
+  heartbeatAt      DateTime?
+  completedAt      DateTime?
+  failedAt         DateTime?
+  nextAttemptAt    DateTime?
+  payload          Json?
+  result           Json?
+  lastError        String?             @db.Text
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([userId])
+  @@index([orderId])
 }
 
 /// Persistent delivery ledger. It binds a private PDF object to the immutable
@@ -717,6 +809,7 @@ enum AiMission {
   CHAT_SESSION // CONFIDANT → session chat
   CONTENT_REFINEMENT // EDITOR → affinage expert
   AUDIO_NARRATION // NARRATOR → script TTS
+  MEMORY_EXTRACTION // MEMORY → candidates from a sealed reading
 }
 
 enum AiRunStatus {

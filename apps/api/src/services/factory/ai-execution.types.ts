@@ -2,7 +2,14 @@ import { AiMission, ProductLevel } from '@prisma/client';
 import { AiThinkingLevel } from './model-runtime-controls';
 
 export type { AiThinkingLevel } from './model-runtime-controls';
-export type AgentType = 'SCRIBE' | 'GUIDE' | 'EDITOR' | 'CONFIDANT' | 'ONIRIQUE' | 'NARRATOR';
+export type AgentType =
+  | 'SCRIBE'
+  | 'GUIDE'
+  | 'EDITOR'
+  | 'CONFIDANT'
+  | 'ONIRIQUE'
+  | 'NARRATOR'
+  | 'MEMORY';
 
 export interface AiExecutionContext {
   orderId?: string;
@@ -17,7 +24,8 @@ export interface AiExecutionContext {
 
 export interface AiPromptSnapshot {
   lumiraDna: string;
-  agentContexts: Record<AgentType, string>;
+  /** Legacy snapshots can omit optional agents; normalization supplies them. */
+  agentContexts: Record<string, string>;
   modelConfig: AiModelConfigSnapshot;
 }
 
@@ -51,7 +59,8 @@ export interface AiAgentModelConfig {
 
 export interface AiModelConfigSnapshot {
   providerMode: AiProviderMode;
-  agents: Record<AgentType, AiAgentModelConfig>;
+  /** Existing persisted MODEL_CONFIG rows can omit new disabled agents. */
+  agents: Record<string, AiAgentModelConfig>;
 }
 
 export interface ResolvedAiExecution {
@@ -86,4 +95,5 @@ export const AGENT_PROMPT_KEYS: Record<AgentType, string> = {
   CONFIDANT: 'CONFIDANT',
   ONIRIQUE: 'ONIRIQUE',
   NARRATOR: 'NARRATOR',
+  MEMORY: 'MEMORY',
 };

@@ -23,7 +23,7 @@ import {
 import expertApi from '@/lib/expertApi';
 import { cn } from '@/lib/utils';
 
-type AgentKey = 'SCRIBE' | 'EDITOR' | 'GUIDE' | 'NARRATOR' | 'CONFIDANT' | 'ONIRIQUE';
+type AgentKey = 'SCRIBE' | 'EDITOR' | 'GUIDE' | 'NARRATOR' | 'CONFIDANT' | 'ONIRIQUE' | 'MEMORY';
 type TabId = 'readiness' | 'credentials' | 'personality' | 'agents' | 'models';
 type ProbeStatus = 'ok' | 'error' | 'not_tested';
 type ProviderId = 'openai' | 'vertex' | 'gemini';
@@ -226,6 +226,11 @@ const AGENTS: Array<{ key: AgentKey; label: string; description: string }> = [
   { key: 'NARRATOR', label: 'NARRATOR', description: 'Adaptation de la lecture pour l’audio' },
   { key: 'CONFIDANT', label: 'CONFIDANT', description: 'Compagnon optionnel' },
   { key: 'ONIRIQUE', label: 'ONIRIQUE', description: 'Interprétation des rêves' },
+  {
+    key: 'MEMORY',
+    label: 'MEMORY',
+    description: 'Continuité contrôlée à partir des lectures scellées',
+  },
 ];
 
 const AGENT_REQUIRED_CAPS: Record<AgentKey, Capability[]> = {
@@ -235,6 +240,7 @@ const AGENT_REQUIRED_CAPS: Record<AgentKey, Capability[]> = {
   NARRATOR: ['text', 'long_text'],
   CONFIDANT: ['text', 'fast_text'],
   ONIRIQUE: ['text', 'structured'],
+  MEMORY: ['text', 'structured'],
 };
 
 const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
@@ -250,6 +256,7 @@ const RECOMMENDED_THINKING: Record<AgentKey, ThinkingLevel> = {
   NARRATOR: 'low',
   CONFIDANT: 'low',
   ONIRIQUE: 'medium',
+  MEMORY: 'low',
 };
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {

@@ -6,6 +6,7 @@ import {
   ConflictException,
   ForbiddenException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -24,6 +25,7 @@ import {
   toJson,
 } from './production-control.types';
 import { S3Service } from '../uploads/s3.service';
+import { MemorySyncService } from '../../services/memory/memory-sync.service';
 import * as bcrypt from 'bcryptjs';
 import {
   Expert,
@@ -111,6 +113,7 @@ export class ExpertService {
     private gateway: ExpertGateway,
     private productionControl: ProductionControlService,
     private s3Service: S3Service,
+    @Optional() private memorySyncService?: MemorySyncService,
   ) {
     this.logger.log(`🔌 DigitalSoulService injected via DI`);
   }
@@ -1723,6 +1726,14 @@ MESSAGE DE L'EXPERT:`;
           sealedByExpertId: expert.id,
           sealedAt,
         },
+      });
+      // Queue only a SEALED immutable version. The worker is deliberately
+      // separate and makes no network call inside this transaction.
+      await this.memorySyncService?.enqueueForSealedReading(tx, {
+        userId: order.userId,
+        orderId: order.id,
+        readingVersionId: version.id,
+        contentHash: version.contentHash,
       });
 
       // GUIDE stays inside the DRAFT payload until this point. A sealed

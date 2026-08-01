@@ -14,6 +14,7 @@ import {
   Res,
   StreamableFile,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
@@ -26,6 +27,7 @@ import {
   PrivateOnboardingPhotoService,
 } from '../uploads/private-onboarding-photo.service';
 import { S3Service } from '../uploads/s3.service';
+import { UserMemoryService } from '../../services/memory/user-memory.service';
 import { ExpertAuthGuard, RolesGuard } from './guards';
 import { Expert } from '@prisma/client';
 import { CurrentExpert, Public, Roles } from './decorators';
@@ -54,6 +56,7 @@ export class ExpertController {
     private readonly audioGenerationService: AudioGenerationService,
     private readonly privateOnboardingPhotoService: PrivateOnboardingPhotoService,
     private readonly s3Service: S3Service,
+    @Optional() private readonly userMemoryService?: UserMemoryService,
   ) {}
 
   // ========================
@@ -89,6 +92,30 @@ export class ExpertController {
   @SkipThrottle()
   async verify(@CurrentExpert() expert: Expert) {
     return { valid: true, expert: { id: expert.id, email: expert.email, role: expert.role } };
+  }
+
+  @Get('clients/:clientId/memories')
+  async listClientMemories(@Param('clientId') clientId: string) {
+    return this.userMemoryService?.listForExpert(clientId) ?? [];
+  }
+
+  @Post('memories/:memoryId/approve')
+  async approveMemory(@Param('memoryId') memoryId: string, @CurrentExpert() expert: Expert) {
+    if (!this.userMemoryService) throw new BadRequestException('Mémoire indisponible.');
+    return this.userMemoryService.approve(memoryId, expert.id);
+  }
+
+  @Post('memories/:memoryId/reject')
+  async rejectMemory(@Param('memoryId') memoryId: string, @CurrentExpert() expert: Expert) {
+    if (!this.userMemoryService) throw new BadRequestException('Mémoire indisponible.');
+    return this.userMemoryService.reject(memoryId, expert.id);
+  }
+
+  @Delete('memories/:memoryId')
+  @HttpCode(HttpStatus.OK)
+  async deleteMemory(@Param('memoryId') memoryId: string) {
+    if (!this.userMemoryService) throw new BadRequestException('Mémoire indisponible.');
+    return this.userMemoryService.delete(memoryId);
   }
 
   @Post('refresh')

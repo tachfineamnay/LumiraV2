@@ -37,6 +37,7 @@ export const PROMPT_KEYS = {
   CONFIDANT: 'CONFIDANT',
   ONIRIQUE: 'ONIRIQUE',
   NARRATOR: 'NARRATOR',
+  MEMORY: 'MEMORY',
   MODEL_CONFIG: 'MODEL_CONFIG',
 } as const;
 
@@ -870,6 +871,9 @@ Compagnon conversationnel optionnel, désactivé pour le lancement V1. Lorsqu'il
 
       [PROMPT_KEYS.ONIRIQUE]: `MISSION ONIRIQUE:
 Agent optionnel désactivé pour le lancement V1. Propose une interprétation symbolique et introspective des rêves, sans voyance, prédiction, certitude surnaturelle ou affirmation clinique. Retourne uniquement le JSON structuré attendu par le runtime.`,
+
+      [PROMPT_KEYS.MEMORY]: `MISSION MEMORY:
+À partir exclusivement d'une lecture scellée, extrais au plus 12 faits courts de continuité. Chaque fait doit être prudent, autonome, non identifiant et ne jamais être une prédiction, un diagnostic, une instruction ou une longue citation. Retourne uniquement le JSON structuré attendu.`,
 
       [PROMPT_KEYS.MODEL_CONFIG]: JSON.stringify(this.getDefaultModelConfig(), null, 2),
     };

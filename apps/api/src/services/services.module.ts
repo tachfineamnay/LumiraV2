@@ -28,6 +28,13 @@ import { AiRuntimeCacheService } from './factory/ai-runtime-cache.service';
 import { GeminiTtsProvider } from './factory/tts/GeminiTtsProvider';
 import { GoogleCloudTtsProvider } from './factory/tts/GoogleCloudTtsProvider';
 import { UploadsModule } from '../modules/uploads/uploads.module';
+import { MemoryConfigService } from './memory/memory-config.service';
+import { MemorySanitizerService } from './memory/memory-sanitizer.service';
+import { VertexMemoryBankClient } from './memory/vertex-memory-bank.client';
+import { UserMemoryService } from './memory/user-memory.service';
+import { MemorySyncService } from './memory/memory-sync.service';
+import { MemorySyncWorkerService } from './memory/memory-sync-worker.service';
+import { MemoryContextBuilder } from './memory/memory-context-builder.service';
 
 @Module({
   imports: [ConfigModule, PrismaModule, UploadsModule, ScheduleModule.forRoot()],
@@ -35,6 +42,12 @@ import { UploadsModule } from '../modules/uploads/uploads.module';
     AiRuntimeCacheService,
     AiExecutionResolverService,
     AiRunService,
+    MemoryConfigService,
+    MemorySanitizerService,
+    VertexMemoryBankClient,
+    UserMemoryService,
+    MemorySyncService,
+    MemoryContextBuilder,
     VertexOracle,
     PdfFactory,
     ContextDispatcher,
@@ -45,11 +58,17 @@ import { UploadsModule } from '../modules/uploads/uploads.module';
     GoogleCloudTtsProvider,
     AudioGenerationService,
     SpiritualPathBatchService,
+    MemorySyncWorkerService,
   ],
   exports: [
     AiRuntimeCacheService,
     AiExecutionResolverService,
     AiRunService,
+    MemoryConfigService,
+    VertexMemoryBankClient,
+    UserMemoryService,
+    MemorySyncService,
+    MemoryContextBuilder,
     VertexOracle,
     PdfFactory,
     ContextDispatcher,

@@ -38,6 +38,7 @@ export const AGENT_REQUIRED_CAPABILITIES: Record<AgentType, readonly AgentCapabi
   NARRATOR: ['text', 'long_text'],
   CONFIDANT: ['text', 'fast_text'],
   ONIRIQUE: ['text', 'structured'],
+  MEMORY: ['text', 'structured'],
 };
 
 export const AGENT_BLOCKING_CAPABILITIES: Record<AgentType, readonly AgentCapability[]> = {
@@ -47,6 +48,7 @@ export const AGENT_BLOCKING_CAPABILITIES: Record<AgentType, readonly AgentCapabi
   NARRATOR: ['text'],
   CONFIDANT: ['text'],
   ONIRIQUE: ['text', 'structured'],
+  MEMORY: ['text', 'structured'],
 };
 
 export function modelCapabilities(
@@ -156,6 +158,13 @@ export const DEFAULT_AI_MODEL_CONFIG: AiModelConfigSnapshot = {
       thinkingLevel: 'medium',
       maxOutputTokens: 2500,
     },
+    MEMORY: {
+      enabled: false,
+      provider: 'vertex',
+      model: 'gemini-3.5-flash',
+      thinkingLevel: 'low',
+      maxOutputTokens: 3000,
+    },
   },
 };
 
@@ -229,6 +238,17 @@ export function cloneAiModelConfig(config: AiModelConfigSnapshot): AiModelConfig
               validation: {
                 ...config.agents.NARRATOR.validation,
                 capabilities: { ...config.agents.NARRATOR.validation.capabilities },
+              },
+            }
+          : {}),
+      },
+      MEMORY: {
+        ...config.agents.MEMORY,
+        ...(config.agents.MEMORY.validation
+          ? {
+              validation: {
+                ...config.agents.MEMORY.validation,
+                capabilities: { ...config.agents.MEMORY.validation.capabilities },
               },
             }
           : {}),
@@ -537,6 +557,7 @@ export function normalizeAiModelConfig(input: unknown): {
     GUIDE: normalizeAgent('GUIDE', rawAgents.GUIDE, issues),
     EDITOR: normalizeAgent('EDITOR', rawAgents.EDITOR, issues),
     NARRATOR: normalizeAgent('NARRATOR', rawAgents.NARRATOR, issues),
+    MEMORY: normalizeAgent('MEMORY', rawAgents.MEMORY, issues),
     CONFIDANT: normalizeAgent('CONFIDANT', rawAgents.CONFIDANT, issues),
     ONIRIQUE: normalizeAgent('ONIRIQUE', rawAgents.ONIRIQUE, issues),
   };

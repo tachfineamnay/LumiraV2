@@ -2,11 +2,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { FileType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3BucketKind, S3Service } from '../uploads/s3.service';
+import { UserMemoryService } from '../../services/memory/user-memory.service';
 
 export interface ClientPurgeResult {
   clientId: string;
@@ -21,6 +23,7 @@ export class ClientPurgeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3Service: S3Service,
+    @Optional() private readonly userMemoryService?: UserMemoryService,
   ) {}
 
   async purge(clientId: string): Promise<ClientPurgeResult> {
@@ -72,12 +75,7 @@ export class ClientPurgeService {
 
     // Include replaced or abandoned uploads that are no longer referenced by a
     // profile or draft but still belong exclusively to this client.
-    await this.collectPrefixKeys(
-      `onboarding/${clientId}/`,
-      uploads,
-      'uploads',
-      clientId,
-    );
+    await this.collectPrefixKeys(`onboarding/${clientId}/`, uploads, 'uploads', clientId);
 
     for (const order of client.orders) {
       for (const file of order.files) {
@@ -126,6 +124,9 @@ export class ClientPurgeService {
     // record remains intact and the purge can be retried safely.
     await this.deleteStorageObjects(uploads, 'uploads', clientId);
     await this.deleteStorageObjects(readings, 'readings', clientId);
+    // Remote deletion precedes the local transaction. A failed external purge
+    // leaves the customer record intact so an expert can retry safely.
+    await this.userMemoryService?.deleteAllForUser(clientId);
 
     const orderIds = client.orders.map((order) => order.id);
 

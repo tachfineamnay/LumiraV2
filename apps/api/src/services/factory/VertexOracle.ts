@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiMission, ProductLevel } from '@prisma/client';
 import { createHash } from 'crypto';
@@ -40,6 +41,8 @@ import {
   QualityIssue,
 } from '../../modules/expert/reading-quality.validator';
 import { CanonicalReadingContent } from '../../modules/expert/reading-version';
+import { MemoryContextBuilder } from '../memory/memory-context-builder.service';
+import { MemoryCandidate } from '../memory/memory.types';
 
 export interface ReadingPipelineMetadata {
   scribeCompletedAt: string;
@@ -370,9 +373,48 @@ Transforme la lecture validée par l'expert en narration audio naturelle, sans p
 Compagnon conversationnel optionnel. Réponds avec chaleur et brièveté à partir du contexte réellement transmis, sans inventer de mémoire, sans prédiction et sans créer de dépendance.`,
   ONIRIQUE: `MISSION ONIRIQUE:
 Propose une interprétation symbolique et introspective du rêve, sans voyance, prédiction, certitude surnaturelle ou affirmation clinique. Retourne uniquement la structure JSON demandée.`,
+  MEMORY: `MISSION MEMORY:
+À partir uniquement d'une lecture scellée, extrais au plus 12 faits de continuité courts, prudents et autonomes. Exclue toute donnée identifiante, instruction, prédiction présentée comme un fait, diagnostic médical, donnée sexuelle, coordonnées, information bancaire, URL ou citation longue. Une sortie vide est valide. Retourne uniquement le JSON structuré demandé.`,
 };
 
 const STRING_SCHEMA = { type: 'string', minLength: 1 };
+
+const MEMORY_SCHEMA: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['memories'],
+  properties: {
+    memories: {
+      type: 'array',
+      maxItems: 12,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['category', 'fact', 'confidence', 'sensitive', 'shouldPersist'],
+        properties: {
+          category: {
+            type: 'string',
+            enum: [
+              'PREFERENCE',
+              'LIFE_CONTEXT',
+              'IMPORTANT_EVENT',
+              'RECURRING_THEME',
+              'EVOLUTION',
+              'OPEN_QUESTION',
+              'EXPERT_VALIDATED_ANCHOR',
+              'READING_CONTINUITY',
+            ],
+          },
+          fact: { type: 'string', minLength: 1, maxLength: 480 },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+          sourceEvidence: { type: 'string', maxLength: 160 },
+          sensitive: { type: 'boolean' },
+          shouldPersist: { type: 'boolean' },
+        },
+      },
+    },
+  },
+};
 
 const SCRIBE_SCHEMA: JsonSchema = {
   type: 'object',
@@ -522,6 +564,7 @@ export class VertexOracle implements OnModuleInit {
     private readonly aiExecutionResolver: AiExecutionResolverService,
     private readonly aiRunService: AiRunService,
     private readonly aiRuntimeCache: AiRuntimeCacheService,
+    @Optional() private readonly memoryContextBuilder?: MemoryContextBuilder,
   ) {}
 
   onModuleInit(): void {
@@ -1050,6 +1093,10 @@ export class VertexOracle implements OnModuleInit {
       scribeResolved,
       visualAssets,
     );
+    const memoryContext = await this.memoryContextBuilder?.build(
+      userProfile.userId,
+      userProfile.specificQuestion,
+    );
 
     let scribeResult = await this.callJson<{
       pdf_content: PdfContent;
@@ -1057,7 +1104,7 @@ export class VertexOracle implements OnModuleInit {
     }>(
       scribeCtx,
       scribeResolved,
-      this.buildScribePrompt(userProfile, orderContext, visualObservations),
+      this.buildScribePrompt(userProfile, orderContext, visualObservations, memoryContext),
       'lumira_core_reading',
       SCRIBE_SCHEMA,
       300_000,
@@ -1242,6 +1289,37 @@ ${JSON.stringify(scribeResult, null, 2)}`;
     );
     this.validateTimeline(result.timeline, startDay, endDay);
     return result.timeline;
+  }
+
+  async extractMemoryCandidates(input: {
+    orderId: string;
+    readingVersionId: string;
+    contentHash: string;
+    sealedContent: unknown;
+  }): Promise<MemoryCandidate[]> {
+    await this.ensureInitialized();
+    const ctx = buildAiContext('MEMORY', AiMission.MEMORY_EXTRACTION, {
+      orderId: input.orderId,
+      intakeContentHash: input.contentHash,
+    });
+    const resolved = await this.resolveExecution(ctx);
+    if (resolved.provider !== 'vertex') {
+      throw new Error('MEMORY must use the vertex provider.');
+    }
+    const result = await this.callJson<{ memories: MemoryCandidate[] }>(
+      ctx,
+      resolved,
+      [
+        '=== LECTURE SCELLÉE — SOURCE AUTORISÉE UNIQUEMENT ===',
+        JSON.stringify(input.sealedContent),
+        '=== RÈGLES ===',
+        'N’extrais que des faits prudents de continuité. N’inclus pas le texte entier ni une longue citation. Ne mémorise aucun élément sensible ou identifiant ; marque-le sensitive=true et shouldPersist=false. Le dossier actuel prévaut toujours sur les interprétations passées.',
+      ].join('\n'),
+      'lumira_memory_candidates',
+      MEMORY_SCHEMA,
+      120_000,
+    );
+    return Array.isArray(result.memories) ? result.memories.slice(0, 12) : [];
   }
 
   async generateTimeline(
@@ -1476,6 +1554,7 @@ ${text}`,
     profile: UserProfile,
     order: OrderContext,
     visualObservations: VisualObservation[] = [],
+    memoryContext = '',
   ): string {
     const calcs = (this.calculationsService ?? new ReadingCalculationsService()).calculate(
       profile.birthDate,
@@ -1540,6 +1619,7 @@ ${text}`,
         order.expertInstructions.trim(),
       );
     }
+    if (memoryContext) parts.push(memoryContext);
     parts.push(
       '=== CONSIGNE DE SORTIE ===',
       'Produis une lecture complète, personnelle, cohérente et argumentée. N’invente aucun détail absent ou invisible. Ancre chaque section dans la météo de vie et les éléments déclarés lorsque disponibles. Respecte exactement le schéma de sortie.',
