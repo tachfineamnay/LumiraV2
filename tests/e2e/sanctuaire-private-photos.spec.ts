@@ -42,7 +42,9 @@ test.describe('Sanctuaire — photos privées', () => {
     });
 
     await page.goto('/sanctuaire/dossier');
-    await expect(page.getByText('Dossier scellé')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('Dossier scellé', { exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByRole('img', { name: 'Photo de visage privée' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Photo de paume privée' })).toBeVisible();
     await expect(page.locator('img[src^="s3://"]')).toHaveCount(0);

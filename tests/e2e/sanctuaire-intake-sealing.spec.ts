@@ -92,47 +92,41 @@ test.describe('Sanctuaire — scellement explicite du dossier', () => {
     });
 
     await page.goto('/sanctuaire');
-    await page.getByRole('button', { name: 'Préparer mon dossier' }).click();
-    await page.getByRole('button', { name: 'Commencer mon dossier' }).click();
+    await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeVisible();
     await page.getByLabel('Date de naissance').fill('1990-06-15');
     await page.getByLabel('Heure (facultative)').fill('09:45');
     await page.getByLabel('Lieu de naissance').fill('Lyon, France');
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await page.getByLabel(/Votre question/).fill('Question provisoire');
-    await page.getByLabel(/Ce que vous souhaitez comprendre/).fill('Avancer sereinement');
+    await page.getByLabel(/éclairer une seule question/i).fill('Question provisoire');
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await page.getByLabel('Sélectionner une photo').first().setInputFiles({
+    await page.getByLabel('Choisir une photo pour visage').setInputFiles({
       name: 'visage.jpg',
       mimeType: 'image/jpeg',
       buffer: TINY_JPEG,
     });
-    await expect(page.getByRole('img', { name: 'Visage' })).toBeVisible();
-    await page.getByLabel('Sélectionner une photo').first().setInputFiles({
+    await expect(page.getByRole('img', { name: 'Aperçu — Visage' })).toBeVisible();
+    await page.getByLabel('Choisir une photo pour paume').setInputFiles({
       name: 'paume.jpg',
       mimeType: 'image/jpeg',
       buffer: TINY_JPEG,
     });
-    await expect(page.getByRole('img', { name: 'Paume' })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Aperçu — Paume' })).toBeVisible();
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await page.getByLabel(/Ce qui vous porte/).fill('Ma créativité');
-    await page.getByRole('button', { name: 'Continuer' }).click();
-
-    await expect(page.getByRole('heading', { name: 'Relire et sceller' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Relecture et transmission' })).toBeVisible();
     await page.getByRole('button', { name: 'Modifier' }).nth(1).click();
-    await page.getByLabel(/Votre question/).fill('Que dois-je comprendre après ma relecture ?');
-    await page.getByRole('button', { name: 'Continuer' }).click();
+    await page
+      .getByLabel(/éclairer une seule question/i)
+      .fill('Que dois-je comprendre après ma relecture ?');
     await page.getByRole('button', { name: 'Continuer' }).click();
     await page.getByRole('button', { name: 'Continuer' }).click();
 
     await expect(page.getByText('Que dois-je comprendre après ma relecture ?')).toBeVisible();
     await page.getByRole('checkbox').check();
-    await page.getByRole('button', { name: 'Sceller et transmettre mon dossier' }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Votre lecture de base peut commencer' }),
-    ).toBeVisible();
+    await page.getByRole('button', { name: 'Confirmer et transmettre mon dossier' }).click();
+    await expect(page.getByRole('heading', { name: 'Votre lecture peut commencer' })).toBeVisible();
 
     expect(sealedPayload).toMatchObject({
       birthDate: '1990-06-15',
@@ -146,10 +140,13 @@ test.describe('Sanctuaire — scellement explicite du dossier', () => {
     expect(JSON.stringify(sealedPayload)).not.toContain('upload.example.test');
     expect(JSON.stringify(sealedPayload)).not.toContain('X-Amz-Signature');
 
-    await page.getByRole('button', { name: 'Retour à mon Sanctuaire' }).click();
     await page.goto('/sanctuaire/dossier');
-    await expect(page.getByText('Dossier scellé')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/protégés pendant la production/)).toBeVisible();
+    await expect(page.getByText('Dossier scellé', { exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(
+      page.getByRole('heading', { name: 'Votre dossier est utilisé pour préparer la lecture' }),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: /modifier/i })).toHaveCount(0);
     await expect(page.locator('img[src^="s3://"]')).toHaveCount(0);
 

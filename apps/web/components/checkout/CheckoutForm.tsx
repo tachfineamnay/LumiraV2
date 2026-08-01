@@ -52,9 +52,21 @@ const InputField = ({
   const error = errors[name];
   const hasValue = value.length > 0;
   const isFieldValid = hasValue && !error;
+  const inputId = `checkout-${name}`;
+  const errorId = `${inputId}-error`;
+  const autoComplete: Record<keyof CheckoutFormData, string> = {
+    email: 'email',
+    phone: 'tel',
+    firstName: 'given-name',
+    lastName: 'family-name',
+  };
+  const inputMode = name === 'email' ? 'email' : name === 'phone' ? 'tel' : 'text';
 
   return (
     <div className="relative group">
+      <label htmlFor={inputId} className="sr-only">
+        {label}
+      </label>
       <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
         <span
           className={`transition-colors ${isFieldValid ? 'text-emerald-400' : hasValue && error ? 'text-rose-400' : ''}`}
@@ -66,6 +78,7 @@ const InputField = ({
         </span>
       </div>
       <input
+        id={inputId}
         {...register(name, {
           onChange: (e) => {
             if (formatter) {
@@ -74,6 +87,10 @@ const InputField = ({
           },
         })}
         type={type}
+        autoComplete={autoComplete[name]}
+        inputMode={inputMode}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
         placeholder={placeholder || label}
         className={`
                     w-full backdrop-blur-sm border rounded-xl pl-12 pr-12 py-4 
@@ -123,10 +140,12 @@ const InputField = ({
       <AnimatePresence>
         {error && (
           <motion.p
+            id={errorId}
+            role="alert"
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -5 }}
-            className="text-rose-400 text-xs mt-1 ml-1"
+            className="text-rose-400 text-sm mt-1 ml-1"
           >
             {error.message}
           </motion.p>

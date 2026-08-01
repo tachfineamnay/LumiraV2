@@ -1,57 +1,55 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const iPhone13 = devices['iPhone 13'];
-const iPhone13Chromium = {
-  userAgent: iPhone13.userAgent,
-  viewport: iPhone13.viewport,
-  screen: iPhone13.screen,
-  deviceScaleFactor: iPhone13.deviceScaleFactor,
-  isMobile: iPhone13.isMobile,
-  hasTouch: iPhone13.hasTouch,
-};
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3110';
+const webServerPort = new URL(baseURL).port || '3110';
 
+/**
+ * Canonical browser matrix for Lumira's public customer journey.
+ *
+ * `tests/e2e` keeps the broader desktop and security regressions. `apps/web/e2e`
+ * owns responsive product checks. They run from this single configuration so a
+ * production deploy cannot bypass Android Chromium or iPhone WebKit coverage.
+ */
 export default defineConfig({
-  testDir: './tests/e2e',
-  timeout: 30000,
-  fullyParallel: true,
+  testDir: '.',
+  testMatch: ['tests/e2e/**/*.spec.ts', 'apps/web/e2e/**/*.spec.ts'],
+  timeout: 60_000,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  // The standalone server is intentionally shared by BFF-mocked scenarios.
-  // One worker prevents local resource contention and matches CI behavior.
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: [['html'], ['list']],
+  reporter: process.env.CI ? [['html', { open: 'never' }], ['list']] : [['html'], ['list']],
   use: {
-    baseURL: 'http://127.0.0.1:3100',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
-      testIgnore: /sanctuaire-mobile\.spec\.ts/,
+      testIgnore: /tests\/e2e\/sanctuaire-mobile\.spec\.ts/,
     },
     {
-      // Chromium + mobile viewport (WebKit not required on Windows CI/dev).
-      // The sealed-intake journey is run here as an explicit mobile smoke test.
-      name: 'Mobile Chrome',
+      name: 'mobile-chromium',
       use: { ...devices['Pixel 5'] },
-      testMatch: /sanctuaire-(mobile|intake-draft)\.spec\.ts/,
+      testMatch: ['apps/web/e2e/**/*.spec.ts', 'tests/e2e/sanctuaire-mobile.spec.ts'],
     },
     {
-      // Safari viewport and touch metrics without requiring WebKit on Windows CI/dev.
-      name: 'iPhone 13 Chrome',
-      use: iPhone13Chromium,
-      testMatch: /sanctuaire-intake-draft\.spec\.ts/,
+      name: 'mobile-webkit',
+      use: { ...devices['iPhone 13'], browserName: 'webkit' },
+      testMatch: 'apps/web/e2e/**/*.spec.ts',
     },
   ],
-
   webServer: {
     command: 'node scripts/start-e2e-web.cjs',
-    url: 'http://127.0.0.1:3100',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
+    url: baseURL,
+    reuseExistingServer: false,
+    timeout: 120_000,
+    env: {
+      PLAYWRIGHT_WEB_PORT: webServerPort,
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_playwright',
+    },
   },
 });

@@ -97,11 +97,16 @@ export default function SanctuaireLecturePage() {
     <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-3 py-3 sm:px-6 sm:py-5">
       <Link
         href="/sanctuaire/draws"
-        className="mb-4 inline-flex min-h-[40px] items-center gap-2 text-sm text-brume-200 hover:text-ivoire-400"
+        className="mb-4 hidden min-h-[40px] items-center gap-2 text-sm text-brume-200 hover:text-ivoire-400 sm:inline-flex"
       >
         <ArrowLeft className="h-4 w-4" /> Retour aux lectures
       </Link>
-      <ReadingPdfViewer orderNumber={orderNumber} title={title} closeHref="/sanctuaire/draws" />
+      <ReadingPdfViewer
+        orderNumber={orderNumber}
+        title={title}
+        closeHref="/sanctuaire/draws"
+        className="min-h-0 flex-1"
+      />
     </div>
   );
 }

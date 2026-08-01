@@ -8,19 +8,29 @@ import { Menu, X } from 'lucide-react';
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingAnchor, setPendingAnchor] = useState<string | null>(null);
   const scrollPositionRef = useRef(0);
   const restoreScrollOnCloseRef = useRef(true);
+  const restoreFocusOnCloseRef = useRef(true);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
-  const closeMobileMenu = useCallback((restoreScroll: boolean) => {
+  const closeMobileMenu = useCallback((restoreScroll: boolean, restoreFocus = true) => {
     restoreScrollOnCloseRef.current = restoreScroll;
+    restoreFocusOnCloseRef.current = restoreFocus;
     setMobileOpen(false);
   }, []);
 
   const handleAnchorClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>, href: string) => {
       event.preventDefault();
-      closeMobileMenu(false);
-      window.location.assign(href);
+      const target = document.querySelector<HTMLElement>(href);
+      if (!target) {
+        window.location.assign(href);
+        return;
+      }
+      setPendingAnchor(href);
+      closeMobileMenu(false, false);
     },
     [closeMobileMenu],
   );
@@ -30,6 +40,42 @@ export function Header() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (mobileOpen || !pendingAnchor) return;
+
+    const target = document.querySelector<HTMLElement>(pendingAnchor);
+    if (!target) {
+      window.location.assign(pendingAnchor);
+      return;
+    }
+
+    // The overlay locks body with position: fixed. React runs that effect's
+    // cleanup before this effect, so the native target scroll is applied to
+    // the restored document rather than being reset to the pre-menu position.
+    // Earlier landing sections use content-visibility for paint work. The
+    // first scroll makes them render; repeat over the following frames so
+    // their resolved height cannot leave the offer above or below the view.
+    let secondFrame: number | undefined;
+    let thirdFrame: number | undefined;
+    const scrollTarget = () => target.scrollIntoView({ block: 'start', behavior: 'auto' });
+    const firstFrame = window.requestAnimationFrame(() => {
+      scrollTarget();
+      secondFrame = window.requestAnimationFrame(() => {
+        scrollTarget();
+        thirdFrame = window.requestAnimationFrame(() => {
+          scrollTarget();
+          window.history.pushState(null, '', pendingAnchor);
+          setPendingAnchor(null);
+        });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
+      if (thirdFrame !== undefined) window.cancelAnimationFrame(thirdFrame);
+    };
+  }, [mobileOpen, pendingAnchor]);
 
   useEffect(() => {
     const scrollToHash = () => {
@@ -56,6 +102,7 @@ export function Header() {
     };
 
     const bodyStyle = document.body.style;
+    const triggerButton = menuButtonRef.current;
     const previousStyles = {
       overflow: bodyStyle.overflow,
       paddingRight: bodyStyle.paddingRight,
@@ -74,15 +121,48 @@ export function Header() {
     if (scrollbarWidth > 0) bodyStyle.paddingRight = `${scrollbarWidth}px`;
 
     window.addEventListener('keydown', onKey);
+
+    const focusFirstMenuItem = () => {
+      const focusable = menuRef.current?.querySelector<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      focusable?.focus();
+    };
+    const frame = window.requestAnimationFrame(focusFirstMenuItem);
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(
+        menuRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', trapFocus);
+
     return () => {
+      window.cancelAnimationFrame(frame);
       bodyStyle.overflow = previousStyles.overflow;
       bodyStyle.paddingRight = previousStyles.paddingRight;
       bodyStyle.position = previousStyles.position;
       bodyStyle.top = previousStyles.top;
       bodyStyle.width = previousStyles.width;
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', trapFocus);
       if (restoreScrollOnCloseRef.current) {
         window.scrollTo(0, scrollPositionRef.current);
+      }
+      if (restoreFocusOnCloseRef.current) {
+        window.requestAnimationFrame(() => triggerButton?.focus());
       }
     };
   }, [closeMobileMenu, mobileOpen]);
@@ -96,7 +176,9 @@ export function Header() {
   return (
     <header
       className={`fixed top-0 w-full z-50 transition-all duration-500 ${
-        scrolled ? 'bg-void/90 border-b border-white/5 py-3 md:py-4' : 'bg-transparent py-5 md:py-8'
+        scrolled
+          ? 'bg-void/90 border-b border-white/5 pb-3 pt-[max(0.75rem,var(--safe-area-top))] md:py-4'
+          : 'bg-transparent pb-5 pt-[max(1.25rem,var(--safe-area-top))] md:py-8'
       }`}
     >
       <nav className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 flex items-center justify-between">
@@ -135,6 +217,7 @@ export function Header() {
           </Link>
 
           <button
+            ref={menuButtonRef}
             type="button"
             onClick={() => {
               if (mobileOpen) {
@@ -156,7 +239,8 @@ export function Header() {
       {mobileOpen && (
         <div
           id="mobile-menu"
-          className="fixed inset-0 z-40 flex min-h-[100dvh] items-start justify-center overflow-y-auto overscroll-contain bg-void/98 px-6 pt-[calc(env(safe-area-inset-top)+6.5rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]"
+          ref={menuRef}
+          className="fixed inset-0 z-40 flex min-h-[100dvh] items-start justify-center overflow-y-auto overscroll-contain bg-void px-6 pt-[calc(var(--safe-area-top)+6.5rem)] pb-[calc(var(--safe-area-bottom)+1.5rem)]"
           role="dialog"
           aria-modal="true"
           aria-label="Navigation principale"

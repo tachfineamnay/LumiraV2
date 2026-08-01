@@ -25,6 +25,7 @@ test.describe('Sanctuaire — mon dossier', () => {
       timeout: 20_000,
     });
     await page.getByRole('button', { name: 'Reprendre et modifier' }).click();
+    await page.getByRole('button', { name: 'Intention' }).click();
     await expect(page.getByRole('heading', { name: 'Ce qui vous amène' })).toBeVisible();
     await expect(page.getByLabel(/éclairer une seule question/i)).toHaveValue(
       'Que dois-je comprendre maintenant ?',
@@ -39,7 +40,7 @@ test.describe('Sanctuaire — mon dossier', () => {
 
     await page.goto('/sanctuaire/dossier');
 
-    await expect(page.getByText('Dossier scellé')).toBeVisible();
+    await expect(page.getByText('Dossier scellé', { exact: true })).toBeVisible();
     await expect(page.getByText(/utilisé pour préparer la lecture/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /modifier/i })).toHaveCount(0);
   });
@@ -52,7 +53,7 @@ test.describe('Sanctuaire — mon dossier', () => {
 
     await page.goto('/sanctuaire/dossier');
 
-    await expect(page.getByText('Dossier scellé')).toBeVisible();
+    await expect(page.getByText('Dossier scellé', { exact: true })).toBeVisible();
     await expect(page.getByText(/restent consultables/i)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Voir ma lecture' })).toBeVisible();
   });

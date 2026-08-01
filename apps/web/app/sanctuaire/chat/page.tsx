@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -81,6 +81,7 @@ export default function GuidancePage() {
   const [content, setContent] = useState('');
   const [category, setCategory] = useState<RequestCategory>('READING_CLARIFICATION');
   const [relatedOrderId, setRelatedOrderId] = useState('');
+  const conversationEndRef = useRef<HTMLDivElement>(null);
 
   const loadDetail = useCallback(async (requestId: string) => {
     setIsDetailLoading(true);
@@ -185,15 +186,27 @@ export default function GuidancePage() {
   const status = selected ? statusPresentation(selected.status) : null;
   const selectedMessages = useMemo(() => selected?.messages || [], [selected]);
 
+  useEffect(() => {
+    if (!selected) return;
+    const frame = window.requestAnimationFrame(() => {
+      conversationEndRef.current?.scrollIntoView({ block: 'end' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selected]);
+
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 pb-28 sm:px-6 sm:py-8 lg:pb-8">
-      <header className="rounded-3xl border border-ivoire-500/[0.06] glass-aube p-5 sm:p-6">
+    <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 pb-6 sm:px-6 sm:py-8 lg:pb-8">
+      <header
+        className={`rounded-3xl border border-ivoire-500/[0.06] glass-aube p-5 sm:p-6 ${
+          selected ? 'max-h-[480px]:hidden' : ''
+        }`}
+      >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ivoire-400/10 text-ivoire-400">
               <MessageCircle className="h-5 w-5" />
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ivoire-400">
                 Sanctuaire Lumira
               </p>
@@ -248,7 +261,7 @@ export default function GuidancePage() {
               <select
                 value={category}
                 onChange={(event) => setCategory(event.target.value as RequestCategory)}
-                className="mt-2 w-full rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-ivoire-100 outline-none focus:border-horizon-400/50"
+                className="mt-2 w-full rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-base text-ivoire-100 outline-none focus:border-horizon-400/50"
               >
                 {CATEGORY_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -262,7 +275,7 @@ export default function GuidancePage() {
               <select
                 value={relatedOrderId}
                 onChange={(event) => setRelatedOrderId(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-ivoire-100 outline-none focus:border-horizon-400/50"
+                className="mt-2 w-full rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-base text-ivoire-100 outline-none focus:border-horizon-400/50"
               >
                 <option value="">Aucune lecture précise</option>
                 {readings.map((reading) => (
@@ -281,7 +294,7 @@ export default function GuidancePage() {
               onChange={(event) => setSubject(event.target.value)}
               maxLength={120}
               placeholder="Ex. Comprendre le passage sur ma mission"
-              className="mt-2 w-full rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-ivoire-100 placeholder:text-brume-400 outline-none focus:border-horizon-400/50"
+              className="mt-2 w-full rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-base text-ivoire-100 placeholder:text-brume-400 outline-none focus:border-horizon-400/50"
             />
           </label>
           <label className="mt-4 block text-sm text-ivoire-200">
@@ -292,7 +305,7 @@ export default function GuidancePage() {
               rows={5}
               maxLength={5000}
               placeholder="Expliquez ce que vous souhaitez clarifier et le contexte utile."
-              className="mt-2 w-full resize-y rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-ivoire-100 placeholder:text-brume-400 outline-none focus:border-horizon-400/50"
+              className="mt-2 w-full resize-y rounded-xl border border-ivoire-500/[0.08] bg-abyss-700 px-3 py-3 text-base text-ivoire-100 placeholder:text-brume-400 outline-none focus:border-horizon-400/50"
             />
           </label>
           <div className="mt-4 flex justify-end">
@@ -373,8 +386,10 @@ export default function GuidancePage() {
         </aside>
 
         <section
-          className={`min-h-[min(500px,calc(100dvh-10rem))] min-w-0 flex-col overflow-hidden rounded-3xl border border-ivoire-500/[0.06] glass-aube lg:flex lg:min-h-[500px] ${
-            selected ? 'flex' : 'hidden'
+          className={`min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-ivoire-500/[0.06] glass-aube lg:static lg:z-auto lg:min-h-[500px] ${
+            selected
+              ? 'fixed inset-x-3 top-[calc(var(--sanctuaire-header-h)+0.75rem)] bottom-[calc(var(--sanctuaire-bottom-nav-h)+0.75rem)] z-30 flex lg:inset-auto'
+              : 'hidden'
           }`}
         >
           {isDetailLoading ? (
@@ -452,7 +467,9 @@ export default function GuidancePage() {
                               {message.senderName || 'Équipe Lumira'}
                             </p>
                           )}
-                          <p className="whitespace-pre-wrap">{message.content}</p>
+                          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                            {message.content}
+                          </p>
                           <time className="mt-2 block text-right text-[10px] text-brume-400">
                             {formatDateTime(message.createdAt)}
                           </time>
@@ -461,9 +478,10 @@ export default function GuidancePage() {
                     );
                   })}
                 </div>
+                <div ref={conversationEndRef} />
               </div>
 
-              <div className="border-t border-ivoire-500/[0.05] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
+              <div className="border-t border-ivoire-500/[0.05] p-3 sm:p-4">
                 {selected.status === 'ARCHIVED' ? (
                   <p className="rounded-xl bg-brume-800/22 p-3 text-center text-xs text-brume-300">
                     Cette demande est archivée.
@@ -484,7 +502,7 @@ export default function GuidancePage() {
                           ? 'Ajouter un message pour rouvrir la demande…'
                           : 'Ajouter une précision ou répondre…'
                       }
-                      className="min-h-[48px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-ivoire-100 placeholder:text-brume-400 outline-none"
+                      className="min-h-[48px] min-w-0 flex-1 resize-none bg-transparent px-3 py-2 text-base text-ivoire-100 placeholder:text-brume-400 outline-none"
                     />
                     <button
                       type="button"

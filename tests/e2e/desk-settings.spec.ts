@@ -192,7 +192,7 @@ test.describe('Desk — Paramètres IA', () => {
 
     // 4. Settings tabs must be rendered
     await expect(page.getByRole('button', { name: /Préproduction/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Connexion/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Connexion', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /ADN Lumira/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Prompts/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Modèles/i })).toBeVisible();

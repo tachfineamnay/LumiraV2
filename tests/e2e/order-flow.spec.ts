@@ -6,7 +6,7 @@ test.describe('Order Flow — lifetime access', () => {
 
   test('landing → checkout form → payment intent', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Lumira', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Oracle Lumira' })).toBeVisible();
 
     // Checkout checks for a prior Sanctuaire session. This scenario covers a new buyer.
     await page.route('**/api/bff/users/profile', async (route) => {

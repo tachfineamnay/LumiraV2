@@ -286,7 +286,7 @@ export const SmartPhotoUploader = ({
       />
 
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold text-stellar-100">{label}</h3>
           <p className="mt-1 text-xs leading-5 text-stellar-500">{description}</p>
         </div>
@@ -350,7 +350,7 @@ export const SmartPhotoUploader = ({
             )}
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -434,12 +434,12 @@ export const SmartPhotoUploader = ({
 
       {isCameraOpen && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-abyss-900/95 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-abyss-900/95 p-3 [padding-top:max(0.75rem,var(--safe-area-top))] [padding-bottom:max(0.75rem,var(--safe-area-bottom))] backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-label={`Prendre une photo — ${label}`}
         >
-          <div className="w-full max-w-lg rounded-3xl border border-white/[0.1] bg-abyss-700 p-4 shadow-abyss sm:p-5">
+          <div className="custom-scrollbar w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.1] bg-abyss-700 p-4 shadow-abyss sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <h4 className="text-sm font-semibold text-stellar-100">
                 <Camera className="mr-2 inline h-4 w-4 text-horizon-300" />
@@ -455,14 +455,14 @@ export const SmartPhotoUploader = ({
               </button>
             </div>
 
-            <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-900">
+            <div className="relative mt-3 h-[min(52dvh,22rem)] overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-900">
               {/* Mirror the preview for selfies; the saved photo stays unmirrored. */}
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 muted
-                className={`aspect-[4/3] w-full object-cover ${
+                className={`h-full w-full object-cover ${
                   captureFacingMode === 'user' ? '-scale-x-100' : ''
                 }`}
               />

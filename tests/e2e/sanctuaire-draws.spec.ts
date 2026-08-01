@@ -14,7 +14,7 @@ test.describe('Sanctuaire — mes lectures', () => {
     });
     await expect(page.getByText("Lecture d'Âme").first()).toBeVisible();
     await expect(page.getByText('Prête', { exact: true })).toBeVisible();
-    await expect(page.getByText('En préparation')).toBeVisible();
+    await expect(page.getByText('En préparation', { exact: true })).toBeVisible();
     await expect(
       page.getByText(/mes révélations|nouvelle lecture|bientôt|voir les offres/i),
     ).toHaveCount(0);
@@ -49,7 +49,7 @@ test.describe('Sanctuaire — mes lectures', () => {
 
     await page.goto('/sanctuaire/draws');
 
-    await expect(page.getByRole('button', { name: 'Lire', exact: true })).toBeVisible({
+    await expect(page.getByRole('link', { name: 'Lire ma lecture' })).toBeVisible({
       timeout: 20_000,
     });
     await expect(page.getByRole('button', { name: 'Télécharger le PDF' })).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('Sanctuaire — mes lectures', () => {
 
     await page.goto('/sanctuaire/draws');
 
-    await expect(page.getByRole('heading', { name: 'Vos lectures apparaîtront ici' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Aucune lecture en préparation' })).toBeVisible({
       timeout: 20_000,
     });
   });

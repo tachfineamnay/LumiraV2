@@ -172,6 +172,28 @@ test.describe('Desk — photos privées client', () => {
         });
         return;
       }
+      if (url.includes('/reading')) {
+        const isOrderB = url.includes('/orders/order-b');
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            order: isOrderB
+              ? orderPayload('order-b', 'client-b', 's3://onboarding/client-b/face.jpg', null)
+              : orderPayload(
+                  'order-a',
+                  'client-a',
+                  's3://onboarding/client-a/face.jpg',
+                  's3://onboarding/client-a/palm.jpg',
+                ),
+            reading: null,
+            revision: 0,
+            quality: null,
+            restorableBlocks: [],
+            history: [],
+          }),
+        });
+        return;
+      }
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({}),
@@ -329,6 +351,28 @@ test.describe('Desk — photos privées client', () => {
         });
         return;
       }
+      if (url.includes('/reading')) {
+        const isOrderB = url.includes('/orders/order-b');
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            order: isOrderB
+              ? orderPayload('order-b', 'client-b', 's3://onboarding/client-b/face.jpg', null)
+              : orderPayload(
+                  'order-a',
+                  'client-a',
+                  's3://onboarding/client-a/face.jpg',
+                  's3://onboarding/client-a/palm.jpg',
+                ),
+            reading: null,
+            revision: 0,
+            quality: null,
+            restorableBlocks: [],
+            history: [],
+          }),
+        });
+        return;
+      }
       if (url.match(/\/orders\/order-a(?:\?|$)/) || url.endsWith('/orders/order-a')) {
         await route.fulfill({
           contentType: 'application/json',
@@ -366,6 +410,8 @@ test.describe('Desk — photos privées client', () => {
     await expect(page.getByRole('heading', { name: /Alice Test/i })).toBeVisible({
       timeout: 20_000,
     });
+    await page.getByRole('button', { name: 'Dossier', exact: true }).click();
+    await expect(page.getByText('Dossier client')).toBeVisible();
     await expect(page.locator('img[src^="s3://"]')).toHaveCount(0);
     await expect(page.locator('img[src^="blob:"]').first()).toBeVisible({ timeout: 20_000 });
     const firstBlobSrc = await page.locator('img[src^="blob:"]').first().getAttribute('src');
@@ -380,6 +426,8 @@ test.describe('Desk — photos privées client', () => {
     await expect(page.getByRole('heading', { name: /Bruno Test/i })).toBeVisible({
       timeout: 20_000,
     });
+    await page.getByRole('button', { name: 'Dossier', exact: true }).click();
+    await expect(page.getByText('Dossier client')).toBeVisible();
     await expect(page.locator('img[src^="s3://"]')).toHaveCount(0);
     await expect(page.locator('img[src^="blob:"]').first()).toBeVisible({ timeout: 20_000 });
     const secondBlobSrc = await page.locator('img[src^="blob:"]').first().getAttribute('src');

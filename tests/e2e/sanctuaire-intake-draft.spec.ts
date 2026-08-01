@@ -51,32 +51,21 @@ test.describe('Sanctuaire — brouillon de dossier scellable', () => {
     await expect(page.getByRole('button', { name: 'Reprendre mon dossier' })).toBeVisible();
     await page.getByRole('button', { name: 'Reprendre mon dossier' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Vous gardez la main' })).toBeVisible();
-    await page.getByRole('button', { name: 'Commencer mon dossier' }).click();
+    await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeVisible();
     await page.getByLabel('Date de naissance').fill('1990-06-15');
     await page.getByLabel('Heure (facultative)').fill('09:45');
     await page.getByLabel('Lieu de naissance').fill('Lyon, France');
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await page.getByLabel(/Votre question/).fill('Que dois-je comprendre dans cette transition ?');
+    await page
+      .getByLabel(/éclairer une seule question/i)
+      .fill('Que dois-je comprendre dans cette transition ?');
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await page.getByLabel('Sélectionner une photo').first().setInputFiles({
-      name: 'visage.jpg',
-      mimeType: 'image/jpeg',
-      buffer: TINY_JPEG,
-    });
-    await expect(page.getByRole('img', { name: 'Visage' })).toBeVisible();
-    await page.getByLabel('Sélectionner une photo').first().setInputFiles({
-      name: 'paume.jpg',
-      mimeType: 'image/jpeg',
-      buffer: TINY_JPEG,
-    });
-    await expect(page.getByRole('img', { name: 'Paume' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await page.getByLabel(/Ce qui vous porte/).fill('Ma créativité et mes proches.');
-    await page.getByLabel(/Ce qui vous freine/).fill('Le doute avant une décision importante.');
+    await expect(page.getByRole('heading', { name: 'Relecture et transmission' })).toBeVisible();
     await expect(page.getByText('Brouillon sauvegardé')).toBeVisible({ timeout: 4_000 });
     expect(savedDrafts.at(-1)).toMatchObject({
       birthDate: '1990-06-15',
@@ -85,22 +74,24 @@ test.describe('Sanctuaire — brouillon de dossier scellable', () => {
     });
     await assertNoHorizontalOverflow(page);
 
-    const continueButton = page.getByRole('button', { name: 'Continuer' });
-    const bounds = await continueButton.boundingBox();
+    const confirmButton = page.getByRole('button', {
+      name: 'Confirmer et transmettre mon dossier',
+    });
+    await confirmButton.scrollIntoViewIfNeeded();
+    const bounds = await confirmButton.boundingBox();
     expect(bounds?.y).toBeGreaterThanOrEqual(0);
     expect((bounds?.y || 0) + (bounds?.height || 0)).toBeLessThanOrEqual(
       (await page.evaluate(() => window.innerHeight)) + 2,
     );
 
     // Equivalent to closing the browser: only server-side draft state is used on return.
-    await page.getByRole('button', { name: 'Fermer et reprendre plus tard' }).click();
+    await page.getByRole('button', { name: 'Revenir à l’aperçu du dossier' }).click();
     await page.reload();
     await expect(page.getByRole('button', { name: 'Reprendre mon dossier' })).toBeVisible({
       timeout: 20_000,
     });
     await page.getByRole('button', { name: 'Reprendre mon dossier' }).click();
-    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
-    await expect(page.getByLabel(/Ce qui vous porte/)).toHaveValue('Ma créativité et mes proches.');
-    await expect(page.getByRole('img', { name: 'Visage' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Relecture et transmission' })).toBeVisible();
+    await expect(page.getByText('Que dois-je comprendre dans cette transition ?')).toBeVisible();
   });
 });

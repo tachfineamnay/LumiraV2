@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Pause, Play, Volume2 } from 'lucide-react';
+import { AlertCircle, Loader2, Pause, Play, Volume2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface MysticAudioPlayerProps {
@@ -41,6 +41,7 @@ export function MysticAudioPlayer({
   const [volume, setVolume] = useState(1);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
   const [error, setError] = useState<string | null>(null);
+  const [isBuffering, setIsBuffering] = useState(false);
 
   const isAvailable = Boolean(audioUrl);
   const progress = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0;
@@ -52,6 +53,7 @@ export function MysticAudioPlayer({
       setDuration(0);
       setCurrentTime(0);
       setError(null);
+      setIsBuffering(false);
       return;
     }
 
@@ -70,6 +72,9 @@ export function MysticAudioPlayer({
         setCurrentTime(saved);
       }
     };
+    const onDurationChange = () => {
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    };
     const onTimeUpdate = () => {
       const second = Math.floor(audio.currentTime);
       setCurrentTime(audio.currentTime);
@@ -78,20 +83,55 @@ export function MysticAudioPlayer({
         window.localStorage.setItem(resumeKey(audioUrl), String(audio.currentTime));
       }
     };
+    const onPlay = () => {
+      setIsPlaying(true);
+      setError(null);
+    };
+    const onPause = () => {
+      if (!audio.ended) setIsPlaying(false);
+    };
+    const onPlaying = () => {
+      setIsPlaying(true);
+      setIsBuffering(false);
+      setError(null);
+    };
+    const onWaiting = () => setIsBuffering(true);
+    const onStalled = () => setIsBuffering(true);
+    const onSeeking = () => setIsBuffering(true);
+    const onSeeked = () => setIsBuffering(false);
+    const onRateChange = () => {
+      const nextRate = audio.playbackRate;
+      if (SPEEDS.includes(nextRate as (typeof SPEEDS)[number])) {
+        setSpeed(nextRate as (typeof SPEEDS)[number]);
+      }
+    };
+    const onVolumeChange = () => setVolume(audio.volume);
     const onEnded = () => {
       setIsPlaying(false);
+      setIsBuffering(false);
       setCurrentTime(0);
       window.localStorage.removeItem(resumeKey(audioUrl));
     };
     const onError = () => {
       setIsPlaying(false);
+      setIsBuffering(false);
       setError('La lecture audio a rencontré un problème. Réessayez dans quelques instants.');
     };
 
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('durationchange', onDurationChange);
     audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('playing', onPlaying);
+    audio.addEventListener('waiting', onWaiting);
+    audio.addEventListener('stalled', onStalled);
+    audio.addEventListener('seeking', onSeeking);
+    audio.addEventListener('seeked', onSeeked);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
+    audio.addEventListener('ratechange', onRateChange);
+    audio.addEventListener('volumechange', onVolumeChange);
 
     return () => {
       if (audio.currentTime > 0 && !audio.ended) {
@@ -99,9 +139,19 @@ export function MysticAudioPlayer({
       }
       audio.pause();
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('playing', onPlaying);
+      audio.removeEventListener('waiting', onWaiting);
+      audio.removeEventListener('stalled', onStalled);
+      audio.removeEventListener('seeking', onSeeking);
+      audio.removeEventListener('seeked', onSeeked);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
+      audio.removeEventListener('ratechange', onRateChange);
+      audio.removeEventListener('volumechange', onVolumeChange);
       if (audioRef.current === audio) audioRef.current = null;
     };
   }, [audioUrl]);
@@ -180,7 +230,7 @@ export function MysticAudioPlayer({
             aria-label={isPlaying ? 'Mettre l’audio en pause' : 'Lire l’audio'}
             className={cn(
               'grid shrink-0 place-items-center rounded-full bg-horizon-400 text-abyss-900 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-200',
-              compact ? 'h-9 w-9' : 'h-12 w-12',
+              compact ? 'h-11 w-11' : 'h-12 w-12',
             )}
           >
             {isPlaying ? (
@@ -199,7 +249,7 @@ export function MysticAudioPlayer({
               value={currentTime}
               onChange={(event) => seek(Number(event.target.value))}
               aria-label="Progression audio"
-              className="h-2 w-full cursor-pointer accent-horizon-400"
+              className="h-10 w-full cursor-pointer accent-horizon-400"
             />
             {!compact && (
               <div className="mt-2 flex h-4 items-end gap-0.5" aria-hidden>
@@ -241,7 +291,7 @@ export function MysticAudioPlayer({
               value={volume}
               onChange={(event) => setVolume(Number(event.target.value))}
               aria-label="Volume"
-              className="w-24 max-w-[45vw] accent-horizon-400"
+              className="h-10 w-24 max-w-[45vw] cursor-pointer accent-horizon-400"
             />
           </label>
           <label className="flex items-center gap-2 text-xs text-stellar-400">
@@ -267,6 +317,11 @@ export function MysticAudioPlayer({
       {error && (
         <p role="alert" className="mt-3 flex items-center gap-2 text-xs text-rose-300">
           <AlertCircle className="h-4 w-4" /> {error}
+        </p>
+      )}
+      {isBuffering && !error && (
+        <p role="status" className="mt-3 flex items-center gap-2 text-xs text-stellar-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Chargement de l&apos;audio…
         </p>
       )}
     </div>

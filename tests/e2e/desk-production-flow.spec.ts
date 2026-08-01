@@ -105,6 +105,51 @@ test.describe('Desk — production depuis le dossier scellé', () => {
           }
         : null;
 
+    const reading = () =>
+      phase === 'AWAITING_REVIEW' || phase === 'DELIVERED'
+        ? {
+            pdf_content: {
+              introduction: finalizedContent || 'Lecture générée à partir du dossier scellé.',
+              archetype_reveal: 'La Gardienne',
+              sections: [{ domain: 'mission', title: 'Mission', content: 'Un contenu à réviser.' }],
+              karmic_insights: [],
+              life_mission: 'Retrouver un cap serein.',
+              rituals: [],
+              conclusion: 'Une conclusion accompagnante.',
+            },
+            synthesis: {
+              archetype: 'La Gardienne',
+              keywords: [],
+              emotional_state: '',
+              key_blockage: '',
+            },
+            timeline: [],
+            lecture: finalizedContent || 'Lecture générée à partir du dossier scellé.',
+          }
+        : null;
+
+    const workspace = () => ({
+      order: order(),
+      reading: reading(),
+      revision: 1,
+      quality: reading()
+        ? {
+            status: 'PASS',
+            blockingIssues: [],
+            warnings: [],
+            metrics: {
+              totalWords: 420,
+              sectionWordCounts: { mission: 120 },
+              insightsCount: 0,
+              ritualsCount: 0,
+              instructionsCount: 0,
+            },
+          }
+        : null,
+      restorableBlocks: [],
+      history: [],
+    });
+
     const controlCenter = () => {
       const activeJob = job();
       return {
@@ -201,6 +246,25 @@ test.describe('Desk — production depuis le dossier scellé', () => {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;
 
+      if (pathname.endsWith('/reading/seal') && request.method() === 'POST') {
+        phase = 'DELIVERED';
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: true }),
+        });
+        return;
+      }
+      if (pathname.includes('/reading/blocks/') && request.method() === 'PATCH') {
+        const value = (request.postDataJSON() as { value?: string }).value;
+        if (typeof value === 'string') finalizedContent = value;
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify(workspace()) });
+        return;
+      }
+      if (pathname.endsWith('/reading') && request.method() === 'GET') {
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify(workspace()) });
+        return;
+      }
+
       if (pathname.endsWith('/control-center')) {
         await route.fulfill({
           contentType: 'application/json',
@@ -257,12 +321,14 @@ test.describe('Desk — production depuis le dossier scellé', () => {
     await expect(page.getByRole('heading', { name: 'Marie Dubois' })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByText('SEALED_INTAKE')).toBeVisible();
+    await page.getByRole('button', { name: 'Dossier', exact: true }).click();
+    await expect(page.getByText('Dossier client')).toBeVisible();
     await expect(page.getByText('Lyon, France')).toBeVisible();
     await expect(page.getByText('Profil mutable — ne pas utiliser')).toHaveCount(0);
     await expect(page.getByRole('img', { name: 'Visage' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Paume' })).toBeVisible();
     await expect(page.locator('img[src^="s3://"]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Fermer le dossier' }).click();
 
     await page.getByRole('button', { name: 'Lancer la production' }).click();
     await expect(page.getByText('Production serveur en cours')).toBeVisible();
@@ -278,19 +344,22 @@ test.describe('Desk — production depuis le dossier scellé', () => {
 
     phase = 'RUNNING';
     await page.goto('/admin/studio/order-1');
-    await expect(page.getByText('Génération de la lecture')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/L.Oracle crée la lecture/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Lecture en production' })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText(/SCRIBE analyse et rédige/)).toBeVisible();
 
     phase = 'AWAITING_REVIEW';
     await page.reload();
     await expect(page.getByText('Lecture prête à réviser')).toBeVisible({ timeout: 20_000 });
-    const editor = page.locator('[contenteditable="true"]').first();
+    await page.getByTitle('Modifier le bloc').first().click();
+    const editor = page.locator('textarea').first();
     await expect(editor).toBeVisible();
     await editor.fill('Version révisée et validée par l’expert.');
-    await page.getByRole('button', { name: /sceller et envoyer/i }).click();
-    await expect(page.getByRole('heading', { name: /Confirmer l.envoi/ })).toBeVisible();
-    await page.getByRole('button', { name: 'Confirmer et envoyer' }).click();
-    await expect(page).toHaveURL(/\/admin\/board/, { timeout: 20_000 });
+    await page.getByRole('button', { name: 'Enregistrer' }).click();
+    await page.getByRole('button', { name: 'Sceller et envoyer' }).first().click();
+    await expect(page.getByRole('heading', { name: 'Sceller cette version ?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Sceller et envoyer' }).last().click();
     expect(finalizedContent).toContain('Version révisée et validée par l’expert.');
 
     await page.goto('/admin/studio/order-1');

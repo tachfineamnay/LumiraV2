@@ -193,7 +193,10 @@ export function ReadingPdfViewer({
           setIsRendering(false);
         }
       } catch (renderError) {
-        if (cancelled || (renderError instanceof Error && renderError.name === 'RenderingCancelledException')) {
+        if (
+          cancelled ||
+          (renderError instanceof Error && renderError.name === 'RenderingCancelledException')
+        ) {
           return;
         }
         setError('Le document PDF est illisible ou corrompu.');
@@ -238,7 +241,7 @@ export function ReadingPdfViewer({
       ({
         '--reading-viewer-mobile-h': visualViewportHeight ? `${visualViewportHeight}px` : '100dvh',
         height:
-          'max(22rem, calc(var(--reading-viewer-mobile-h) - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 0.75rem))',
+          'min(100%, calc(var(--reading-viewer-mobile-h) - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h)))',
       }) as React.CSSProperties,
     [visualViewportHeight],
   );
@@ -248,15 +251,15 @@ export function ReadingPdfViewer({
       ref={rootRef}
       data-testid="reading-pdf-viewer"
       style={viewerStyle}
-      className={`flex max-h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[rgba(90,148,205,0.18)] bg-[#E4EFF8] ${className}`}
+      className={`reading-pdf-viewer flex max-h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[rgba(90,148,205,0.18)] bg-[#E4EFF8] ${className}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[rgba(90,148,205,0.14)] bg-[rgba(242,250,255,0.96)] px-3 py-2.5 backdrop-blur-xl sm:px-5 sm:py-3">
+      <div className="reading-pdf-toolbar flex shrink-0 items-center justify-between gap-3 border-b border-[rgba(90,148,205,0.14)] bg-[rgba(242,250,255,0.96)] px-3 py-2.5 backdrop-blur-xl sm:px-5 sm:py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#8a6820]/10 text-[#8a6820]">
             <FileText className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h1 className="truncate font-playfair text-lg italic text-[#0d1f35] sm:text-2xl">
+            <h1 className="truncate font-playfair text-base italic text-[#0d1f35] sm:text-2xl">
               {title}
             </h1>
             <p className="text-xs text-[#385c7a]">
@@ -296,7 +299,7 @@ export function ReadingPdfViewer({
         )}
 
         {error && !isLoading && (
-          <div className="flex min-h-[50vh] items-center justify-center px-4">
+          <div className="flex min-h-full items-center justify-center px-4 py-6">
             <div className="max-w-sm text-center">
               <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-400" />
               <p className="mb-1 font-medium text-[#0d1f35]">Impossible d&apos;afficher le PDF</p>
@@ -324,7 +327,7 @@ export function ReadingPdfViewer({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-[rgba(90,148,205,0.14)] bg-[rgba(242,250,255,0.96)] px-2 py-2 [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))] sm:px-4">
+      <div className="reading-pdf-controls shrink-0 border-t border-[rgba(90,148,205,0.14)] bg-[rgba(242,250,255,0.96)] px-2 py-2 [padding-bottom:max(0.5rem,var(--safe-area-bottom))] sm:px-4">
         <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2 lg:grid-cols-3">
           <div className="flex min-w-0 items-center justify-center gap-1">
             <button

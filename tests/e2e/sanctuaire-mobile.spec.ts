@@ -15,16 +15,20 @@ test.describe('Sanctuaire mobile — navigation essentielle', () => {
     await mockFullSanctuaire(page, { profileCompleted: true });
   });
 
-  test('keeps the five primary destinations visible', async ({ page }) => {
+  test('keeps the four canonical destinations visible and leaves the dossier in its intended menu', async ({
+    page,
+  }) => {
     await page.goto('/sanctuaire');
 
     const nav = page.getByRole('navigation', { name: 'Navigation principale' });
     await expect(nav).toBeVisible({ timeout: 20_000 });
+    await expect(nav.getByRole('link')).toHaveCount(4);
     await expect(nav.getByRole('link', { name: 'Accueil' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Dossier' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Lectures' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Synthèse' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Éclairage' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Mes lectures' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Ma synthèse' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Demander un éclairage' })).toBeVisible();
+    await page.getByRole('button', { expanded: false, hasPopup: 'menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Mon dossier' })).toBeVisible();
     await expect(nav.getByText(/chemin|rêves|plus/i)).toHaveCount(0);
     await assertNoHorizontalOverflow(page);
   });
@@ -35,13 +39,14 @@ test.describe('Sanctuaire mobile — navigation essentielle', () => {
     await expect(page.getByRole('heading', { name: 'Demander un éclairage' })).toBeVisible({
       timeout: 20_000,
     });
+    await page.getByRole('button', { name: /^Comprendre ma mission/ }).click();
 
     const input = page.getByLabel('Ajouter un message');
     const nav = page.getByRole('navigation', { name: 'Navigation principale' });
     await expect(input).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('button', { name: 'Envoyer mon message au Desk' })).toBeVisible();
-
-    await input.scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole('button', { name: 'Envoyer mon message à l’équipe' }),
+    ).toBeVisible();
 
     const [inputBox, navBox] = await Promise.all([input.boundingBox(), nav.boundingBox()]);
     expect(inputBox).toBeTruthy();

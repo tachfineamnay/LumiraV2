@@ -119,7 +119,7 @@ export function StripePayment({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
-      className="space-y-6 pb-20 md:pb-0"
+      className="space-y-6 pb-[calc(var(--safe-area-bottom)+5rem)] md:pb-0"
     >
       <div
         data-testid="stripe-payment-element"
@@ -182,7 +182,7 @@ export function StripePayment({
           !stripe || !elements || isProcessing || disabled || paymentElementState !== 'ready'
         }
         className={`
-          sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 min-h-[52px] w-full rounded-xl py-4 text-lg font-bold transition-all duration-300 md:static
+          sticky bottom-[max(0.75rem,var(--safe-area-bottom))] z-20 min-h-[52px] w-full rounded-xl py-4 text-lg font-bold transition-all duration-300 md:static
           flex items-center justify-center gap-3
           ${
             isProcessing || disabled || paymentElementState !== 'ready'
