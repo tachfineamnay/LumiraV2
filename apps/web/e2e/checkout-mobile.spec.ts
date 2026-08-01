@@ -1,12 +1,7 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
+import { expectNoHorizontalOverflow } from './helpers/layout';
 
 test.describe.configure({ timeout: 60_000 });
-
-async function expectNoHorizontalOverflow(page: Page) {
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
-    .toBe(true);
-}
 
 async function scrollIntoView(locator: Locator) {
   await locator.evaluate((element) =>
@@ -33,6 +28,20 @@ async function expectIntersectsViewport(locator: Locator) {
   expect(box!.y + box!.height).toBeGreaterThanOrEqual(0);
 }
 
+async function mockCheckoutStatus(page: import('@playwright/test').Page) {
+  await page.route('**/api/bff/payments/checkout-status', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        paymentIntentId: 'pi_test_checkout',
+        paymentMayBePending: false,
+        status: 'requires_payment_method',
+        stripeMode: 'test',
+      }),
+    }),
+  );
+}
+
 test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'Chromium-only viewport check');
   await page.setViewportSize({ width: 320, height: 568 });
@@ -43,6 +52,10 @@ test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo
   await menuButton.click({ force: true });
   const menu = page.getByRole('dialog', { name: 'Navigation principale' });
   await expect(menu).toBeVisible();
+  await expect(menu).toHaveCSS('background-color', 'rgb(12, 18, 37)');
+  await expect(menu.getByRole('link', { name: "L'Offre" })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(menu.getByRole('link', { name: "Commencer l'expérience" })).toBeFocused();
   for (const name of [
     "L'Offre",
     'Comment ça marche',
@@ -59,6 +72,27 @@ test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo
   await expect(page.getByText('97€', { exact: true })).toBeVisible();
   await expect(page.getByText('paiement unique', { exact: true })).toBeVisible();
   await expectInViewport(page.locator('#niveaux a[href="/commande"]'));
+  await expectNoHorizontalOverflow(page);
+});
+
+test('landing carousel is controllable at 360 × 800 without horizontal escape', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Mobile Chromium carousel check');
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/');
+  const carousel = page.locator('#temoignages');
+  await scrollIntoView(carousel);
+
+  const next = page.getByRole('button', { name: 'Témoignage suivant' });
+  const nextBox = await next.boundingBox();
+  expect(nextBox).not.toBeNull();
+  expect(nextBox!.height).toBeGreaterThanOrEqual(44);
+  await next.click();
+  await expect(page.getByRole('tab', { name: 'Témoignage Jean-Pierre D.' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expectNoHorizontalOverflow(page);
 });
 
@@ -102,10 +136,14 @@ test('Pixel 5 reaches the visible payment step with a reduced viewport', async (
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium', 'Pixel 5-only checkout flow');
   await page.route('**/api/bff/users/profile', (route) => route.fulfill({ status: 401 }));
+  await mockCheckoutStatus(page);
   await page.route('**/api/bff/payments/checkout-intent', (route) =>
     route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ clientSecret: 'pi_test_checkout_secret_mobile' }),
+      body: JSON.stringify({
+        clientSecret: 'pi_test_checkout_secret_mobile',
+        stripeMode: 'test',
+      }),
     }),
   );
 
@@ -117,6 +155,8 @@ test('Pixel 5 reaches the visible payment step with a reduced viewport', async (
   await expect(page).toHaveURL(/\/commande$/);
   await page.setViewportSize({ width: 393, height: 420 });
 
+  await expect(page.getByLabel('Email')).toHaveAttribute('autocomplete', 'email');
+  await expect(page.getByLabel('Téléphone')).toHaveAttribute('inputmode', 'tel');
   await page.getByPlaceholder('votre@email.com').fill('mobile@example.com');
   await page.getByPlaceholder('Prénom').fill('Maya');
   await page.getByPlaceholder('Nom', { exact: true }).fill('Mobile');
@@ -137,12 +177,13 @@ test('checkout creates one intent for a double tap and resumes that same attempt
   let intentCalls = 0;
 
   await page.route('**/api/bff/users/profile', (route) => route.fulfill({ status: 401 }));
+  await mockCheckoutStatus(page);
   await page.route('**/api/bff/payments/checkout-intent', async (route) => {
     intentCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 250));
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ clientSecret: 'pi_test_resume_secret_mobile' }),
+      body: JSON.stringify({ clientSecret: 'pi_test_resume_secret_mobile', stripeMode: 'test' }),
     });
   });
 

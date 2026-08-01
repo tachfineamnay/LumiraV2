@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Quote, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Quote, Star } from 'lucide-react';
 
 const TESTIMONIALS = [
   {
@@ -60,20 +60,37 @@ function Avatar({ initials, size = 'md' }: { initials: string; size?: 'sm' | 'md
 
 export function TestimonialsCarousel() {
   const [current, setCurrent] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (isPaused || reducedMotion) return;
     const timer = setInterval(() => {
       setCurrent((prev) => (prev + 1) % TESTIMONIALS.length);
     }, 8000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isPaused, reducedMotion]);
 
   const t = TESTIMONIALS[current];
+  const selectTestimonial = (index: number) => {
+    setCurrent((index + TESTIMONIALS.length) % TESTIMONIALS.length);
+    setIsPaused(true);
+  };
 
   return (
     <section
       id="temoignages"
       className="py-16 md:py-32 relative bg-void overflow-hidden content-visibility-auto"
+      onFocusCapture={() => setIsPaused(true)}
+      onPointerDown={() => setIsPaused(true)}
     >
       <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[150px] pointer-events-none" />
 
@@ -102,7 +119,15 @@ export function TestimonialsCarousel() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
           <div className="relative">
-            <div key={t.id} className="motion-safe:animate-hero-enter">
+            <div
+              key={t.id}
+              id={`testimonial-${t.id}`}
+              role="group"
+              aria-roledescription="témoignage"
+              aria-label={`${current + 1} sur ${TESTIMONIALS.length}`}
+              aria-live={isPaused ? 'polite' : 'off'}
+              className="motion-safe:animate-hero-enter"
+            >
               <Quote className="w-12 h-12 text-cosmic-gold opacity-25 mb-8" aria-hidden />
 
               <p className="font-playfair italic text-xl md:text-2xl lg:text-3xl text-amber-300/80 leading-snug mb-6">
@@ -125,20 +150,47 @@ export function TestimonialsCarousel() {
               </div>
             </div>
 
-            <div className="flex gap-4 mt-14" role="tablist" aria-label="Témoignages">
-              {TESTIMONIALS.map((item, i) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={current === i}
-                  aria-label={`Témoignage ${item.name}`}
-                  onClick={() => setCurrent(i)}
-                  className={`h-[2px] transition-all duration-500 ${
-                    current === i ? 'w-16 bg-amber-400/80' : 'w-8 bg-white/10 hover:bg-white/25'
-                  }`}
-                />
-              ))}
+            <div className="mt-10 flex items-center gap-2 sm:mt-14">
+              <button
+                type="button"
+                onClick={() => selectTestimonial(current - 1)}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 text-white/75 hover:border-cosmic-gold/45 hover:text-cosmic-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cosmic-gold"
+                aria-label="Témoignage précédent"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <div
+                className="flex flex-1 justify-center gap-1.5"
+                role="tablist"
+                aria-label="Témoignages"
+              >
+                {TESTIMONIALS.map((item, i) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={current === i}
+                    aria-label={`Témoignage ${item.name}`}
+                    aria-controls={`testimonial-${item.id}`}
+                    onClick={() => selectTestimonial(i)}
+                    className="grid h-11 w-11 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cosmic-gold"
+                  >
+                    <span
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        current === i ? 'w-8 bg-amber-400/80' : 'w-4 bg-white/20 hover:bg-white/40'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => selectTestimonial(current + 1)}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 text-white/75 hover:border-cosmic-gold/45 hover:text-cosmic-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cosmic-gold"
+                aria-label="Témoignage suivant"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
             </div>
           </div>
 
@@ -149,7 +201,7 @@ export function TestimonialsCarousel() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setCurrent(TESTIMONIALS.indexOf(item))}
+                  onClick={() => selectTestimonial(TESTIMONIALS.indexOf(item))}
                   className="text-left p-6 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10 transition-all duration-300 group"
                 >
                   <div className="flex items-center gap-3 mb-3">

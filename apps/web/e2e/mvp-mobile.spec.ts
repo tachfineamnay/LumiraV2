@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, type Route, test } from '@playwright/test';
+import { expectNoHorizontalOverflow } from './helpers/layout';
 
 type AuthController = {
   setAuthenticated: (next: boolean) => void;
@@ -14,6 +15,9 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     status,
     contentType: 'application/json',
+    headers: {
+      'cache-control': 'no-store',
+    },
     body: JSON.stringify(body),
   });
 }
@@ -199,16 +203,6 @@ async function installMvpMocks(page: Page): Promise<AuthController> {
   };
 }
 
-async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(() => ({
-    viewport: window.innerWidth,
-    documentWidth: document.documentElement.scrollWidth,
-    bodyWidth: document.body.scrollWidth,
-  }));
-  expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewport + 2);
-  expect(overflow.bodyWidth).toBeLessThanOrEqual(overflow.viewport + 2);
-}
-
 async function expectAboveMobileNav(page: Page, locator: Locator) {
   await locator.scrollIntoViewIfNeeded();
   await expect(locator).toBeVisible();
@@ -268,9 +262,9 @@ async function openReading(page: Page) {
 
   const audioPlayer = page.getByTestId('audio-player');
   await expect(audioPlayer).toBeVisible();
-  await expectAboveMobileNav(page, audioPlayer);
 
   const play = page.getByRole('button', { name: 'Lire l’audio' });
+  await expectAboveMobileNav(page, play);
   await expect(play).toBeVisible();
   await play.click();
   const pause = page.getByRole('button', { name: 'Mettre l’audio en pause' });
@@ -403,6 +397,26 @@ test.describe('MVP mobile reading responsive', () => {
     await page.getByRole('link', { name: 'Fermer le PDF' }).click();
     await page.getByRole('button', { name: 'Lire l’audio' }).click();
     await expect(page.getByRole('button', { name: 'Mettre l’audio en pause' })).toBeVisible();
+  });
+
+  test('mobile landscape PDF keeps every control available without page overflow', async ({
+    page,
+  }, testInfo) => {
+    test.skip(!['mobile-chromium', 'mobile-webkit'].includes(testInfo.project.name));
+    await page.setViewportSize({ width: 568, height: 320 });
+    await installAudioMock(page);
+    await installMvpMocks(page);
+
+    await openReading(page);
+    await assertPdfViewer(page);
+    for (const name of ['Fermer le PDF', 'Page suivante', 'Zoom avant', 'Télécharger']) {
+      const box = await page
+        .getByRole(name === 'Fermer le PDF' ? 'link' : 'button', { name })
+        .boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(320);
+    }
   });
 
   test('Desktop Chromium: landing, checkout, Sanctuaire and reading', async ({

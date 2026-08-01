@@ -9,7 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "type-check": "tsc --noEmit",
-    "test:e2e:mvp-mobile": "playwright test --config=playwright.mvp-mobile.config.ts",
+    "test:e2e:mvp-mobile": "playwright test --config=../../playwright.config.ts --project=mobile-chromium --project=mobile-webkit",
     "test": "echo 'No tests yet'"
   },
   "dependencies": {

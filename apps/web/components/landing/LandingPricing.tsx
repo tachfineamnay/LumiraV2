@@ -20,7 +20,7 @@ const GROUP_ICONS = [
 
 export function LandingPricing() {
   return (
-    <section id="niveaux" className="py-16 md:py-24 relative z-10 content-visibility-auto">
+    <section id="niveaux" className="relative z-10 py-16 md:py-24">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-16">
           <span className="text-cosmic-gold text-xs font-bold tracking-widest uppercase">

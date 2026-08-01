@@ -1,4 +1,5 @@
 import { expect, type Page, type Route, test } from '@playwright/test';
+import { expectNoHorizontalOverflow } from './helpers/layout';
 
 type IntakeData = Record<string, unknown>;
 
@@ -203,16 +204,6 @@ async function installSanctuaireMocks(page: Page) {
   return calls;
 }
 
-async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(() => ({
-    viewport: window.innerWidth,
-    documentWidth: document.documentElement.scrollWidth,
-    bodyWidth: document.body.scrollWidth,
-  }));
-  expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewport);
-  expect(overflow.bodyWidth).toBeLessThanOrEqual(overflow.viewport);
-}
-
 async function expectVisibleAboveBottomNav(page: Page, buttonName: RegExp | string) {
   const button = page.getByRole('button', { name: buttonName }).last();
   await expect(button).toBeVisible();
@@ -277,7 +268,7 @@ test.describe('Sanctuaire mobile connexion et onboarding', () => {
   });
 
   test('parcourt, reprend et confirme le dossier avec photos sur mobile', async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 568 });
+    await page.setViewportSize({ width: 360, height: 800 });
     const calls = await installSanctuaireMocks(page);
 
     await openOnboarding(page);

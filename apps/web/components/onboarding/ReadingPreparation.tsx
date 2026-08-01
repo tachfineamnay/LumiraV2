@@ -405,6 +405,7 @@ export function ReadingPreparation({
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const actionErrorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const mountedRef = useRef(true);
@@ -747,6 +748,14 @@ export function ReadingPreparation({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [loadState, step]);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const frame = window.requestAnimationFrame(() =>
+      actionErrorRef.current?.scrollIntoView({ block: 'nearest' }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [actionError]);
 
   useEffect(() => {
     if (!isComplete) return;
@@ -1149,7 +1158,7 @@ export function ReadingPreparation({
         className={
           isInline
             ? 'rounded-3xl border border-emerald-400/20 bg-abyss-700/80 p-6 text-center sm:p-9'
-            : 'fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl'
+            : 'fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,var(--safe-area-top))] pb-[max(1rem,var(--safe-area-bottom))] backdrop-blur-xl'
         }
         role={isInline ? 'status' : 'dialog'}
         aria-modal={isInline ? undefined : true}
@@ -1220,9 +1229,7 @@ export function ReadingPreparation({
       >
         <header
           className={`shrink-0 border-b border-white/[0.07] bg-abyss-700/95 px-3 sm:px-5 lg:pt-3 ${
-            isCompactMobileViewport
-              ? 'py-2 lg:py-3'
-              : 'pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
+            isCompactMobileViewport ? 'py-2 lg:py-3' : 'pb-3 pt-[max(0.75rem,var(--safe-area-top))]'
           }`}
         >
           <div className="flex min-w-0 items-center justify-between gap-3">
@@ -1358,6 +1365,7 @@ export function ReadingPreparation({
 
                 {(actionError || saveState === 'conflict') && (
                   <div
+                    ref={actionErrorRef}
                     role="alert"
                     className="mt-4 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm leading-6 text-rose-100"
                   >
@@ -1523,8 +1531,8 @@ export function ReadingPreparation({
             <footer
               className={`shrink-0 border-t border-white/[0.07] bg-abyss-700/98 px-3 backdrop-blur-xl sm:px-6 lg:pb-3 ${
                 isCompactMobileViewport
-                  ? 'pt-2 pb-[max(1.75rem,env(safe-area-inset-bottom))]'
-                  : 'pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]'
+                  ? 'pt-2 pb-[max(1.75rem,var(--safe-area-bottom))]'
+                  : 'pt-3 pb-[max(0.75rem,var(--safe-area-bottom))]'
               }`}
             >
               <div className="mx-auto flex max-w-3xl items-center gap-2 sm:gap-3">
@@ -2462,7 +2470,7 @@ function BlockingDialog({
       className={
         isInline
           ? 'grid place-items-center overflow-y-auto rounded-3xl border border-white/[0.08] bg-abyss-800 p-4'
-          : 'fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
+          : 'fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-abyss-900/98 p-4 pt-[max(1rem,var(--safe-area-top))] pb-[max(1rem,var(--safe-area-bottom))]'
       }
       role={isInline ? 'region' : 'dialog'}
       aria-modal={isInline ? undefined : true}

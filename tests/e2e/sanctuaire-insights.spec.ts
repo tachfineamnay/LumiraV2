@@ -30,10 +30,10 @@ test.describe('Sanctuaire — ma synthèse', () => {
     await page.goto('/sanctuaire/synthesis');
 
     for (const title of [
-      'Forces',
-      'Points d’attention',
-      'Thèmes récurrents',
-      'Conseils essentiels',
+      'Le Sage',
+      'Ce qui cherche à prendre place',
+      'Ce qui mérite votre attention',
+      'Vos conseils essentiels',
     ]) {
       await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 20_000 });
     }
@@ -52,7 +52,7 @@ test.describe('Sanctuaire — ma synthèse', () => {
     await page.goto('/sanctuaire/synthesis');
 
     await expect(
-      page.getByRole('heading', { name: 'Votre synthèse se construit avec vos lectures.' }),
+      page.getByRole('heading', { name: 'Votre synthèse apparaîtra après votre première lecture' }),
     ).toBeVisible({ timeout: 20_000 });
   });
 });

@@ -72,7 +72,7 @@ test.describe('Sanctuaire — livraison de lecture validée', () => {
     await expect(page.getByRole('heading', { name: 'Votre lecture est prête' })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByRole('button', { name: 'Lire', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Lire ma lecture' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Lire l’audio' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Télécharger le PDF' })).toBeVisible();
     await expect(page.locator('body')).not.toContainText('s3://');
@@ -86,11 +86,8 @@ test.describe('Sanctuaire — livraison de lecture validée', () => {
     expect(audioSources.join(' ')).not.toContain('s3://');
 
     const pdfRequest = page.waitForRequest('**/api/bff/readings/LUM-SEALED-001/file');
-    await page.getByRole('button', { name: 'Lire', exact: true }).click();
+    await page.getByRole('link', { name: 'Lire ma lecture' }).click();
+    await expect(page).toHaveURL(/\/sanctuaire\/lecture\/LUM-SEALED-001$/);
     await pdfRequest;
-    await expect(
-      page.getByRole('dialog', { name: "Lecture d'Âme — version validée" }),
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Fermer' }).click();
   });
 });

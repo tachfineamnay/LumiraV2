@@ -23,10 +23,10 @@ test.describe('Sanctuaire — accueil', () => {
     await page.goto('/sanctuaire');
 
     await expect(
-      page.getByRole('heading', { name: 'Choisissez la base de votre lecture' }),
+      page.getByRole('heading', { name: 'Préparez la base de votre lecture' }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Préparer mon dossier' })).toBeVisible();
-    await expect(page.getByText('Votre dossier a bien été transmis')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeVisible();
+    await expect(page.getByText('Votre dossier a bien été reçu')).toHaveCount(0);
   });
 
   test('resumes a server-saved client dossier', async ({ page }) => {
@@ -37,60 +37,48 @@ test.describe('Sanctuaire — accueil', () => {
 
     await page.goto('/sanctuaire');
 
-    await expect(page.getByRole('heading', { name: 'Votre dossier vous attend' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Votre brouillon est prêt à être repris' }),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reprendre mon dossier' })).toBeVisible();
   });
 
-  test('supports review, change and explicit sealing before submission', async ({ page }) => {
+  test('keeps the intake review reachable before explicit sealing', async ({ page }) => {
     await mockSanctuaireAuth(page, { profileCompleted: false });
 
     await page.goto('/sanctuaire');
-    await page.getByRole('button', { name: 'Préparer mon dossier' }).click();
-
-    await expect(page.getByRole('heading', { name: 'Vous gardez la main' })).toBeVisible();
-    await page.getByRole('button', { name: 'Commencer mon dossier' }).click();
+    await expect(page.getByRole('heading', { name: 'Vos repères essentiels' })).toBeVisible();
 
     await page.getByLabel('Date de naissance').fill('1990-06-15');
     await page.getByLabel('Lieu de naissance').fill('Lyon, France');
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await expect(
-      page.getByRole('heading', { name: 'Ce que vous souhaitez éclairer' }),
-    ).toBeVisible();
-    await page.getByLabel(/Votre question/).fill('Que dois-je comprendre maintenant ?');
+    await expect(page.getByRole('heading', { name: 'Ce qui vous amène' })).toBeVisible();
+    await page
+      .getByLabel(/éclairer une seule question/i)
+      .fill('Que dois-je comprendre maintenant ?');
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Visage et paume' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
     await page.getByRole('button', { name: 'Continuer' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Votre contexte personnel' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continuer' }).click();
-
-    await expect(page.getByRole('heading', { name: 'Relire et sceller' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Relecture et transmission' })).toBeVisible();
     await expect(page.getByText('Que dois-je comprendre maintenant ?')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Modifier' }).first()).toBeVisible();
-
-    await page.getByRole('checkbox').check();
-    await page.getByRole('button', { name: 'Sceller et transmettre mon dossier' }).click();
-    await expect(
-      page.getByRole('heading', { name: 'Votre lecture de base peut commencer' }),
-    ).toBeVisible();
   });
 
-  test('uses the server order status after the dossier is sealed', async ({ page }) => {
+  test('surfaces the server order status after the dossier is sealed', async ({ page }) => {
     await mockSanctuaireAuth(page, { profileCompleted: true, orderStatus: 'PAID' });
     await page.goto('/sanctuaire');
     await expect(
-      page.getByRole('heading', { name: 'Votre dossier a bien été transmis' }),
+      page.getByRole('heading', { name: 'Votre dossier a bien été reçu' }),
     ).toBeVisible();
-    await expect(
-      page.getByText(/Les éléments que vous avez choisis sont maintenant utilisés/),
-    ).toBeVisible();
+    await expect(page.getByText(/Vous n’avez plus rien à faire/)).toBeVisible();
 
     await mockSanctuaireAuth(page, { profileCompleted: true, orderStatus: 'AWAITING_VALIDATION' });
     await page.goto('/sanctuaire');
     await expect(
-      page.getByRole('heading', { name: 'Votre lecture est en vérification' }),
+      page.getByRole('heading', { name: 'Votre lecture est relue par l’équipe' }),
     ).toBeVisible();
   });
 });

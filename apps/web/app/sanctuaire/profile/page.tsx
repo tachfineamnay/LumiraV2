@@ -43,6 +43,7 @@ export default function ProfilePage() {
   const [isEditingPhotos, setIsEditingPhotos] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [photoRefreshKey, setPhotoRefreshKey] = useState(0);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   // Editable state for photos
   const [facePhoto, setFacePhoto] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export default function ProfilePage() {
   // Handle photo save
   const handleSavePhotos = async () => {
     setIsSaving(true);
+    setPhotoError(null);
     try {
       const changes: { facePhotoUrl?: string | null; palmPhotoUrl?: string | null } = {};
       if (facePhoto !== profile?.facePhotoUrl) {
@@ -73,8 +75,10 @@ export default function ProfilePage() {
       setPhotoRefreshKey((value) => value + 1);
       setIsEditingPhotos(false);
       setPhotosChanged(false);
-    } catch (error) {
-      console.error('Failed to save photos:', error);
+    } catch {
+      setPhotoError(
+        'Vos photos n’ont pas pu être enregistrées. Elles restent disponibles dans ce formulaire pour réessayer.',
+      );
     } finally {
       setIsSaving(false);
     }
@@ -234,11 +238,12 @@ export default function ProfilePage() {
             </div>
 
             {/* Action Button */}
-            <Link href="/sanctuaire/settings/preferences">
-              <button className="flex items-center gap-2 px-5 py-3 rounded-xl bg-brume-800/25 text-ivoire-200 border border-ivoire-500/[0.06] hover:bg-brume-700/25 hover:border-horizon-400/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
-                <Target className="w-4 h-4" />
-                Réglages
-              </button>
+            <Link
+              href="/sanctuaire/settings/preferences"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-ivoire-500/[0.06] bg-brume-800/25 px-5 py-3 text-ivoire-200 transition-all duration-300 hover:scale-[1.02] hover:border-horizon-400/30 hover:bg-brume-700/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 active:scale-[0.98]"
+            >
+              <Target className="w-4 h-4" />
+              Réglages
             </Link>
           </div>
         </div>
@@ -260,12 +265,12 @@ export default function ProfilePage() {
               Informations Personnelles
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div>
                 <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <User className="w-3 h-3" /> Prénom
                 </label>
-                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
+                <div className="break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {user?.firstName || 'Non renseigné'}
                 </div>
               </div>
@@ -274,7 +279,7 @@ export default function ProfilePage() {
                 <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <User className="w-3 h-3" /> Nom
                 </label>
-                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
+                <div className="break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {user?.lastName || 'Non renseigné'}
                 </div>
               </div>
@@ -283,7 +288,7 @@ export default function ProfilePage() {
                 <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Mail className="w-3 h-3" /> Email
                 </label>
-                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
+                <div className="break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {user?.email || 'Non renseigné'}
                 </div>
               </div>
@@ -292,7 +297,7 @@ export default function ProfilePage() {
                 <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Phone className="w-3 h-3" /> Téléphone
                 </label>
-                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-brume-200">
+                <div className="break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-brume-200">
                   {user?.phone || 'Non renseigné'}
                 </div>
               </div>
@@ -301,7 +306,7 @@ export default function ProfilePage() {
                 <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Calendar className="w-3 h-3" /> Date de naissance
                 </label>
-                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
+                <div className="break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {formatDate(profile?.birthDate)}
                 </div>
               </div>
@@ -310,7 +315,7 @@ export default function ProfilePage() {
                 <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <Clock className="w-3 h-3" /> Heure de naissance
                 </label>
-                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
+                <div className="break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {profile?.birthTime || 'Non renseigné'}
                 </div>
               </div>
@@ -319,7 +324,7 @@ export default function ProfilePage() {
                 <label className="flex items-center gap-2 text-xs text-brume-200 uppercase tracking-wider mb-2 font-medium">
                   <MapPin className="w-3 h-3" /> Lieu de naissance
                 </label>
-                <div className="p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
+                <div className="break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-brume-800/40 border border-ivoire-500/[0.05] text-ivoire-200">
                   {profile?.birthPlace || 'Non renseigné'}
                 </div>
               </div>
@@ -477,7 +482,7 @@ export default function ProfilePage() {
           transition={{ delay: 0.3 }}
         >
           <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <h2 className="text-lg font-playfair italic text-serenity-300 flex items-center gap-2">
                 <Camera className="w-5 h-5" />
                 Photos Uploadées
@@ -487,7 +492,7 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleCancelEdit}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-all text-sm"
+                    className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-all text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
                   >
                     <X className="w-4 h-4" />
                     Annuler
@@ -496,7 +501,7 @@ export default function ProfilePage() {
                     <button
                       onClick={handleSavePhotos}
                       disabled={isSaving}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all disabled:opacity-50 text-sm"
+                      className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all disabled:opacity-50 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
                     >
                       {isSaving ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -510,13 +515,22 @@ export default function ProfilePage() {
               ) : (
                 <button
                   onClick={() => setIsEditingPhotos(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-horizon-400/20 text-ivoire-400 border border-horizon-400/30 hover:bg-horizon-400/30 transition-all text-sm"
+                  className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl bg-horizon-400/20 text-ivoire-400 border border-horizon-400/30 hover:bg-horizon-400/30 transition-all text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
                 >
                   <Edit3 className="w-4 h-4" />
                   Modifier
                 </button>
               )}
             </div>
+
+            {photoError && (
+              <p
+                role="alert"
+                className="mb-4 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm leading-6 text-rose-100"
+              >
+                {photoError}
+              </p>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Photo de visage */}

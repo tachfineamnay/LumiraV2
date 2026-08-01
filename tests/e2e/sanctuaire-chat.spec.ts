@@ -17,18 +17,24 @@ test.describe('Sanctuaire — demander un éclairage', () => {
       page.getByText(
         'Relisez ce passage en le reliant à la décision que vous traversez actuellement.',
       ),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Comprendre ma mission' }).click();
+    await expect(
+      page.getByText(
+        'Relisez ce passage en le reliant à la décision que vous traversez actuellement.',
+      ),
     ).toBeVisible();
     await expect(page.getByText(/réponse automatique/i)).toBeVisible();
 
     await page
       .getByLabel('Ajouter un message')
       .fill('Merci, je vais relier ce passage à mon choix actuel.');
-    await page.getByRole('button', { name: 'Envoyer mon message au Desk' }).click();
+    await page.getByRole('button', { name: 'Envoyer mon message à l’équipe' }).click();
 
     await expect(
       page.getByText('Merci, je vais relier ce passage à mon choix actuel.'),
     ).toBeVisible();
-    await expect(page.getByText(/en attente de réponse du Desk/i)).toBeVisible();
+    await expect(page.getByText(/en attente de réponse de l’équipe/i)).toBeVisible();
   });
 
   test('creates a new request linked to a reading', async ({ page }) => {
@@ -42,7 +48,7 @@ test.describe('Sanctuaire — demander un éclairage', () => {
     await page
       .getByLabel('Votre message')
       .fill('Je souhaite comprendre comment appliquer ce passage dans ma situation actuelle.');
-    await page.getByRole('button', { name: 'Envoyer au Desk' }).click();
+    await page.getByRole('button', { name: 'Envoyer à l’équipe' }).click();
 
     await expect(
       page.getByText('Clarifier un passage important', { exact: true }).first(),

@@ -123,12 +123,15 @@ jobs:
 
       - name: Build web application for Playwright
         run: pnpm --filter web... build
+        env:
+          # A non-secret test-mode prefix enables the checkout UI guard; E2E mocks the API intent/status.
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_playwright
 
-      - name: Install Playwright Chromium and system dependencies
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright Chromium, WebKit and system dependencies
+        run: pnpm exec playwright install --with-deps chromium webkit
 
-      - name: Run Playwright E2E tests
-        run: pnpm exec playwright test
+      - name: Run canonical Playwright E2E matrix
+        run: pnpm test:e2e
         env:
           CI: true
 

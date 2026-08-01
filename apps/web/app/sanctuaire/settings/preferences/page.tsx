@@ -14,6 +14,7 @@ export default function PreferencesPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Load current preference
   useEffect(() => {
@@ -30,16 +31,18 @@ export default function PreferencesPage() {
   }, []);
 
   const handleVoiceChange = async (voice: VoiceOption) => {
+    const previousVoice = selectedVoice;
     setSelectedVoice(voice);
     setSaving(true);
     setSaved(false);
+    setError(null);
     try {
       await sanctuaireApi.patch('/client/voice-preference', { voice });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      // Revert on error
-      setSelectedVoice(selectedVoice);
+      setSelectedVoice(previousVoice);
+      setError('La préférence n’a pas pu être enregistrée. Votre choix précédent est conservé.');
     } finally {
       setSaving(false);
     }
@@ -88,7 +91,7 @@ export default function PreferencesPage() {
                   key={voice.value}
                   onClick={() => handleVoiceChange(voice.value)}
                   disabled={saving}
-                  className={`relative p-5 rounded-xl border text-left transition-all ${
+                  className={`relative min-h-[96px] p-5 rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-serenity-300 ${
                     isSelected
                       ? 'bg-serenity-500/10 border-serenity-400/40 ring-1 ring-serenity-400/20'
                       : 'bg-brume-800/20 border-ivoire-500/[0.08] hover:border-ivoire-500/[0.12] hover:bg-brume-800/30'
@@ -120,8 +123,16 @@ export default function PreferencesPage() {
         )}
 
         {saved && (
-          <p className="text-serenity-400 text-xs mt-4 flex items-center gap-1">
+          <p role="status" className="text-serenity-400 text-xs mt-4 flex items-center gap-1">
             <Check className="w-3 h-3" /> Préférence enregistrée
+          </p>
+        )}
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-100"
+          >
+            {error}
           </p>
         )}
 
