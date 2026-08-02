@@ -3,6 +3,7 @@ import { join } from 'path';
 
 describe('Reading amendment production contracts', () => {
   const service = readFileSync(join(__dirname, './reading-amendment.service.ts'), 'utf8');
+  const facade = readFileSync(join(__dirname, './reading-amendment.facade.ts'), 'utf8');
   const controller = readFileSync(join(__dirname, './reading-amendment.controller.ts'), 'utf8');
   const resolver = readFileSync(
     join(__dirname, '../../services/factory/reading-source.resolver.ts'),
@@ -17,6 +18,14 @@ describe('Reading amendment production contracts', () => {
       __dirname,
       '../../../../../packages/database/prisma/migrations/20260802123000_add_reading_intake_amendments/migration.sql',
     ),
+    'utf8',
+  );
+  const schemaBuilder = readFileSync(
+    join(__dirname, '../../../../../packages/database/prisma/build-runtime-schema.cjs'),
+    'utf8',
+  );
+  const databasePackage = readFileSync(
+    join(__dirname, '../../../../../packages/database/package.json'),
     'utf8',
   );
 
@@ -45,12 +54,37 @@ describe('Reading amendment production contracts', () => {
     expect(migration).not.toContain('DELETE FROM "DeliveryRecord"');
   });
 
+  it('keeps Prisma generation aligned with the SQL extension', () => {
+    expect(schemaBuilder).toContain('model ReadingIntakeAmendment');
+    expect(schemaBuilder).toContain('model ReadingInputSnapshot');
+    expect(schemaBuilder).toContain('inputSnapshotId String?');
+    expect(databasePackage).toContain('db:prepare-schema');
+    expect(databasePackage).toContain('schema.runtime.prisma');
+  });
+
   it('routes generation through the effective snapshot and excludes V1 memories', () => {
     expect(resolver).toContain("source: 'EFFECTIVE_SNAPSHOT'");
     expect(resolver).toContain('readingIntakeEffective');
     expect(memory).toContain('excludedReadingVersionIds');
     expect(memory).toContain('sourceVersionId: { notIn: excludedReadingVersionIds }');
     expect(service).toContain('Conserve les éléments valides de la lecture précédente');
+  });
+
+  it('serializes revision launch before any generation side effect', () => {
+    expect(facade).toContain('revisionClaim');
+    expect(facade).toContain('AMENDMENT_REVISION_ALREADY_CLAIMED');
+    expect(facade.indexOf('revisionClaim')).toBeLessThan(
+      facade.indexOf('this.amendments.createRevisedReading'),
+    );
+    expect(facade).toContain("'lastRevisionFailure'");
+  });
+
+  it('never expires a complement already submitted for expert review', () => {
+    expect(facade).toContain("AND \"status\" = 'SUBMITTED'");
+    expect(facade).toContain("AND \"status\" IN ('REQUESTED', 'DRAFT')");
+    expect(facade).not.toContain(
+      "AND \"status\" IN ('REQUESTED', 'DRAFT', 'SUBMITTED')\n          AND \"expiresAt\"",
+    );
   });
 
   it('preserves the existing version and delivery lineage during revision', () => {
