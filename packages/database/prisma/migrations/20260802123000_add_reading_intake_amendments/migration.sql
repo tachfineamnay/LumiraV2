@@ -114,3 +114,25 @@ CREATE INDEX "ReadingInputSnapshot_userId_createdAt_idx"
   ON "ReadingInputSnapshot"("userId", "createdAt" DESC);
 CREATE INDEX "ReadingVersion_inputSnapshotId_idx"
   ON "ReadingVersion"("inputSnapshotId");
+
+-- A retake can be requested after the original client deadline. Give the
+-- client a complete seven-day window instead of cancelling the reopened task
+-- on the next Sanctuaire read.
+CREATE FUNCTION "extend_reading_amendment_retake_expiry"()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."status" = 'REQUESTED'
+     AND OLD."status" IN ('SUBMITTED', 'REJECTED') THEN
+    NEW."expiresAt" := GREATEST(
+      NEW."expiresAt",
+      CURRENT_TIMESTAMP + INTERVAL '7 days'
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "ReadingIntakeAmendment_extend_retake_expiry"
+BEFORE UPDATE OF "status" ON "ReadingIntakeAmendment"
+FOR EACH ROW
+EXECUTE FUNCTION "extend_reading_amendment_retake_expiry"();
