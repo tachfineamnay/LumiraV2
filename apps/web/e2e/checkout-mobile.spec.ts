@@ -32,6 +32,7 @@ async function mockCheckoutStatus(page: import('@playwright/test').Page) {
   await page.route('**/api/bff/payments/checkout-status', (route) =>
     route.fulfill({
       contentType: 'application/json',
+      headers: { 'cache-control': 'no-store' },
       body: JSON.stringify({
         paymentIntentId: 'pi_test_checkout',
         paymentMayBePending: false,
@@ -125,11 +126,14 @@ test('Pixel 5 reaches the visible payment step with a reduced viewport', async (
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium', 'Pixel 5-only checkout flow');
-  await page.route('**/api/bff/users/profile', (route) => route.fulfill({ status: 401 }));
+  await page.route('**/api/bff/users/profile', (route) =>
+    route.fulfill({ status: 401, headers: { 'cache-control': 'no-store' } }),
+  );
   await mockCheckoutStatus(page);
   await page.route('**/api/bff/payments/checkout-intent', (route) =>
     route.fulfill({
       contentType: 'application/json',
+      headers: { 'cache-control': 'no-store' },
       body: JSON.stringify({
         clientSecret: 'pi_test_checkout_secret_mobile',
         stripeMode: 'test',
@@ -166,13 +170,16 @@ test('checkout creates one intent for a double tap and resumes that same attempt
   test.skip(testInfo.project.name !== 'mobile-chromium', 'Pixel 5-only checkout flow');
   let intentCalls = 0;
 
-  await page.route('**/api/bff/users/profile', (route) => route.fulfill({ status: 401 }));
+  await page.route('**/api/bff/users/profile', (route) =>
+    route.fulfill({ status: 401, headers: { 'cache-control': 'no-store' } }),
+  );
   await mockCheckoutStatus(page);
   await page.route('**/api/bff/payments/checkout-intent', async (route) => {
     intentCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 250));
     await route.fulfill({
       contentType: 'application/json',
+      headers: { 'cache-control': 'no-store' },
       body: JSON.stringify({ clientSecret: 'pi_test_resume_secret_mobile', stripeMode: 'test' }),
     });
   });
@@ -205,11 +212,15 @@ test('payment return retries access finalization without creating another checko
 
   await page.route('**/api/bff/payments/checkout-intent', async (route) => {
     checkoutIntentCalls += 1;
-    await route.fulfill({ status: 500 });
+    await route.fulfill({ status: 500, headers: { 'cache-control': 'no-store' } });
   });
   await page.route('**/api/bff/payments/confirm-checkout', async (route) => {
     confirmCalls += 1;
-    await route.fulfill({ status: 503, body: 'temporary failure' });
+    await route.fulfill({
+      status: 503,
+      headers: { 'cache-control': 'no-store' },
+      body: 'temporary failure',
+    });
   });
 
   await page.addInitScript(() => {
