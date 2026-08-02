@@ -7,6 +7,7 @@ describe('MemoryContextBuilder', () => {
 
   it('orders only fully synchronized local facts returned by Vertex relevance and caps the context', async () => {
     const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
       userMemory: {
         findMany: jest
           .fn()
@@ -28,7 +29,8 @@ describe('MemoryContextBuilder', () => {
     };
     const service = new MemoryContextBuilder(config as never, prisma as never, bank as never);
 
-    const sensitiveQuestion = 'Mon diagnostic médical et mon téléphone 0612345678 doivent-ils changer ?';
+    const sensitiveQuestion =
+      'Mon diagnostic médical et mon téléphone 0612345678 doivent-ils changer ?';
     const result = await service.build('user-a', sensitiveQuestion);
 
     expect(result.indexOf('Repère local B')).toBeLessThan(result.indexOf('Repère local A'));
@@ -64,6 +66,7 @@ describe('MemoryContextBuilder', () => {
     [
       'Vertex',
       () => ({
+        $queryRaw: jest.fn().mockResolvedValue([]),
         userMemory: {
           findMany: jest
             .fn()
