@@ -1,4 +1,5 @@
-import { Sparkles, Clock, Star } from 'lucide-react';
+import { Sparkles, ShieldCheck, Clock, Star } from 'lucide-react';
+import Link from 'next/link';
 import { SUBSCRIPTION } from '../../lib/products';
 
 export function FinalCTA() {
@@ -30,7 +31,7 @@ export function FinalCTA() {
         </p>
 
         <div className="flex flex-col items-center gap-6">
-          <a
+          <Link
             href="/commande"
             className="group relative inline-flex items-center gap-3 px-8 md:px-12 py-4 md:py-6 rounded-2xl text-abyss-900 font-bold text-base md:text-lg overflow-hidden w-full max-w-xs justify-center md:w-auto bg-gold-gradient shadow-gold-glow"
           >
@@ -39,12 +40,17 @@ export function FinalCTA() {
             <span className="relative z-10 tracking-wide">
               Recevoir ma Lecture — {SUBSCRIPTION.price}€
             </span>
-          </a>
+          </Link>
 
           <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 text-white/30 text-xs">
             <span className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-amber-400/50" aria-hidden />
               24 à 48h après scellement
+            </span>
+            <span className="w-1 h-1 rounded-full bg-white/10" />
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400/50" aria-hidden />
+              Satisfait ou remboursé 14 jours
             </span>
           </div>
         </div>
