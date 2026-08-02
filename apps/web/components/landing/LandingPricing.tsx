@@ -4,7 +4,6 @@ import {
   Sparkles,
   Star,
   Check,
-  ShieldCheck,
   FileText,
   Headphones,
   UserCheck,
@@ -62,17 +61,13 @@ export function LandingPricing() {
                   </p>
                 </div>
                 <div className="flex w-full flex-col items-stretch gap-3 md:w-auto md:items-end">
-                  <Link
+                  <a
                     href="/commande"
                     className="group/btn relative inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 text-center text-base font-bold text-abyss-900 transition-all duration-300 hover:from-amber-400 hover:to-amber-500 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)] md:w-auto md:px-8 md:hover:scale-105"
                   >
                     <Sparkles className="w-5 h-5" aria-hidden />
                     Commencer mon voyage — {SUBSCRIPTION.price}€
-                  </Link>
-                  <div className="flex items-center gap-1.5 text-emerald-400/70 text-xs">
-                    <ShieldCheck className="w-3.5 h-3.5" aria-hidden />
-                    <span>{SUBSCRIPTION.guaranteeText}</span>
-                  </div>
+                  </a>
                 </div>
               </div>
             </div>

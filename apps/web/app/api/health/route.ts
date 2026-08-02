@@ -1,20 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  if (process.env.NODE_ENV === 'production') {
-    const required = ['JWT_SECRET', 'API_INTERNAL_URL'] as const;
-    const missing = required.filter((key) => !process.env[key]?.trim());
-    if (missing.length > 0) {
-      return NextResponse.json(
-        { status: 'error', service: 'web', missing },
-        { status: 503 },
-      );
-    }
-  }
-
-  const apiUrl = process.env.API_INTERNAL_URL;
+  const apiUrl = process.env.API_INTERNAL_URL?.trim();
   if (apiUrl) {
     try {
       const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/health`, {

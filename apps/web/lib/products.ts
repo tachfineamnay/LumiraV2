@@ -19,7 +19,6 @@ export interface SubscriptionProduct {
   features: string[];
   featureGroups: FeatureGroup[];
   ctaLabel: string;
-  guaranteeText: string;
   deliveryLabel: string;
   accessLabel: string;
 }
@@ -83,7 +82,6 @@ export const SUBSCRIPTION: SubscriptionProduct = {
     },
   ],
   ctaLabel: `Commencer mon voyage — ${LUMIRA_EARLY_OFFER.priceEuros}€`,
-  guaranteeText: 'Satisfait ou remboursé sous 14 jours',
   deliveryLabel: `Livraison sous ${LUMIRA_EARLY_OFFER.deliveryWindowHours.min} à ${LUMIRA_EARLY_OFFER.deliveryWindowHours.max}h après scellement du dossier`,
   accessLabel: `Accès ${LUMIRA_EARLY_OFFER.accessDurationMonths} mois · Offre early`,
 };

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
+import { ConsentPreferencesButton } from '../analytics/ConsentPreferencesButton';
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -40,20 +41,32 @@ export function Footer() {
               Navigation
             </span>
             <ul className="space-y-4">
-              {navLinks.map((link) => (
-                <li key={link.name}>
-                  <Link
-                    href={link.href}
-                    className="text-white/60 hover:text-white transition-colors text-sm font-medium tracking-wide flex items-center gap-2 group"
-                  >
+              {navLinks.map((link) => {
+                const className =
+                  'text-white/60 hover:text-white transition-colors text-sm font-medium tracking-wide flex items-center gap-2 group';
+                const content = (
+                  <>
                     {link.name}
                     <ArrowUpRight
                       className="w-3 h-3 opacity-0 -translate-y-1 translate-x-1 group-hover:opacity-100 group-hover:translate-y-0 group-hover:translate-x-0 transition-all duration-300"
                       aria-hidden
                     />
-                  </Link>
-                </li>
-              ))}
+                  </>
+                );
+                return (
+                  <li key={link.name}>
+                    {link.href === '/sanctuaire/login' ? (
+                      <a href={link.href} className={className}>
+                        {content}
+                      </a>
+                    ) : (
+                      <Link href={link.href} className={className}>
+                        {content}
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -86,6 +99,7 @@ export function Footer() {
                 {link.name}
               </Link>
             ))}
+            <ConsentPreferencesButton />
           </div>
 
           <div className="flex items-center gap-2">

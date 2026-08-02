@@ -32,7 +32,6 @@ import {
   readCheckoutAttempt,
   saveCheckoutAttempt,
 } from '../../lib/checkoutAttempt';
-import { trackInitiateCheckout, trackPurchase } from '../../lib/pixel';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
@@ -120,7 +119,6 @@ function CheckoutContent() {
       }
     };
     fetchConnectedUser();
-    trackInitiateCheckout(SUBSCRIPTION.price);
   }, []);
 
   const checkoutInitialValues = useMemo(
@@ -228,7 +226,6 @@ function CheckoutContent() {
         });
         await completeCheckoutSession(intentId, secret);
         clearCheckoutAttempt();
-        trackPurchase(SUBSCRIPTION.price, intentId);
         window.location.assign(buildSanctuairePostCheckoutUrl());
       } catch (err) {
         console.error('[Checkout] Post-payment session failed:', err);
@@ -523,7 +520,7 @@ function CheckoutContent() {
                       className="text-[11px] text-center"
                       style={{ color: 'rgba(160,200,255,0.35)' }}
                     >
-                      Paiement unique · {SUBSCRIPTION.accessLabel} · Satisfait ou remboursé 14 jours
+                      Paiement unique · {SUBSCRIPTION.accessLabel}
                     </p>
                   </div>
                 </div>

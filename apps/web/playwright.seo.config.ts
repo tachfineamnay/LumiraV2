@@ -15,12 +15,13 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'node .next/standalone/apps/web/server.js',
+    command: 'node ../../scripts/start-e2e-web.cjs',
     url: `${baseURL}/api/version`,
     reuseExistingServer: false,
     timeout: 180_000,
     env: {
       PORT: String(port),
+      PLAYWRIGHT_WEB_PORT: String(port),
       HOSTNAME: '127.0.0.1',
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_seo_contract',
     },

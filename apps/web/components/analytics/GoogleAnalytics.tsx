@@ -2,11 +2,10 @@
 
 import Script from 'next/script';
 
-export const GA_TRACKING_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-NTCVR1YYN8';
+const GA_TRACKING_ID = process.env.NEXT_PUBLIC_GA_ID;
 
 /**
- * Loads Google Analytics (gtag.js).
- * afterInteractive strategy loads the script after the page becomes interactive.
+ * The parent consent manager renders this only after explicit audience consent.
  */
 export function GoogleAnalytics() {
   if (!GA_TRACKING_ID) return null;
@@ -14,6 +13,7 @@ export function GoogleAnalytics() {
   return (
     <>
       <Script
+        id="google-analytics-loader"
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_TRACKING_ID}`}
         strategy="afterInteractive"
       />
@@ -22,7 +22,7 @@ export function GoogleAnalytics() {
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
           gtag('js', new Date());
-
+          gtag('consent', 'default', { analytics_storage: 'granted' });
           gtag('config', '${GA_TRACKING_ID}');
         `}
       </Script>

@@ -26,12 +26,9 @@ RUN pnpm install --frozen-lockfile --production=false
 # Copy source code
 COPY --from=pruner /app/out/full/ .
 
-# NEXT_PUBLIC_* values are compiled into browser bundles; API_INTERNAL_URL is
-# used by server-side routes and rewrites inside the Docker network.
-# Default API URL unblocks Coolify when the var is missing or passed empty
-# as a build-arg (empty overrides a plain ARG default). Override via Coolify
-# "Build Variable" when targeting a non-production API.
-ARG NEXT_PUBLIC_API_URL=https://api.oraclelumira.com
+# NEXT_PUBLIC_* values are compiled into browser bundles. Coolify must expose
+# them as build variables; only the analytics IDs are deliberately optional.
+ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_META_PIXEL_ID
 ARG NEXT_PUBLIC_GA_ID
@@ -39,11 +36,11 @@ ARG API_INTERNAL_URL=http://api:3001
 ARG SKIP_STRIPE_VALIDATION=false
 ARG APP_REVISION=unknown
 
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.oraclelumira.com}
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_META_PIXEL_ID=$NEXT_PUBLIC_META_PIXEL_ID
 ENV NEXT_PUBLIC_GA_ID=$NEXT_PUBLIC_GA_ID
-ENV API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:3001}
+ENV API_INTERNAL_URL=$API_INTERNAL_URL
 ENV SKIP_STRIPE_VALIDATION=$SKIP_STRIPE_VALIDATION
 ENV APP_REVISION=$APP_REVISION
 
@@ -64,9 +61,9 @@ RUN if [ -z "$NEXT_PUBLIC_API_URL" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KE
 # The public production API creates live PaymentIntents. Refuse a browser
 # bundle with a test publishable key instead of shipping a permanently loading
 # Payment Element.
-# Bypassed if SKIP_STRIPE_VALIDATION is true, or if using the known expert Desk test Stripe key.
+# SKIP_STRIPE_VALIDATION is exclusively for local validation images. Coolify's
+# production build must never combine the production API with a test key.
 RUN if [ "$SKIP_STRIPE_VALIDATION" != "true" ] && \
-       [ "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" != "pk_test_51Ms0j7HY5XvhVZuDjKcQKRP6PVzPmtN3nmZcPJK4NEK9c5do3kmDq1L180Dwx1rd3EwqdZ2rQCf3eRuqPI6MNhwY00K5JGq3RL" ] && \
        [ "$NEXT_PUBLIC_API_URL" = "https://api.oraclelumira.com" ] && \
        ! echo "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" | grep -q '^pk_live_'; then \
       echo "ERROR: production API requires a NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY starting with pk_live_."; \
@@ -84,10 +81,9 @@ RUN mkdir -p /app/apps/web/public
 RUN pnpm turbo run build --filter=web...
 
 # Verify build outputs exist
-RUN ls -la /app/apps/web/.next/ && \
-    ls -la /app/apps/web/.next/standalone/ || echo "Standalone directory not found" && \
-    ls -la /app/apps/web/.next/static/ || echo "Static directory not found" && \
-    ls -la /app/apps/web/public/ || echo "Public directory not found"
+RUN test -d /app/apps/web/.next/standalone && \
+    test -d /app/apps/web/.next/static && \
+    test -d /app/apps/web/public
 
 # 3. Production Runner
 FROM base AS runner

@@ -45,6 +45,19 @@ const questions = [
 ] as const;
 
 export default function FaqPage() {
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: questions.map(({ question, answer }) => ({
+      '@type': 'Question',
+      name: question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: answer,
+      },
+    })),
+  };
+
   return (
     <main className="min-h-screen bg-cosmic-void text-white starfield">
       <JsonLd
@@ -72,6 +85,7 @@ export default function FaqPage() {
           },
         }}
       />
+      <JsonLd data={faqSchema} />
       <Header />
       <article className="relative z-10 mx-auto max-w-3xl px-6 pb-24 pt-32 md:pt-40">
         <Breadcrumbs current="Questions fréquentes" />

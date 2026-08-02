@@ -11,7 +11,7 @@ export default function ConfidentialitePage() {
   return (
     <LegalPage
       title="Politique de confidentialité"
-      updatedAt="21 juillet 2026"
+      updatedAt="2 août 2026"
       sections={[
         {
           title: 'Données collectées',
@@ -50,7 +50,8 @@ export default function ConfidentialitePage() {
         {
           title: 'Cookies',
           paragraphs: [
-            "Le site utilise uniquement des cookies strictement nécessaires au fonctionnement (session sécurisée de votre Sanctuaire). Aucun cookie publicitaire n'est déposé sans votre consentement.",
+            'Le site utilise des cookies strictement nécessaires au fonctionnement, notamment pour votre session sécurisée dans le Sanctuaire. Votre choix de consentement est mémorisé localement dans votre navigateur.',
+            'Google Analytics n’est chargé qu’après votre accord pour la mesure d’audience. Le Meta Pixel n’est chargé qu’après votre accord marketing. Aucun de ces scripts n’est chargé sur le Desk, le Sanctuaire, la commande ou les pages de paiement. Vous pouvez modifier votre choix depuis le footer.',
           ],
         },
       ]}
