@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import sanctuaireApi from '../../../lib/sanctuaireApi';
+import { useStableVisualViewportHeight } from '../../../hooks/useStableVisualViewportHeight';
 
 type RequestStatus =
   | 'NEW'
@@ -82,9 +83,19 @@ export default function GuidancePage() {
   const [category, setCategory] = useState<RequestCategory>('READING_CLARIFICATION');
   const [relatedOrderId, setRelatedOrderId] = useState('');
   const conversationEndRef = useRef<HTMLDivElement>(null);
+  const replyComposerRef = useRef<HTMLDivElement>(null);
+  const replyInputRef = useRef<HTMLTextAreaElement>(null);
   const composerTriggerRef = useRef<HTMLElement | null>(null);
   const composerSubjectRef = useRef<HTMLInputElement>(null);
   const selectedRequestTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const visualViewportHeight = useStableVisualViewportHeight({ maxWidth: 1024, minHeight: 280 });
+
+  const conversationPanelStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!selected || !visualViewportHeight) return undefined;
+    return {
+      maxHeight: `calc(${visualViewportHeight}px - var(--sanctuaire-header-h) - var(--sanctuaire-bottom-nav-h) - 1.5rem)`,
+    };
+  }, [selected, visualViewportHeight]);
 
   const openComposer = useCallback((trigger: HTMLElement) => {
     composerTriggerRef.current = trigger;
@@ -208,6 +219,17 @@ export default function GuidancePage() {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [selected]);
+
+  useEffect(() => {
+    if (!selected || !visualViewportHeight || document.activeElement !== replyInputRef.current) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      replyComposerRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' });
+      conversationEndRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selected, visualViewportHeight]);
 
   useEffect(() => {
     if (!showComposer) return;
@@ -346,7 +368,7 @@ export default function GuidancePage() {
               type="button"
               onClick={() => void createRequest()}
               disabled={subject.trim().length < 3 || content.trim().length < 10 || isCreating}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-horizon-400 px-5 py-2 text-sm font-semibold text-abyss-900 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-horizon-400 px-5 py-2 text-sm font-semibold text-abyss-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isCreating ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -375,7 +397,7 @@ export default function GuidancePage() {
               <MessageCircle className="mx-auto h-7 w-7 text-brume-400" />
               <p className="mt-3 text-sm text-brume-300">Aucune demande pour le moment.</p>
               <button
-              type="button"
+                type="button"
                 onClick={(event) => openComposer(event.currentTarget)}
                 className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 text-sm text-ivoire-200 hover:bg-brume-800/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
               >
@@ -422,7 +444,8 @@ export default function GuidancePage() {
         </aside>
 
         <section
-          className={`min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-ivoire-500/[0.06] glass-aube lg:static lg:z-auto lg:min-h-[500px] ${
+          style={conversationPanelStyle}
+          className={`min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-ivoire-500/[0.06] glass-aube lg:static lg:z-auto lg:min-h-[500px] lg:max-h-none ${
             selected
               ? 'fixed inset-x-3 top-[calc(var(--sanctuaire-header-h)+0.75rem)] bottom-[calc(var(--sanctuaire-bottom-nav-h)+0.75rem)] z-30 flex lg:inset-auto'
               : 'hidden'
@@ -520,7 +543,7 @@ export default function GuidancePage() {
                 <div ref={conversationEndRef} />
               </div>
 
-              <div className="border-t border-ivoire-500/[0.05] p-3 sm:p-4">
+              <div ref={replyComposerRef} className="shrink-0 border-t border-ivoire-500/[0.05] p-3 sm:p-4">
                 {selected.status === 'ARCHIVED' ? (
                   <p className="rounded-xl bg-brume-800/22 p-3 text-center text-xs text-brume-300">
                     Cette demande est archivée.
@@ -531,9 +554,15 @@ export default function GuidancePage() {
                       Ajouter un message
                     </label>
                     <textarea
+                      ref={replyInputRef}
                       id="guidance-reply"
                       value={reply}
                       onChange={(event) => setReply(event.target.value)}
+                      onFocus={() => {
+                        window.requestAnimationFrame(() => {
+                          replyComposerRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' });
+                        });
+                      }}
                       rows={2}
                       maxLength={5000}
                       placeholder={
@@ -548,7 +577,7 @@ export default function GuidancePage() {
                       onClick={() => void sendReply()}
                       disabled={!reply.trim() || isSending}
                       aria-label="Envoyer mon message à l’équipe"
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-horizon-400 text-abyss-900 hover:bg-horizon-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-horizon-400 text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isSending ? (
                         <Loader2 className="h-5 w-5 animate-spin" />
