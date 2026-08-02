@@ -1,4 +1,5 @@
 import { ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 export function HowItWorks() {
   return (
@@ -23,7 +24,7 @@ export function HowItWorks() {
               Vous n&apos;avez pas besoin de connaître l&apos;astrologie. Vous n&apos;avez pas
               besoin de croire quoi que ce soit. Il vous suffit d&apos;être curieux de vous-même.
             </p>
-            <a
+            <Link
               href="/commande"
               className="inline-flex items-center gap-2 mt-6 text-amber-400/70 hover:text-amber-400 text-xs uppercase tracking-widest transition-colors group"
             >
@@ -32,7 +33,7 @@ export function HowItWorks() {
                 className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform"
                 aria-hidden
               />
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -109,6 +110,7 @@ export function HowItWorks() {
           <span>🔒 Paiement sécurisé Stripe</span>
           <span>⚡ Livraison annoncée sous 24 à 48h après scellement</span>
           <span>💎 Expert humain inclus</span>
+          <span>↩️ Satisfait ou remboursé 14 jours</span>
         </div>
       </div>
     </section>
