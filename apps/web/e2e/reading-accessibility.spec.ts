@@ -110,13 +110,14 @@ test('exposes PDF status, page image and native alternatives to assistive techno
   const viewer = page.getByRole('region', { name: 'Lecteur PDF — Lecture accessible' });
   await expect(viewer).toBeVisible({ timeout: 60_000 });
   const pageImage = viewer.getByRole('img', { name: 'Page 1 sur 1 de Lecture accessible' });
+  const pageStatus = viewer.getByTestId('reading-pdf-page-count');
   await expect(pageImage).toBeVisible({ timeout: 20_000 });
   await expect(pageImage).toHaveAttribute('aria-describedby', /.+/);
-  await expect(viewer.getByRole('status')).toContainText('Page 1 sur 1');
+  await expect(pageStatus).toContainText('Page 1 sur 1');
   await expect(viewer.getByRole('button', { name: 'Télécharger' })).toBeVisible();
   await expect(viewer.getByRole('button', { name: 'Ouvrir dans un nouvel onglet' })).toBeVisible();
 
   await viewer.getByRole('button', { name: 'Zoom avant' }).click();
-  await expect(viewer.getByRole('status')).toContainText('zoom 115 %');
+  await expect(pageStatus).toContainText('zoom 115 %');
   await expectNoHorizontalOverflow(page);
 });
