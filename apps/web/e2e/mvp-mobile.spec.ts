@@ -185,6 +185,7 @@ async function installMvpMocks(page: Page): Promise<AuthController> {
       await route.fulfill({
         status: 200,
         contentType: 'application/pdf',
+        headers: { 'cache-control': 'no-store' },
         body: PDF_BYTES,
       });
       return;

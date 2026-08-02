@@ -70,7 +70,7 @@ test('landing stays usable at 320 × 568 in Chromium', async ({ page }, testInfo
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(600);
 
   await scrollIntoView(page.locator('#niveaux'));
-  await expect(page.getByText('17€', { exact: true })).toBeVisible();
+  await expect(page.locator('#niveaux').getByText('17€', { exact: true })).toBeVisible();
   await expect(page.getByText('paiement unique', { exact: true })).toBeVisible();
   await expectInViewport(page.locator('#niveaux a[href="/commande"]'));
   await expectNoHorizontalOverflow(page);
@@ -203,6 +203,41 @@ test('checkout creates one intent for a double tap and resumes that same attempt
   await expectNoHorizontalOverflow(page);
 });
 
+test('late Sanctuaire prefill preserves an email already typed by the customer', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Pixel 5-only checkout form regression');
+  let releaseProfile: (() => void) | undefined;
+  const profilePending = new Promise<void>((resolve) => {
+    releaseProfile = resolve;
+  });
+
+  await page.route('**/api/bff/users/profile', async (route) => {
+    await profilePending;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'cache-control': 'no-store' },
+      body: JSON.stringify({
+        email: 'ariane@lumira.test',
+        firstName: 'Ariane',
+        lastName: 'Lumira',
+        phone: '+33612345678',
+      }),
+    });
+  });
+  await mockCheckoutStatus(page);
+
+  await page.goto('/commande');
+  await page.getByLabel('Email').fill('moi@exemple.test');
+  releaseProfile?.();
+
+  await expect(page.getByLabel('Email')).toHaveValue('moi@exemple.test');
+  await expect(page.getByLabel('Prénom')).toHaveValue('Ariane');
+  await expect(page.getByLabel('Nom', { exact: true })).toHaveValue('Lumira');
+  await expect(page.getByLabel('Téléphone')).toHaveValue('+33612345678');
+});
+
 test('payment return retries access finalization without creating another checkout intent', async ({
   page,
 }, testInfo) => {
@@ -253,7 +288,7 @@ test('landing stays usable in mobile WebKit', async ({ page }, testInfo) => {
   await expect(page.getByRole('dialog', { name: 'Navigation principale' })).toBeVisible();
   await page.getByRole('button', { name: 'Fermer le menu' }).click({ force: true });
   await scrollIntoView(page.locator('#niveaux'));
-  await expect(page.getByText('17€', { exact: true })).toBeVisible();
+  await expect(page.locator('#niveaux').getByText('17€', { exact: true })).toBeVisible();
   await expectInViewport(page.locator('#niveaux a[href="/commande"]'));
   await expectNoHorizontalOverflow(page);
 });
