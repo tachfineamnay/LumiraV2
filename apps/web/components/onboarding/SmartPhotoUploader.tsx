@@ -182,14 +182,17 @@ export const SmartPhotoUploader = ({
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
-  const closeWebcam = useCallback((restoreFocus = true) => {
-    stopWebcam();
-    setIsCameraOpen(false);
-    setCameraError(null);
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => previousFocusRef.current?.focus());
-    }
-  }, [stopWebcam]);
+  const closeWebcam = useCallback(
+    (restoreFocus = true) => {
+      stopWebcam();
+      setIsCameraOpen(false);
+      setCameraError(null);
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => previousFocusRef.current?.focus());
+      }
+    },
+    [stopWebcam],
+  );
 
   useEffect(() => stopWebcam, [stopWebcam]);
 
@@ -231,7 +234,8 @@ export const SmartPhotoUploader = ({
   }, [closeWebcam, isCameraOpen]);
 
   const openCamera = useCallback(async () => {
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (prefersNativeCameraInput()) {
       cameraInputRef.current?.click();
       return;
@@ -499,7 +503,7 @@ export const SmartPhotoUploader = ({
               </h4>
               <button
                 type="button"
-                onClick={closeWebcam}
+                onClick={() => closeWebcam()}
                 aria-label="Fermer la caméra"
                 className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.1] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
               >
@@ -558,7 +562,7 @@ export const SmartPhotoUploader = ({
               )}
               <button
                 type="button"
-                onClick={closeWebcam}
+                onClick={() => closeWebcam()}
                 className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-4 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
               >
                 Annuler
