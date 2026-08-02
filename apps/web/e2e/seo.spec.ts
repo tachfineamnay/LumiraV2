@@ -121,7 +121,9 @@ test.describe('SEO production search contract', () => {
     }
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('h1')).toContainText('Lecture personnalisée révisée par un expert');
+    expect((await page.locator('h1').textContent())?.replace(/\s+/g, ' ').trim()).toBe(
+      'Oracle Lumira',
+    );
     await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
       'content',
       'summary_large_image',
