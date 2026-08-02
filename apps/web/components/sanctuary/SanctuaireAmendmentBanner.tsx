@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock3,
+  Images,
   ImagePlus,
   Loader2,
   RefreshCw,
@@ -32,7 +33,7 @@ interface ReadingAmendment {
   updatedAt: string;
 }
 
-const MAX_PHOTO_BYTES = 1_200_000;
+const MAX_PHOTO_BYTES = Math.floor(1.2 * 1024 * 1024);
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 export function SanctuaireAmendmentBanner() {
@@ -45,7 +46,8 @@ export function SanctuaireAmendmentBanner() {
   const [palmRole, setPalmRole] = useState<PalmRole>('PALM_UNKNOWN');
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -67,7 +69,11 @@ export function SanctuaireAmendmentBanner() {
   const current = useMemo(
     () =>
       items.find((item) => ['REQUESTED', 'DRAFT', 'SUBMITTED'].includes(item.status)) ??
-      items.find((item) => item.status === 'APPROVED' && Date.now() - new Date(item.updatedAt).getTime() < 7 * 86400000) ??
+      items.find(
+        (item) =>
+          item.status === 'APPROVED' &&
+          Date.now() - new Date(item.updatedAt).getTime() < 7 * 86_400_000,
+      ) ??
       null,
     [items],
   );
@@ -257,39 +263,62 @@ export function SanctuaireAmendmentBanner() {
           </div>
 
           <input
-            ref={fileInputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             capture="environment"
             onChange={choosePhoto}
             className="sr-only"
           />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={choosePhoto}
+            className="sr-only"
+          />
 
           <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_1fr]">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="relative flex aspect-[4/5] min-h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-horizon-400/30 bg-brume-800/20"
-            >
-              {preview ? (
-                <img src={preview} alt="Aperçu de votre paume" className="h-full w-full object-cover" />
-              ) : storageRef ? (
-                <span className="flex flex-col items-center gap-2 px-4 text-center text-sm text-emerald-200">
-                  <CheckCircle2 className="h-7 w-7" /> Photo privée enregistrée
-                </span>
-              ) : (
-                <span className="flex flex-col items-center gap-3 px-4 text-center text-sm text-brume-200">
-                  <Camera className="h-8 w-8 text-horizon-200" />
-                  Prendre une photo ou choisir dans la galerie
-                </span>
-              )}
-            </button>
+            <div className="space-y-2">
+              <div className="relative flex aspect-[4/5] min-h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-horizon-400/30 bg-brume-800/20">
+                {preview ? (
+                  <img src={preview} alt="Aperçu de votre paume" className="h-full w-full object-cover" />
+                ) : storageRef ? (
+                  <span className="flex flex-col items-center gap-2 px-4 text-center text-sm text-emerald-200">
+                    <CheckCircle2 className="h-7 w-7" /> Photo privée enregistrée
+                  </span>
+                ) : (
+                  <span className="flex flex-col items-center gap-3 px-4 text-center text-sm text-brume-200">
+                    <ImagePlus className="h-8 w-8 text-horizon-200" />
+                    Ajoutez une photo nette de toute la paume
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-horizon-400/25 px-3 py-2 text-xs font-medium text-horizon-100 disabled:opacity-50"
+                >
+                  <Camera className="h-4 w-4" /> Appareil photo
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-3 py-2 text-xs font-medium text-ivoire-200 disabled:opacity-50"
+                >
+                  <Images className="h-4 w-4" /> Galerie
+                </button>
+              </div>
+            </div>
 
             <div className="flex flex-col justify-between gap-4">
               <div className="space-y-2 text-xs leading-5 text-brume-300">
                 <p>Formats : JPEG, PNG ou WebP.</p>
                 <p>Taille maximale : 1,2 Mo.</p>
-                <p>La photo reste privée et liée à votre commande.</p>
+                <p>La photo reste privée et liée à votre compte.</p>
                 <p>Échéance : {new Date(current.expiresAt).toLocaleDateString('fr-FR')}.</p>
               </div>
 
