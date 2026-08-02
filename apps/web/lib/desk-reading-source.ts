@@ -1,6 +1,7 @@
 import type { Order, UserProfile } from '@/components/desk-v2/types';
 
 export type DeskReadingSourceKind =
+  | 'EFFECTIVE_SNAPSHOT'
   | 'SEALED_INTAKE'
   | 'LEGACY_PROFILE'
   | 'WAITING_CLIENT'
@@ -12,6 +13,8 @@ export type DeskReadingSource = {
   readyForProduction: boolean;
   sealedAt: string | null;
   contentHash: string | null;
+  inputSnapshotId?: string | null;
+  revision?: number | null;
   reason: string | null;
   profile: UserProfile | undefined;
 };
@@ -91,13 +94,40 @@ function isUsableSnapshot(profile: UserProfile | undefined): boolean {
 }
 
 /**
- * Resolves the material shown to an expert. A valid sealed intake is immutable
- * order data, while legacy orders keep their historical profile fallback.
+ * Resolves the material shown to an expert. An approved effective snapshot is
+ * selected first, while the original sealed intake remains immutable and
+ * available as historical evidence.
  */
 export function resolveDeskReadingSource(
   order: Pick<Order, 'clientInputs' | 'intakeRequired' | 'readingIntake' | 'user'>,
 ): DeskReadingSource {
   const required = order.intakeRequired === true;
+  const clientInputs = asRecord(order.clientInputs);
+  const effective = asRecord(clientInputs.readingIntakeEffective);
+  const effectiveSnapshotId = nonEmptyString(effective.snapshotId);
+  const effectiveHash = nonEmptyString(effective.contentHash);
+  const effectiveProfile = snapshotProfile(
+    effective.profile,
+    order.user.profile?.id || 'effective-intake',
+  );
+  if (effectiveSnapshotId && effectiveHash && isUsableSnapshot(effectiveProfile)) {
+    return {
+      source: 'EFFECTIVE_SNAPSHOT',
+      intakeRequired: required,
+      readyForProduction: true,
+      sealedAt:
+        nonEmptyString(effective.effectiveAt) || nonEmptyString(effective.sealedAt) || null,
+      contentHash: effectiveHash,
+      inputSnapshotId: effectiveSnapshotId,
+      revision:
+        typeof effective.revision === 'number' && Number.isInteger(effective.revision)
+          ? effective.revision
+          : null,
+      reason: null,
+      profile: effectiveProfile,
+    };
+  }
+
   const relational = asRecord(order.readingIntake);
   const relationalStatus = nonEmptyString(relational.status);
   const relationalSealedAt = nonEmptyString(relational.sealedAt) || null;
@@ -140,8 +170,7 @@ export function resolveDeskReadingSource(
     };
   }
 
-  // Historical snapshots live under clientInputs.readingIntake.profile.
-  const legacyIntake = asRecord(asRecord(order.clientInputs).readingIntake);
+  const legacyIntake = asRecord(clientInputs.readingIntake);
   const legacySealedAt = nonEmptyString(legacyIntake.sealedAt) || null;
   const legacyProfile = snapshotProfile(
     legacyIntake.profile ?? legacyIntake.data,

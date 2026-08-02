@@ -8,7 +8,9 @@ import { PrivatePhotoLightbox } from './PrivatePhotoLightbox';
 export type PrivatePhotoKind = 'face' | 'palm';
 
 interface ExpertPrivatePhotoProps {
-  clientId: string;
+  clientId?: string;
+  orderId?: string;
+  amendmentId?: string;
   kind: PrivatePhotoKind;
   alt: string;
   className?: string;
@@ -20,6 +22,8 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 
 export function ExpertPrivatePhoto({
   clientId,
+  orderId,
+  amendmentId,
   kind,
   alt,
   className = '',
@@ -47,8 +51,24 @@ export function ExpertPrivatePhoto({
     revokeCurrent();
     setObjectUrl(null);
 
+    const endpoint =
+      orderId && amendmentId
+        ? `/expert/orders/${orderId}/amendments/${amendmentId}/photo`
+        : orderId
+          ? `/expert/orders/${orderId}/photos/${kind}`
+          : clientId
+            ? `/expert/clients/${clientId}/photos/${kind}`
+            : null;
+    if (!endpoint) {
+      setState('missing');
+      return () => {
+        cancelled = true;
+        revokeCurrent();
+      };
+    }
+
     expertApi
-      .get(`/expert/clients/${clientId}/photos/${kind}`, { responseType: 'blob' })
+      .get(endpoint, { responseType: 'blob' })
       .then((response) => {
         if (cancelled || requestId !== requestIdRef.current) return;
         const blob = response.data as Blob;
@@ -72,7 +92,7 @@ export function ExpertPrivatePhoto({
       cancelled = true;
       revokeCurrent();
     };
-  }, [clientId, kind, retryCount, revokeCurrent]);
+  }, [amendmentId, clientId, kind, orderId, retryCount, revokeCurrent]);
 
   const retry = () => setRetryCount((value) => value + 1);
 

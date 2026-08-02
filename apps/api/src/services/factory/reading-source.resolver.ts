@@ -2,11 +2,14 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { UserProfile as PrismaUserProfile } from '@prisma/client';
 import { UserProfile as VertexUserProfile } from './VertexOracle';
 
-export type ReadingSourceKind = 'SEALED_INTAKE' | 'LEGACY_PROFILE';
+export type ReadingSourceKind =
+  | 'EFFECTIVE_SNAPSHOT'
+  | 'SEALED_INTAKE'
+  | 'LEGACY_PROFILE';
 
 export type ReadingLifeAreas = Record<string, { state: string; note?: string }>;
 
-/** Normalized reading fields shared by sealed intake and legacy profile. */
+/** Normalized reading fields shared by effective snapshot, sealed intake and legacy profile. */
 export interface ReadingSourceProfile {
   usageName: string | null;
   birthDate: string;
@@ -36,6 +39,9 @@ export interface ResolvedReadingSource {
   source: ReadingSourceKind;
   sealedAt?: string;
   contentHash?: string;
+  inputSnapshotId?: string;
+  revision?: number;
+  amendmentIds?: string[];
   profile: ReadingSourceProfile;
 }
 
@@ -83,52 +89,52 @@ export class ReadingSourceResolver {
 
   resolve(order: OrderForReadingSource): ResolvedReadingSource {
     const clientInputs = this.asRecord(order.clientInputs);
+    const effective = this.asRecord(clientInputs.readingIntakeEffective);
+    const effectiveSnapshotId = this.nonEmptyString(effective.snapshotId);
+
+    if (effectiveSnapshotId) {
+      const contentHash = this.nonEmptyString(effective.contentHash);
+      const profileRaw = effective.profile;
+      if (!contentHash || !this.isValidSealedProfile(profileRaw)) {
+        this.logInvalid(order, 'EFFECTIVE_SNAPSHOT', Boolean(contentHash), profileRaw);
+        throw new BadRequestException(
+          'Le snapshot effectif de cette commande est incomplet ou invalide pour la génération',
+        );
+      }
+      const profile = this.normalizeSealedProfile(profileRaw as Record<string, unknown>);
+      const effectiveAt =
+        this.nonEmptyString(effective.effectiveAt) ?? this.nonEmptyString(effective.sealedAt) ?? undefined;
+      const revision =
+        typeof effective.revision === 'number' && Number.isInteger(effective.revision)
+          ? effective.revision
+          : undefined;
+      const amendmentIds = this.stringArray(effective.amendmentIds);
+      this.logResolved(order, 'EFFECTIVE_SNAPSHOT', contentHash, effectiveSnapshotId);
+      return {
+        source: 'EFFECTIVE_SNAPSHOT',
+        sealedAt: effectiveAt,
+        contentHash,
+        inputSnapshotId: effectiveSnapshotId,
+        revision,
+        amendmentIds,
+        profile,
+      };
+    }
+
     const readingIntake = this.asRecord(clientInputs.readingIntake);
     const sealedAt = this.nonEmptyString(readingIntake.sealedAt);
-
     if (sealedAt) {
       const contentHash = this.nonEmptyString(readingIntake.contentHash);
       const profileRaw = readingIntake.profile;
-
       if (!contentHash || !this.isValidSealedProfile(profileRaw)) {
-        this.logger.warn(
-          JSON.stringify({
-            event: 'Invalid sealed reading intake',
-            orderId: order.id,
-            orderNumber: order.orderNumber ?? null,
-            hasContentHash: Boolean(contentHash),
-            hasValidProfile: this.isValidSealedProfile(profileRaw),
-          }),
-        );
+        this.logInvalid(order, 'SEALED_INTAKE', Boolean(contentHash), profileRaw);
         throw new BadRequestException(
           'Le dossier scellé de cette commande est incomplet ou invalide pour la génération',
         );
       }
-
-      const profile = this.normalizeSealedProfile(profileRaw);
-      this.logger.log(
-        JSON.stringify({
-          event: 'Reading source resolved',
-          orderId: order.id,
-          orderNumber: order.orderNumber ?? null,
-          source: 'SEALED_INTAKE',
-        }),
-      );
-      this.logger.log('Reading source: SEALED_INTAKE');
-      this.logger.log(
-        JSON.stringify({
-          event: 'Reading intake hash loaded',
-          orderId: order.id,
-          contentHash,
-        }),
-      );
-
-      return {
-        source: 'SEALED_INTAKE',
-        sealedAt,
-        contentHash,
-        profile,
-      };
+      const profile = this.normalizeSealedProfile(profileRaw as Record<string, unknown>);
+      this.logResolved(order, 'SEALED_INTAKE', contentHash);
+      return { source: 'SEALED_INTAKE', sealedAt, contentHash, profile };
     }
 
     const legacyProfile = this.fromLegacyProfile(order.user.profile);
@@ -141,11 +147,7 @@ export class ReadingSourceResolver {
       }),
     );
     this.logger.log('Reading source: LEGACY_PROFILE');
-
-    return {
-      source: 'LEGACY_PROFILE',
-      profile: legacyProfile,
-    };
+    return { source: 'LEGACY_PROFILE', profile: legacyProfile };
   }
 
   toVertexUserProfile(
@@ -182,12 +184,47 @@ export class ReadingSourceResolver {
     };
   }
 
+  private logResolved(
+    order: OrderForReadingSource,
+    source: Exclude<ReadingSourceKind, 'LEGACY_PROFILE'>,
+    contentHash: string,
+    snapshotId?: string,
+  ): void {
+    this.logger.log(
+      JSON.stringify({
+        event: 'Reading source resolved',
+        orderId: order.id,
+        orderNumber: order.orderNumber ?? null,
+        source,
+        contentHash,
+        inputSnapshotId: snapshotId ?? null,
+      }),
+    );
+    this.logger.log(`Reading source: ${source}`);
+  }
+
+  private logInvalid(
+    order: OrderForReadingSource,
+    source: Exclude<ReadingSourceKind, 'LEGACY_PROFILE'>,
+    hasContentHash: boolean,
+    profileRaw: unknown,
+  ): void {
+    this.logger.warn(
+      JSON.stringify({
+        event: 'Invalid reading source',
+        orderId: order.id,
+        orderNumber: order.orderNumber ?? null,
+        source,
+        hasContentHash,
+        hasValidProfile: this.isValidSealedProfile(profileRaw),
+      }),
+    );
+  }
+
   private isValidSealedProfile(value: unknown): value is Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const profile = value as Record<string, unknown>;
-    const birthDate = this.nonEmptyString(profile.birthDate);
-    const birthPlace = this.nonEmptyString(profile.birthPlace);
-    return Boolean(birthDate && birthPlace);
+    return Boolean(this.nonEmptyString(profile.birthDate) && this.nonEmptyString(profile.birthPlace));
   }
 
   private normalizeSealedProfile(raw: Record<string, unknown>): ReadingSourceProfile {
@@ -257,10 +294,15 @@ export class ReadingSourceResolver {
   }
 
   private nullableString(value: unknown): string | null {
-    if (value === null || value === undefined) return null;
-    if (typeof value !== 'string') return null;
+    if (value === null || value === undefined || typeof value !== 'string') return null;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private stringArray(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+      : [];
   }
 
   private palmRole(value: unknown): 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN' {

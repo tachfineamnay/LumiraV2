@@ -7,6 +7,7 @@ import { ChevronDown, LogOut, ShieldCheck, Star } from 'lucide-react';
 import { SanctuaireGuard } from '../../components/guards/SanctuaireGuard';
 import { MobileBottomNav } from '../../components/sanctuary/MobileBottomNav';
 import { SanctuaireSidebar } from '../../components/sanctuary/SanctuaireSidebar';
+import { SanctuaireAmendmentBanner } from '../../components/sanctuary/SanctuaireAmendmentBanner';
 import { SanctuaireAuthProvider, useSanctuaireAuth } from '../../context/SanctuaireAuthContext';
 import { SanctuaireProvider } from '../../context/SanctuaireContext';
 import { PROFILE_MENU_NAV } from '@/lib/sanctuaireNav';
@@ -205,6 +206,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
             )}
           </header>
           <main className="sanctuaire-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-auto">
+            <SanctuaireAmendmentBanner />
             {children}
           </main>
         </div>

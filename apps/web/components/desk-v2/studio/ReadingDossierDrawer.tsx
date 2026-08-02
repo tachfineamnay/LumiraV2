@@ -13,6 +13,7 @@ import {
 import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 import { resolveDeskReadingSource } from '@/lib/desk-reading-source';
 import type { Order } from '../types';
+import { ReadingAmendmentPanel } from './ReadingAmendmentPanel';
 
 interface ReadingDossierDrawerProps {
   order: Order;
@@ -23,6 +24,9 @@ interface ReadingDossierDrawerProps {
 export function ReadingDossierDrawer({ order, open, onClose }: ReadingDossierDrawerProps) {
   const source = resolveDeskReadingSource(order);
   const profile = source.profile;
+  const hasEffectiveSnapshot = source.source === 'EFFECTIVE_SNAPSHOT';
+  const showBasePalm = Boolean(profile?.palmPhotoUrl && !hasEffectiveSnapshot);
+  const showBasePhotos = Boolean(profile?.facePhotoUrl || showBasePalm);
 
   return (
     <AnimatePresence>
@@ -60,6 +64,8 @@ export function ReadingDossierDrawer({ order, open, onClose }: ReadingDossierDra
             </header>
 
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
+              <ReadingAmendmentPanel orderId={order.id} />
+
               <section className="rounded-2xl border border-desk-border bg-desk-card p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-desk-subtle">
                   Identité
@@ -132,17 +138,32 @@ export function ReadingDossierDrawer({ order, open, onClose }: ReadingDossierDra
                 </section>
               )}
 
-              {(profile?.facePhotoUrl || profile?.palmPhotoUrl) && (
+              {showBasePhotos && (
                 <section className="rounded-2xl border border-desk-border bg-desk-card p-4">
                   <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-desk-subtle">
-                    <ImageIcon className="h-4 w-4" /> Photos
+                    <ImageIcon className="h-4 w-4" /> Photos du dossier initial
                   </p>
+                  {hasEffectiveSnapshot && (
+                    <p className="mb-3 text-xs leading-relaxed text-desk-muted">
+                      La paume complémentaire approuvée est affichée dans la section « Compléments du dossier » avec sa propre traçabilité.
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     {profile?.facePhotoUrl && (
-                      <ExpertPrivatePhoto clientId={order.user.id} kind="face" alt="Visage" />
+                      <ExpertPrivatePhoto
+                        clientId={order.user.id}
+                        orderId={order.id}
+                        kind="face"
+                        alt="Visage du dossier initial"
+                      />
                     )}
-                    {profile?.palmPhotoUrl && (
-                      <ExpertPrivatePhoto clientId={order.user.id} kind="palm" alt="Paume" />
+                    {showBasePalm && (
+                      <ExpertPrivatePhoto
+                        clientId={order.user.id}
+                        orderId={order.id}
+                        kind="palm"
+                        alt="Paume du dossier initial"
+                      />
                     )}
                   </div>
                 </section>

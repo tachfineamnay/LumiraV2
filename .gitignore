@@ -11,6 +11,7 @@ dist/
 
 # prisma
 /packages/database/src/generated
+/packages/database/prisma/schema.runtime.prisma
 
 # production
 build/
