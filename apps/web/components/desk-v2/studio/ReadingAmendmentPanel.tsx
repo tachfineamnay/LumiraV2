@@ -22,7 +22,12 @@ interface ReadingAmendment {
   reason: string;
   status: 'REQUESTED' | 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   displayStatus: string;
-  data: Record<string, unknown>;
+  data: {
+    revisionQueuedAt?: string | null;
+    reviewReason?: string;
+    retakeReason?: string;
+    [key: string]: unknown;
+  };
   revision: number;
   requestedAt: string;
   submittedAt: string | null;
@@ -109,7 +114,9 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
     let actionReason: string | undefined;
     if (action === 'reject' || action === 'retake') {
       const answer = window.prompt(
-        action === 'reject' ? 'Pourquoi refusez-vous cette photo ?' : 'Que doit corriger le client ?',
+        action === 'reject'
+          ? 'Pourquoi refusez-vous cette photo ?'
+          : 'Que doit corriger le client ?',
       );
       if (answer === null || answer.trim().length < 3) return;
       actionReason = answer.trim();
@@ -157,7 +164,8 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
             <ImagePlus className="h-4 w-4" /> Compléments du dossier
           </p>
           <p className="mt-1 text-xs leading-relaxed text-desk-muted">
-            Demandez uniquement l’élément manquant. Le dossier scellé et les lectures livrées ne sont jamais écrasés.
+            Demandez uniquement l’élément manquant. Le dossier scellé et les lectures livrées ne
+            sont jamais écrasés.
           </p>
         </div>
         <button
@@ -185,7 +193,10 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
                   ? item.data.retakeReason
                   : null;
             return (
-              <article key={item.id} className="rounded-xl border border-desk-border bg-desk-card p-3">
+              <article
+                key={item.id}
+                className="rounded-xl border border-desk-border bg-desk-card p-3"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold text-desk-text">Photo de la paume</p>
@@ -245,7 +256,7 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
                       </ActionButton>
                     </>
                   )}
-                  {item.status === 'APPROVED' && !item.data.revisionQueuedAt && (
+                  {item.status === 'APPROVED' && !Boolean(item.data.revisionQueuedAt) && (
                     <ActionButton
                       disabled={busy}
                       onClick={() => void review(item, 'create-revision')}
@@ -254,7 +265,7 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
                       Créer une version révisée
                     </ActionButton>
                   )}
-                  {item.data.revisionQueuedAt && (
+                  {Boolean(item.data.revisionQueuedAt) && (
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600">
                       <CheckCircle2 className="h-3.5 w-3.5" /> Révision lancée
                     </span>
@@ -313,7 +324,11 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
                   onClick={() => void createRequest()}
                   className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {creating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                   Envoyer
                 </button>
                 <button

@@ -4,7 +4,7 @@ const path = require('node:path');
 const prismaDir = __dirname;
 const sourcePath = path.join(prismaDir, 'schema.prisma');
 const runtimePath = path.join(prismaDir, 'schema.runtime.prisma');
-const source = fs.readFileSync(sourcePath, 'utf8');
+const source = fs.readFileSync(sourcePath, 'utf8').replace(/\r\n/g, '\n');
 
 function modelBounds(schema, modelName) {
   const marker = `model ${modelName} {`;
