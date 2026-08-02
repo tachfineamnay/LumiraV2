@@ -14,6 +14,6 @@ import { ReadingAmendmentService } from './reading-amendment.service';
   imports: [PrismaModule, UploadsModule, ExpertModule, NotificationsModule],
   controllers: [ClientReadingAmendmentController, ExpertReadingAmendmentController],
   providers: [ReadingAmendmentService, ReadingAmendmentFacade],
-  exports: [ReadingAmendmentService, ReadingAmendmentFacade],
+  exports: [ReadingAmendmentFacade],
 })
 export class ReadingAmendmentModule {}
