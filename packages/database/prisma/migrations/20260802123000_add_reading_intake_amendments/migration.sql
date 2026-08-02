@@ -136,3 +136,22 @@ CREATE TRIGGER "ReadingIntakeAmendment_extend_retake_expiry"
 BEFORE UPDATE OF "status" ON "ReadingIntakeAmendment"
 FOR EACH ROW
 EXECUTE FUNCTION "extend_reading_amendment_retake_expiry"();
+
+-- The JSON snapshot is the immutable source of truth. Keep the searchable
+-- amendmentIds column exactly aligned with its complete amendment lineage.
+CREATE FUNCTION "sync_reading_input_snapshot_amendment_ids"()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF jsonb_typeof(NEW."data"->'amendmentIds') = 'array' THEN
+    NEW."amendmentIds" := ARRAY(
+      SELECT jsonb_array_elements_text(NEW."data"->'amendmentIds')
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "ReadingInputSnapshot_sync_amendment_ids"
+BEFORE INSERT OR UPDATE OF "data" ON "ReadingInputSnapshot"
+FOR EACH ROW
+EXECUTE FUNCTION "sync_reading_input_snapshot_amendment_ids"();
