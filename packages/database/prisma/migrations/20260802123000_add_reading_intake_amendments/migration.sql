@@ -85,7 +85,7 @@ ALTER TABLE "ReadingInputSnapshot"
 
 ALTER TABLE "ReadingInputSnapshot"
   ADD CONSTRAINT "ReadingInputSnapshot_parentSnapshotId_fkey"
-  FOREIGN KEY ("parentSnapshotId") REFERENCES "ReadingInputSnapshot"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  FOREIGN KEY ("parentSnapshotId") REFERENCES "ReadingInputSnapshot"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE "ReadingVersion"
   ADD CONSTRAINT "ReadingVersion_inputSnapshotId_fkey"
