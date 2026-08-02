@@ -45,6 +45,21 @@ export class ReadingAmendmentFacade {
   ) {}
 
   async requestPalmPhoto(orderId: string, expertId: string, dto: CreatePalmAmendmentDto) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        status: true,
+        orderNumber: true,
+        user: { select: { email: true, firstName: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('Commande non trouvée');
+    if (!['COMPLETED', 'AWAITING_VALIDATION'].includes(order.status)) {
+      throw new ConflictException(
+        `Une demande de complément ne peut être créée dans l’état ${order.status}`,
+      );
+    }
+
     // A photo delivered before the deadline remains reviewable afterward. The
     // legacy core expiry helper also includes SUBMITTED, so guard that state
     // before delegating and never let a received photo be silently cancelled.
@@ -60,29 +75,19 @@ export class ReadingAmendmentFacade {
     }
 
     const amendment = await this.amendments.requestPalmPhoto(orderId, expertId, dto);
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      select: {
-        orderNumber: true,
-        user: { select: { email: true, firstName: true } },
+    await this.email.send({
+      to: order.user.email,
+      subject: 'Une action est demandée dans votre Sanctuaire Lumira',
+      template: 'reading-amendment-requested',
+      messageId: `<lumira-amendment-${amendment.id}@oraclelumira.com>`,
+      context: {
+        firstName: order.user.firstName,
+        orderNumber: order.orderNumber,
+        reason: amendment.reason,
+        expiresAt: new Date(amendment.expiresAt).toLocaleDateString('fr-FR'),
+        sanctuaireLink: `${this.getWebUrl()}/sanctuaire`,
       },
     });
-
-    if (order) {
-      await this.email.send({
-        to: order.user.email,
-        subject: 'Une action est demandée dans votre Sanctuaire Lumira',
-        template: 'reading-amendment-requested',
-        messageId: `<lumira-amendment-${amendment.id}@oraclelumira.com>`,
-        context: {
-          firstName: order.user.firstName,
-          orderNumber: order.orderNumber,
-          reason: amendment.reason,
-          expiresAt: new Date(amendment.expiresAt).toLocaleDateString('fr-FR'),
-          sanctuaireLink: `${this.getWebUrl()}/sanctuaire`,
-        },
-      });
-    }
 
     return amendment;
   }
