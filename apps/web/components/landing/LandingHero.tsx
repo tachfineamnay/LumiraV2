@@ -16,15 +16,10 @@ export function LandingHero() {
         </p>
 
         <div className="relative">
-          <h1 className="font-playfair italic tracking-[-0.05em] select-none">
-            <span className="block text-[clamp(3rem,13vw,10rem)] leading-[0.85]">
-              <span className="block text-white/90 mix-blend-overlay opacity-90">Oracle</span>
-              <span className="block text-transparent bg-clip-text bg-gradient-to-b from-[#FFD700] to-white -mt-1 md:-mt-6 text-glow-hero">
-                Lumira
-              </span>
-            </span>
-            <span className="mx-auto mt-7 block max-w-2xl text-lg leading-tight tracking-normal text-white/90 md:mt-10 md:text-3xl">
-              Lecture personnalisée révisée par un expert
+          <h1 className="text-[clamp(3rem,13vw,10rem)] leading-[0.85] font-playfair italic tracking-[-0.05em] select-none">
+            <span className="block text-white/90 mix-blend-overlay opacity-90">Oracle</span>
+            <span className="block text-transparent bg-clip-text bg-gradient-to-b from-[#FFD700] to-white -mt-1 md:-mt-6 text-glow-hero">
+              Lumira
             </span>
           </h1>
 
