@@ -16,6 +16,13 @@ describe('ReadingAmendmentFacade', () => {
   it('does not replace a submitted photo merely because its deadline passed', async () => {
     const core = { requestPalmPhoto: jest.fn() };
     const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'COMPLETED',
+          orderNumber: 'LUM-001',
+          user: { email: 'client@example.test', firstName: 'Marie' },
+        }),
+      },
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'ram-submitted' }]),
     };
     const facade = new ReadingAmendmentFacade(
@@ -30,6 +37,34 @@ describe('ReadingAmendmentFacade', () => {
         reason: 'Paume manquante',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+    expect(core.requestPalmPhoto).not.toHaveBeenCalled();
+  });
+
+  it('rejects a complement request for an order that cannot enter revision', async () => {
+    const core = { requestPalmPhoto: jest.fn() };
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'FAILED',
+          orderNumber: 'LUM-002',
+          user: { email: 'client@example.test', firstName: 'Marie' },
+        }),
+      },
+      $queryRaw: jest.fn(),
+    };
+    const facade = new ReadingAmendmentFacade(
+      core as never,
+      prisma as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      facade.requestPalmPhoto('order-failed', 'expert-1', {
+        reason: 'Paume manquante',
+      }),
+    ).rejects.toThrow('FAILED');
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
     expect(core.requestPalmPhoto).not.toHaveBeenCalled();
   });
 
