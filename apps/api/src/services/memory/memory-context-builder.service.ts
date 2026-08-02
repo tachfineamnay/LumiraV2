@@ -137,12 +137,12 @@ export class MemoryContextBuilder {
         `);
         currentOrderId = revisionOrders[0]?.id;
       } catch (error) {
-        // Auto-detection of an active revision order is best-effort. A failure
-        // here must not block memory context delivery — fail-open with no extra
-        // exclusion rather than propagating and returning an empty context.
+        // Memory is optional. If revision scope cannot be proven, skip all
+        // continuity for this generation rather than risk injecting V1 into V2.
         this.logger.warn(
-          `Memory revision scope auto-detect failed: ${error instanceof Error ? error.name : 'unknown'}`,
+          `Memory revision scope unavailable: ${error instanceof Error ? error.name : 'unknown'}`,
         );
+        throw new Error('MEMORY_REVISION_SCOPE_UNAVAILABLE');
       }
     }
 
