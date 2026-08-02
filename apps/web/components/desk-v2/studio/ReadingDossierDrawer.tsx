@@ -13,6 +13,7 @@ import {
 import { ExpertPrivatePhoto } from '@/components/private-media/ExpertPrivatePhoto';
 import { resolveDeskReadingSource } from '@/lib/desk-reading-source';
 import type { Order } from '../types';
+import { ReadingAmendmentPanel } from './ReadingAmendmentPanel';
 
 interface ReadingDossierDrawerProps {
   order: Order;
@@ -60,6 +61,8 @@ export function ReadingDossierDrawer({ order, open, onClose }: ReadingDossierDra
             </header>
 
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
+              <ReadingAmendmentPanel orderId={order.id} />
+
               <section className="rounded-2xl border border-desk-border bg-desk-card p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-desk-subtle">
                   Identité
@@ -135,14 +138,24 @@ export function ReadingDossierDrawer({ order, open, onClose }: ReadingDossierDra
               {(profile?.facePhotoUrl || profile?.palmPhotoUrl) && (
                 <section className="rounded-2xl border border-desk-border bg-desk-card p-4">
                   <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-desk-subtle">
-                    <ImageIcon className="h-4 w-4" /> Photos
+                    <ImageIcon className="h-4 w-4" /> Photos du dossier scellé
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     {profile?.facePhotoUrl && (
-                      <ExpertPrivatePhoto clientId={order.user.id} kind="face" alt="Visage" />
+                      <ExpertPrivatePhoto
+                        clientId={order.user.id}
+                        orderId={order.id}
+                        kind="face"
+                        alt="Visage"
+                      />
                     )}
                     {profile?.palmPhotoUrl && (
-                      <ExpertPrivatePhoto clientId={order.user.id} kind="palm" alt="Paume" />
+                      <ExpertPrivatePhoto
+                        clientId={order.user.id}
+                        orderId={order.id}
+                        kind="palm"
+                        alt="Paume"
+                      />
                     )}
                   </div>
                 </section>
