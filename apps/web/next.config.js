@@ -3,6 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  swcMinify: false,
   transpilePackages: ['@packages/ui', '@packages/shared', '@packages/database'],
   output: 'standalone',
   experimental: {
@@ -84,10 +85,6 @@ const nextConfig = {
   webpack: (config) => {
     // Keep optional Node canvas out of the browser PDF build path.
     config.resolve.alias.canvas = false;
-    // Allows the standalone SEO contract to stay independent from stale local
-    // webpack caches after a Next.js installation changes. Production builds
-    // keep Next's default cache unless this explicit local switch is set.
-    if (process.env.LUMIRA_DISABLE_WEBPACK_CACHE === 'true') config.cache = false;
     return config;
   },
 };

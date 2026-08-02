@@ -1,0 +1,191 @@
+name: CI
+
+on:
+  # Direct pushes to main are validated once through deploy.yml.
+  # Keeping main here as well would run the full CI twice on every production push.
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Non-sensitive values for Next.js build and E2E (never use production secrets in CI).
+  NEXT_PUBLIC_API_URL: http://127.0.0.1:3100
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder_not_real
+  API_INTERNAL_URL: http://127.0.0.1:3100
+  JWT_SECRET: ci-test-jwt-secret-minimum-32-characters-long
+  PLAYWRIGHT_WEB_PORT: '3100'
+
+jobs:
+  build:
+    name: Quality, build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      # pnpm 8 still targets npm's retired audit endpoint. Run the audit with
+      # pnpm 11, which uses npm's bulk advisory endpoint, without migrating
+      # the workspace lockfile used for installation.
+      - name: Audit dependencies (high severity)
+        run: corepack pnpm@11.0.0 audit --audit-level=high
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: API regression tests
+        run: >-
+          pnpm --filter api exec jest
+          services/factory/ai-model-config.spec.ts
+          services/factory/ai-run.service.spec.ts
+          services/factory/ai-execution-resolver.service.spec.ts
+          services/factory/DigitalSoulService.spec.ts
+          modules/expert/production-control.service.spec.ts
+          modules/expert/reading-workspace.service.spec.ts
+          modules/expert/expert.service.seal-journey.spec.ts
+          modules/expert/expert.controller.memory.spec.ts
+          modules/expert/client-purge.service.spec.ts
+          modules/expert/ai-production-readiness.service.spec.ts
+          modules/uploads/private-onboarding-photo.service.spec.ts
+          services/memory/memory-sanitizer.service.spec.ts
+          services/memory/memory-config.service.spec.ts
+          services/memory/memory-readiness.service.spec.ts
+          services/memory/memory-context-builder.service.spec.ts
+          services/memory/memory-sync.service.spec.ts
+          services/memory/memory-sync-worker.service.spec.ts
+          services/memory/user-memory.service.spec.ts
+          services/memory/vertex-memory-bank.client.spec.ts
+          --runInBand --silent
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright Chromium for production SEO contract
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: SEO production contract against the build above
+        run: pnpm seo:check:built
+
+      - name: Build Web Docker image
+        run: >-
+          docker build --file apps/web/Dockerfile --tag lumira-web-ci:${{ github.sha }}
+          --build-arg NEXT_PUBLIC_API_URL=http://127.0.0.1:3100
+          --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_ci_placeholder_not_real
+          --build-arg SKIP_STRIPE_VALIDATION=true
+          --build-arg APP_REVISION=${{ github.sha }} .
+
+      - name: Smoke Web Docker image
+        run: |
+          set -euo pipefail
+          container_name="lumira-web-ci-${GITHUB_RUN_ID}"
+          trap 'docker rm -f "$container_name" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --rm --name "$container_name" --publish 3101:3000 \
+            --env APP_REVISION="${GITHUB_SHA}" lumira-web-ci:${{ github.sha }}
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3101/api/version >/tmp/lumira-version.json; then break; fi
+            if [ "$attempt" = 30 ]; then exit 1; fi
+            sleep 2
+          done
+          node -e "const value=require('/tmp/lumira-version.json'); if(value.revision !== process.env.GITHUB_SHA || value.service !== 'web') process.exit(1)"
+          curl --fail --silent --show-error http://127.0.0.1:3101/robots.txt | grep -F 'Sitemap: https://oraclelumira.com/sitemap.xml'
+          curl --fail --silent --show-error http://127.0.0.1:3101/sitemap.xml | grep -F '<loc>https://oraclelumira.com/faq</loc>'
+          curl --silent --show-error --dump-header /tmp/lumira-desk.headers --output /dev/null \
+            --header 'Host: desk.oraclelumira.com' http://127.0.0.1:3101/
+          grep -qi '^x-robots-tag:.*noindex' /tmp/lumira-desk.headers
+          grep -qi '^cache-control:.*no-store' /tmp/lumira-desk.headers
+
+      - name: Build API Docker image and smoke sharp
+        run: docker build --file apps/api/Dockerfile --tag lumira-api-ci:${{ github.sha }} .
+
+      - name: Verify committed diff has no whitespace errors
+        run: git diff --check HEAD^ HEAD
+
+  e2e:
+    name: Desk and Sanctuaire browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build
+    permissions:
+      contents: read
+      actions: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Build web application for Playwright
+        run: pnpm --filter web... build
+        env:
+          # A non-secret test-mode prefix enables the checkout UI guard; E2E mocks the API intent/status.
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_playwright
+
+      - name: Install Playwright Chromium, WebKit and system dependencies
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Run canonical Playwright E2E matrix
+        run: pnpm test:e2e
+        env:
+          CI: true
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

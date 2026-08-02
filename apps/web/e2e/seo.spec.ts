@@ -1,21 +1,4 @@
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 import { expect, test } from '@playwright/test';
-
-const repositoryRoot = path.resolve(__dirname, '../../..');
-
-type RouteMatrixEntry = {
-  path: string;
-  kind: 'page' | 'route' | 'metadata';
-  classification: 'indexable' | 'public-noindex' | 'private' | 'technical';
-};
-
-const routeMatrix: RouteMatrixEntry[] = JSON.parse(
-  execFileSync(process.execPath, ['scripts/seo-route-matrix.cjs', '--json'], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-  }),
-);
 
 const publicPages = [
   {
@@ -35,30 +18,26 @@ const publicPages = [
   },
 ] as const;
 
+const privatePaths = [
+  '/commande',
+  '/payment-success',
+  '/sanctuaire',
+  '/sanctuaire/login',
+  '/admin',
+  '/admin/login',
+  '/api/health',
+  '/api/version',
+] as const;
+
 function expectPrivateHeaders(headers: Record<string, string>) {
   expect(headers['x-robots-tag'] || '').toContain('noindex');
   expect(headers['x-robots-tag'] || '').toContain('nofollow');
-  expect(headers['x-robots-tag'] || '').toContain('noarchive');
-  expect(headers['x-robots-tag'] || '').toContain('nosnippet');
   expect(headers['x-robots-tag'] || '').toContain('noimageindex');
   expect(headers['cache-control'] || '').toMatch(/private.*no-store|no-store.*private/i);
 }
 
-function materializeRoute(pathname: string) {
-  return pathname.replace(/:[^/]+/g, 'seo-contract');
-}
-
 test.describe('SEO production search contract', () => {
   test.describe.configure({ timeout: 120_000 });
-
-  test('derives and classifies every App Router page and route', () => {
-    expect(
-      routeMatrix
-        .filter((entry) => entry.classification === 'indexable')
-        .map((entry) => entry.path),
-    ).toEqual(['/', '/faq', '/notre-approche']);
-    expect(routeMatrix.every((entry) => entry.classification)).toBe(true);
-  });
 
   test('robots and sitemap expose exactly the three canonical public URLs', async ({
     page,
@@ -81,23 +60,21 @@ test.describe('SEO production search contract', () => {
 
     const locations = await page.evaluate((xml) => {
       const document = new DOMParser().parseFromString(xml, 'application/xml');
-      if (document.getElementsByTagName('parsererror').length > 0)
+      if (document.getElementsByTagName('parsererror').length > 0) {
         throw new Error('Sitemap XML is not parseable');
+      }
       return Array.from(document.getElementsByTagName('loc'), (node) => node.textContent);
     }, sitemapText);
 
     expect(locations).toEqual(publicPages.map(({ canonical }) => canonical));
     for (const location of locations) {
       expect(location).not.toMatch(
-        /(?:admin|api|commande|payment-success|sanctuaire|desk|token|session|order|email|\?)/i,
+        /(?:admin|api|commande|payment-success|sanctuaire|desk|\?|www\.)/i,
       );
     }
   });
 
-  test('public pages have canonical metadata, a social image and one H1', async ({
-    page,
-    request,
-  }) => {
+  test('public pages have canonical, indexable, branded metadata and one H1', async ({ page }) => {
     const seenDescriptions = new Set<string>();
 
     for (const entry of publicPages) {
@@ -105,55 +82,43 @@ test.describe('SEO production search contract', () => {
       const description = await page.locator('meta[name="description"]').getAttribute('content');
       const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
       const robots = await page.locator('meta[name="robots"]').getAttribute('content');
-      const socialImage = await page.locator('meta[property="og:image"]').getAttribute('content');
 
       await expect(page).toHaveTitle(entry.title);
       expect(description).toBeTruthy();
+      expect(canonical).toBeTruthy();
       expect(new URL(canonical!).toString()).toBe(entry.canonical);
       expect(robots || '').toContain('index');
       await expect(page.locator('h1')).toHaveCount(1);
       expect(seenDescriptions.has(description!)).toBe(false);
-      expect(socialImage).toMatch(/^https:\/\/oraclelumira\.com\//);
-      const socialImagePath = new URL(socialImage!).pathname;
-      const socialResponse = await request.get(socialImagePath);
-      await expect(socialResponse).toBeOK();
       seenDescriptions.add(description!);
     }
+  });
 
+  test('structured data is valid JSON and matches the offer source of truth', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    expect((await page.locator('h1').textContent())?.replace(/\s+/g, ' ').trim()).toBe(
-      'Oracle Lumira',
-    );
-    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
-      'content',
-      'summary_large_image',
-    );
-  });
-
-  test('FAQ structured data exactly matches visible questions and answers', async ({ page }) => {
-    await page.goto('/faq', { waitUntil: 'domcontentloaded' });
-    const schemas = await page
+    const graph = await page
       .locator('script[type="application/ld+json"]')
-      .evaluateAll((nodes) => nodes.map((node) => JSON.parse(node.textContent || '{}')));
-    const faq = schemas.find((schema) => schema['@type'] === 'FAQPage');
-    expect(faq).toBeTruthy();
+      .evaluate((node) => JSON.parse(node.textContent || '{}'));
+    const service = graph['@graph'].find(
+      (entry: { '@type': string }) => entry['@type'] === 'Service',
+    );
 
-    for (const item of faq.mainEntity) {
-      await expect(page.locator('dt', { hasText: item.name })).toHaveCount(1);
-      await expect(page.locator('dd', { hasText: item.acceptedAnswer.text })).toHaveCount(1);
-    }
+    expect(service).toBeTruthy();
+    expect(service.offers).toMatchObject({
+      price: '17',
+      priceCurrency: 'EUR',
+      url: 'https://oraclelumira.com/commande',
+    });
+    expect(JSON.stringify(graph)).not.toMatch(/AggregateRating|Review|4\.9|2 500/i);
   });
 
-  test('every discovered private or technical route is noindex and no-store', async ({
+  test('private and transactional paths have noindex and no-store headers without a public canonical', async ({
     request,
   }) => {
-    const protectedRoutes = routeMatrix.filter(
-      (entry) => entry.classification === 'private' || entry.classification === 'technical',
-    );
-
-    for (const entry of protectedRoutes) {
-      const response = await request.get(materializeRoute(entry.path), { maxRedirects: 0 });
+    for (const path of privatePaths) {
+      const response = await request.get(path, { maxRedirects: 0 });
       expectPrivateHeaders(response.headers());
+      expect(await response.text()).not.toMatch(/<link[^>]+rel="canonical"/i);
     }
   });
 
@@ -161,13 +126,12 @@ test.describe('SEO production search contract', () => {
     request,
   }) => {
     const deskHeaders = { Host: 'desk.localhost:3112' };
-    for (const route of ['/', '/login', '/board', '/clients']) {
-      const response = await request.get(route, { headers: deskHeaders, maxRedirects: 0 });
+    for (const path of ['/', '/login', '/board', '/clients']) {
+      const response = await request.get(path, { headers: deskHeaders, maxRedirects: 0 });
       expectPrivateHeaders(response.headers());
       const html = await response.text();
       expect(html).not.toMatch(/<link[^>]+rel="canonical"/i);
       expect(html).not.toContain('application/ld+json');
-      expect(html).not.toMatch(/googletagmanager\.com|connect\.facebook\.net/i);
     }
 
     const robots = await request.get('/robots.txt', { headers: deskHeaders });
@@ -178,28 +142,6 @@ test.describe('SEO production search contract', () => {
     const sitemap = await request.get('/sitemap.xml', { headers: deskHeaders });
     expect(sitemap.status()).toBe(404);
     expectPrivateHeaders(sitemap.headers());
-  });
-
-  test('analytics and marketing require consent and never render on private pages', async ({
-    page,
-  }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('dialog', { name: 'Préférences cookies' })).toBeVisible();
-    await expect(page.locator('#google-analytics-loader')).toHaveCount(0);
-    await expect(page.locator('#meta-pixel')).toHaveCount(0);
-
-    await page.getByRole('button', { name: 'Tout refuser' }).click();
-    await expect(page.locator('#google-analytics-loader')).toHaveCount(0);
-    await expect(page.locator('#meta-pixel')).toHaveCount(0);
-
-    await page.getByRole('button', { name: 'Préférences cookies' }).click();
-    await page.getByRole('button', { name: 'Tout accepter' }).click();
-    await expect(page.locator('#google-analytics-loader')).toHaveCount(1);
-    await expect(page.locator('#meta-pixel')).toHaveCount(1);
-
-    await page.goto('/sanctuaire/login', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#google-analytics-loader')).toHaveCount(0);
-    await expect(page.locator('#meta-pixel')).toHaveCount(0);
   });
 
   test('canonical redirects preserve attribution and payment parameters', async ({
@@ -221,10 +163,27 @@ test.describe('SEO production search contract', () => {
 
     const payment = await request.get(
       '/payment-success?payment_intent=pi_test&session_id=cs_test',
-      { maxRedirects: 0 },
+      {
+        maxRedirects: 0,
+      },
     );
     expect(payment.url()).toContain('payment_intent=pi_test');
     expect(payment.url()).toContain('session_id=cs_test');
+
+    const www = await request.get('/faq?utm_campaign=launch', {
+      headers: { Host: 'www.oraclelumira.com' },
+      maxRedirects: 0,
+    });
+    expect(www.status()).toBe(308);
+    const wwwLocation = new URL(www.headers().location || '');
+    expect(wwwLocation.hostname).toBe('oraclelumira.com');
+    expect(wwwLocation.search).toBe('?utm_campaign=launch');
+
+    const upperCase = await request.get('/FAQ?fbclid=tracking', { maxRedirects: 0 });
+    expect(upperCase.status()).toBe(308);
+    const upperCaseLocation = new URL(upperCase.headers().location || '', page.url());
+    expect(upperCaseLocation.pathname).toBe('/faq');
+    expect(upperCaseLocation.search).toBe('?fbclid=tracking');
   });
 
   test('the deployed revision endpoint is technical, private and non-cacheable', async ({

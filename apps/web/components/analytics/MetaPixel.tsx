@@ -1,11 +1,12 @@
 'use client';
 
 import Script from 'next/script';
-
-const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+import { META_PIXEL_ID } from '../../lib/pixel';
 
 /**
- * The parent consent manager renders this only after explicit marketing consent.
+ * Loads the Meta Pixel and fires PageView. Renders nothing when
+ * NEXT_PUBLIC_META_PIXEL_ID is not configured.
+ * lazyOnload keeps the pixel off the critical path for LCP/TBT.
  */
 export function MetaPixel() {
   if (!META_PIXEL_ID) return null;
@@ -17,7 +18,7 @@ export function MetaPixel() {
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};
 if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
 n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;t.id='meta-pixel-loader';s=b.getElementsByTagName(e)[0];
+t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '${META_PIXEL_ID}');

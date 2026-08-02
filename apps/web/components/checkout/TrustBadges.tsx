@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Shield, Zap } from 'lucide-react';
+import { Shield, Zap, RefreshCw } from 'lucide-react';
 
 const badges = [
   {
@@ -14,6 +14,11 @@ const badges = [
     title: 'Accès immédiat',
     description: 'Dès confirmation',
   },
+  {
+    icon: RefreshCw,
+    title: 'Satisfait ou remboursé',
+    description: 'Garantie 14 jours',
+  },
 ];
 
 export function TrustBadges() {
@@ -22,7 +27,7 @@ export function TrustBadges() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.5 }}
-      className="grid grid-cols-2 gap-3"
+      className="grid grid-cols-3 gap-3"
     >
       {badges.map((badge, index) => (
         <motion.div

@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: lumira_dev
       POSTGRES_DB: lumira
     ports:
-      - '5432:5432'
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -19,7 +19,7 @@ services:
     image: gotenberg/gotenberg:8
     restart: always
     ports:
-      - '3002:3000'
+      - "3002:3000"
     networks:
       - lumira-network
 
@@ -30,12 +30,9 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
         NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-pk_test_replace_me}
-        NEXT_PUBLIC_META_PIXEL_ID: ${NEXT_PUBLIC_META_PIXEL_ID:-}
-        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
         API_INTERNAL_URL: http://api:3001
-        APP_REVISION: ${APP_REVISION:-unknown}
     ports:
-      - '3000:3000'
+      - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:3001
       - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-pk_test_replace_me}
@@ -51,7 +48,7 @@ services:
       context: ..
       dockerfile: apps/api/Dockerfile
     ports:
-      - '3001:3001'
+      - "3001:3001"
     environment:
       - DATABASE_URL=postgresql://lumira:lumira_dev@postgres:5432/lumira
       - GOTENBERG_URL=http://gotenberg:3000

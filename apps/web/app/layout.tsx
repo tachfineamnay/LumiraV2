@@ -1,25 +1,23 @@
 import type { Viewport } from 'next';
-import localFont from 'next/font/local';
+import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
-import { ConsentManager } from '../components/analytics/ConsentManager';
+import { MetaPixel } from '../components/analytics/MetaPixel';
+import { GoogleAnalytics } from '../components/analytics/GoogleAnalytics';
 import { rootMetadata } from '../lib/seo';
 
-const inter = localFont({
-  src: './fonts/inter-latin.woff2',
-  weight: '100 900',
+const inter = Inter({
+  subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
   preload: true,
   fallback: ['ui-sans-serif', 'system-ui', 'Segoe UI', 'sans-serif'],
 });
 
-const playfair = localFont({
-  src: [
-    { path: './fonts/playfair-display-latin.woff2', weight: '400 900', style: 'normal' },
-    { path: './fonts/playfair-display-latin-italic.woff2', weight: '400 900', style: 'italic' },
-  ],
+const playfair = Playfair_Display({
+  subsets: ['latin'],
   display: 'swap',
   variable: '--font-playfair',
+  style: ['normal', 'italic'],
   preload: true,
   fallback: ['Georgia', 'Times New Roman', 'serif'],
 });
@@ -38,7 +36,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr" className={`h-full ${inter.variable} ${playfair.variable}`}>
       <body className="font-sans h-full bg-void text-divine selection:bg-gold/30 antialiased">
-        <ConsentManager />
+        <MetaPixel />
+        <GoogleAnalytics />
         {children}
       </body>
     </html>

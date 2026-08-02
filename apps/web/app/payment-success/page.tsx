@@ -13,6 +13,8 @@ import {
   readCheckoutAttempt,
   saveCheckoutAttempt,
 } from '../../lib/checkoutAttempt';
+import { SUBSCRIPTION } from '../../lib/products';
+import { trackPurchase } from '../../lib/pixel';
 
 type PaymentStatus = 'processing' | 'confirmed' | 'needs_action';
 type RecoveryAction = 'verify' | 'return_to_payment' | 'login';
@@ -66,6 +68,7 @@ function PaymentSuccessContent() {
       try {
         await completeCheckoutSession(intentId, storedClientSecret);
         clearCheckoutAttempt();
+        trackPurchase(SUBSCRIPTION.price, intentId);
         setStatus('confirmed');
         redirectTimerRef.current = window.setTimeout(() => {
           window.location.assign(buildSanctuairePostCheckoutUrl());
