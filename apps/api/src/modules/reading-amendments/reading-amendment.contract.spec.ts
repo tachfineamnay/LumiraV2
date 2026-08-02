@@ -13,6 +13,14 @@ describe('Reading amendment production contracts', () => {
     join(__dirname, '../../services/memory/memory-context-builder.service.ts'),
     'utf8',
   );
+  const snapshotMiddleware = readFileSync(
+    join(__dirname, '../../prisma/reading-input-snapshot.middleware.ts'),
+    'utf8',
+  );
+  const prismaService = readFileSync(
+    join(__dirname, '../../prisma/prisma.service.ts'),
+    'utf8',
+  );
   const migration = readFileSync(
     join(
       __dirname,
@@ -65,6 +73,11 @@ describe('Reading amendment production contracts', () => {
   it('routes generation through the effective snapshot and excludes V1 memories', () => {
     expect(resolver).toContain("source: 'EFFECTIVE_SNAPSHOT'");
     expect(resolver).toContain('readingIntakeEffective');
+    expect(snapshotMiddleware).toContain('isDigitalSoulGenerationLoad');
+    expect(snapshotMiddleware).toContain('sealedAt: null');
+    expect(snapshotMiddleware).toContain("source.source === 'EFFECTIVE_SNAPSHOT'");
+    expect(snapshotMiddleware).toContain('inputSnapshotId: snapshotId');
+    expect(prismaService).toContain('installReadingInputSnapshotMiddleware(this)');
     expect(memory).toContain('excludedReadingVersionIds');
     expect(memory).toContain('sourceVersionId: { notIn: excludedReadingVersionIds }');
     expect(service).toContain('Conserve les éléments valides de la lecture précédente');
