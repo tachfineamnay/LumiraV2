@@ -101,9 +101,9 @@ function isReadingVersionCandidateCreate(params: Prisma.MiddlewareParams): boole
   return source.source === 'EFFECTIVE_SNAPSHOT';
 }
 
-function asRecord(value: unknown): Record<string, any> {
+function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, any>)
+    ? (value as Record<string, unknown>)
     : {};
 }
 
