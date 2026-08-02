@@ -113,28 +113,37 @@ export class MemoryContextBuilder {
     let currentOrderId = options.currentOrderId;
 
     if (!currentOrderId) {
-      const revisionOrders = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-        SELECT "id"
-        FROM "Order"
-        WHERE "userId" = ${userId}
-          AND "status" IN ('PROCESSING', 'AWAITING_VALIDATION')
-          AND NULLIF(
-            "clientInputs"->'readingIntakeEffective'->>'snapshotId',
-            ''
-          ) IS NOT NULL
-          AND NULLIF(
-            "clientInputs"->'readingIntakeEffective'->>'contentHash',
-            ''
-          ) IS NOT NULL
-          AND (
-            "status" = 'PROCESSING'
-            OR NULLIF("generatedContent"->>'reopenedFromVersionId', '') IS NOT NULL
-            OR NULLIF("generatedContent"->>'workingReadingVersionId', '') IS NOT NULL
-          )
-        ORDER BY "updatedAt" DESC
-        LIMIT 1
-      `);
-      currentOrderId = revisionOrders[0]?.id;
+      try {
+        const revisionOrders = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT "id"
+          FROM "Order"
+          WHERE "userId" = ${userId}
+            AND "status" IN ('PROCESSING', 'AWAITING_VALIDATION')
+            AND NULLIF(
+              "clientInputs"->'readingIntakeEffective'->>'snapshotId',
+              ''
+            ) IS NOT NULL
+            AND NULLIF(
+              "clientInputs"->'readingIntakeEffective'->>'contentHash',
+              ''
+            ) IS NOT NULL
+            AND (
+              "status" = 'PROCESSING'
+              OR NULLIF("generatedContent"->>'reopenedFromVersionId', '') IS NOT NULL
+              OR NULLIF("generatedContent"->>'workingReadingVersionId', '') IS NOT NULL
+            )
+          ORDER BY "updatedAt" DESC
+          LIMIT 1
+        `);
+        currentOrderId = revisionOrders[0]?.id;
+      } catch (error) {
+        // Auto-detection of an active revision order is best-effort. A failure
+        // here must not block memory context delivery — fail-open with no extra
+        // exclusion rather than propagating and returning an empty context.
+        this.logger.warn(
+          `Memory revision scope auto-detect failed: ${error instanceof Error ? error.name : 'unknown'}`,
+        );
+      }
     }
 
     if (currentOrderId) {

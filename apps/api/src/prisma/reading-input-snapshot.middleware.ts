@@ -62,11 +62,7 @@ function isDigitalSoulGenerationLoad(params: Prisma.MiddlewareParams): boolean {
   const include = asRecord(params.args?.include);
   const user = asRecord(include.user);
   const userInclude = asRecord(user.include);
-  return (
-    include.readingIntake === true &&
-    include.files === true &&
-    userInclude.profile === true
-  );
+  return include.readingIntake === true && include.files === true && userInclude.profile === true;
 }
 
 function exposeEffectiveProjection(result: unknown): unknown {
@@ -108,6 +104,9 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function nonEmptyString(value: unknown): string | null {
+  // Prisma returns DateTime columns as Date objects at runtime. Accept both
+  // so that guards on sealedAt work whether the field is a string or a Date.
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.toISOString() : null;
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
