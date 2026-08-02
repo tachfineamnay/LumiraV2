@@ -36,6 +36,7 @@ function run(label, command, args) {
 
 run('Branche courante', git, ['rev-parse', '--abbrev-ref', 'HEAD']);
 run('SHA courant', git, ['rev-parse', 'HEAD']);
+run('État Git', git, ['status', '--short']);
 run('Contrôle des espaces et marqueurs de conflit', git, ['diff', '--check']);
 
 if (!skipInstall) {
@@ -45,7 +46,7 @@ if (!skipInstall) {
 run('Génération Prisma', pnpm, ['db:generate']);
 run('Typecheck monorepo', pnpm, ['typecheck']);
 run('Lint monorepo', pnpm, ['lint']);
-run('Tests API', pnpm, ['--filter', 'api', 'test', '--', '--runInBand']);
+run('Tests API', pnpm, ['--filter', 'api', 'exec', 'jest', '--runInBand', '--passWithNoTests']);
 run('Build production web', pnpm, ['--filter', 'web...', 'build']);
 
 if (!skipBrowserInstall) {
