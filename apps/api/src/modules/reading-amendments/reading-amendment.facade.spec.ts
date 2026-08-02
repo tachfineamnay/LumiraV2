@@ -33,6 +33,64 @@ describe('ReadingAmendmentFacade', () => {
     expect(core.requestPalmPhoto).not.toHaveBeenCalled();
   });
 
+  it('materializes a compatibility projection from a relational sealed intake before approval', async () => {
+    const core = { approvePalm: jest.fn().mockResolvedValue({ status: 'APPROVED' }) };
+    const tx = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          clientInputs: { source: 'existing' },
+          readingIntake: {
+            status: 'SEALED',
+            data: {
+              birthDate: '1990-06-15',
+              birthPlace: 'Lyon, France',
+              facePhotoUrl: 's3://onboarding/user-1/face.jpg',
+            },
+            contentHash: 'intake-hash',
+            sealedAt: new Date('2026-08-01T10:00:00.000Z'),
+          },
+        }),
+        update: jest.fn().mockResolvedValue({ id: 'order-1' }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const facade = new ReadingAmendmentFacade(
+      core as never,
+      prisma as never,
+      {} as never,
+      {} as never,
+    );
+
+    await facade.approvePalm('order-1', 'ram-1', 'expert-1', { expectedRevision: 2 });
+
+    expect(tx.order.update).toHaveBeenCalledWith({
+      where: { id: 'order-1' },
+      data: {
+        clientInputs: {
+          source: 'existing',
+          readingIntake: {
+            version: 'relational-reading-intake-v1',
+            sealedAt: '2026-08-01T10:00:00.000Z',
+            contentHash: 'intake-hash',
+            profile: {
+              birthDate: '1990-06-15',
+              birthPlace: 'Lyon, France',
+              facePhotoUrl: 's3://onboarding/user-1/face.jpg',
+            },
+          },
+        },
+      },
+    });
+    expect(core.approvePalm).toHaveBeenCalledWith(
+      'order-1',
+      'ram-1',
+      'expert-1',
+      { expectedRevision: 2 },
+    );
+  });
+
   it('claims the amendment before delegating revision generation', async () => {
     const core = {
       createRevisedReading: jest.fn().mockResolvedValue({ success: true }),
