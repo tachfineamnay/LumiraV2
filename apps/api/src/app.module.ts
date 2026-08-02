@@ -21,6 +21,7 @@ import { ServicesModule } from './services/services.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { DreamsModule } from './modules/dreams/dreams.module';
 import { GuidanceRequestsModule } from './modules/guidance-requests/guidance-requests.module';
+import { ReadingAmendmentModule } from './modules/reading-amendments/reading-amendment.module';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 import { validateEnvironment } from './config/validate-env';
 
@@ -47,6 +48,7 @@ import { validateEnvironment } from './config/validate-env';
     WebhooksModule,
     NotificationsModule,
     ExpertModule,
+    ReadingAmendmentModule,
     GuidanceRequestsModule,
     ProductsModule,
     InsightsModule,
