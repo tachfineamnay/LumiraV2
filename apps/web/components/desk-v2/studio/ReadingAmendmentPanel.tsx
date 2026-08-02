@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Clock3,
@@ -53,22 +53,27 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
   });
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const { data } = await expertApi.get<ReadingAmendment[]>(
-        `/expert/orders/${orderId}/amendments`,
-      );
-      setItems(data);
-    } catch (error) {
-      console.error(error);
-      toast.error('Impossible de charger les demandes de complément');
-    } finally {
-      setLoading(false);
-    }
-  }, [orderId]);
+  const load = useCallback(
+    async (silent = false) => {
+      try {
+        const { data } = await expertApi.get<ReadingAmendment[]>(
+          `/expert/orders/${orderId}/amendments`,
+        );
+        setItems(data);
+      } catch (error) {
+        console.error(error);
+        if (!silent) toast.error('Impossible de charger les demandes de complément');
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [orderId],
+  );
 
   useEffect(() => {
     void load();
+    const timer = window.setInterval(() => void load(true), 15_000);
+    return () => window.clearInterval(timer);
   }, [load]);
 
   const hasOpenPalmRequest = useMemo(
@@ -333,8 +338,8 @@ function ActionButton({
   disabled,
   onClick,
 }: {
-  children: React.ReactNode;
-  icon: React.ReactNode;
+  children: ReactNode;
+  icon: ReactNode;
   disabled: boolean;
   onClick: () => void;
 }) {
@@ -352,6 +357,11 @@ function ActionButton({
 }
 
 function responseMessage(error: unknown): string {
-  const value = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
-  return typeof value === 'string' ? value : 'Réessayez après actualisation.';
+  const value = (error as { response?: { data?: { message?: string | string[] } } })?.response?.data
+    ?.message;
+  return Array.isArray(value)
+    ? value.join(' ')
+    : typeof value === 'string'
+      ? value
+      : 'Réessayez après actualisation.';
 }
