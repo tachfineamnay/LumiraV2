@@ -2,14 +2,17 @@
 
 import Script from 'next/script';
 import { META_PIXEL_ID } from '../../lib/pixel';
+import { useConsent } from './ConsentProvider';
 
 /**
  * Loads the Meta Pixel and fires PageView. Renders nothing when
- * NEXT_PUBLIC_META_PIXEL_ID is not configured.
+ * NEXT_PUBLIC_META_PIXEL_ID is not configured or consent is not granted.
  * lazyOnload keeps the pixel off the critical path for LCP/TBT.
  */
 export function MetaPixel() {
-  if (!META_PIXEL_ID) return null;
+  const { consent } = useConsent();
+
+  if (!META_PIXEL_ID || consent !== 'granted') return null;
 
   return (
     <Script id="meta-pixel" strategy="lazyOnload">

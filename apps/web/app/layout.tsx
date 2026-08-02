@@ -1,8 +1,10 @@
 import type { Viewport } from 'next';
 import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
-import { MetaPixel } from '../components/analytics/MetaPixel';
+import { ConsentBanner } from '../components/analytics/ConsentBanner';
+import { ConsentProvider } from '../components/analytics/ConsentProvider';
 import { GoogleAnalytics } from '../components/analytics/GoogleAnalytics';
+import { MetaPixel } from '../components/analytics/MetaPixel';
 import { rootMetadata } from '../lib/seo';
 
 const inter = Inter({
@@ -36,10 +38,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr" className={`h-full ${inter.variable} ${playfair.variable}`}>
       <body className="font-sans h-full bg-void text-divine selection:bg-gold/30 antialiased">
-        <MetaPixel />
-        <GoogleAnalytics />
-        {children}
+        <ConsentProvider>
+          <MetaPixel />
+          <GoogleAnalytics />
+          {children}
+          <ConsentBanner />
+        </ConsentProvider>
       </body>
     </html>
   );
 }
+

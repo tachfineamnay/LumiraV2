@@ -51,7 +51,7 @@ export function pageMetadata({
       locale: SITE_LOCALE,
     },
     twitter: {
-      card: 'summary',
+      card: 'summary_large_image',
       title: `${title} | ${SITE_NAME}`,
       description,
     },
@@ -90,5 +90,5 @@ export const rootMetadata: Metadata = {
     siteName: SITE_NAME,
     locale: SITE_LOCALE,
   },
-  twitter: { card: 'summary' },
+  twitter: { card: 'summary_large_image' },
 };

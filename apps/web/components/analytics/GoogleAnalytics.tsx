@@ -1,15 +1,19 @@
 'use client';
 
 import Script from 'next/script';
+import { useConsent } from './ConsentProvider';
 
 export const GA_TRACKING_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-NTCVR1YYN8';
 
 /**
  * Loads Google Analytics (gtag.js).
  * afterInteractive strategy loads the script after the page becomes interactive.
+ * Rendered only after the user has granted analytics consent (RGPD).
  */
 export function GoogleAnalytics() {
-  if (!GA_TRACKING_ID) return null;
+  const { consent } = useConsent();
+
+  if (!GA_TRACKING_ID || consent !== 'granted') return null;
 
   return (
     <>
