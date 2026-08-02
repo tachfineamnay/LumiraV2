@@ -8,8 +8,8 @@ const responsiveMatrixTest = 'apps/web/e2e/customer-responsive-matrix.spec.ts';
  * Canonical browser matrix for Lumira's public customer journey.
  *
  * `tests/e2e` keeps the broader desktop and security regressions. `apps/web/e2e`
- * owns responsive product checks. They run from this single configuration so a
- * production deploy cannot bypass Android Chromium or iPhone WebKit coverage.
+ * owns responsive product checks. The additional projects only run the focused
+ * responsive contract so the complete local suite remains practical without CI.
  */
 export default defineConfig({
   testDir: '.',
@@ -88,6 +88,24 @@ export default defineConfig({
       testMatch: responsiveMatrixTest,
     },
     {
+      name: 'tablet-portrait-webkit',
+      use: {
+        ...devices['iPad (gen 7)'],
+        browserName: 'webkit',
+        viewport: { width: 768, height: 1024 },
+      },
+      testMatch: responsiveMatrixTest,
+    },
+    {
+      name: 'tablet-tall-chromium',
+      use: {
+        ...devices['iPad (gen 7)'],
+        browserName: 'chromium',
+        viewport: { width: 800, height: 1280 },
+      },
+      testMatch: responsiveMatrixTest,
+    },
+    {
       name: 'tablet-landscape-chromium',
       use: {
         ...devices['iPad (gen 7)'],
@@ -99,6 +117,16 @@ export default defineConfig({
     {
       name: 'desktop-compact-chromium',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 600 } },
+      testMatch: responsiveMatrixTest,
+    },
+    {
+      name: 'desktop-standard-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } },
+      testMatch: responsiveMatrixTest,
+    },
+    {
+      name: 'desktop-large-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 } },
       testMatch: responsiveMatrixTest,
     },
   ],
