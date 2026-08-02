@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Expert, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -17,6 +17,24 @@ interface RevisionClaimRow {
   data: Prisma.JsonValue;
 }
 
+interface AmendmentRow {
+  id: string;
+  orderId: string;
+  kind: 'PALM_PHOTO';
+  requestedFields: string[];
+  reason: string;
+  status: 'REQUESTED' | 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  data: Prisma.JsonValue;
+  contentHash: string | null;
+  revision: number;
+  requestedAt: Date;
+  submittedAt: Date | null;
+  reviewedAt: Date | null;
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class ReadingAmendmentFacade {
   constructor(
@@ -27,6 +45,20 @@ export class ReadingAmendmentFacade {
   ) {}
 
   async requestPalmPhoto(orderId: string, expertId: string, dto: CreatePalmAmendmentDto) {
+    // A photo delivered before the deadline remains reviewable afterward. The
+    // legacy core expiry helper also includes SUBMITTED, so guard that state
+    // before delegating and never let a received photo be silently cancelled.
+    const submitted = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id" FROM "ReadingIntakeAmendment"
+      WHERE "orderId" = ${orderId}
+        AND "kind" = 'PALM_PHOTO'
+        AND "status" = 'SUBMITTED'
+      LIMIT 1
+    `);
+    if (submitted.length > 0) {
+      throw new ConflictException('Une photo de paume transmise attend encore la vérification');
+    }
+
     const amendment = await this.amendments.requestPalmPhoto(orderId, expertId, dto);
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -55,12 +87,35 @@ export class ReadingAmendmentFacade {
     return amendment;
   }
 
-  listForClient(userId: string) {
-    return this.amendments.listForClient(userId);
+  async listForClient(userId: string) {
+    await this.expireDrafts({ userId });
+    const rows = await this.prisma.$queryRaw<AmendmentRow[]>(Prisma.sql`
+      SELECT "id", "orderId", "kind", "requestedFields", "reason", "status",
+             "data", "contentHash", "revision", "requestedAt", "submittedAt",
+             "reviewedAt", "expiresAt", "createdAt", "updatedAt"
+      FROM "ReadingIntakeAmendment"
+      WHERE "userId" = ${userId}
+      ORDER BY "createdAt" DESC
+    `);
+    return rows.map((row) => this.toPublic(row));
   }
 
-  listForExpert(orderId: string) {
-    return this.amendments.listForExpert(orderId);
+  async listForExpert(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true },
+    });
+    if (!order) throw new NotFoundException('Commande non trouvée');
+    await this.expireDrafts({ orderId });
+    const rows = await this.prisma.$queryRaw<AmendmentRow[]>(Prisma.sql`
+      SELECT "id", "orderId", "kind", "requestedFields", "reason", "status",
+             "data", "contentHash", "revision", "requestedAt", "submittedAt",
+             "reviewedAt", "expiresAt", "createdAt", "updatedAt"
+      FROM "ReadingIntakeAmendment"
+      WHERE "orderId" = ${orderId}
+      ORDER BY "createdAt" DESC
+    `);
+    return rows.map((row) => this.toPublic(row));
   }
 
   savePalmDraft(userId: string, amendmentId: string, dto: SavePalmAmendmentDraftDto) {
@@ -111,11 +166,7 @@ export class ReadingAmendmentFacade {
     return this.amendments.getPhotoReference(options);
   }
 
-  /**
-   * Claims a revision before calling the existing reopen/generation workflow.
-   * This closes the gap where two expert clicks could both enqueue V2 before
-   * ReadingAmendmentService persisted revisionQueuedAt.
-   */
+  /** Claims the approved amendment before any reopen or generation side effect. */
   async createRevisedReading(
     orderId: string,
     amendmentId: string,
@@ -166,7 +217,7 @@ export class ReadingAmendmentFacade {
           AND "orderId" = ${orderId}
           AND "data"#>>'{revisionClaim,id}' = ${operationId}
       `);
-      const refreshed = (await this.amendments.listForExpert(orderId)).find(
+      const refreshed = (await this.listForExpert(orderId)).find(
         (item) => item.id === amendmentId,
       );
       return refreshed && result && typeof result === 'object'
@@ -192,6 +243,63 @@ export class ReadingAmendmentFacade {
       `);
       throw error;
     }
+  }
+
+  private async expireDrafts(scope: { userId?: string; orderId?: string }) {
+    if (scope.userId) {
+      await this.prisma.$executeRaw(Prisma.sql`
+        UPDATE "ReadingIntakeAmendment"
+        SET "status" = 'CANCELLED',
+            "data" = "data" || '{"cancelReason":"EXPIRED"}'::JSONB,
+            "revision" = "revision" + 1,
+            "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "userId" = ${scope.userId}
+          AND "status" IN ('REQUESTED', 'DRAFT')
+          AND "expiresAt" <= CURRENT_TIMESTAMP
+      `);
+      return;
+    }
+    if (scope.orderId) {
+      await this.prisma.$executeRaw(Prisma.sql`
+        UPDATE "ReadingIntakeAmendment"
+        SET "status" = 'CANCELLED',
+            "data" = "data" || '{"cancelReason":"EXPIRED"}'::JSONB,
+            "revision" = "revision" + 1,
+            "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "orderId" = ${scope.orderId}
+          AND "status" IN ('REQUESTED', 'DRAFT')
+          AND "expiresAt" <= CURRENT_TIMESTAMP
+      `);
+    }
+  }
+
+  private toPublic(row: AmendmentRow) {
+    const data = this.asRecord(row.data);
+    return {
+      id: row.id,
+      orderId: row.orderId,
+      kind: row.kind,
+      requestedFields: row.requestedFields,
+      reason: row.reason,
+      status: row.status,
+      displayStatus:
+        row.status === 'CANCELLED' && data.cancelReason === 'EXPIRED' ? 'EXPIRED' : row.status,
+      data,
+      contentHash: row.contentHash,
+      revision: row.revision,
+      requestedAt: row.requestedAt.toISOString(),
+      submittedAt: row.submittedAt?.toISOString() ?? null,
+      reviewedAt: row.reviewedAt?.toISOString() ?? null,
+      expiresAt: row.expiresAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   }
 
   private getWebUrl(): string {
