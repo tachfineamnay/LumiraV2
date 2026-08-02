@@ -113,17 +113,28 @@ export class MemoryContextBuilder {
     let currentOrderId = options.currentOrderId;
 
     if (!currentOrderId) {
-      const currentOrder = await this.prisma.order.findFirst({
-        where: {
-          userId,
-          status: { in: ['PROCESSING', 'AWAITING_VALIDATION'] },
-        },
-        orderBy: { updatedAt: 'desc' },
-        select: { id: true, status: true, generatedContent: true, clientInputs: true },
-      });
-      if (currentOrder && this.isRevisionGeneration(currentOrder)) {
-        currentOrderId = currentOrder.id;
-      }
+      const revisionOrders = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "Order"
+        WHERE "userId" = ${userId}
+          AND "status" IN ('PROCESSING', 'AWAITING_VALIDATION')
+          AND NULLIF(
+            "clientInputs"->'readingIntakeEffective'->>'snapshotId',
+            ''
+          ) IS NOT NULL
+          AND NULLIF(
+            "clientInputs"->'readingIntakeEffective'->>'contentHash',
+            ''
+          ) IS NOT NULL
+          AND (
+            "status" = 'PROCESSING'
+            OR NULLIF("generatedContent"->>'reopenedFromVersionId', '') IS NOT NULL
+            OR NULLIF("generatedContent"->>'workingReadingVersionId', '') IS NOT NULL
+          )
+        ORDER BY "updatedAt" DESC
+        LIMIT 1
+      `);
+      currentOrderId = revisionOrders[0]?.id;
     }
 
     if (currentOrderId) {
@@ -144,22 +155,6 @@ export class MemoryContextBuilder {
     return [...explicit];
   }
 
-  private isRevisionGeneration(order: {
-    status: string;
-    generatedContent: Prisma.JsonValue | null;
-    clientInputs: Prisma.JsonValue | null;
-  }): boolean {
-    const generated = this.asRecord(order.generatedContent);
-    const clientInputs = this.asRecord(order.clientInputs);
-    const effective = this.asRecord(clientInputs.readingIntakeEffective);
-    const hasReopenLineage =
-      this.nonEmptyString(generated.reopenedFromVersionId) ||
-      this.nonEmptyString(generated.workingReadingVersionId);
-    const hasEffectiveSnapshot =
-      this.nonEmptyString(effective.snapshotId) && this.nonEmptyString(effective.contentHash);
-    return Boolean(hasEffectiveSnapshot && (hasReopenLineage || order.status === 'PROCESSING'));
-  }
-
   private withBudget(facts: string[], budget: number): string {
     return facts
       .slice(0, 8)
@@ -174,18 +169,6 @@ export class MemoryContextBuilder {
     // The customer question can contain sensitive free text. Vertex only ever
     // receives this fixed, non-personal continuity query for similarity ranking.
     return 'continuité de la lecture actuelle';
-  }
-
-  private asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  }
-
-  private nonEmptyString(value: unknown): string | null {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
   }
 
   private logFallback(error: unknown, source: 'local' | 'vertex'): void {
