@@ -84,4 +84,26 @@ describe('MemoryContextBuilder revision isolation', () => {
     expect(prisma.order.findFirst).not.toHaveBeenCalled();
     expect(prisma.readingVersion.findMany).not.toHaveBeenCalled();
   });
+
+  it('returns no memory context when revision scope cannot be proven', async () => {
+    const userMemoryFindMany = jest.fn();
+    const prisma = {
+      $queryRaw: jest.fn().mockRejectedValue(new Error('database unavailable')),
+      order: { findFirst: jest.fn() },
+      readingVersion: { findMany: jest.fn() },
+      userMemory: { findMany: userMemoryFindMany },
+    };
+    const bank = { retrieveMemories: jest.fn() };
+    const builder = new MemoryContextBuilder(
+      { isReadEnabled: () => true } as never,
+      prisma as never,
+      bank as never,
+    );
+
+    const context = await builder.build('user-1');
+
+    expect(context).toBe('');
+    expect(userMemoryFindMany).not.toHaveBeenCalled();
+    expect(bank.retrieveMemories).not.toHaveBeenCalled();
+  });
 });
