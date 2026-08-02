@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertCircle,
@@ -45,6 +45,8 @@ export function ReadingPdfViewer({
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const accessibilityDescriptionId = useId();
+  const pageStatusId = useId();
   const [scale, setScale] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
@@ -58,6 +60,8 @@ export function ReadingPdfViewer({
   const [pageWidth, setPageWidth] = useState(280);
 
   const safeFilename = `${title.replace(/[^\w\-àâäéèêëïîôùûüç]+/gi, '_')}.pdf`;
+  const pageStatus =
+    numPages > 0 ? `Page ${pageNumber} sur ${numPages}, zoom ${Math.round(scale * 100)} %` : 'Document PDF';
 
   useEffect(() => {
     const root = rootRef.current;
@@ -202,7 +206,8 @@ export function ReadingPdfViewer({
   const handleZoomOut = () => setScale((s) => Math.max(Number((s - 0.15).toFixed(2)), 0.7));
   const goToPage = (nextPage: number) => {
     setPageNumber(Math.min(Math.max(nextPage, 1), Math.max(numPages, 1)));
-    scrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    scrollRef.current?.scrollTo({ top: 0, left: 0, behavior });
   };
 
   const handleDownload = useCallback(() => {
@@ -235,9 +240,18 @@ export function ReadingPdfViewer({
     <div
       ref={rootRef}
       data-testid="reading-pdf-viewer"
+      role="region"
+      aria-label={`Lecteur PDF — ${title}`}
+      aria-busy={isLoading || isRendering}
       style={viewerStyle}
       className={`reading-pdf-viewer flex max-h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[rgba(90,148,205,0.18)] bg-[#E4EFF8] ${className}`}
     >
+      <p id={accessibilityDescriptionId} className="sr-only">
+        Le document est rendu page par page sous forme d’image. Utilisez les commandes de
+        navigation et de zoom ci-dessous. Le bouton Ouvrir dans un nouvel onglet permet aussi
+        d’utiliser le lecteur PDF natif du navigateur, et le bouton Télécharger conserve le
+        document sur votre appareil.
+      </p>
       <div className="reading-pdf-toolbar flex shrink-0 items-center justify-between gap-3 border-b border-[rgba(90,148,205,0.14)] bg-[rgba(242,250,255,0.96)] px-3 py-2.5 backdrop-blur-xl sm:px-5 sm:py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#8a6820]/10 text-[#8a6820]">
@@ -247,14 +261,19 @@ export function ReadingPdfViewer({
             <h1 className="truncate font-playfair text-base italic text-[#0d1f35] sm:text-2xl">
               {title}
             </h1>
-            <p className="text-xs text-[#385c7a]">
+            <p className="text-xs text-[#385c7a]" aria-hidden="true">
               {numPages > 0 ? `Page ${pageNumber} sur ${numPages}` : 'Document PDF'}
             </p>
-            {numPages > 0 && (
-              <span data-testid="reading-pdf-page-count" className="sr-only">
-                {numPages}
-              </span>
-            )}
+            <span
+              id={pageStatusId}
+              data-testid="reading-pdf-page-count"
+              className="sr-only"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {pageStatus}
+            </span>
           </div>
         </div>
 
@@ -275,7 +294,11 @@ export function ReadingPdfViewer({
         className="relative min-h-0 flex-1 overflow-auto bg-[#D8E9F4]"
       >
         {(isLoading || isRendering) && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(232,245,252,0.85)] backdrop-blur-sm">
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(232,245,252,0.85)] backdrop-blur-sm"
+            role="status"
+            aria-live="polite"
+          >
             <div className="px-4 text-center">
               <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-[#8a6820]" />
               <p className="text-sm text-[#385c7a]">Chargement de votre lecture...</p>
@@ -284,7 +307,7 @@ export function ReadingPdfViewer({
         )}
 
         {error && !isLoading && (
-          <div className="flex min-h-full items-center justify-center px-4 py-6">
+          <div className="flex min-h-full items-center justify-center px-4 py-6" role="alert">
             <div className="max-w-sm text-center">
               <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-400" />
               <p className="mb-1 font-medium text-[#0d1f35]">Impossible d&apos;afficher le PDF</p>
@@ -292,7 +315,7 @@ export function ReadingPdfViewer({
               <button
                 type="button"
                 onClick={() => setReloadKey((k) => k + 1)}
-                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/70 px-4 py-2.5 text-sm font-medium text-[#385c7a] hover:bg-white/90"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-[rgba(90,148,205,0.22)] bg-white/70 px-4 py-2.5 text-sm font-medium text-[#385c7a] hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd]"
               >
                 <RefreshCw className="h-4 w-4" />
                 Réessayer
@@ -305,8 +328,11 @@ export function ReadingPdfViewer({
           <div className="flex min-h-full items-start justify-center px-3 py-4">
             <canvas
               ref={canvasRef}
+              role="img"
+              tabIndex={0}
               aria-label={`Page ${pageNumber} sur ${numPages} de ${title}`}
-              className="overflow-hidden rounded-sm bg-white shadow-xl"
+              aria-describedby={`${pageStatusId} ${accessibilityDescriptionId}`}
+              className="overflow-hidden rounded-sm bg-white shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd]"
             />
           </div>
         )}
@@ -319,19 +345,19 @@ export function ReadingPdfViewer({
               type="button"
               onClick={() => goToPage(Math.max(1, pageNumber - 1))}
               disabled={pageNumber <= 1 || numPages <= 0}
-              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd] disabled:opacity-40"
               aria-label="Page précédente"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="min-w-[4.5rem] text-center text-xs tabular-nums text-[#385c7a]">
+            <span className="min-w-[4.5rem] text-center text-xs tabular-nums text-[#385c7a]" aria-hidden="true">
               {numPages > 0 ? `${pageNumber} / ${numPages}` : '-- / --'}
             </span>
             <button
               type="button"
               onClick={() => goToPage(Math.min(numPages, pageNumber + 1))}
               disabled={pageNumber >= numPages || numPages <= 0}
-              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd] disabled:opacity-40"
               aria-label="Page suivante"
             >
               <ChevronRight className="h-4 w-4" />
@@ -343,19 +369,19 @@ export function ReadingPdfViewer({
               type="button"
               onClick={handleZoomOut}
               disabled={scale <= 0.7}
-              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd] disabled:opacity-40"
               aria-label="Zoom arrière"
             >
               <ZoomOut className="h-4 w-4" />
             </button>
-            <span className="min-w-[3rem] text-center text-xs tabular-nums text-[#385c7a]">
+            <span className="min-w-[3rem] text-center text-xs tabular-nums text-[#385c7a]" aria-hidden="true">
               {Math.round(scale * 100)}%
             </span>
             <button
               type="button"
               onClick={handleZoomIn}
               disabled={scale >= 2.2}
-              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd] disabled:opacity-40"
               aria-label="Zoom avant"
             >
               <ZoomIn className="h-4 w-4" />
@@ -367,7 +393,8 @@ export function ReadingPdfViewer({
               type="button"
               onClick={handleDownload}
               disabled={!blobUrl}
-              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              aria-describedby={accessibilityDescriptionId}
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd] disabled:opacity-40"
               aria-label="Télécharger"
             >
               <Download className="h-4 w-4" />
@@ -376,7 +403,8 @@ export function ReadingPdfViewer({
               type="button"
               onClick={handleOpenExternal}
               disabled={!blobUrl}
-              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 disabled:opacity-40"
+              aria-describedby={accessibilityDescriptionId}
+              className="grid h-11 w-11 place-items-center rounded-lg text-[#385c7a] hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5a94cd] disabled:opacity-40"
               aria-label="Ouvrir dans un nouvel onglet"
             >
               <ExternalLink className="h-4 w-4" />
