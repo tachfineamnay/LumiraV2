@@ -5,9 +5,9 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
 
   const navLinks = [
-    { name: "L'offre", href: '/#niveaux' },
-    { name: 'Notre approche', href: '/notre-approche' },
-    { name: 'Questions fréquentes', href: '/faq' },
+    { name: "L'Offre", href: '#niveaux' },
+    { name: 'Comment ça marche', href: '#comment-ca-marche' },
+    { name: 'Témoignages', href: '#temoignages' },
     { name: 'Connexion', href: '/sanctuaire/login' },
   ];
 
@@ -30,8 +30,7 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-white/40 text-lg font-light leading-relaxed max-w-sm">
-              Une lecture personnalisée interprétative, préparée avec l&apos;IA et révisée par un
-              expert humain.
+              Architecture vibratoire et cartographie de l&apos;âme par algorithmes sacrés.
             </p>
           </div>
 
@@ -76,8 +75,8 @@ export function Footer() {
 
         <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-end gap-6 text-[10px] font-mono text-white/30 uppercase tracking-widest">
           <div className="flex flex-col gap-2">
-            <span>© {currentYear} Oracle Lumira</span>
-            <span>Lecture interprétative et accompagnement personnel.</span>
+            <span>© {currentYear} Lumira Systems Inc.</span>
+            <span>All rights reserved.</span>
           </div>
 
           <div className="flex flex-wrap gap-4 md:gap-8">
@@ -90,7 +89,7 @@ export function Footer() {
 
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
-            <span>Service en ligne</span>
+            <span>System Operational</span>
           </div>
         </div>
       </div>
