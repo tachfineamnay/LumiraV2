@@ -126,12 +126,13 @@ export class ReadingAmendmentFacade {
     return this.amendments.submitPalm(userId, amendmentId, dto);
   }
 
-  approvePalm(
+  async approvePalm(
     orderId: string,
     amendmentId: string,
     expertId: string,
     dto: ReviewPalmAmendmentDto,
   ) {
+    await this.ensureOriginalInputProjection(orderId);
     return this.amendments.approvePalm(orderId, amendmentId, expertId, dto);
   }
 
@@ -245,6 +246,70 @@ export class ReadingAmendmentFacade {
     }
   }
 
+  /**
+   * Current orders store their sealed intake in ReadingIntake.data. Older
+   * generation helpers still expect an immutable clientInputs.readingIntake
+   * projection. Materialize that projection once without mutating ReadingIntake.
+   */
+  private async ensureOriginalInputProjection(orderId: string): Promise<void> {
+    await this.prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id: orderId },
+          select: {
+            clientInputs: true,
+            readingIntake: {
+              select: {
+                status: true,
+                data: true,
+                contentHash: true,
+                sealedAt: true,
+              },
+            },
+          },
+        });
+        if (!order) throw new NotFoundException('Commande non trouvée');
+
+        const clientInputs = this.asRecord(order.clientInputs);
+        const existing = this.asRecord(clientInputs.readingIntake);
+        const existingProfile = this.asRecord(existing.profile);
+        if (
+          this.nonEmptyString(existing.sealedAt) &&
+          this.nonEmptyString(existing.contentHash) &&
+          Object.keys(existingProfile).length > 0
+        ) {
+          return;
+        }
+
+        const intake = order.readingIntake;
+        if (
+          intake?.status !== 'SEALED' ||
+          !intake.sealedAt ||
+          !intake.contentHash ||
+          !intake.data
+        ) {
+          throw new ConflictException('Le dossier scellé original est introuvable');
+        }
+
+        await tx.order.update({
+          where: { id: orderId },
+          data: {
+            clientInputs: {
+              ...clientInputs,
+              readingIntake: {
+                version: 'relational-reading-intake-v1',
+                sealedAt: intake.sealedAt.toISOString(),
+                contentHash: intake.contentHash,
+                profile: intake.data,
+              },
+            } as Prisma.InputJsonValue,
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
   private async expireDrafts(scope: { userId?: string; orderId?: string }) {
     if (scope.userId) {
       await this.prisma.$executeRaw(Prisma.sql`
@@ -300,6 +365,12 @@ export class ReadingAmendmentFacade {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : {};
+  }
+
+  private nonEmptyString(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
   }
 
   private getWebUrl(): string {
