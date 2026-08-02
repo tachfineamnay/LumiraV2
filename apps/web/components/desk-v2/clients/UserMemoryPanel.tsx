@@ -203,11 +203,15 @@ export function UserMemoryPanel({ clientId }: { clientId: string }) {
                     <p className="mt-2 text-sm leading-6 text-desk-text">{memory.fact}</p>
                   )}
                 </div>
-                <span
-                  className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLE[memory.status]}`}
-                >
-                  {memory.status}
-                </span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-medium ${memory.status === 'ACTIVE' && !memory.vertexSynced && memory.pendingOperation === 'UPSERT' ? 'bg-amber-500/10 text-amber-700' : STATUS_STYLE[memory.status]}`}
+                  >
+                    {memory.status === 'ACTIVE' &&
+                    !memory.vertexSynced &&
+                    memory.pendingOperation === 'UPSERT'
+                      ? 'APPROUVÉE · SYNCHRO EN ATTENTE'
+                      : memory.status}
+                  </span>
               </div>
               <p className="mt-2 text-xs text-desk-muted">
                 Vertex : {memory.vertexSynced ? 'synchronisée' : 'en attente ou absente'}

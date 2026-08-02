@@ -23,14 +23,19 @@ export function Header() {
 
   const handleAnchorClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>, href: string) => {
-      if (!href.startsWith('#')) return;
+      const destination = new URL(href, window.location.origin);
+      const isSameDocumentAnchor =
+        Boolean(destination.hash) && destination.pathname === window.location.pathname;
+      if (!isSameDocumentAnchor) return;
+
       event.preventDefault();
-      const target = document.querySelector<HTMLElement>(href);
+      const anchor = destination.hash.slice(1);
+      const target = document.getElementById(decodeURIComponent(anchor));
       if (!target) {
         window.location.assign(href);
         return;
       }
-      setPendingAnchor(href);
+      setPendingAnchor(destination.hash);
       closeMobileMenu(false, false);
     },
     [closeMobileMenu],
@@ -212,6 +217,7 @@ export function Header() {
 
           <Link
             href="/#niveaux"
+            onClick={(event) => handleAnchorClick(event, '/#niveaux')}
             className="hidden md:flex items-center justify-center px-6 py-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-cosmic-gold/30 text-white text-xs uppercase tracking-widest font-bold transition-all duration-500 group"
           >
             <span className="group-hover:text-cosmic-gold transition-colors">Commencer</span>
@@ -267,6 +273,7 @@ export function Header() {
               </Link>
               <Link
                 href="/#niveaux"
+                onClick={(event) => handleAnchorClick(event, '/#niveaux')}
                 className="flex min-h-[44px] items-center justify-center rounded-xl border border-cosmic-gold/30 px-3 py-2 text-sm uppercase tracking-widest text-cosmic-gold"
               >
                 Commencer l&apos;expérience

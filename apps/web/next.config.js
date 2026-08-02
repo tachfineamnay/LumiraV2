@@ -83,7 +83,7 @@ const nextConfig = {
     ];
   },
   webpack: (config) => {
-    // react-pdf / pdfjs — avoid bundling node canvas
+    // Keep optional Node canvas out of the browser PDF build path.
     config.resolve.alias.canvas = false;
     return config;
   },

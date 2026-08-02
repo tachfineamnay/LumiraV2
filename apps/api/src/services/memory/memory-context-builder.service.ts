@@ -17,11 +17,20 @@ export class MemoryContextBuilder {
    * SCRIBE enrichment is intentionally fail-open: neither PostgreSQL nor
    * Vertex can cancel, retry, or alter a reading when continuity is absent.
    */
-  async build(userId: string, currentQuestion?: string): Promise<string> {
+  async build(userId: string, _currentQuestion?: string): Promise<string> {
+    // Keep the caller contract while intentionally discarding free-form client text.
+    void _currentQuestion;
     if (!this.config.isReadEnabled()) return '';
     try {
       const local = await this.prisma.userMemory.findMany({
-        where: { userId, status: 'ACTIVE', pendingOperation: null },
+        where: {
+          userId,
+          status: 'ACTIVE',
+          pendingOperation: null,
+          vertexMemoryName: { not: null },
+          syncedAt: { not: null },
+          lastSyncError: null,
+        },
         orderBy: [{ updatedAt: 'desc' }, { confidence: 'desc' }],
         take: 8,
         select: { id: true, fact: true, vertexMemoryName: true },
@@ -32,7 +41,7 @@ export class MemoryContextBuilder {
       try {
         const remote = await this.bank.retrieveMemories(
           userId,
-          currentQuestion || 'continuité de la lecture actuelle',
+          this.safeSearchQuery(),
           8,
         );
         const orderedNames = remote.map((item) => item.name);
@@ -43,6 +52,8 @@ export class MemoryContextBuilder {
               status: 'ACTIVE',
               pendingOperation: null,
               vertexMemoryName: { in: orderedNames },
+              syncedAt: { not: null },
+              lastSyncError: null,
             },
             select: { fact: true, vertexMemoryName: true },
           });
@@ -84,6 +95,12 @@ export class MemoryContextBuilder {
         return acc.join('\n').length + next.length <= budget ? [...acc, next] : acc;
       }, [])
       .join('\n');
+  }
+
+  private safeSearchQuery(): string {
+    // The customer question can contain sensitive free text. Vertex only ever
+    // receives this fixed, non-personal continuity query for similarity ranking.
+    return 'continuité de la lecture actuelle';
   }
 
   private logFallback(error: unknown, source: 'local' | 'vertex'): void {

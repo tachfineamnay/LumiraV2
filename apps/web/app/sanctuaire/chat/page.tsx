@@ -82,6 +82,21 @@ export default function GuidancePage() {
   const [category, setCategory] = useState<RequestCategory>('READING_CLARIFICATION');
   const [relatedOrderId, setRelatedOrderId] = useState('');
   const conversationEndRef = useRef<HTMLDivElement>(null);
+  const composerTriggerRef = useRef<HTMLElement | null>(null);
+  const composerSubjectRef = useRef<HTMLInputElement>(null);
+  const selectedRequestTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const openComposer = useCallback((trigger: HTMLElement) => {
+    composerTriggerRef.current = trigger;
+    setShowComposer(true);
+  }, []);
+
+  const closeComposer = useCallback((restoreFocus = true) => {
+    setShowComposer(false);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => composerTriggerRef.current?.focus());
+    }
+  }, []);
 
   const loadDetail = useCallback(async (requestId: string) => {
     setIsDetailLoading(true);
@@ -194,6 +209,22 @@ export default function GuidancePage() {
     return () => window.cancelAnimationFrame(frame);
   }, [selected]);
 
+  useEffect(() => {
+    if (!showComposer) return;
+    const frame = window.requestAnimationFrame(() => composerSubjectRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeComposer();
+      }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [closeComposer, showComposer]);
+
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 pb-6 sm:px-6 sm:py-8 lg:pb-8">
       <header
@@ -221,8 +252,8 @@ export default function GuidancePage() {
           </div>
           <button
             type="button"
-            onClick={() => setShowComposer(true)}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-2 text-sm font-semibold text-abyss-900 hover:bg-horizon-300"
+            onClick={(event) => openComposer(event.currentTarget)}
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-2 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"
           >
             <Plus className="h-4 w-4" /> Nouvelle demande
           </button>
@@ -247,9 +278,9 @@ export default function GuidancePage() {
             </div>
             <button
               type="button"
-              onClick={() => setShowComposer(false)}
+              onClick={() => closeComposer()}
               aria-label="Fermer le formulaire"
-              className="grid h-10 w-10 place-items-center rounded-xl text-brume-200 hover:bg-brume-800/25"
+              className="grid h-11 w-11 place-items-center rounded-xl text-brume-200 hover:bg-brume-800/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
             >
               <X className="h-5 w-5" />
             </button>
@@ -290,6 +321,8 @@ export default function GuidancePage() {
           <label className="mt-4 block text-sm text-ivoire-200">
             Sujet
             <input
+              ref={composerSubjectRef}
+              id="guidance-subject"
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
               maxLength={120}
@@ -342,9 +375,9 @@ export default function GuidancePage() {
               <MessageCircle className="mx-auto h-7 w-7 text-brume-400" />
               <p className="mt-3 text-sm text-brume-300">Aucune demande pour le moment.</p>
               <button
-                type="button"
-                onClick={() => setShowComposer(true)}
-                className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 text-sm text-ivoire-200 hover:bg-brume-800/25"
+              type="button"
+                onClick={(event) => openComposer(event.currentTarget)}
+                className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 text-sm text-ivoire-200 hover:bg-brume-800/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
               >
                 <Plus className="h-4 w-4" /> Créer ma première demande
               </button>
@@ -358,8 +391,11 @@ export default function GuidancePage() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => void loadDetail(item.id)}
-                    className={`flex min-h-[72px] w-full items-center gap-3 px-4 py-4 text-left transition-colors ${
+                    onClick={(event) => {
+                      selectedRequestTriggerRef.current = event.currentTarget;
+                      void loadDetail(item.id);
+                    }}
+                    className={`flex min-h-[72px] w-full items-center gap-3 px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-horizon-400 ${
                       active ? 'bg-ivoire-400/8' : 'hover:bg-brume-800/22'
                     }`}
                   >
@@ -411,9 +447,12 @@ export default function GuidancePage() {
                 <div className="flex items-start gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelected(null)}
+                    onClick={() => {
+                      setSelected(null);
+                      window.requestAnimationFrame(() => selectedRequestTriggerRef.current?.focus());
+                    }}
                     aria-label="Retour à mes demandes"
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-ivoire-500/[0.06] text-brume-200 hover:bg-brume-800/25 lg:hidden"
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-ivoire-500/[0.06] text-brume-200 hover:bg-brume-800/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 lg:hidden"
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>

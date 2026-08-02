@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Volume2, Check, Loader2 } from 'lucide-react';
 import { GlassCard } from '../../../../components/ui/GlassCard';
 import sanctuaireApi from '../../../../lib/sanctuaireApi';
@@ -15,20 +15,28 @@ export default function PreferencesPage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Load current preference
-  useEffect(() => {
-    sanctuaireApi
-      .get('/client/profile')
-      .then((res) => {
+  const loadPreferences = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await sanctuaireApi.get('/client/profile');
         const voice = res.data?.profile?.preferredVoice;
         if (voice === 'MASCULINE' || voice === 'FEMININE') {
           setSelectedVoice(voice);
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    } catch {
+      setLoadError('Les préférences ne peuvent pas être chargées pour le moment.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadPreferences();
+  }, [loadPreferences]);
 
   const handleVoiceChange = async (voice: VoiceOption) => {
     const previousVoice = selectedVoice;
@@ -91,6 +99,7 @@ export default function PreferencesPage() {
                   key={voice.value}
                   onClick={() => handleVoiceChange(voice.value)}
                   disabled={saving}
+                  aria-pressed={isSelected}
                   className={`relative min-h-[96px] p-5 rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-serenity-300 ${
                     isSelected
                       ? 'bg-serenity-500/10 border-serenity-400/40 ring-1 ring-serenity-400/20'
@@ -119,6 +128,22 @@ export default function PreferencesPage() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {loadError && (
+          <div
+            role="alert"
+            className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-100"
+          >
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={() => void loadPreferences()}
+              className="inline-flex min-h-[40px] items-center rounded-lg px-3 text-sm font-semibold text-rose-100 hover:bg-rose-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+            >
+              Réessayer
+            </button>
           </div>
         )}
 

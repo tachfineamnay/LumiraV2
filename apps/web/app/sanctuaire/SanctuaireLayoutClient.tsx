@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronDown, LogOut, ShieldCheck, Star } from 'lucide-react';
@@ -15,19 +15,68 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, logout, user } = useSanctuaireAuth();
   const pathname = usePathname();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileTriggerRef = useRef<HTMLButtonElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  const closeProfileMenu = useCallback((restoreFocus = false) => {
+    setIsProfileOpen(false);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => profileTriggerRef.current?.focus());
+    }
+  }, []);
 
   useEffect(() => {
-    setIsProfileOpen(false);
-  }, [pathname]);
+    closeProfileMenu(false);
+  }, [closeProfileMenu, pathname]);
 
   useEffect(() => {
     if (!isProfileOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsProfileOpen(false);
+    const focusFirstMenuItem = () => {
+      profileMenuRef.current
+        ?.querySelector<HTMLElement>('[role="menuitem"], button:not([disabled])')
+        ?.focus();
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) closeProfileMenu(true);
+    };
+    const frame = window.requestAnimationFrame(focusFirstMenuItem);
     window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [isProfileOpen]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [closeProfileMenu, isProfileOpen]);
+
+  const handleProfileMenuKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const menuItems = Array.from(
+        profileMenuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"], button:not([disabled])') ?? [],
+      );
+      if (!menuItems.length) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeProfileMenu(true);
+        return;
+      }
+
+      const currentIndex = Math.max(0, menuItems.indexOf(document.activeElement as HTMLElement));
+      if (event.key === 'Home') {
+        event.preventDefault();
+        menuItems[0]?.focus();
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        menuItems[menuItems.length - 1]?.focus();
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        menuItems[(currentIndex + 1) % menuItems.length]?.focus();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        menuItems[(currentIndex - 1 + menuItems.length) % menuItems.length]?.focus();
+      }
+    },
+    [closeProfileMenu],
+  );
 
   if (pathname === '/sanctuaire/login') return <>{children}</>;
 
@@ -67,8 +116,12 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
             {isAuthenticated && (
               <div className="relative">
                 <button
+                  ref={profileTriggerRef}
                   type="button"
-                  onClick={() => setIsProfileOpen((open) => !open)}
+                  onClick={() => {
+                    if (isProfileOpen) closeProfileMenu(false);
+                    else setIsProfileOpen(true);
+                  }}
                   aria-expanded={isProfileOpen}
                   aria-haspopup="menu"
                   aria-controls="sanctuaire-profile-menu"
@@ -93,11 +146,13 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                       type="button"
                       aria-label="Fermer le menu profil"
                       className="fixed inset-0 z-40 cursor-default"
-                      onClick={() => setIsProfileOpen(false)}
+                      onClick={() => closeProfileMenu(true)}
                     />
                     <div
+                      ref={profileMenuRef}
                       id="sanctuaire-profile-menu"
                       role="menu"
+                      onKeyDown={handleProfileMenuKeyDown}
                       className="absolute right-0 z-50 mt-2 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-ivoire-500/[0.06] glass-aube shadow-aube-glow"
                     >
                       <div className="border-b border-ivoire-500/[0.04] p-4">
@@ -115,6 +170,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                               key={item.key}
                               href={item.route}
                               role="menuitem"
+                              onClick={() => closeProfileMenu(false)}
                               className="flex min-h-[52px] items-center gap-3 rounded-xl px-3 py-2 text-sm text-ivoire-200 hover:bg-brume-700/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
                             >
                               <Icon className="h-5 w-5 shrink-0 text-ivoire-400" />
@@ -135,7 +191,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                           type="button"
                           onClick={() => {
                             logout();
-                            setIsProfileOpen(false);
+                            closeProfileMenu(false);
                           }}
                           className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-rose-300 hover:bg-rose-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
                         >

@@ -159,6 +159,7 @@ export function CheckoutForm({ onFormValid, onFormInvalid, initialValues }: Chec
   const {
     register,
     watch,
+    reset,
     formState: { errors, isValid },
   } = useForm<CheckoutFormData>({
     resolver: zodResolver(formSchema),
@@ -167,6 +168,14 @@ export function CheckoutForm({ onFormValid, onFormInvalid, initialValues }: Chec
   });
 
   const watchedFields = watch();
+
+  useEffect(() => {
+    if (!initialValues) return;
+    // The Sanctuaire profile arrives after the first render. React Hook Form
+    // reads defaultValues once, so reset is required to hydrate the form while
+    // keepDirtyValues guarantees that a customer typing in the meantime wins.
+    reset(initialValues, { keepDirtyValues: true, keepTouched: true, keepErrors: true });
+  }, [initialValues, reset]);
 
   // Keep international prefixes such as +33, +52 and +212 intact.
   const formatPhone = (value: string) => {

@@ -4,6 +4,7 @@ import {
   Component,
   useState,
   useEffect,
+  useMemo,
   useRef,
   Suspense,
   useCallback,
@@ -115,12 +116,25 @@ function CheckoutContent() {
           });
         }
       } catch {
-        console.log('[Checkout] No connected user found');
+        // A visitor without a Sanctuaire session proceeds with an empty form.
       }
     };
     fetchConnectedUser();
     trackInitiateCheckout(SUBSCRIPTION.price);
   }, []);
+
+  const checkoutInitialValues = useMemo(
+    () =>
+      connectedUser
+        ? {
+            email: connectedUser.email,
+            firstName: connectedUser.firstName || '',
+            lastName: connectedUser.lastName || '',
+            phone: connectedUser.phone || '',
+          }
+        : undefined,
+    [connectedUser],
+  );
 
   useEffect(() => {
     const attempt = readCheckoutAttempt();
@@ -555,16 +569,7 @@ function CheckoutContent() {
                     <CheckoutForm
                       onFormValid={handleFormValid}
                       onFormInvalid={handleFormInvalid}
-                      initialValues={
-                        connectedUser
-                          ? {
-                              email: connectedUser.email,
-                              firstName: connectedUser.firstName || '',
-                              lastName: connectedUser.lastName || '',
-                              phone: connectedUser.phone || '',
-                            }
-                          : undefined
-                      }
+                      initialValues={checkoutInitialValues}
                     />
                     {connectedUser && (
                       <p className="mt-5 text-sm leading-6 text-blue-100/75">

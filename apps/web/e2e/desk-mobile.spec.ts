@@ -16,6 +16,7 @@ function json(route: Route, body: unknown, status = 200) {
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
       'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
       'Access-Control-Allow-Origin': '*',
+      'cache-control': 'no-store',
     },
     body: JSON.stringify(body),
   });
@@ -36,6 +37,7 @@ async function installDeskMocks(page: Page) {
           'Access-Control-Allow-Headers': 'Authorization, Content-Type',
           'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
           'Access-Control-Allow-Origin': '*',
+          'cache-control': 'no-store',
         },
       });
       return;

@@ -59,6 +59,7 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     status,
     contentType: 'application/json',
+    headers: { 'cache-control': 'no-store' },
     body: JSON.stringify(body),
   });
 }

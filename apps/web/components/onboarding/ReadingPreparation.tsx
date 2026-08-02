@@ -26,6 +26,7 @@ import { SmartPhotoUploader, PhotoUploadState } from './SmartPhotoUploader';
 import sanctuaireApi from '../../lib/sanctuaireApi';
 import { parseAndNormalizeOnboardingProgress } from '../../lib/onboarding-parser';
 import { uploadOnboardingPhoto } from '../../lib/onboarding-upload';
+import { useStableVisualViewportHeight } from '../../hooks/useStableVisualViewportHeight';
 import {
   DELIVERY_STYLES,
   LIFE_AREA_KEYS,
@@ -393,7 +394,7 @@ export function ReadingPreparation({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
+  const mobileViewportHeight = useStableVisualViewportHeight({ maxWidth: 1024, minHeight: 240 });
   const [draftLoadKey, setDraftLoadKey] = useState(0);
   const [openOptionalSections, setOpenOptionalSections] = useState<OptionalSectionKey[]>([]);
   const [pendingFocusField, setPendingFocusField] =
@@ -764,26 +765,6 @@ export function ReadingPreparation({
     );
     return () => window.cancelAnimationFrame(frame);
   }, [isComplete]);
-
-  useEffect(() => {
-    const updateViewportHeight = () => {
-      if (window.innerWidth >= 1024) {
-        setMobileViewportHeight(null);
-        return;
-      }
-      const nextHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
-      setMobileViewportHeight(nextHeight >= 240 ? nextHeight : null);
-    };
-    updateViewportHeight();
-    window.addEventListener('resize', updateViewportHeight);
-    window.visualViewport?.addEventListener('resize', updateViewportHeight);
-    window.visualViewport?.addEventListener('scroll', updateViewportHeight);
-    return () => {
-      window.removeEventListener('resize', updateViewportHeight);
-      window.visualViewport?.removeEventListener('resize', updateViewportHeight);
-      window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
-    };
-  }, []);
 
   const isPhotoBusy =
     photoStates.face === 'preparing' ||

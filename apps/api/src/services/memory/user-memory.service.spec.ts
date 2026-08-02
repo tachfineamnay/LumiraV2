@@ -15,6 +15,7 @@ describe('UserMemoryService ownership and purge', () => {
         groupBy: jest.fn(),
       },
       user: { count: jest.fn().mockResolvedValue(0) },
+      memorySyncJob: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn(),
     };
     const sanitizer = { sanitize: jest.fn(), hash: jest.fn() };
@@ -140,7 +141,7 @@ describe('UserMemoryService ownership and purge', () => {
   it('blocks a purge when a terminal local memory still references Vertex but configuration is unavailable', async () => {
     const { service, prisma, bank } = setup();
     prisma.userMemory.findMany.mockResolvedValue([
-      { vertexMemoryName: 'remote-a', status: 'DELETED', pendingOperation: 'DELETE' },
+      { vertexMemoryName: 'remote-a', pendingOperation: 'DELETE' },
     ]);
     bank.isConfigured.mockResolvedValue(false);
 
@@ -149,8 +150,8 @@ describe('UserMemoryService ownership and purge', () => {
     );
     expect(bank.deleteMemory).not.toHaveBeenCalled();
     expect(prisma.userMemory.findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-a', vertexMemoryName: { not: null } },
-      select: { vertexMemoryName: true },
+      where: { userId: 'user-a' },
+      select: { vertexMemoryName: true, pendingOperation: true },
     });
   });
 
@@ -331,6 +332,9 @@ describe('UserMemoryService ownership and purge', () => {
       fact: 'Diagnostic',
       scope: { user_id: 'lumira-memory-test-a' },
     });
+    bank.updateMemory.mockRejectedValue(
+      new MemoryBankError('invalid_argument', 'scope mismatch', false),
+    );
     (bank as unknown as { retrieveMemories: jest.Mock }).retrieveMemories = jest
       .fn()
       .mockResolvedValueOnce([
@@ -358,6 +362,11 @@ describe('UserMemoryService ownership and purge', () => {
       'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-diag-a',
       'lumira-memory-test-a',
     );
+    expect(bank.updateMemory).toHaveBeenCalledWith(
+      'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-diag-a',
+      expect.any(String),
+      'lumira-memory-test-b',
+    );
   });
 
   it('keeps a legacy account with no memory trace purgeable', async () => {
@@ -366,6 +375,20 @@ describe('UserMemoryService ownership and purge', () => {
     bank.isConfigured.mockResolvedValue(false);
 
     await expect(service.deleteRemoteForUser('user-a')).resolves.toEqual({ deleted: 0 });
+  });
+
+  it('purges a potentially orphaned remote scope while normal writing is disabled', async () => {
+    const { service, prisma, config, bank } = setup();
+    config.isWriteEnabled.mockReturnValue(false);
+    prisma.userMemory.findMany.mockResolvedValue([
+      { vertexMemoryName: null, pendingOperation: 'UPSERT' },
+    ]);
+    bank.deleteAllUserMemories.mockResolvedValue(1);
+
+    await expect(service.deleteRemoteForUser('user-a')).resolves.toEqual({ deleted: 1 });
+
+    expect(bank.isConfigured).toHaveBeenCalledTimes(1);
+    expect(bank.deleteAllUserMemories).toHaveBeenCalledWith('user-a');
   });
 
   it('does not scan or call Vertex for pending mutations while remote writing is disabled', async () => {

@@ -8,6 +8,7 @@ describe('MemorySyncWorkerService', () => {
       pollMs: jest.fn().mockReturnValue(5_000),
       concurrency: jest.fn().mockReturnValue(1),
       pendingMutationLimit: jest.fn().mockReturnValue(10),
+      heartbeatMs: jest.fn().mockReturnValue(1_000),
     };
     const readiness = { getStatus: jest.fn().mockResolvedValue({ ready: true, code: 'ready' }) };
     const sync = {
@@ -130,6 +131,41 @@ describe('MemorySyncWorkerService', () => {
       'job-a',
       expect.objectContaining({ candidateCount: 1, synced: 1 }),
     );
+  });
+
+  it('keeps a long extraction claimed with periodic heartbeats and clears the timer', async () => {
+    jest.useFakeTimers();
+    const { service, sync, prisma, oracle } = setup();
+    sync.claimNext.mockResolvedValue({
+      id: 'job-a',
+      readingVersionId: 'version-a',
+      userId: 'user-a',
+      orderId: 'order-a',
+      contentHash: 'hash-a',
+      attempts: 1,
+      maxAttempts: 5,
+    });
+    prisma.readingVersion.findUnique.mockResolvedValue({
+      status: 'SEALED',
+      contentHash: 'hash-a',
+      content: { safe: 'sealed' },
+      order: { userId: 'user-a' },
+    });
+    let release!: (value: unknown[]) => void;
+    oracle.extractMemoryCandidates.mockReturnValue(
+      new Promise<unknown[]>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    const processing = (service as unknown as { processOne(): Promise<void> }).processOne();
+    await jest.advanceTimersByTimeAsync(0);
+    await jest.advanceTimersByTimeAsync(3_000);
+
+    expect(sync.heartbeat).toHaveBeenCalledTimes(4);
+    release([]);
+    await processing;
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it.each([

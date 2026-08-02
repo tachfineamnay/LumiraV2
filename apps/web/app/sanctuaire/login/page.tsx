@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Mail, Loader2, Sparkles, ArrowLeft, AlertCircle, Lock, Timer } from 'lucide-react';
 import { useSanctuaireAuth } from '../../../context/SanctuaireAuthContext';
 
@@ -25,6 +25,7 @@ function LoginContent() {
   const [message, setMessage] = useState<string | null>(null);
   const consumedLinkRef = useRef(false);
   const magicToken = searchParams.get('token');
+  const prefersReducedMotion = useReducedMotion();
 
   // Pre-fill email from URL params (from redirect)
   useEffect(() => {
@@ -104,18 +105,18 @@ function LoginContent() {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           animate={{
-            scale: [1, 1.15, 1],
-            opacity: [0.2, 0.35, 0.2],
+            scale: prefersReducedMotion ? 1 : [1, 1.15, 1],
+            opacity: prefersReducedMotion ? 0.2 : [0.2, 0.35, 0.2],
           }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          transition={prefersReducedMotion ? { duration: 0 } : { duration: 6, repeat: Infinity, ease: 'easeInOut' }}
           className="absolute top-1/4 left-1/4 w-96 h-96 bg-horizon-400/20 rounded-full blur-[120px]"
         />
         <motion.div
           animate={{
-            scale: [1, 1.1, 1],
-            opacity: [0.15, 0.25, 0.15],
+            scale: prefersReducedMotion ? 1 : [1, 1.1, 1],
+            opacity: prefersReducedMotion ? 0.15 : [0.15, 0.25, 0.15],
           }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+          transition={prefersReducedMotion ? { duration: 0 } : { duration: 8, repeat: Infinity, ease: 'easeInOut' }}
           className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-serenity-400/15 rounded-full blur-[100px]"
         />
       </div>
@@ -125,7 +126,7 @@ function LoginContent() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.6 }}
           className="rounded-3xl border border-white/[0.08] bg-abyss-600/80 p-5 shadow-abyss backdrop-blur-xl min-[360px]:p-6 sm:p-8"
         >
           {/* Header */}
@@ -133,7 +134,7 @@ function LoginContent() {
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ type: 'spring', delay: 0.2 }}
+              transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', delay: 0.2 }}
               className="relative mx-auto mb-5 h-16 w-16 sm:mb-6 sm:h-20 sm:w-20"
             >
               {/* Outer glow */}
@@ -154,7 +155,7 @@ function LoginContent() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Input */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-stellar-300">
+              <label htmlFor="sanctuaire-login-email" className="block text-sm font-medium text-stellar-300">
                 Email de commande
               </label>
               <div className="relative">
@@ -162,6 +163,8 @@ function LoginContent() {
                   <Mail className="w-5 h-5 text-stellar-500" />
                 </div>
                 <input
+                  id="sanctuaire-login-email"
+                  name="email"
                   type="email"
                   value={email}
                   onChange={(e) => {
@@ -184,6 +187,7 @@ function LoginContent() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   className="flex items-start gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl"
+                  role="alert"
                 >
                   <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-rose-300">{error}</p>
@@ -195,6 +199,8 @@ function LoginContent() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl"
+                  role="status"
+                  aria-live="polite"
                 >
                   <Mail className="w-5 h-5 text-emerald-300 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-emerald-200">{message}</p>
@@ -210,6 +216,7 @@ function LoginContent() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   className="flex items-center justify-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl"
+                  role="status"
                 >
                   <Timer className="w-4 h-4 text-amber-400" />
                   <p className="text-sm text-amber-300">
@@ -252,12 +259,12 @@ function LoginContent() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.3, delay: prefersReducedMotion ? 0 : 0.4 }}
           className="mt-6 text-center"
         >
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-stellar-400 hover:text-stellar-200 transition-colors text-sm"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl px-2 text-sm text-stellar-400 transition-colors hover:text-stellar-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Retour à l&apos;accueil</span>

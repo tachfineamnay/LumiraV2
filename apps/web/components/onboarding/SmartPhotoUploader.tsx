@@ -88,6 +88,9 @@ export const SmartPhotoUploader = ({
   const [privatePreviewFailed, setPrivatePreviewFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraDialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const cameraRequestRef = useRef(0);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCameraStarting, setIsCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -173,24 +176,67 @@ export const SmartPhotoUploader = ({
   }, [onChange]);
 
   const stopWebcam = useCallback(() => {
+    cameraRequestRef.current += 1;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
-  const closeWebcam = useCallback(() => {
+  const closeWebcam = useCallback((restoreFocus = true) => {
     stopWebcam();
     setIsCameraOpen(false);
     setCameraError(null);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => previousFocusRef.current?.focus());
+    }
   }, [stopWebcam]);
 
   useEffect(() => stopWebcam, [stopWebcam]);
 
+  useEffect(() => {
+    if (!isCameraOpen) return;
+    const dialog = cameraDialogRef.current;
+    const getFocusable = () =>
+      Array.from(
+        dialog?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+    const frame = window.requestAnimationFrame(() => getFocusable()[0]?.focus());
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeWebcam();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = getFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', trapFocus);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', trapFocus);
+    };
+  }, [closeWebcam, isCameraOpen]);
+
   const openCamera = useCallback(async () => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (prefersNativeCameraInput()) {
       cameraInputRef.current?.click();
       return;
     }
+    const request = ++cameraRequestRef.current;
     setCameraError(null);
     setIsCameraOpen(true);
     setIsCameraStarting(true);
@@ -203,6 +249,10 @@ export const SmartPhotoUploader = ({
         },
         audio: false,
       });
+      if (request !== cameraRequestRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -434,14 +484,16 @@ export const SmartPhotoUploader = ({
 
       {isCameraOpen && (
         <div
+          ref={cameraDialogRef}
           className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-abyss-900/95 p-3 [padding-top:max(0.75rem,var(--safe-area-top))] [padding-bottom:max(0.75rem,var(--safe-area-bottom))] backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
-          aria-label={`Prendre une photo — ${label}`}
+          aria-labelledby="camera-dialog-title"
+          tabIndex={-1}
         >
           <div className="custom-scrollbar w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.1] bg-abyss-700 p-4 shadow-abyss sm:p-5">
             <div className="flex items-center justify-between gap-3">
-              <h4 className="text-sm font-semibold text-stellar-100">
+              <h4 id="camera-dialog-title" className="text-sm font-semibold text-stellar-100">
                 <Camera className="mr-2 inline h-4 w-4 text-horizon-300" />
                 {label}
               </h4>
@@ -449,7 +501,7 @@ export const SmartPhotoUploader = ({
                 type="button"
                 onClick={closeWebcam}
                 aria-label="Fermer la caméra"
-                className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.1] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+                className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.1] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -487,7 +539,7 @@ export const SmartPhotoUploader = ({
                 <button
                   type="button"
                   onClick={() => {
-                    closeWebcam();
+                    closeWebcam(false);
                     fileInputRef.current?.click();
                   }}
                   className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"

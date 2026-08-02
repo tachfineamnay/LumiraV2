@@ -56,6 +56,11 @@ export class MemoryConfigService {
     return this.number('MEMORY_JOB_STALE_MS', 900_000, 60_000, 86_400_000);
   }
 
+  heartbeatMs(): number {
+    // Leave room for at least two missed ticks before a running job is stale.
+    return Math.max(1_000, Math.floor(this.staleMs() / 3));
+  }
+
   requestTimeoutMs(): number {
     return this.number('VERTEX_MEMORY_REQUEST_TIMEOUT_MS', 8_000, 500, 30_000);
   }

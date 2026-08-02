@@ -43,6 +43,7 @@ test.describe('Compatibilité de l’ancien onboarding', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
+        headers: { 'cache-control': 'no-store' },
         body: JSON.stringify({ authenticated: false }),
       }),
     );

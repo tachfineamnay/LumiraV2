@@ -70,6 +70,7 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     status,
     contentType: 'application/json',
+    headers: { 'cache-control': 'no-store' },
     body: JSON.stringify(body),
   });
 }
@@ -99,7 +100,7 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
     // an application failure.
     const body = route.request().postDataBuffer();
     if (body) expect(body.byteLength).toBeGreaterThan(0);
-    await route.fulfill({ status: 200, body: '' });
+    await route.fulfill({ status: 200, headers: { 'cache-control': 'no-store' }, body: '' });
   });
 
   await page.route('**/api/bff/**', async (route) => {

@@ -34,6 +34,7 @@ describe('MemoryConfigService', () => {
         MEMORY_RECOVERY_LOOKBACK_MS: '7200000',
         MEMORY_RECOVERY_LIMIT: '12',
         MEMORY_PENDING_MUTATION_LIMIT: '7',
+        MEMORY_JOB_STALE_MS: '60000',
       }),
     );
 
@@ -42,5 +43,6 @@ describe('MemoryConfigService', () => {
     expect(config.recoveryLookbackMs()).toBe(7200000);
     expect(config.recoveryLimit()).toBe(12);
     expect(config.pendingMutationLimit()).toBe(7);
+    expect(config.heartbeatMs()).toBe(20_000);
   });
 });

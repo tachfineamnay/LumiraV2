@@ -263,4 +263,38 @@ describe('VertexMemoryBankClient deletion', () => {
     ).rejects.toEqual(expect.objectContaining({ code: 'invalid_argument' }));
     expect(deleteMemory).not.toHaveBeenCalled();
   });
+
+  it('refuses an update across scopes before the update RPC', async () => {
+    const { service } = setup();
+    const updateMemory = jest.fn();
+    (service as unknown as { client: unknown }).client = {
+      getMemory: jest.fn().mockResolvedValue([
+        {
+          name: 'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+          fact: 'Fait de user-b',
+          scope: { user_id: 'user-b' },
+        },
+      ]),
+      updateMemory,
+    };
+
+    await expect(
+      service.updateMemory(
+        'projects/test/locations/global/reasoningEngines/lumira/memories/lumira-abc123',
+        'Fait de user-a',
+        'user-a',
+      ),
+    ).rejects.toEqual(expect.objectContaining({ code: 'invalid_argument' }));
+    expect(updateMemory).not.toHaveBeenCalled();
+  });
+
+  it('closes the gRPC client during Nest shutdown', async () => {
+    const { service } = setup();
+    const close = jest.fn().mockResolvedValue(undefined);
+    (service as unknown as { client: unknown }).client = { close };
+
+    await service.onModuleDestroy();
+
+    expect(close).toHaveBeenCalledTimes(1);
+  });
 });

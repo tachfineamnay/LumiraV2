@@ -133,7 +133,7 @@ export class UserMemoryService {
 
     try {
       const remote = memory.vertexMemoryName
-        ? await this.bank.updateMemory(memory.vertexMemoryName, memory.fact)
+        ? await this.bank.updateMemory(memory.vertexMemoryName, memory.fact, memory.userId)
         : await this.bank.createMemory({
             memoryId: this.vertexMemoryId(memory.id),
             userId: memory.userId,
@@ -169,37 +169,28 @@ export class UserMemoryService {
    * data is touched. A legacy account with no memory trace remains purgeable.
    */
   async deleteRemoteForUser(userId: string): Promise<{ deleted: number }> {
-    const local = await this.prisma.userMemory.findMany({
-      where: { userId, vertexMemoryName: { not: null } },
-      select: { vertexMemoryName: true },
-    });
-    if (!this.memoryConfig.isWriteEnabled()) {
-      if (local.length > 0) {
-        throw new MemoryBankError(
-          'not_configured',
-          'Vertex Memory writing must be enabled before a referenced memory can be purged.',
-          false,
-        );
-      }
-      return { deleted: 0 };
-    }
+    const [local, job] = await Promise.all([
+      this.prisma.userMemory.findMany({
+        where: { userId },
+        select: { vertexMemoryName: true, pendingOperation: true },
+      }),
+      this.prisma.memorySyncJob.findFirst({ where: { userId }, select: { id: true } }),
+    ]);
+    // A local fact or job is durable evidence that this account may have reached
+    // Memory Bank. Purge is deliberately independent from the normal write flag.
+    if (local.length === 0 && !job) return { deleted: 0 };
+
     const configured = await this.bank.isConfigured();
     if (!configured) {
-      if (local.length > 0) {
-        throw new MemoryBankError(
-          'not_configured',
-          'Vertex Memory must be configured before a referenced memory can be purged.',
-          false,
-        );
-      }
-      return { deleted: 0 };
+      throw new MemoryBankError(
+        'not_configured',
+        'Vertex Memory must be configured before exposed memory data can be purged.',
+        false,
+      );
     }
 
-    for (const memory of local) {
-      if (memory.vertexMemoryName) await this.bank.deleteMemory(memory.vertexMemoryName, userId);
-    }
     const deleted = await this.bank.deleteAllUserMemories(userId);
-    return { deleted: Math.max(deleted, local.length) };
+    return { deleted };
   }
 
   async markAllDeleted(userId: string): Promise<void> {
@@ -565,6 +556,21 @@ export class UserMemoryService {
         category: 'READING_CONTINUITY',
       });
       createdName = created.name;
+      let scopeBreakRejected = false;
+      try {
+        await this.bank.updateMemory(created.name, fact, users.userBId);
+      } catch (error) {
+        const normalized = this.asMemoryError(error);
+        if (normalized.code !== 'invalid_argument') throw normalized;
+        scopeBreakRejected = true;
+      }
+      if (!scopeBreakRejected) {
+        throw new MemoryBankError(
+          'invalid_argument',
+          'Vertex Memory scope-break attempt was not rejected.',
+          false,
+        );
+      }
       const [retrievedA, listedB, listedCaseVariant] = await Promise.all([
         this.bank.retrieveMemories(users.userAId, fact, 8),
         this.bank.listUserMemories(users.userBId),
@@ -587,7 +593,7 @@ export class UserMemoryService {
         retrievedForA: true,
         absentFromB: true,
         absentFromCaseVariant: true,
-        scopeBreakRejected: true,
+        scopeBreakRejected,
       };
     } finally {
       if (createdName) {

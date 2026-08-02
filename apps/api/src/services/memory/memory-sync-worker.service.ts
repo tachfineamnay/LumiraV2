@@ -70,49 +70,50 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
     const job = await this.sync.claimNext();
     if (!job) return;
     try {
-      const version = await this.prisma.readingVersion.findUnique({
-        where: { id: job.readingVersionId },
-        select: {
-          status: true,
-          contentHash: true,
-          content: true,
-          order: { select: { userId: true } },
-        },
-      });
-      if (
-        !version ||
-        version.status !== 'SEALED' ||
-        version.contentHash !== job.contentHash ||
-        version.order.userId !== job.userId
-      ) {
-        throw new MemoryBankError(
-          'non_retryable',
-          'sealed version no longer matches the queued job',
-          false,
-        );
-      }
-      await this.sync.heartbeat(job.id);
-      const candidates = await this.oracle.extractMemoryCandidates({
-        orderId: job.orderId,
-        readingVersionId: job.readingVersionId,
-        contentHash: job.contentHash,
-        sealedContent: version.content,
-      });
-      const stored = await this.userMemory.persistSealedCandidates({
-        userId: job.userId,
-        readingVersionId: job.readingVersionId,
-        candidates,
-      });
-      const synced = await this.userMemory.syncActiveForReading(job.readingVersionId);
-      if (synced.failed > 0) {
-        throw synced.error ?? new MemoryBankError('unavailable', 'memory write failed', true);
-      }
-      await this.sync.succeed(job.id, {
-        candidateCount: Array.isArray(candidates) ? candidates.length : 0,
-        accepted: stored.accepted,
-        active: stored.active,
-        synced: synced.synced,
-        syncFailed: synced.failed,
+      await this.withHeartbeat(job.id, async () => {
+        const version = await this.prisma.readingVersion.findUnique({
+          where: { id: job.readingVersionId },
+          select: {
+            status: true,
+            contentHash: true,
+            content: true,
+            order: { select: { userId: true } },
+          },
+        });
+        if (
+          !version ||
+          version.status !== 'SEALED' ||
+          version.contentHash !== job.contentHash ||
+          version.order.userId !== job.userId
+        ) {
+          throw new MemoryBankError(
+            'non_retryable',
+            'sealed version no longer matches the queued job',
+            false,
+          );
+        }
+        const candidates = await this.oracle.extractMemoryCandidates({
+          orderId: job.orderId,
+          readingVersionId: job.readingVersionId,
+          contentHash: job.contentHash,
+          sealedContent: version.content,
+        });
+        const stored = await this.userMemory.persistSealedCandidates({
+          userId: job.userId,
+          readingVersionId: job.readingVersionId,
+          candidates,
+        });
+        const synced = await this.userMemory.syncActiveForReading(job.readingVersionId);
+        if (synced.failed > 0) {
+          throw synced.error ?? new MemoryBankError('unavailable', 'memory write failed', true);
+        }
+        await this.sync.succeed(job.id, {
+          candidateCount: Array.isArray(candidates) ? candidates.length : 0,
+          accepted: stored.accepted,
+          active: stored.active,
+          synced: synced.synced,
+          syncFailed: synced.failed,
+        });
       });
     } catch (error) {
       const normalized = this.normalizeError(error);
@@ -126,6 +127,22 @@ export class MemorySyncWorkerService implements OnModuleInit, OnModuleDestroy {
     this.lastReadinessCode = code;
     // Keep this operational signal free of config values, user ids and content.
     this.logger.warn(`Memory worker blocked: readiness=${code}`);
+  }
+
+  private async withHeartbeat<T>(jobId: string, work: () => Promise<T>): Promise<T> {
+    await this.sync.heartbeat(jobId);
+    const timer = setInterval(() => {
+      void this.sync.heartbeat(jobId).catch((error) => {
+        this.logger.warn(
+          `Memory worker heartbeat failed: ${error instanceof Error ? error.name : 'unknown'}`,
+        );
+      });
+    }, this.config.heartbeatMs());
+    try {
+      return await work();
+    } finally {
+      clearInterval(timer);
+    }
   }
 
   private normalizeError(error: unknown): MemoryBankError {

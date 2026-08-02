@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { v1beta1 } from '@google-cloud/aiplatform';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -19,7 +19,7 @@ type MemoryOperation = { promise(): Promise<[unknown, ...unknown[]]> };
  * explicit retry contract for callers.
  */
 @Injectable()
-export class VertexMemoryBankClient implements VertexMemoryBank {
+export class VertexMemoryBankClient implements VertexMemoryBank, OnModuleDestroy {
   private readonly logger = new Logger(VertexMemoryBankClient.name);
   private client: MemoryBankClient | null = null;
 
@@ -75,7 +75,7 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
         const existing = await this.getExistingMemory(parent, input.memoryId, input.userId);
         if (existing.fact === input.fact) return existing;
 
-        const updated = await this.updateMemory(existing.name, input.fact);
+        const updated = await this.updateMemory(existing.name, input.fact, input.userId);
         this.assertOwned(updated.name);
         this.assertScope(updated.scope, input.userId);
         if (updated.fact !== input.fact) {
@@ -142,9 +142,14 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
     }
   }
 
-  async updateMemory(name: string, fact: string): Promise<VertexMemory> {
+  async updateMemory(name: string, fact: string, expectedUserId: string): Promise<VertexMemory> {
     this.assertOwned(name);
     try {
+      // Do not trust a local Vertex name: a corrupted local reference must never
+      // mutate a resource outside the expected user scope.
+      const existing = await this.getMemory(name);
+      this.assertOwned(existing.name);
+      this.assertScope(existing.scope, expectedUserId);
       const [operation] = await (
         await this.getClient()
       ).updateMemory(
@@ -154,6 +159,7 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
       const [memory] = await this.awaitOperation(operation as unknown as MemoryOperation);
       const mapped = this.map(memory);
       this.assertOwned(mapped.name);
+      this.assertScope(mapped.scope, expectedUserId);
       return mapped;
     } catch (error) {
       throw this.normalize(error);
@@ -198,6 +204,10 @@ export class VertexMemoryBankClient implements VertexMemoryBank {
   async close(): Promise<void> {
     await this.client?.close();
     this.client = null;
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.close();
   }
 
   private parent(): string {

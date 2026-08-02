@@ -22,6 +22,7 @@ import {
   type PdfPageProxy,
   type PdfRenderTask,
 } from '@/lib/pdfjs-client';
+import { useStableVisualViewportHeight } from '@/hooks/useStableVisualViewportHeight';
 
 export function extractOrderNumberFromPdfUrl(pdfUrl: string): string | null {
   const match = pdfUrl.match(/\/readings\/([^/]+)\/(download|file)/);
@@ -53,26 +54,10 @@ export function ReadingPdfViewer({
   const [pdfDocument, setPdfDocument] = useState<PdfDocumentProxy | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [visualViewportHeight, setVisualViewportHeight] = useState<number | null>(null);
+  const visualViewportHeight = useStableVisualViewportHeight();
   const [pageWidth, setPageWidth] = useState(280);
 
   const safeFilename = `${title.replace(/[^\w\-àâäéèêëïîôùûüç]+/gi, '_')}.pdf`;
-
-  useEffect(() => {
-    const updateViewportHeight = () => {
-      setVisualViewportHeight(Math.round(window.visualViewport?.height ?? window.innerHeight));
-    };
-
-    updateViewportHeight();
-    window.visualViewport?.addEventListener('resize', updateViewportHeight);
-    window.visualViewport?.addEventListener('scroll', updateViewportHeight);
-    window.addEventListener('resize', updateViewportHeight);
-    return () => {
-      window.visualViewport?.removeEventListener('resize', updateViewportHeight);
-      window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
-      window.removeEventListener('resize', updateViewportHeight);
-    };
-  }, []);
 
   useEffect(() => {
     const root = rootRef.current;
