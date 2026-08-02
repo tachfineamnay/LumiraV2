@@ -10,6 +10,7 @@ import { SanctuaireSidebar } from '../../components/sanctuary/SanctuaireSidebar'
 import { SanctuaireAmendmentBanner } from '../../components/sanctuary/SanctuaireAmendmentBanner';
 import { SanctuaireAuthProvider, useSanctuaireAuth } from '../../context/SanctuaireAuthContext';
 import { SanctuaireProvider } from '../../context/SanctuaireContext';
+import { useStableVisualViewportHeight } from '../../hooks/useStableVisualViewportHeight';
 import { PROFILE_MENU_NAV } from '@/lib/sanctuaireNav';
 
 function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileTriggerRef = useRef<HTMLButtonElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const visualViewportHeight = useStableVisualViewportHeight({ maxWidth: 1024, minHeight: 280 });
 
   const closeProfileMenu = useCallback((restoreFocus = false) => {
     setIsProfileOpen(false);
@@ -51,7 +53,9 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
   const handleProfileMenuKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       const menuItems = Array.from(
-        profileMenuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"], button:not([disabled])') ?? [],
+        profileMenuRef.current?.querySelectorAll<HTMLElement>(
+          '[role="menuitem"], button:not([disabled])',
+        ) ?? [],
       );
       if (!menuItems.length) return;
 
@@ -61,13 +65,28 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const currentIndex = Math.max(0, menuItems.indexOf(document.activeElement as HTMLElement));
+      const activeElement = document.activeElement as HTMLElement | null;
+      const currentIndex = Math.max(0, menuItems.indexOf(activeElement as HTMLElement));
+      const first = menuItems[0];
+      const last = menuItems[menuItems.length - 1];
+
+      if (event.key === 'Tab') {
+        if (event.shiftKey && activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+        return;
+      }
+
       if (event.key === 'Home') {
         event.preventDefault();
-        menuItems[0]?.focus();
+        first?.focus();
       } else if (event.key === 'End') {
         event.preventDefault();
-        menuItems[menuItems.length - 1]?.focus();
+        last?.focus();
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
         menuItems[(currentIndex + 1) % menuItems.length]?.focus();
@@ -92,7 +111,11 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <SanctuaireGuard>
-      <div className="sanctuaire-aube relative h-[100dvh] overflow-hidden text-ivoire-100 selection:bg-horizon-300/15">
+      <div
+        data-testid="sanctuaire-shell"
+        style={{ height: visualViewportHeight ? `${visualViewportHeight}px` : '100dvh' }}
+        className="sanctuaire-aube relative overflow-hidden text-ivoire-100 selection:bg-horizon-300/15"
+      >
         <SanctuaireSidebar />
         <div className="relative z-10 flex h-full min-h-0 min-w-0 flex-col lg:ml-64">
           <header className="glass-header-aube sticky top-0 z-40 flex min-h-[var(--sanctuaire-header-h)] shrink-0 items-center justify-between px-3 py-3 sm:px-5">
@@ -126,6 +149,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                   aria-expanded={isProfileOpen}
                   aria-haspopup="menu"
                   aria-controls="sanctuaire-profile-menu"
+                  aria-label={`Ouvrir le menu profil de ${userName}`}
                   className="flex min-h-[44px] items-center gap-2 rounded-xl border border-ivoire-500/[0.06] bg-brume-700/40 px-2 py-2 text-left transition-colors hover:bg-brume-600/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 sm:px-3"
                 >
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-horizon-400 text-sm font-bold text-abyss-800">
@@ -153,6 +177,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                       ref={profileMenuRef}
                       id="sanctuaire-profile-menu"
                       role="menu"
+                      aria-label="Profil et réglages"
                       onKeyDown={handleProfileMenuKeyDown}
                       className="absolute right-0 z-50 mt-2 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-ivoire-500/[0.06] glass-aube shadow-aube-glow"
                     >
@@ -190,6 +215,7 @@ function SanctuaireLayoutContent({ children }: { children: React.ReactNode }) {
                       <div className="border-t border-ivoire-500/[0.04] p-2">
                         <button
                           type="button"
+                          role="menuitem"
                           onClick={() => {
                             logout();
                             closeProfileMenu(false);
