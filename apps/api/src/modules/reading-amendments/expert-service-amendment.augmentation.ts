@@ -1,4 +1,5 @@
 import type { Expert } from '@prisma/client';
+import '../expert/expert.service';
 
 declare module '../expert/expert.service' {
   interface ExpertService {
