@@ -25,13 +25,13 @@ import {
   SavePalmAmendmentDraftDto,
   SubmitPalmAmendmentDto,
 } from './dto/reading-amendment.dto';
-import { ReadingAmendmentService } from './reading-amendment.service';
+import { ReadingAmendmentFacade } from './reading-amendment.facade';
 
 @Controller('users/reading-amendments')
 @UseGuards(JwtAuthGuard)
 export class ClientReadingAmendmentController {
   constructor(
-    private readonly amendments: ReadingAmendmentService,
+    private readonly amendments: ReadingAmendmentFacade,
     private readonly privatePhotos: PrivateOnboardingPhotoService,
     private readonly s3: S3Service,
   ) {}
@@ -105,7 +105,7 @@ export class ClientReadingAmendmentController {
 @Roles('EXPERT', 'ADMIN')
 export class ExpertReadingAmendmentController {
   constructor(
-    private readonly amendments: ReadingAmendmentService,
+    private readonly amendments: ReadingAmendmentFacade,
     private readonly privatePhotos: PrivateOnboardingPhotoService,
     private readonly s3: S3Service,
   ) {}
