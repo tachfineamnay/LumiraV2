@@ -2,7 +2,11 @@
 # Production API boot: recover known rolled-back Prisma failures, migrate, then start Nest.
 set -eu
 
-SCHEMA="packages/database/prisma/schema.prisma"
+# Build the additive runtime schema in the exact container that will run
+# migrate deploy and Nest. This keeps Prisma generation, migration discovery and
+# the ReadingVersion.inputSnapshotId client shape aligned.
+node packages/database/prisma/build-runtime-schema.cjs
+SCHEMA="packages/database/prisma/schema.runtime.prisma"
 
 # Migrations that failed in production after a Postgres transactional rollback, then were
 # fixed in git. Marking them --rolled-back lets migrate deploy re-apply the fixed SQL.
