@@ -1,6 +1,7 @@
 import type { Viewport } from 'next';
 import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
+import './accessibility.css';
 import { ConsentBanner } from '../components/analytics/ConsentBanner';
 import { ConsentProvider } from '../components/analytics/ConsentProvider';
 import { GoogleAnalytics } from '../components/analytics/GoogleAnalytics';
@@ -48,4 +49,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-
