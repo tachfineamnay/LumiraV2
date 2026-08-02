@@ -15,7 +15,7 @@ describe('Reading amendment production contracts', () => {
   const migration = readFileSync(
     join(
       __dirname,
-      '../../../../packages/database/prisma/migrations/20260802123000_add_reading_intake_amendments/migration.sql',
+      '../../../../../packages/database/prisma/migrations/20260802123000_add_reading_intake_amendments/migration.sql',
     ),
     'utf8',
   );
