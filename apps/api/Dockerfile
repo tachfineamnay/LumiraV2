@@ -28,7 +28,7 @@ RUN pnpm turbo run build --filter=api...
 
 # 3. Stage Runner
 FROM node:20-alpine AS runner
-RUN apk add --no-cache libc6-compat curl openssl ffmpeg
+RUN apk add --no-cache libc6-compat curl openssl ffmpeg libheif-tools
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -44,9 +44,10 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 # successful build.
 RUN pnpm install --prod --frozen-lockfile
 
-# Fail the image build when sharp cannot load its native binding or decode a
-# known 1x1 PNG. This runs in the exact Coolify runtime stage.
-RUN node -e "const sharp=require('sharp'); sharp(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64')).metadata().then(m=>{if(m.width!==1||m.height!==1)throw new Error('invalid sharp decode')})"
+# Fail the image build when sharp cannot load its native binding, decode a
+# known PNG, or when the native HEIC/HEIF fallback is unavailable.
+RUN command -v heif-convert >/dev/null && \
+    node -e "const sharp=require('sharp'); sharp(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64')).metadata().then(m=>{if(m.width!==1||m.height!==1)throw new Error('invalid sharp decode')})"
 
 # RÉCUPÉRATION DES ARTIFACTS (CRUCIAL)
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
