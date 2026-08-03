@@ -65,7 +65,7 @@ export function Footer() {
 
           <div>
             <span className="mb-8 block text-[10px] font-bold uppercase tracking-[0.2em] text-white/20">
-              Contact
+              Connect
             </span>
             <ul className="space-y-4">
               <li>
@@ -98,8 +98,8 @@ export function Footer() {
 
         <div className="flex flex-col items-start justify-between gap-6 border-t border-white/5 pt-8 text-[10px] font-mono uppercase tracking-widest text-white/30 md:flex-row md:items-end">
           <div className="flex flex-col gap-2">
-            <span>© {currentYear} Oracle Lumira</span>
-            <span>Tous droits réservés.</span>
+            <span>© {currentYear} Lumira Systems Inc.</span>
+            <span>All rights reserved.</span>
           </div>
 
           <div className="flex flex-wrap gap-4 md:gap-8">
@@ -112,7 +112,7 @@ export function Footer() {
 
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
-            <span>Service opérationnel</span>
+            <span>System Operational</span>
           </div>
         </div>
       </div>
