@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
+import { LandingAnchorLink } from './LandingAnchorLink';
 
 /**
  * Hero above the fold — fully server-rendered for LCP.
@@ -7,77 +7,80 @@ import { ChevronDown } from 'lucide-react';
  */
 export function LandingHero() {
   return (
-    <section className="relative min-h-[100svh] flex flex-col items-center justify-center text-center px-4 pt-24 md:pt-32 pb-16 md:pb-20 overflow-hidden z-10 selection:bg-cosmic-gold/20">
-      <div className="absolute inset-0 bg-noise opacity-30 pointer-events-none mix-blend-overlay" />
+    <section className="relative z-10 flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-4 pb-16 pt-24 text-center selection:bg-cosmic-gold/20 md:pb-20 md:pt-32">
+      <div
+        className="pointer-events-none absolute inset-0 bg-noise opacity-30 mix-blend-overlay"
+        aria-hidden
+      />
 
-      <div className="relative max-w-[1600px] mx-auto w-full flex flex-col items-center motion-safe:animate-hero-enter">
-        <div className="mb-8 md:mb-12 flex items-center gap-3">
+      <div className="relative mx-auto flex w-full max-w-[1600px] flex-col items-center motion-safe:animate-hero-enter">
+        <div className="mb-8 flex items-center gap-3 md:mb-12">
           <div className="flex -space-x-3" aria-hidden>
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/20"
+                className="h-7 w-7 rounded-full border border-white/20 bg-gradient-to-br from-white/10 to-white/5 md:h-8 md:w-8"
               />
             ))}
           </div>
-          <p className="text-cosmic-ethereal/60 text-[10px] md:text-xs tracking-[0.15em] md:tracking-[0.2em] uppercase font-medium">
+          <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-cosmic-ethereal/60 md:text-xs md:tracking-[0.2em]">
             2 500+ âmes éveillées · 4.9/5
           </p>
         </div>
 
         <div className="relative">
-          <h1 className="text-[clamp(3rem,13vw,10rem)] leading-[0.85] font-playfair italic tracking-[-0.05em] select-none">
-            <span className="block text-white/90 mix-blend-overlay opacity-90">Oracle</span>
-            <span className="block text-transparent bg-clip-text bg-gradient-to-b from-[#FFD700] to-white -mt-1 md:-mt-6 text-glow-hero">
+          <h1 className="select-none font-playfair text-[clamp(3rem,13vw,10rem)] italic leading-[0.85] tracking-[-0.05em]">
+            <span className="block text-white/90 opacity-90 mix-blend-overlay">Oracle</span>
+            <span className="-mt-1 block bg-gradient-to-b from-[#FFD700] to-white bg-clip-text text-transparent text-glow-hero md:-mt-6">
               Lumira
             </span>
           </h1>
 
-          <div className="mt-8 md:mt-12 max-w-xl mx-auto px-2">
-            <p className="text-base md:text-xl lg:text-2xl text-white/85 font-light leading-relaxed tracking-wide">
+          <div className="mx-auto mt-8 max-w-xl px-2 md:mt-12">
+            <p className="text-base font-light leading-relaxed tracking-wide text-white/85 md:text-xl lg:text-2xl">
               Ce que les autres mettent des années à comprendre sur eux-mêmes —
             </p>
-            <p className="text-base md:text-xl lg:text-2xl text-cosmic-gold/90 font-light leading-relaxed tracking-wide mt-2">
+            <p className="mt-2 text-base font-light leading-relaxed tracking-wide text-cosmic-gold/90 md:text-xl lg:text-2xl">
               Lumira vous le révèle en 24 heures.
             </p>
-            <p className="text-white/40 text-[11px] md:text-sm mt-4 md:mt-5 uppercase tracking-[0.15em] md:tracking-[0.2em]">
+            <p className="mt-4 text-[11px] uppercase tracking-[0.15em] text-white/40 md:mt-5 md:text-sm md:tracking-[0.2em]">
               Analyse vibratoire · Intelligence IA · Expert humain
             </p>
           </div>
         </div>
 
-        <div className="mt-10 md:mt-16 flex flex-col items-center gap-4 md:gap-6 w-full px-4">
-          <Link
-            href="#niveaux"
-            className="group relative pointer-events-auto w-full max-w-xs md:max-w-none md:w-auto"
+        <div className="mt-10 flex w-full flex-col items-center gap-4 px-4 md:mt-16 md:gap-6">
+          <LandingAnchorLink
+            sectionId="niveaux"
+            className="group pointer-events-auto relative w-full max-w-xs md:w-auto md:max-w-none"
           >
-            <div className="absolute inset-0 bg-cosmic-gold/30 rounded-full blur-[50px] opacity-0 group-hover:opacity-70 transition-opacity duration-700 scale-150" />
-            <div className="relative px-8 md:px-16 py-4 md:py-6 rounded-full border border-white/10 bg-white/[0.02] text-white tracking-[0.2em] md:tracking-[0.25em] text-xs uppercase font-bold group-hover:bg-white/[0.08] group-hover:border-cosmic-gold/50 transition-all duration-500 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.05)] group-hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] text-center w-full">
-              <span className="relative z-10 group-hover:text-cosmic-gold transition-colors duration-500">
+            <span className="absolute inset-0 scale-150 rounded-full bg-cosmic-gold/30 opacity-0 blur-[50px] transition-opacity duration-700 group-hover:opacity-70" />
+            <span className="relative block w-full overflow-hidden rounded-full border border-white/10 bg-white/[0.02] px-8 py-4 text-center text-xs font-bold uppercase tracking-[0.2em] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.05)] transition-all duration-500 group-hover:border-cosmic-gold/50 group-hover:bg-white/[0.08] group-hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] md:px-16 md:py-6 md:tracking-[0.25em]">
+              <span className="relative z-10 transition-colors duration-500 group-hover:text-cosmic-gold">
                 Découvrir ma lecture
               </span>
-              <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-cosmic-gold to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-500 opacity-50" />
-            </div>
-          </Link>
+              <span className="absolute inset-x-0 bottom-0 h-px translate-y-full bg-gradient-to-r from-transparent via-cosmic-gold to-transparent opacity-50 transition-transform duration-500 group-hover:translate-y-0" />
+            </span>
+          </LandingAnchorLink>
 
-          <div className="flex items-center gap-5 md:gap-8 mt-4 md:mt-6 opacity-50">
+          <div className="mt-4 flex items-center gap-5 opacity-50 md:mt-6 md:gap-8">
             <div className="flex flex-col items-center">
-              <span className="text-white font-playfair text-lg md:text-xl italic">4.9</span>
-              <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">
+              <span className="font-playfair text-lg italic text-white md:text-xl">4.9</span>
+              <span className="text-[9px] uppercase tracking-widest text-white/40 md:text-[10px]">
                 Note
               </span>
             </div>
-            <div className="w-px h-6 md:h-8 bg-white/10" />
+            <div className="h-6 w-px bg-white/10 md:h-8" />
             <div className="flex flex-col items-center">
-              <span className="text-white font-playfair text-lg md:text-xl italic">24h</span>
-              <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">
+              <span className="font-playfair text-lg italic text-white md:text-xl">24h</span>
+              <span className="text-[9px] uppercase tracking-widest text-white/40 md:text-[10px]">
                 Livraison
               </span>
             </div>
-            <div className="w-px h-6 md:h-8 bg-white/10" />
+            <div className="h-6 w-px bg-white/10 md:h-8" />
             <div className="flex flex-col items-center">
-              <span className="text-white font-playfair text-lg md:text-xl italic">17€</span>
-              <span className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">
+              <span className="font-playfair text-lg italic text-white md:text-xl">17€</span>
+              <span className="text-[9px] uppercase tracking-widest text-white/40 md:text-[10px]">
                 early · 3 mois
               </span>
             </div>
@@ -85,9 +88,9 @@ export function LandingHero() {
         </div>
       </div>
 
-      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/20">
+      <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 text-white/20">
         <span className="text-[9px] uppercase tracking-[0.3em]">Découvrir</span>
-        <ChevronDown className="w-4 h-4 motion-safe:animate-bounce" aria-hidden />
+        <ChevronDown className="h-4 w-4 motion-safe:animate-bounce" aria-hidden />
       </div>
     </section>
   );

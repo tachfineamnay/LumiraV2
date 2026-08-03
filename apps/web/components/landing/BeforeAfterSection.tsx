@@ -1,90 +1,86 @@
-const TRANSFORMATIONS = [
+const PERSPECTIVES = [
   {
-    emoji: '🌙',
-    before: 'Je me sens perdue, tiraillée entre mille directions sans savoir laquelle prendre.',
+    before: 'Je me sens perdue, tiraillée entre plusieurs directions sans savoir laquelle choisir.',
     after:
-      'J\'ai compris que ma "dispersion" était en réalité ma plus grande force : je suis née pour explorer, pas pour me fixer.',
-    name: 'Camille, 31 ans',
-    domain: 'Chemin de vie 3 · Ascendant Gémeaux',
+      'La lecture propose une grille pour distinguer ce qui relève d’un besoin d’exploration, d’une hésitation ou d’une priorité réelle.',
   },
   {
-    emoji: '🔥',
-    before: "Je donne tout dans mes relations mais je reste toujours l'oubliée, celle qui attend.",
+    before: 'Je donne beaucoup dans mes relations, mais j’ai souvent l’impression de rester en retrait.',
     after:
-      "La lecture a révélé mon schéma de don excessif. Aujourd'hui j'attire des personnes qui me voient vraiment.",
-    name: 'Yasmine, 28 ans',
-    domain: 'Venus en maison 12 · Nœud Nord Balance',
+      'La mise en perspective aide à observer les habitudes relationnelles et les limites qui méritent d’être reformulées.',
   },
   {
-    emoji: '⚡',
-    before: "J'ai peur de mes propres ambitions. Comme si je n'avais pas le droit de vouloir plus.",
+    before: 'Mes ambitions m’attirent autant qu’elles m’intimident, comme si je n’étais pas encore légitime.',
     after:
-      "L'Oracle a identifié une blessure de légitimité profonde. Depuis, j'ai lancé mon entreprise.",
-    name: 'David, 36 ans',
-    domain: 'Soleil en maison 10 · Saturne rétrograde',
+      'La lecture offre des repères symboliques pour nommer cette tension et réfléchir à une prochaine étape concrète.',
   },
-];
+] as const;
 
 export function BeforeAfterSection() {
   return (
-    <section className="py-16 md:py-32 relative overflow-hidden content-visibility-auto">
-      <div className="absolute left-0 top-1/3 w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[150px] pointer-events-none" />
+    <section
+      className="relative overflow-hidden py-16 content-visibility-auto md:py-32"
+      aria-labelledby="before-after-title"
+    >
+      <div
+        className="pointer-events-none absolute left-0 top-1/3 h-[600px] w-[600px] rounded-full bg-purple-900/10 blur-[150px]"
+        aria-hidden
+      />
 
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12">
-        <div className="mb-20">
-          <span className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-bold block mb-4">
-            Ce que nos initiés vivent
+      <div className="mx-auto max-w-[1400px] px-6 md:px-12">
+        <div className="mb-14 max-w-2xl md:mb-20">
+          <span className="mb-4 block text-[10px] font-bold uppercase tracking-[0.3em] text-white/30">
+            Situations illustratives
           </span>
-          <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-7xl text-white">
-            Avant. <span className="text-cosmic-gold opacity-70">Après.</span>
+          <h2
+            id="before-after-title"
+            className="font-playfair text-4xl italic text-white md:text-5xl lg:text-7xl"
+          >
+            Avant. <span className="text-cosmic-gold/70">Après.</span>
           </h2>
-          <p className="text-white/40 mt-6 max-w-lg text-base font-light leading-relaxed">
-            Une lecture Lumira ne donne pas des réponses génériques. Elle met des mots précis sur ce
-            que vous vivez — et ouvre le chemin vers ce que vous désirez vraiment.
+          <p className="mt-6 max-w-xl text-base font-light leading-relaxed text-white/45">
+            Une lecture interprétative ne promet pas une transformation automatique. Elle peut
+            offrir des mots, des angles de lecture et des repères pour regarder une situation
+            autrement.
           </p>
         </div>
 
-        <div className="space-y-6">
-          {TRANSFORMATIONS.map((item) => (
-            <div
-              key={item.name}
-              className="grid grid-cols-1 md:grid-cols-2 gap-0 rounded-[2rem] overflow-hidden border border-white/5 group hover:border-amber-500/15 transition-colors duration-500"
+        <div className="space-y-5 md:space-y-6">
+          {PERSPECTIVES.map((item, index) => (
+            <article
+              key={item.before}
+              className="group grid grid-cols-1 overflow-hidden rounded-[1.75rem] border border-white/5 transition-colors duration-500 hover:border-amber-500/15 md:grid-cols-2 md:rounded-[2rem]"
             >
-              <div className="p-6 sm:p-10 md:p-14 relative">
-                <div className="absolute top-8 right-8 text-white/5 text-6xl font-playfair select-none group-hover:text-white/8 transition-colors duration-500">
+              <div className="relative p-6 sm:p-10 md:p-14">
+                <span
+                  className="pointer-events-none absolute right-8 top-6 select-none font-playfair text-5xl text-white/[0.04] md:top-8 md:text-6xl"
+                  aria-hidden
+                >
                   Avant
-                </div>
-                <span className="text-white/20 text-[10px] uppercase tracking-[0.3em] font-bold block mb-6">
-                  Avant la lecture
                 </span>
-                <p className="font-playfair italic text-xl md:text-2xl text-white/70 leading-relaxed">
-                  &ldquo;{item.before}&rdquo;
+                <span className="mb-6 block text-[10px] font-bold uppercase tracking-[0.3em] text-white/25">
+                  Situation {String(index + 1).padStart(2, '0')}
+                </span>
+                <p className="relative font-playfair text-xl italic leading-relaxed text-white/70 md:text-2xl">
+                  « {item.before} »
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-amber-500/[0.06] to-purple-900/[0.06] p-6 sm:p-10 md:p-14 relative border-t md:border-t-0 md:border-l border-amber-500/10">
-                <div className="absolute top-8 right-8 text-amber-500/5 text-6xl font-playfair select-none group-hover:text-amber-500/10 transition-colors duration-500">
+              <div className="relative border-t border-amber-500/10 bg-gradient-to-br from-amber-500/[0.06] to-purple-900/[0.06] p-6 sm:p-10 md:border-l md:border-t-0 md:p-14">
+                <span
+                  className="pointer-events-none absolute right-8 top-6 select-none font-playfair text-5xl text-amber-500/[0.06] md:top-8 md:text-6xl"
+                  aria-hidden
+                >
                   Après
-                </div>
-                <span className="text-amber-400/60 text-[10px] uppercase tracking-[0.3em] font-bold block mb-6">
-                  Après la révélation
                 </span>
-                <p className="font-playfair italic text-xl md:text-2xl text-white leading-relaxed">
-                  &ldquo;{item.after}&rdquo;
+                <span className="mb-6 block text-[10px] font-bold uppercase tracking-[0.3em] text-amber-400/60">
+                  Mise en perspective
+                </span>
+                <p className="relative font-playfair text-xl italic leading-relaxed text-white md:text-2xl">
+                  {item.after}
                 </p>
-                <div className="mt-8 flex items-center gap-4">
-                  <span className="text-2xl" aria-hidden>
-                    {item.emoji}
-                  </span>
-                  <div>
-                    <div className="text-white/80 text-sm font-medium">{item.name}</div>
-                    <div className="text-white/30 text-xs mt-1 uppercase tracking-widest">
-                      {item.domain}
-                    </div>
-                  </div>
-                </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       </div>
