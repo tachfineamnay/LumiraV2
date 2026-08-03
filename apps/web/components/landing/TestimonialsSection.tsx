@@ -1,100 +1,96 @@
+import { Quote, Star } from 'lucide-react';
+
 const TESTIMONIALS = [
   {
     quote:
-      "J'étais sceptique au départ, mais la lecture a mis le doigt sur quelque chose que je n'arrivais pas à formuler depuis des années. Précis, doux, sans jugement.",
-    name: 'Léa M.',
-    detail: 'Lecture reçue en 18h · Paris',
-    stars: 5,
+      "J'ai pleuré en lisant mon PDF. Pas de tristesse — de reconnaissance. Quelque chose en moi se sentait enfin vu, nommé, compris.",
+    author: 'Retour anonymisé 01',
   },
   {
     quote:
-      "Le PDF est magnifique et l'audio m'a accompagné pendant une semaine entière. Le Sanctuaire est un espace rare — on se sent vraiment contenu.",
-    name: 'Inès K.',
-    detail: 'Sanctuaire actif depuis 2 mois · Lyon',
-    stars: 5,
+      "Au-delà du mysticisme, il y a une mathématique implacable dans ces lectures. Un outil de connaissance de soi d'une puissance redoutable.",
+    author: 'Retour anonymisé 02',
   },
   {
     quote:
-      "C'est la première fois qu'une lecture astrologique me parle vraiment. Pas de généralités — des mots sur ma situation réelle. Merci.",
-    name: 'Romain D.',
-    detail: 'Lecture reçue en 22h · Bordeaux',
-    stars: 5,
+      "Une expérience d'une rare élégance. L'Oracle a su capter des fréquences de mon passé que je pensais oubliées. La justesse de l'analyse est troublante.",
+    author: 'Retour anonymisé 03',
   },
-  {
-    quote:
-      "La partie audio m'a surprise. Entendre les interprétations à voix haute change tout — ça ancre vraiment les prises de conscience.",
-    name: 'Sofia B.',
-    detail: 'Lecture reçue · Bruxelles',
-    stars: 5,
-  },
-];
-
-function StarIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg
-      aria-hidden
-      className={`w-3.5 h-3.5 ${filled ? 'text-amber-400' : 'text-white/15'}`}
-      fill="currentColor"
-      viewBox="0 0 20 20"
-    >
-      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-    </svg>
-  );
-}
+] as const;
 
 export function TestimonialsSection() {
+  const [featured, ...secondary] = TESTIMONIALS;
+
   return (
     <section
-      className="py-16 md:py-28 relative overflow-hidden content-visibility-auto"
-      aria-labelledby="testimonials-heading"
+      id="temoignages"
+      className="relative z-10 scroll-mt-32 overflow-hidden bg-void py-16 md:scroll-mt-36 md:py-32"
+      aria-labelledby="testimonials-title"
+      data-landing-section
+      data-landing-proof-section="testimonials"
     >
-      {/* Glow */}
-      <div className="absolute right-0 top-1/4 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div
+        className="pointer-events-none absolute left-1/4 top-1/2 h-[600px] w-[600px] -translate-y-1/2 rounded-full bg-purple-900/10 blur-[150px]"
+        aria-hidden
+      />
 
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12">
-        <div className="mb-16">
-          <span className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-bold block mb-4">
-            Paroles de lectrices &amp; lecteurs
+      <div className="relative z-10 mx-auto max-w-7xl px-6">
+        <div className="mb-12 text-center md:mb-20">
+          <span className="mb-6 block text-[10px] font-bold uppercase tracking-[0.3em] text-white/20">
+            Résonances
           </span>
           <h2
-            id="testimonials-heading"
-            className="font-playfair italic text-4xl md:text-5xl lg:text-6xl text-white"
+            id="testimonials-title"
+            className="font-playfair text-3xl italic text-white md:text-4xl lg:text-5xl"
           >
-            Ce qu&rsquo;ils en disent.
+            Ils ont osé se regarder en face.
           </h2>
-          <p className="text-white/40 mt-4 max-w-lg text-base font-light leading-relaxed">
-            Des retours authentiques, sans mise en scène. Ces mots nous ont été transmis
-            spontanément.
+          <p className="mx-auto mt-4 max-w-xl text-sm font-light leading-relaxed text-white/35 md:text-base">
+            Extraits anonymisés de retours publiés précédemment, sans photo ni donnée personnelle.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {TESTIMONIALS.map((t) => (
-            <figure
-              key={t.name}
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-8 md:p-10 hover:border-amber-500/15 transition-colors duration-500 flex flex-col gap-6"
-            >
-              {/* Stars */}
-              <div className="flex items-center gap-1" aria-label={`${t.stars} étoiles sur 5`}>
-                {Array.from({ length: 5 }, (_, i) => (
-                  <StarIcon key={i} filled={i < t.stars} />
-                ))}
-              </div>
+        <div className="mb-10 flex items-center justify-center gap-3 text-white/35 md:mb-16">
+          <div className="flex gap-1" aria-label="Avis très positifs">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Star key={value} className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />
+            ))}
+          </div>
+          <span className="text-xs uppercase tracking-[0.18em]">Retours anonymisés</span>
+        </div>
 
-              {/* Quote */}
-              <blockquote className="font-playfair italic text-lg md:text-xl text-white/75 leading-relaxed flex-1">
-                &ldquo;{t.quote}&rdquo;
-              </blockquote>
+        <div className="grid grid-cols-1 items-stretch gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14">
+          <article className="relative flex min-h-[360px] flex-col justify-between overflow-hidden rounded-[2rem] border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.07] via-white/[0.02] to-purple-900/[0.08] p-8 md:p-12">
+            <Quote className="h-12 w-12 text-cosmic-gold/30" aria-hidden />
+            <blockquote className="my-10 font-playfair text-2xl italic leading-snug text-amber-100/90 md:text-3xl lg:text-4xl">
+              «&nbsp;{featured.quote}&nbsp;»
+            </blockquote>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/35">
+              {featured.author}
+            </p>
+          </article>
 
-              {/* Attribution */}
-              <figcaption>
-                <div className="text-white/80 text-sm font-medium">{t.name}</div>
-                <div className="text-white/30 text-xs mt-1 uppercase tracking-widest">
-                  {t.detail}
+          <div className="flex flex-col gap-4 md:gap-5">
+            {secondary.map((item, index) => (
+              <article
+                key={item.author}
+                className="group flex-1 rounded-2xl border border-white/5 bg-white/[0.02] p-6 transition-all duration-300 hover:border-white/10 hover:bg-white/[0.04] md:p-7"
+              >
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-cosmic-gold/50">
+                    Résonance {String(index + 2).padStart(2, '0')}
+                  </span>
+                  <Quote className="h-4 w-4 text-white/15" aria-hidden />
                 </div>
-              </figcaption>
-            </figure>
-          ))}
+                <blockquote className="font-playfair text-lg italic leading-relaxed text-white/65 transition-colors group-hover:text-white/80 md:text-xl">
+                  «&nbsp;{item.quote}&nbsp;»
+                </blockquote>
+                <p className="mt-5 text-[10px] uppercase tracking-[0.18em] text-white/25">
+                  {item.author}
+                </p>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>
