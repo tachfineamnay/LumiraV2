@@ -19,15 +19,17 @@ const PERSPECTIVES = [
 export function BeforeAfterSection() {
   return (
     <section
-      className="relative overflow-hidden py-16 content-visibility-auto md:py-32"
+      id="avant-apres"
+      className="relative z-10 overflow-hidden bg-cosmic-void py-16 md:py-32"
       aria-labelledby="before-after-title"
+      data-landing-proof-section="before-after"
     >
       <div
         className="pointer-events-none absolute left-0 top-1/3 h-[600px] w-[600px] rounded-full bg-purple-900/10 blur-[150px]"
         aria-hidden
       />
 
-      <div className="mx-auto max-w-[1400px] px-6 md:px-12">
+      <div className="relative z-10 mx-auto max-w-[1400px] px-6 md:px-12">
         <div className="mb-14 max-w-2xl md:mb-20">
           <span className="mb-4 block text-[10px] font-bold uppercase tracking-[0.3em] text-white/30">
             Situations illustratives
