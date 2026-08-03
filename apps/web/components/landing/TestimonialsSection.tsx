@@ -8,18 +8,13 @@ const TESTIMONIALS = [
   },
   {
     quote:
-      "Au-delà du mysticisme, il y a une logique étonnamment structurée dans la lecture. Un outil de connaissance de soi d’une grande profondeur.",
+      "Au-delà du mysticisme, il y a une mathématique implacable dans ces lectures. Un outil de connaissance de soi d’une puissance redoutable.",
     author: 'Retour anonymisé 02',
   },
   {
     quote:
-      "Une expérience d’une rare élégance. Certains passages ont fait résonner des éléments de mon histoire que je pensais avoir oubliés.",
+      "Une expérience d’une rare élégance. L’Oracle a su capter des fréquences de mon passé que je pensais oubliées. La justesse de l’analyse est troublante.",
     author: 'Retour anonymisé 03',
-  },
-  {
-    quote:
-      "La lecture ne m’a pas donné une vérité toute faite. Elle m’a donné des mots précis pour poursuivre ma propre réflexion.",
-    author: 'Retour anonymisé 04',
   },
 ] as const;
 
