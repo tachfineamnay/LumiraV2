@@ -113,7 +113,9 @@ async function installChatMocks(page: Page) {
   });
 }
 
-test('keeps reply field and send action visible when the mobile viewport shrinks', async ({ page }) => {
+test('keeps reply field and send action visible when the mobile viewport shrinks', async ({
+  page,
+}) => {
   await installChatMocks(page);
   await page.goto('/sanctuaire/chat');
   await page
@@ -141,7 +143,7 @@ test('keeps reply field and send action visible when the mobile viewport shrinks
   expect(replyBox).not.toBeNull();
   expect(sendBox).not.toBeNull();
   expect(currentViewport).not.toBeNull();
-  expect(replyBox!.bottom).toBeLessThanOrEqual(currentViewport!.height + 1);
-  expect(sendBox!.bottom).toBeLessThanOrEqual(currentViewport!.height + 1);
+  expect(replyBox!.y + replyBox!.height).toBeLessThanOrEqual(currentViewport!.height + 1);
+  expect(sendBox!.y + sendBox!.height).toBeLessThanOrEqual(currentViewport!.height + 1);
   await expectNoHorizontalOverflow(page);
 });
