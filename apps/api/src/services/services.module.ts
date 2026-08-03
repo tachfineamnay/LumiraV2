@@ -32,7 +32,9 @@ import { MemoryConfigService } from './memory/memory-config.service';
 import { MemoryReadinessService } from './memory/memory-readiness.service';
 import { MemorySanitizerService } from './memory/memory-sanitizer.service';
 import { VertexMemoryBankClient } from './memory/vertex-memory-bank.client';
+import { ResilientVertexMemoryBankClient } from './memory/resilient-vertex-memory-bank.client';
 import { UserMemoryService } from './memory/user-memory.service';
+import { ResilientUserMemoryService } from './memory/resilient-user-memory.service';
 import { MemorySyncService } from './memory/memory-sync.service';
 import { MemorySyncWorkerService } from './memory/memory-sync-worker.service';
 import { MemoryContextBuilder } from './memory/memory-context-builder.service';
@@ -46,8 +48,10 @@ import { MemoryContextBuilder } from './memory/memory-context-builder.service';
     MemoryConfigService,
     MemoryReadinessService,
     MemorySanitizerService,
-    VertexMemoryBankClient,
-    UserMemoryService,
+    ResilientVertexMemoryBankClient,
+    { provide: VertexMemoryBankClient, useExisting: ResilientVertexMemoryBankClient },
+    ResilientUserMemoryService,
+    { provide: UserMemoryService, useExisting: ResilientUserMemoryService },
     MemorySyncService,
     MemoryContextBuilder,
     VertexOracle,
