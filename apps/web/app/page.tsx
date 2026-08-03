@@ -107,8 +107,12 @@ export default function Home() {
         <HowItWorks />
         <WhatYouGet />
         <LandingPricing />
-        <BeforeAfterSection />
-        <TestimonialsSection />
+
+        <div className="relative z-10" data-home-proof-sections="restored-v2">
+          <BeforeAfterSection />
+          <TestimonialsSection />
+        </div>
+
         <FinalCTA />
       </main>
       <Footer />
