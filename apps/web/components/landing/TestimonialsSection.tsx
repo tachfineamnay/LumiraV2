@@ -24,9 +24,10 @@ export function TestimonialsSection() {
   return (
     <section
       id="temoignages"
-      className="relative scroll-mt-32 overflow-hidden bg-void py-16 md:scroll-mt-36 md:py-32"
+      className="relative z-10 scroll-mt-32 overflow-hidden bg-void py-16 md:scroll-mt-36 md:py-32"
       aria-labelledby="testimonials-title"
       data-landing-section
+      data-landing-proof-section="testimonials"
     >
       <div
         className="pointer-events-none absolute left-1/4 top-1/2 h-[600px] w-[600px] -translate-y-1/2 rounded-full bg-purple-900/10 blur-[150px]"
