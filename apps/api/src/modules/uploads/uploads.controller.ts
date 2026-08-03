@@ -51,7 +51,7 @@ async function normalizeWithSharp(input: Buffer): Promise<Buffer> {
 
   let maxEdge = 1600;
   let quality = 88;
-  let normalized = Buffer.alloc(0);
+  let normalized: Buffer = Buffer.alloc(0);
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
     normalized = await sharp(input, {
