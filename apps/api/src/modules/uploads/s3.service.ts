@@ -71,6 +71,23 @@ export class S3Service {
     return getSignedUrl(this.s3Client, command, { expiresIn: expiresInSeconds });
   }
 
+  async putObject(
+    key: string,
+    body: Buffer,
+    contentType: string,
+    bucket: S3BucketKind = 'uploads',
+  ): Promise<void> {
+    await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: this.resolveBucket(bucket),
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        CacheControl: 'private, no-store',
+      }),
+    );
+  }
+
   async getDownloadPresignedUrl(key: string, bucket: S3BucketKind = 'readings') {
     const command = new GetObjectCommand({
       Bucket: this.resolveBucket(bucket),
