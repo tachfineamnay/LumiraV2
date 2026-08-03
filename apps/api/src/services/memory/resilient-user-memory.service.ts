@@ -21,10 +21,10 @@ export class ResilientUserMemoryService extends UserMemoryService {
   constructor(
     private readonly localPrisma: PrismaService,
     sanitizer: MemorySanitizerService,
-    memoryConfig: MemoryConfigService,
+    private readonly localMemoryConfig: MemoryConfigService,
     bank: VertexMemoryBankClient,
   ) {
-    super(localPrisma, sanitizer, memoryConfig, bank);
+    super(localPrisma, sanitizer, localMemoryConfig, bank);
   }
 
   override async approve(
@@ -52,6 +52,8 @@ export class ResilientUserMemoryService extends UserMemoryService {
   override async convergePendingMutations(
     limit: number,
   ): Promise<{ processed: number; failed: number }> {
+    if (!this.localMemoryConfig.isWriteEnabled()) return { processed: 0, failed: 0 };
+
     const retryBefore = new Date(Date.now() - ResilientUserMemoryService.RETRY_COOLDOWN_MS);
     const pending = await this.localPrisma.userMemory.findMany({
       where: {
@@ -63,8 +65,7 @@ export class ResilientUserMemoryService extends UserMemoryService {
         ],
       },
       orderBy: { updatedAt: 'asc' },
-      // A single remote mutation per worker tick prevents burst retries and
-      // preserves quota while Memory Bank is in preview.
+      // A single remote mutation per worker tick prevents burst retries.
       take: Math.min(Math.max(limit, 0), 1),
       select: { id: true },
     });
