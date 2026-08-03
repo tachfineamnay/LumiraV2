@@ -1,18 +1,17 @@
 'use client';
 
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Camera,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock3,
-  Images,
   ImagePlus,
   Loader2,
   RefreshCw,
   Send,
 } from 'lucide-react';
+import { SmartPhotoUploader, type PhotoUploadState } from '@/components/onboarding/SmartPhotoUploader';
 import sanctuaireApi from '@/lib/sanctuaireApi';
 import { uploadOnboardingPhoto } from '@/lib/onboarding-upload';
 
@@ -33,21 +32,16 @@ interface ReadingAmendment {
   updatedAt: string;
 }
 
-const MAX_PHOTO_BYTES = Math.floor(1.2 * 1024 * 1024);
-const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
 export function SanctuaireAmendmentBanner() {
   const [items, setItems] = useState<ReadingAmendment[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
   const [storageRef, setStorageRef] = useState<string | null>(null);
+  const [photoState, setPhotoState] = useState<PhotoUploadState>('idle');
   const [palmRole, setPalmRole] = useState<PalmRole>('PALM_UNKNOWN');
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -97,53 +91,24 @@ export function SanctuaireAmendmentBanner() {
     });
   };
 
-  const choosePhoto = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setError(null);
-    if (!ALLOWED_TYPES.has(file.type)) {
-      showError('Choisissez une image JPEG, PNG ou WebP.');
-      event.target.value = '';
-      return;
-    }
-    if (file.size > MAX_PHOTO_BYTES) {
-      showError('La photo dépasse 1,2 Mo. Réduisez sa taille puis recommencez.');
-      event.target.value = '';
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        showError('La photo ne peut pas être lue.');
-        return;
-      }
-      setPreview(reader.result);
-      setStorageRef(null);
-    };
-    reader.onerror = () => showError('La photo ne peut pas être lue.');
-    reader.readAsDataURL(file);
-  };
-
-  const ensurePrivateUpload = async (): Promise<string> => {
-    if (storageRef) return storageRef;
-    if (!preview) throw new Error('Ajoutez une photo nette de votre paume.');
+  const uploadPalmPhoto = useCallback(async (preview: string): Promise<string> => {
     const uploaded = await uploadOnboardingPhoto(preview, 'PALM');
     if (!uploaded) throw new Error('Le stockage privé de la photo a échoué.');
-    setStorageRef(uploaded);
     return uploaded;
-  };
+  }, []);
+
+  const photoBusy = photoState === 'preparing' || photoState === 'uploading';
 
   const saveDraft = async () => {
-    if (!current || !['REQUESTED', 'DRAFT'].includes(current.status)) return;
+    if (!current || !['REQUESTED', 'DRAFT'].includes(current.status) || photoBusy) return;
     setBusy(true);
     setError(null);
     try {
-      const uploaded = preview || storageRef ? await ensurePrivateUpload() : undefined;
       const { data } = await sanctuaireApi.patch<ReadingAmendment>(
         `/users/reading-amendments/${current.id}/draft`,
         {
           expectedRevision: current.revision,
-          storageRef: uploaded,
+          storageRef: storageRef || undefined,
           palmRole,
         },
       );
@@ -159,22 +124,26 @@ export function SanctuaireAmendmentBanner() {
   };
 
   const submit = async () => {
-    if (!current || !['REQUESTED', 'DRAFT'].includes(current.status)) return;
+    if (!current || !['REQUESTED', 'DRAFT'].includes(current.status) || photoBusy) return;
+    if (!storageRef) {
+      showError('Ajoutez une photo nette de votre paume avant de la transmettre.');
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
-      const uploaded = await ensurePrivateUpload();
       const { data } = await sanctuaireApi.post<ReadingAmendment>(
         `/users/reading-amendments/${current.id}/submit`,
         {
           expectedRevision: current.revision,
-          storageRef: uploaded,
+          storageRef,
           palmRole,
         },
       );
       setItems((existing) => existing.map((item) => (item.id === data.id ? data : item)));
       setExpanded(false);
-      setPreview(null);
+      setPhotoState('idle');
     } catch (requestError: unknown) {
       showError(responseMessage(requestError, 'La photo n’a pas pu être transmise.'));
       if ((requestError as { response?: { status?: number } })?.response?.status === 409) {
@@ -190,6 +159,7 @@ export function SanctuaireAmendmentBanner() {
   const editable = current.status === 'REQUESTED' || current.status === 'DRAFT';
   const submitted = current.status === 'SUBMITTED';
   const approved = current.status === 'APPROVED';
+  const actionsDisabled = busy || photoBusy;
 
   return (
     <section className="mx-auto mt-3 w-[calc(100%-1.5rem)] max-w-5xl rounded-2xl border border-horizon-400/25 bg-horizon-400/[0.08] shadow-aube-glow sm:mt-5 sm:w-[calc(100%-3rem)]">
@@ -250,7 +220,8 @@ export function SanctuaireAmendmentBanner() {
                   key={value}
                   type="button"
                   onClick={() => setPalmRole(value)}
-                  className={`min-h-[48px] rounded-xl border px-2 py-2 text-xs font-medium transition-colors ${
+                  disabled={actionsDisabled}
+                  className={`min-h-[48px] rounded-xl border px-2 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
                     palmRole === value
                       ? 'border-horizon-300 bg-horizon-400/15 text-horizon-100'
                       : 'border-ivoire-500/[0.07] text-brume-200 hover:bg-brume-700/25'
@@ -262,62 +233,26 @@ export function SanctuaireAmendmentBanner() {
             </div>
           </div>
 
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            onChange={choosePhoto}
-            className="sr-only"
-          />
-          <input
-            ref={galleryInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={choosePhoto}
-            className="sr-only"
-          />
-
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_1fr]">
-            <div className="space-y-2">
-              <div className="relative flex aspect-[4/5] min-h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-horizon-400/30 bg-brume-800/20">
-                {preview ? (
-                  <img src={preview} alt="Aperçu de votre paume" className="h-full w-full object-cover" />
-                ) : storageRef ? (
-                  <span className="flex flex-col items-center gap-2 px-4 text-center text-sm text-emerald-200">
-                    <CheckCircle2 className="h-7 w-7" /> Photo privée enregistrée
-                  </span>
-                ) : (
-                  <span className="flex flex-col items-center gap-3 px-4 text-center text-sm text-brume-200">
-                    <ImagePlus className="h-8 w-8 text-horizon-200" />
-                    Ajoutez une photo nette de toute la paume
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-horizon-400/25 px-3 py-2 text-xs font-medium text-horizon-100 disabled:opacity-50"
-                >
-                  <Camera className="h-4 w-4" /> Appareil photo
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => galleryInputRef.current?.click()}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-3 py-2 text-xs font-medium text-ivoire-200 disabled:opacity-50"
-                >
-                  <Images className="h-4 w-4" /> Galerie
-                </button>
-              </div>
-            </div>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_1fr]">
+            <SmartPhotoUploader
+              key={current.id}
+              label="Photo de la paume"
+              description="Choisissez une photo ou utilisez l’appareil. Elle sera automatiquement optimisée avant l’envoi privé."
+              value={storageRef || undefined}
+              onChange={(value) => {
+                setStorageRef(value);
+                setError(null);
+              }}
+              uploadPhoto={uploadPalmPhoto}
+              onUploadStateChange={setPhotoState}
+              captureFacingMode="environment"
+              compact={false}
+            />
 
             <div className="flex flex-col justify-between gap-4">
               <div className="space-y-2 text-xs leading-5 text-brume-300">
-                <p>Formats : JPEG, PNG ou WebP.</p>
-                <p>Taille maximale : 1,2 Mo.</p>
+                <p>Photos JPEG, PNG, WebP et formats photo courants.</p>
+                <p>Les images jusqu’à 20 Mo sont automatiquement réduites.</p>
                 <p>La photo reste privée et liée à votre compte.</p>
                 <p>Échéance : {new Date(current.expiresAt).toLocaleDateString('fr-FR')}.</p>
               </div>
@@ -336,7 +271,7 @@ export function SanctuaireAmendmentBanner() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={actionsDisabled}
                   onClick={() => void saveDraft()}
                   className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl border border-ivoire-500/[0.08] px-4 py-3 text-sm font-medium text-ivoire-200 disabled:opacity-50"
                 >
@@ -345,7 +280,7 @@ export function SanctuaireAmendmentBanner() {
                 </button>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={actionsDisabled || !storageRef}
                   onClick={() => void submit()}
                   className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 disabled:opacity-50"
                 >
@@ -365,5 +300,6 @@ function responseMessage(error: unknown, fallback: string): string {
   const response = (error as { response?: { data?: { message?: string | string[] } } })?.response;
   const message = response?.data?.message;
   if (Array.isArray(message)) return message.join(' ');
-  return typeof message === 'string' ? message : fallback;
+  if (typeof message === 'string') return message;
+  return error instanceof Error && error.message ? error.message : fallback;
 }
