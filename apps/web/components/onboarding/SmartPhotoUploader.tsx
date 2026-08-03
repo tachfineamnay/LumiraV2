@@ -3,16 +3,28 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import imageCompression from 'browser-image-compression';
 import Image from 'next/image';
-import { Camera, Check, ImagePlus, Loader2, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
+import {
+  Camera,
+  Check,
+  ImagePlus,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { uploadOriginalOnboardingPhoto } from '../../lib/onboarding-upload';
 
 export type PhotoUploadState = 'idle' | 'preparing' | 'uploading' | 'saved' | 'error';
+
+type PhotoKind = 'FACE' | 'PALM';
 
 interface SmartPhotoUploaderProps {
   label: string;
   description: string;
   value?: string;
   onChange: (storageRefOrPreview: string | null) => void;
-  /** Uploads a compressed browser preview and returns its private storage reference. */
+  /** Legacy fallback for generic usages that cannot be inferred as face or palm. */
   uploadPhoto?: (previewDataUrl: string) => Promise<string>;
   onUploadStateChange?: (state: PhotoUploadState) => void;
   captureFacingMode?: 'user' | 'environment';
@@ -23,13 +35,23 @@ interface SmartPhotoUploaderProps {
   privatePreviewNode?: React.ReactNode;
 }
 
-const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+const MAX_SOURCE_BYTES = 30 * 1024 * 1024;
+const ACCEPTED_PHOTO_FORMATS = 'image/*,.heic,.heif,.tif,.tiff,.avif,.bmp,.gif';
 
-/**
- * On phones and tablets the native `capture` file input opens the camera app,
- * which is the best UX. On desktop that attribute is ignored (plain file
- * dialog), so we open a getUserMedia webcam view instead.
- */
+function inferPhotoKind(label: string, facingMode: 'user' | 'environment'): PhotoKind | null {
+  const normalized = label.toLocaleLowerCase('fr-FR');
+  if (normalized.includes('visage') || normalized.includes('face')) return 'FACE';
+  if (
+    normalized.includes('paume') ||
+    normalized.includes('palm') ||
+    normalized.includes('main')
+  ) {
+    return 'PALM';
+  }
+  if (facingMode === 'user') return 'FACE';
+  return null;
+}
+
 function prefersNativeCameraInput(): boolean {
   if (typeof navigator === 'undefined') return true;
   const isMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -46,22 +68,15 @@ function readAsDataUrl(file: Blob): Promise<string> {
   });
 }
 
-async function preparePhoto(file: File): Promise<string> {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Choisissez un fichier image.');
-  }
-  if (file.size > MAX_SOURCE_BYTES) {
-    throw new Error('Cette image est trop volumineuse. Choisissez une photo de moins de 20 Mo.');
-  }
-
-  const compressed = await imageCompression(file, {
-    maxSizeMB: 1,
-    maxWidthOrHeight: 1600,
-    useWebWorker: true,
-    fileType: 'image/jpeg',
-    initialQuality: 0.9,
-  });
-  return readAsDataUrl(compressed);
+function responseMessage(error: unknown): string {
+  const response = (error as { response?: { status?: number; data?: { message?: string | string[] } } })
+    ?.response;
+  const message = response?.data?.message;
+  if (Array.isArray(message)) return message.join(' ');
+  if (typeof message === 'string') return message;
+  if (response?.status === 413) return 'La photo source dépasse 30 Mo.';
+  if (error instanceof Error && error.message) return error.message;
+  return "Cette image n'a pas pu être préparée. Elle est peut-être corrompue.";
 }
 
 export const SmartPhotoUploader = ({
@@ -80,17 +95,17 @@ export const SmartPhotoUploader = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const attemptRef = useRef(0);
+  const retryFileRef = useRef<File | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
   const uploadStateCallbackRef = useRef(onUploadStateChange);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const [retryPreview, setRetryPreview] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [uploadState, setUploadState] = useState<PhotoUploadState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [privatePreviewFailed, setPrivatePreviewFailed] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const cameraDialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const cameraRequestRef = useRef(0);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCameraStarting, setIsCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -107,140 +122,136 @@ export const SmartPhotoUploader = ({
     setPrivatePreviewFailed(false);
   }, [privatePreviewUrl, value]);
 
-  const persistPreview = useCallback(
-    async (preview: string, existingAttempt?: number) => {
-      const attempt = existingAttempt ?? ++attemptRef.current;
-      setLocalPreview(preview);
-      setRetryPreview(preview);
-      setError(null);
+  const revokeObjectUrl = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
 
-      if (!uploadPhoto) {
-        onChange(preview);
-        setUploadState('saved');
-        return;
-      }
-
-      setUploadState('uploading');
-      try {
-        const storageRef = await uploadPhoto(preview);
-        if (attempt !== attemptRef.current) return;
-        onChange(storageRef);
-        setRetryPreview(null);
-        setUploadState('saved');
-      } catch (uploadError) {
-        if (attempt !== attemptRef.current) return;
-        setUploadState('error');
-        setError(
-          uploadError instanceof Error
-            ? uploadError.message
-            : "L'envoi privé de la photo a échoué. Réessayez.",
-        );
-      }
+  const setFilePreview = useCallback(
+    (file: File) => {
+      revokeObjectUrl();
+      const url = URL.createObjectURL(file);
+      objectUrlRef.current = url;
+      setLocalPreview(url);
+      setPreviewFailed(false);
     },
-    [onChange, uploadPhoto],
+    [revokeObjectUrl],
   );
 
   const processFile = useCallback(
     async (file: File | undefined) => {
       if (!file) return;
       const attempt = ++attemptRef.current;
+      retryFileRef.current = file;
       setUploadState('preparing');
       setError(null);
+      setFilePreview(file);
+
       try {
-        const preview = await preparePhoto(file);
+        if (!file.size) throw new Error('Le fichier image est vide.');
+        if (file.size > MAX_SOURCE_BYTES) {
+          throw new Error('Cette photo dépasse 30 Mo.');
+        }
+
+        const inferredKind = inferPhotoKind(label, captureFacingMode);
+        if (inferredKind) {
+          setUploadState('uploading');
+          const storageRef = await uploadOriginalOnboardingPhoto(file, inferredKind);
+          if (attempt !== attemptRef.current) return;
+          onChange(storageRef);
+          retryFileRef.current = null;
+          setUploadState('saved');
+          return;
+        }
+
+        const compressed = await imageCompression(file, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1600,
+          useWebWorker: true,
+          fileType: 'image/jpeg',
+          initialQuality: 0.9,
+        });
+        const preview = await readAsDataUrl(compressed);
         if (attempt !== attemptRef.current) return;
-        await persistPreview(preview, attempt);
-      } catch (preparationError) {
+
+        revokeObjectUrl();
+        setLocalPreview(preview);
+        setPreviewFailed(false);
+
+        if (uploadPhoto) {
+          setUploadState('uploading');
+          const storageRef = await uploadPhoto(preview);
+          if (attempt !== attemptRef.current) return;
+          onChange(storageRef);
+        } else {
+          onChange(preview);
+        }
+        retryFileRef.current = null;
+        setUploadState('saved');
+      } catch (processingError) {
         if (attempt !== attemptRef.current) return;
         setUploadState('error');
-        setError(
-          preparationError instanceof Error
-            ? preparationError.message
-            : "Cette photo n'a pas pu être préparée.",
-        );
+        setError(responseMessage(processingError));
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (cameraInputRef.current) cameraInputRef.current.value = '';
       }
     },
-    [persistPreview],
+    [captureFacingMode, label, onChange, revokeObjectUrl, setFilePreview, uploadPhoto],
   );
+
+  const retry = useCallback(() => {
+    if (retryFileRef.current) void processFile(retryFileRef.current);
+  }, [processFile]);
 
   const handleRemove = useCallback(() => {
     attemptRef.current += 1;
+    retryFileRef.current = null;
+    revokeObjectUrl();
     setLocalPreview(null);
-    setRetryPreview(null);
+    setPreviewFailed(false);
     setError(null);
     setUploadState('idle');
     onChange(null);
-  }, [onChange]);
+  }, [onChange, revokeObjectUrl]);
 
   const stopWebcam = useCallback(() => {
-    cameraRequestRef.current += 1;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
-  const closeWebcam = useCallback(
-    (restoreFocus = true) => {
-      stopWebcam();
-      setIsCameraOpen(false);
-      setCameraError(null);
-      if (restoreFocus) {
-        window.requestAnimationFrame(() => previousFocusRef.current?.focus());
-      }
-    },
-    [stopWebcam],
-  );
+  const closeWebcam = useCallback(() => {
+    stopWebcam();
+    setIsCameraOpen(false);
+    setIsCameraStarting(false);
+    setCameraError(null);
+  }, [stopWebcam]);
 
-  useEffect(() => stopWebcam, [stopWebcam]);
+  useEffect(() => {
+    return () => {
+      stopWebcam();
+      revokeObjectUrl();
+    };
+  }, [revokeObjectUrl, stopWebcam]);
 
   useEffect(() => {
     if (!isCameraOpen) return;
-    const dialog = cameraDialogRef.current;
-    const getFocusable = () =>
-      Array.from(
-        dialog?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      );
-    const frame = window.requestAnimationFrame(() => getFocusable()[0]?.focus());
-    const trapFocus = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeWebcam();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = getFocusable();
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeWebcam();
     };
-
-    window.addEventListener('keydown', trapFocus);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('keydown', trapFocus);
-    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [closeWebcam, isCameraOpen]);
 
   const openCamera = useCallback(async () => {
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (prefersNativeCameraInput()) {
       cameraInputRef.current?.click();
       return;
     }
-    const request = ++cameraRequestRef.current;
+
     setCameraError(null);
     setIsCameraOpen(true);
     setIsCameraStarting(true);
@@ -253,10 +264,6 @@ export const SmartPhotoUploader = ({
         },
         audio: false,
       });
-      if (request !== cameraRequestRef.current) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -264,14 +271,14 @@ export const SmartPhotoUploader = ({
       }
     } catch (cameraOpenError) {
       stopWebcam();
-      const isDenied =
+      const denied =
         cameraOpenError instanceof DOMException &&
         (cameraOpenError.name === 'NotAllowedError' ||
           cameraOpenError.name === 'PermissionDeniedError');
       setCameraError(
-        isDenied
-          ? 'L’accès à la caméra a été refusé. Autorisez la caméra dans votre navigateur ou choisissez un fichier.'
-          : 'La caméra n’est pas disponible sur cet appareil. Vous pouvez choisir une photo existante.',
+        denied
+          ? 'L’accès à la caméra a été refusé. Autorisez-la ou choisissez une photo.'
+          : 'La caméra n’est pas disponible. Choisissez une photo existante.',
       );
     } finally {
       setIsCameraStarting(false);
@@ -281,6 +288,7 @@ export const SmartPhotoUploader = ({
   const captureFromWebcam = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) return;
+
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -290,29 +298,67 @@ export const SmartPhotoUploader = ({
     );
     closeWebcam();
     if (!blob) {
-      setError("La photo n'a pas pu être capturée. Réessayez ou choisissez un fichier.");
+      setError("La photo n'a pas pu être capturée. Réessayez.");
+      setUploadState('error');
       return;
     }
     await processFile(new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' }));
   }, [closeWebcam, processFile]);
-
-  const retry = useCallback(() => {
-    if (retryPreview) void persistPreview(retryPreview);
-  }, [persistPreview, retryPreview]);
 
   const isBusy = uploadState === 'preparing' || uploadState === 'uploading';
   const isPrivateStorageReference = Boolean(value?.startsWith('s3://onboarding/'));
   const hasPhoto = Boolean(localPreview || value);
   const statusText =
     uploadState === 'preparing'
-      ? 'Préparation de la photo…'
+      ? 'Analyse du format…'
       : uploadState === 'uploading'
-        ? 'Enregistrement privé…'
+        ? 'Conversion et enregistrement privé…'
         : uploadState === 'saved'
-          ? 'Photo enregistrée dans votre brouillon privé'
+          ? 'Photo convertie et enregistrée en privé'
           : isPrivateStorageReference
-            ? 'Photo présente dans votre brouillon privé'
+            ? 'Photo présente dans votre dossier privé'
             : null;
+
+  const previewContent = localPreview && !previewFailed ? (
+    <Image
+      src={localPreview}
+      alt={`Aperçu — ${label}`}
+      fill
+      unoptimized
+      sizes="(max-width: 640px) 100vw, 360px"
+      className="h-full w-full object-cover"
+      onError={() => setPreviewFailed(true)}
+    />
+  ) : isPrivateStorageReference && privatePreviewNode ? (
+    privatePreviewNode
+  ) : isPrivateStorageReference && privatePreviewUrl && !privatePreviewFailed ? (
+    <Image
+      src={privatePreviewUrl}
+      alt={`Aperçu privé — ${label}`}
+      fill
+      unoptimized
+      sizes="(max-width: 640px) 100vw, 360px"
+      className="h-full w-full object-cover"
+      onError={() => setPrivatePreviewFailed(true)}
+    />
+  ) : value && !isPrivateStorageReference && !previewFailed ? (
+    <Image
+      src={value}
+      alt={`Aperçu — ${label}`}
+      fill
+      unoptimized
+      sizes="(max-width: 640px) 100vw, 360px"
+      className="h-full w-full object-cover"
+      onError={() => setPreviewFailed(true)}
+    />
+  ) : (
+    <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-emerald-300">
+      <Check className="h-7 w-7" />
+      <span className="text-xs font-medium">
+        {isBusy ? 'Préparation en cours' : 'Photo enregistrée de façon privée'}
+      </span>
+    </div>
+  );
 
   return (
     <section
@@ -323,7 +369,7 @@ export const SmartPhotoUploader = ({
         ref={fileInputRef}
         type="file"
         tabIndex={-1}
-        accept="image/*"
+        accept={ACCEPTED_PHOTO_FORMATS}
         onChange={(event) => void processFile(event.target.files?.[0])}
         aria-label={`Choisir une photo pour ${label.toLowerCase()}`}
         className="sr-only"
@@ -332,7 +378,7 @@ export const SmartPhotoUploader = ({
         ref={cameraInputRef}
         type="file"
         tabIndex={-1}
-        accept="image/*"
+        accept={ACCEPTED_PHOTO_FORMATS}
         capture={captureFacingMode}
         onChange={(event) => void processFile(event.target.files?.[0])}
         aria-label={`Prendre une photo pour ${label.toLowerCase()}`}
@@ -352,53 +398,13 @@ export const SmartPhotoUploader = ({
       {hasPhoto ? (
         <div className="mt-3">
           <div
-            className={`relative overflow-hidden rounded-xl border border-horizon-400/25 bg-abyss-700/70 ${
-              compact ? 'aspect-square' : 'aspect-[4/3]'
-            }`}
+            className={`relative overflow-hidden rounded-xl border border-horizon-400/25 bg-abyss-700/70 ${compact ? 'aspect-square' : 'aspect-[4/3]'}`}
           >
-            {localPreview ? (
-              <Image
-                src={localPreview}
-                alt={`Aperçu — ${label}`}
-                fill
-                unoptimized
-                sizes="(max-width: 640px) 100vw, 360px"
-                className="h-full w-full object-cover"
-              />
-            ) : isPrivateStorageReference ? (
-              privatePreviewNode ? (
-                privatePreviewNode
-              ) : privatePreviewUrl && !privatePreviewFailed ? (
-                <Image
-                  src={privatePreviewUrl}
-                  alt={`Aperçu privé — ${label}`}
-                  fill
-                  unoptimized
-                  sizes="(max-width: 640px) 100vw, 360px"
-                  className="h-full w-full object-cover"
-                  onError={() => setPrivatePreviewFailed(true)}
-                />
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-emerald-300">
-                  <Check className="h-7 w-7" />
-                  <span className="text-xs font-medium">Photo enregistrée de façon privée</span>
-                </div>
-              )
-            ) : (
-              <Image
-                src={value || ''}
-                alt={`Aperçu — ${label}`}
-                fill
-                unoptimized
-                sizes="(max-width: 640px) 100vw, 360px"
-                className="h-full w-full object-cover"
-              />
-            )}
-
+            {previewContent}
             {isBusy && (
-              <div className="absolute inset-0 grid place-items-center bg-abyss-900/75 backdrop-blur-sm">
-                <span className="inline-flex items-center gap-2 rounded-full bg-abyss-700 px-3 py-2 text-xs text-stellar-200">
-                  <Loader2 className="h-4 w-4 animate-spin" /> {statusText}
+              <div className="absolute inset-0 grid place-items-center bg-abyss-900/75 p-3 backdrop-blur-sm">
+                <span className="inline-flex items-center gap-2 rounded-full bg-abyss-700 px-3 py-2 text-center text-xs text-stellar-200">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> {statusText}
                 </span>
               </div>
             )}
@@ -411,7 +417,7 @@ export const SmartPhotoUploader = ({
               disabled={isBusy}
               className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/[0.1] px-2 py-2 text-xs font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
             >
-              <ImagePlus className="h-4 w-4 shrink-0" /> Remplacer
+              <ImagePlus className="h-4 w-4" /> Remplacer
             </button>
             <button
               type="button"
@@ -419,7 +425,7 @@ export const SmartPhotoUploader = ({
               disabled={isBusy}
               className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-horizon-400/25 px-2 py-2 text-xs font-medium text-horizon-200 hover:bg-horizon-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400 disabled:opacity-50"
             >
-              <Camera className="h-4 w-4 shrink-0" /> Reprendre
+              <Camera className="h-4 w-4" /> Reprendre
             </button>
             <button
               type="button"
@@ -427,7 +433,7 @@ export const SmartPhotoUploader = ({
               disabled={isBusy}
               className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-rose-400/20 px-2 py-2 text-xs font-medium text-rose-200 hover:bg-rose-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-50"
             >
-              <Trash2 className="h-4 w-4 shrink-0" /> Retirer
+              <Trash2 className="h-4 w-4" /> Retirer
             </button>
           </div>
         </div>
@@ -437,7 +443,7 @@ export const SmartPhotoUploader = ({
             <Camera className="h-5 w-5" />
           </span>
           <p className="mt-3 text-xs leading-5 text-stellar-500">
-            JPEG, PNG ou WebP · compression automatique · 1,2 Mo maximum après préparation
+            Tous formats photo courants · HEIC, HEIF, TIFF, AVIF, GIF, BMP, PNG, WebP, JPEG · 30 Mo max
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
@@ -474,13 +480,13 @@ export const SmartPhotoUploader = ({
       {error && (
         <div className="mt-3 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3" role="alert">
           <p className="text-xs leading-5 text-rose-100">{error}</p>
-          {retryPreview && (
+          {retryFileRef.current && (
             <button
               type="button"
               onClick={retry}
               className="mt-2 inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-xs font-semibold text-rose-100 hover:bg-rose-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
             >
-              <RefreshCw className="h-4 w-4" /> Réessayer l’envoi
+              <RefreshCw className="h-4 w-4" /> Réessayer
             </button>
           )}
         </div>
@@ -488,22 +494,19 @@ export const SmartPhotoUploader = ({
 
       {isCameraOpen && (
         <div
-          ref={cameraDialogRef}
-          className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-abyss-900/95 p-3 [padding-top:max(0.75rem,var(--safe-area-top))] [padding-bottom:max(0.75rem,var(--safe-area-bottom))] backdrop-blur-sm"
+          className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-abyss-900/95 p-3 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="camera-dialog-title"
-          tabIndex={-1}
+          aria-label={`Caméra — ${label}`}
         >
-          <div className="custom-scrollbar w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.1] bg-abyss-700 p-4 shadow-abyss sm:p-5">
+          <div className="w-full max-w-lg rounded-3xl border border-white/[0.1] bg-abyss-700 p-4 shadow-abyss sm:p-5">
             <div className="flex items-center justify-between gap-3">
-              <h4 id="camera-dialog-title" className="text-sm font-semibold text-stellar-100">
-                <Camera className="mr-2 inline h-4 w-4 text-horizon-300" />
-                {label}
+              <h4 className="text-sm font-semibold text-stellar-100">
+                <Camera className="mr-2 inline h-4 w-4 text-horizon-300" /> {label}
               </h4>
               <button
                 type="button"
-                onClick={() => closeWebcam()}
+                onClick={closeWebcam}
                 aria-label="Fermer la caméra"
                 className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.1] text-stellar-300 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
               >
@@ -512,15 +515,12 @@ export const SmartPhotoUploader = ({
             </div>
 
             <div className="relative mt-3 h-[min(52dvh,22rem)] overflow-hidden rounded-2xl border border-white/[0.08] bg-abyss-900">
-              {/* Mirror the preview for selfies; the saved photo stays unmirrored. */}
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 muted
-                className={`h-full w-full object-cover ${
-                  captureFacingMode === 'user' ? '-scale-x-100' : ''
-                }`}
+                className={`h-full w-full object-cover ${captureFacingMode === 'user' ? '-scale-x-100' : ''}`}
               />
               {isCameraStarting && (
                 <div className="absolute inset-0 grid place-items-center bg-abyss-900/80">
@@ -543,27 +543,27 @@ export const SmartPhotoUploader = ({
                 <button
                   type="button"
                   onClick={() => {
-                    closeWebcam(false);
+                    closeWebcam();
                     fileInputRef.current?.click();
                   }}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900"
                 >
-                  <ImagePlus className="h-4 w-4" /> Choisir un fichier
+                  <ImagePlus className="h-4 w-4" /> Choisir
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => void captureFromWebcam()}
                   disabled={isCameraStarting}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 hover:bg-horizon-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-300 disabled:opacity-50"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-horizon-400 px-4 py-3 text-sm font-semibold text-abyss-900 disabled:opacity-50"
                 >
                   <Camera className="h-4 w-4" /> Capturer
                 </button>
               )}
               <button
                 type="button"
-                onClick={() => closeWebcam()}
-                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/[0.1] px-4 py-3 text-sm font-medium text-stellar-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-horizon-400"
+                onClick={closeWebcam}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-white/[0.1] px-4 py-3 text-sm font-medium text-stellar-200"
               >
                 Annuler
               </button>
