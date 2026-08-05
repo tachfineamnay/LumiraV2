@@ -173,8 +173,8 @@ function resolvePhotoStatus(
   storageRef: string | null,
   validatedStatus?: ReadingPhotoStatus,
 ): ReadingPhotoStatus {
-  if (validatedStatus) return validatedStatus;
   if (!storageRef) return 'MISSING';
+  if (validatedStatus) return validatedStatus;
   return isPrivateOnboardingPhotoReference(storageRef) ? 'VALID' : 'INVALID';
 }
 
