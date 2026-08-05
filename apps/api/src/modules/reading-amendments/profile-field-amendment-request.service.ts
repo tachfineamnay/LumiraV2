@@ -74,7 +74,11 @@ export class ProfileFieldAmendmentRequestService {
           },
         });
         if (!order) throw new NotFoundException('Commande non trouvée');
-        if (!['PAID', 'COMPLETED', 'AWAITING_VALIDATION', 'FAILED'].includes(order.status)) {
+        if (
+          !['PAID', 'PROCESSING', 'COMPLETED', 'AWAITING_VALIDATION', 'FAILED'].includes(
+            order.status,
+          )
+        ) {
           throw new ConflictException(
             `La commande ne peut pas recevoir de complément dans son état actuel (${order.status})`,
           );
@@ -130,12 +134,14 @@ export class ProfileFieldAmendmentRequestService {
           visibleFields.map((field) => [field, currentByKey.get(field) ?? null]),
         );
         const id = `ram_${randomUUID()}`;
+        const productionWasActiveAtRequest = order.status === 'PROCESSING';
         const data = {
           schemaVersion: READING_REQUIREMENTS_VERSION,
           fieldLabels: profileFieldLabels(visibleFields),
           previousValues,
           invalidFields,
           values: {},
+          productionWasActiveAtRequest,
         };
         const rows = await tx.$queryRaw<ProfileAmendmentRow[]>(Prisma.sql`
           INSERT INTO "ReadingIntakeAmendment" (
@@ -165,6 +171,7 @@ export class ProfileFieldAmendmentRequestService {
               kind: 'PROFILE_FIELDS',
               requestedFields: visibleFields,
               expiresAt: expiresAt.toISOString(),
+              productionWasActiveAtRequest,
             },
           },
         });
