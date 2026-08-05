@@ -1,8 +1,20 @@
 import { ConflictException } from '@nestjs/common';
+import {
+  READING_REQUIREMENTS_VERSION,
+  RequiredReadingField,
+  evaluateReadingRequirements,
+} from '../users/reading-intake-policy';
 
 export const READING_INTAKE_REQUIRED_CODE = 'READING_INTAKE_REQUIRED';
+export const READING_INTAKE_INCOMPLETE_CODE = 'READING_INTAKE_INCOMPLETE';
 
-export type ReadingIntakeReadinessStatus = 'LEGACY' | 'MISSING' | 'DRAFT' | 'INVALID' | 'SEALED';
+export type ReadingIntakeReadinessStatus =
+  | 'LEGACY'
+  | 'MISSING'
+  | 'DRAFT'
+  | 'INVALID'
+  | 'INCOMPLETE'
+  | 'SEALED';
 
 export interface ReadingIntakeReadiness {
   required: boolean;
@@ -11,6 +23,9 @@ export interface ReadingIntakeReadiness {
   sealedAt: string | null;
   contentHash: string | null;
   data: Record<string, unknown>;
+  requirementsVersion: string | null;
+  missingFields: RequiredReadingField[];
+  invalidFields: RequiredReadingField[];
 }
 
 export interface OrderWithReadingIntake {
@@ -29,32 +44,44 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function baseResult(
+  input: Omit<ReadingIntakeReadiness, 'requirementsVersion' | 'missingFields' | 'invalidFields'>,
+): ReadingIntakeReadiness {
+  return {
+    ...input,
+    requirementsVersion: null,
+    missingFields: [],
+    invalidFields: [],
+  };
+}
+
 /**
- * New orders have an immutable, order-scoped intake. Legacy orders deliberately
- * remain processable through their historical profile/clientInputs fallback.
+ * New orders have an immutable, order-scoped intake. A SEALED database status
+ * is not enough: the stored data must also satisfy the five production inputs.
+ * Legacy orders remain readable and are handled by the compatibility workflow.
  */
 export function readOrderIntakeReadiness(order: OrderWithReadingIntake): ReadingIntakeReadiness {
   if (order.intakeRequired !== true) {
-    return {
+    return baseResult({
       required: false,
       ready: true,
       status: 'LEGACY',
       sealedAt: null,
       contentHash: null,
       data: {},
-    };
+    });
   }
 
   const intake = asRecord(order.readingIntake);
   if (Object.keys(intake).length === 0) {
-    return {
+    return baseResult({
       required: true,
       ready: false,
       status: 'MISSING',
       sealedAt: null,
       contentHash: null,
       data: {},
-    };
+    });
   }
 
   const rawStatus = nonEmptyString(intake.status);
@@ -64,24 +91,44 @@ export function readOrderIntakeReadiness(order: OrderWithReadingIntake): Reading
   const hasSnapshot = Object.keys(data).length > 0;
 
   if (rawStatus !== 'SEALED') {
-    return {
+    return baseResult({
       required: true,
       ready: false,
       status: rawStatus === 'DRAFT' ? 'DRAFT' : 'INVALID',
       sealedAt,
       contentHash,
       data,
-    };
+    });
   }
 
-  const ready = Boolean(sealedAt && contentHash && hasSnapshot);
+  if (!sealedAt || !contentHash || !hasSnapshot) {
+    return baseResult({
+      required: true,
+      ready: false,
+      status: 'INVALID',
+      sealedAt,
+      contentHash,
+      data,
+    });
+  }
+
+  const requirements = evaluateReadingRequirements(data, {
+    requireExplicitIntentionMode: false,
+    strictIntentionExclusivity: false,
+  });
+  const requirementsVersion =
+    nonEmptyString(data.requirementsVersion) ?? READING_REQUIREMENTS_VERSION;
+
   return {
     required: true,
-    ready,
-    status: ready ? 'SEALED' : 'INVALID',
+    ready: requirements.complete,
+    status: requirements.complete ? 'SEALED' : 'INCOMPLETE',
     sealedAt,
     contentHash,
     data,
+    requirementsVersion,
+    missingFields: requirements.missingFields,
+    invalidFields: requirements.invalidFields,
   };
 }
 
@@ -89,11 +136,15 @@ export function assertOrderIntakeReady(order: OrderWithReadingIntake): void {
   const readiness = readOrderIntakeReadiness(order);
   if (readiness.ready) return;
 
+  const incomplete = readiness.status === 'INCOMPLETE';
   throw new ConflictException({
     statusCode: 409,
-    code: READING_INTAKE_REQUIRED_CODE,
-    message:
-      'Le dossier client doit être finalisé et scellé avant toute prise en charge ou production.',
+    code: incomplete ? READING_INTAKE_INCOMPLETE_CODE : READING_INTAKE_REQUIRED_CODE,
+    message: incomplete
+      ? 'Le dossier scellé doit être complété avant toute prise en charge ou production.'
+      : 'Le dossier client doit être finalisé et scellé avant toute prise en charge ou production.',
     intakeStatus: readiness.status,
+    missingFields: readiness.missingFields,
+    invalidFields: readiness.invalidFields,
   });
 }
