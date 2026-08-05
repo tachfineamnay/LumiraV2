@@ -1,15 +1,31 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Expert, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import {
+  CreateProfileFieldAmendmentDto,
+  ReviewProfileFieldAmendmentDto,
+  SaveProfileFieldAmendmentDraftDto,
+  SubmitProfileFieldAmendmentDto,
+} from './dto/profile-field-amendment.dto';
+import {
   CreatePalmAmendmentDto,
   ReviewPalmAmendmentDto,
   SavePalmAmendmentDraftDto,
+  SaveReadingAmendmentDraftDto,
   SubmitPalmAmendmentDto,
+  SubmitReadingAmendmentDto,
 } from './dto/reading-amendment.dto';
+import { IntakeCompletenessService } from './intake-completeness.service';
+import { ProfileFieldAmendmentService } from './profile-field-amendment.service';
 import { ReadingAmendmentService } from './reading-amendment.service';
 
 interface RevisionClaimRow {
@@ -20,7 +36,7 @@ interface RevisionClaimRow {
 interface AmendmentRow {
   id: string;
   orderId: string;
-  kind: 'PALM_PHOTO';
+  kind: 'PALM_PHOTO' | 'PROFILE_FIELDS';
   requestedFields: string[];
   reason: string;
   status: 'REQUESTED' | 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
@@ -35,14 +51,32 @@ interface AmendmentRow {
   updatedAt: Date;
 }
 
+type AmendmentKind = AmendmentRow['kind'];
+
 @Injectable()
 export class ReadingAmendmentFacade {
+  private readonly logger = new Logger(ReadingAmendmentFacade.name);
+
   constructor(
     private readonly amendments: ReadingAmendmentService,
+    private readonly profileFields: ProfileFieldAmendmentService,
+    private readonly completeness: IntakeCompletenessService,
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
     private readonly config: ConfigService,
   ) {}
+
+  getCompleteness(orderId: string) {
+    return this.completeness.getForOrder(orderId);
+  }
+
+  requestProfileFields(
+    orderId: string,
+    expertId: string,
+    dto: CreateProfileFieldAmendmentDto,
+  ) {
+    return this.profileFields.request(orderId, expertId, dto);
+  }
 
   async requestPalmPhoto(orderId: string, expertId: string, dto: CreatePalmAmendmentDto) {
     const order = await this.prisma.order.findUnique({
@@ -60,34 +94,44 @@ export class ReadingAmendmentFacade {
       );
     }
 
-    // A photo delivered before the deadline remains reviewable afterward. The
-    // legacy core expiry helper also includes SUBMITTED, so guard that state
-    // before delegating and never let a received photo be silently cancelled.
-    const submitted = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT "id" FROM "ReadingIntakeAmendment"
+    const active = await this.prisma.$queryRaw<
+      Array<{ id: string; kind: AmendmentKind; status: string }>
+    >(Prisma.sql`
+      SELECT "id", "kind", "status" FROM "ReadingIntakeAmendment"
       WHERE "orderId" = ${orderId}
-        AND "kind" = 'PALM_PHOTO'
-        AND "status" = 'SUBMITTED'
+        AND "status" IN ('REQUESTED', 'DRAFT', 'SUBMITTED')
       LIMIT 1
     `);
-    if (submitted.length > 0) {
-      throw new ConflictException('Une photo de paume transmise attend encore la vérification');
+    if (active.length > 0) {
+      throw new ConflictException(
+        active[0].status === 'SUBMITTED'
+          ? 'Un complément transmis attend encore la vérification'
+          : 'Une demande de complément est déjà ouverte pour cette commande',
+      );
     }
 
     const amendment = await this.amendments.requestPalmPhoto(orderId, expertId, dto);
-    await this.email.send({
-      to: order.user.email,
-      subject: 'Une action est demandée dans votre Sanctuaire Lumira',
-      template: 'reading-amendment-requested',
-      messageId: `<lumira-amendment-${amendment.id}@oraclelumira.com>`,
-      context: {
-        firstName: order.user.firstName,
-        orderNumber: order.orderNumber,
-        reason: amendment.reason,
-        expiresAt: new Date(amendment.expiresAt).toLocaleDateString('fr-FR'),
-        sanctuaireLink: `${this.getWebUrl()}/sanctuaire`,
-      },
-    });
+    try {
+      await this.email.send({
+        to: order.user.email,
+        subject: 'Une action est demandée dans votre Sanctuaire Lumira',
+        template: 'reading-amendment-requested',
+        messageId: `<lumira-amendment-${amendment.id}@oraclelumira.com>`,
+        context: {
+          firstName: order.user.firstName,
+          orderNumber: order.orderNumber,
+          reason: amendment.reason,
+          expiresAt: new Date(amendment.expiresAt).toLocaleDateString('fr-FR'),
+          sanctuaireLink: `${this.getWebUrl()}/sanctuaire`,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Demande ${amendment.id} créée mais email non envoyé: ${
+          error instanceof Error ? error.message : 'erreur inconnue'
+        }`,
+      );
+    }
 
     return amendment;
   }
@@ -123,6 +167,44 @@ export class ReadingAmendmentFacade {
     return rows.map((row) => this.toPublic(row));
   }
 
+  async saveDraft(userId: string, amendmentId: string, dto: SaveReadingAmendmentDraftDto) {
+    const kind = await this.getKind({ amendmentId, userId });
+    if (kind === 'PROFILE_FIELDS') {
+      const profileDto: SaveProfileFieldAmendmentDraftDto = {
+        expectedRevision: dto.expectedRevision,
+        values: dto.values ?? {},
+      };
+      return this.profileFields.saveDraft(userId, amendmentId, profileDto);
+    }
+    const palmDto: SavePalmAmendmentDraftDto = {
+      expectedRevision: dto.expectedRevision,
+      storageRef: dto.storageRef,
+      palmRole: dto.palmRole ?? 'PALM_UNKNOWN',
+    };
+    return this.amendments.savePalmDraft(userId, amendmentId, palmDto);
+  }
+
+  async submit(userId: string, amendmentId: string, dto: SubmitReadingAmendmentDto) {
+    const kind = await this.getKind({ amendmentId, userId });
+    if (kind === 'PROFILE_FIELDS') {
+      const profileDto: SubmitProfileFieldAmendmentDto = {
+        expectedRevision: dto.expectedRevision,
+        values: dto.values ?? {},
+      };
+      return this.profileFields.submit(userId, amendmentId, profileDto);
+    }
+    const storageRef = dto.storageRef?.trim();
+    if (!storageRef) {
+      throw new BadRequestException('Ajoutez une photo de paume avant de la transmettre');
+    }
+    const palmDto: SubmitPalmAmendmentDto = {
+      expectedRevision: dto.expectedRevision,
+      storageRef,
+      palmRole: dto.palmRole ?? 'PALM_UNKNOWN',
+    };
+    return this.amendments.submitPalm(userId, amendmentId, palmDto);
+  }
+
   savePalmDraft(userId: string, amendmentId: string, dto: SavePalmAmendmentDraftDto) {
     return this.amendments.savePalmDraft(userId, amendmentId, dto);
   }
@@ -131,14 +213,40 @@ export class ReadingAmendmentFacade {
     return this.amendments.submitPalm(userId, amendmentId, dto);
   }
 
-  async approvePalm(
+  async approve(
     orderId: string,
     amendmentId: string,
     expertId: string,
     dto: ReviewPalmAmendmentDto,
   ) {
     await this.ensureOriginalInputProjection(orderId);
+    const kind = await this.getKind({ amendmentId, orderId });
+    if (kind === 'PROFILE_FIELDS') {
+      return this.profileFields.approve(orderId, amendmentId, expertId, dto);
+    }
     return this.amendments.approvePalm(orderId, amendmentId, expertId, dto);
+  }
+
+  approvePalm(
+    orderId: string,
+    amendmentId: string,
+    expertId: string,
+    dto: ReviewPalmAmendmentDto,
+  ) {
+    return this.approve(orderId, amendmentId, expertId, dto);
+  }
+
+  async reject(
+    orderId: string,
+    amendmentId: string,
+    expertId: string,
+    dto: ReviewPalmAmendmentDto,
+  ) {
+    const kind = await this.getKind({ amendmentId, orderId });
+    if (kind === 'PROFILE_FIELDS') {
+      return this.profileFields.reject(orderId, amendmentId, expertId, dto);
+    }
+    return this.amendments.rejectPalm(orderId, amendmentId, expertId, dto);
   }
 
   rejectPalm(
@@ -147,38 +255,65 @@ export class ReadingAmendmentFacade {
     expertId: string,
     dto: ReviewPalmAmendmentDto,
   ) {
-    return this.amendments.rejectPalm(orderId, amendmentId, expertId, dto);
+    return this.reject(orderId, amendmentId, expertId, dto);
   }
 
-  requestRetake(
+  async requestRetake(
     orderId: string,
     amendmentId: string,
     expertId: string,
     dto: ReviewPalmAmendmentDto,
   ) {
+    const kind = await this.getKind({ amendmentId, orderId });
+    if (kind === 'PROFILE_FIELDS') {
+      return this.profileFields.requestRetake(orderId, amendmentId, expertId, dto);
+    }
     return this.amendments.requestRetake(orderId, amendmentId, expertId, dto);
   }
 
-  cancel(
+  async cancel(
     orderId: string,
     amendmentId: string,
     expertId: string,
     dto: ReviewPalmAmendmentDto,
   ) {
+    const kind = await this.getKind({ amendmentId, orderId });
+    if (kind === 'PROFILE_FIELDS') {
+      return this.profileFields.cancel(orderId, amendmentId, expertId, dto);
+    }
     return this.amendments.cancel(orderId, amendmentId, expertId, dto);
   }
 
-  getPhotoReference(options: { amendmentId: string; userId?: string; orderId?: string }) {
-    return this.amendments.getPhotoReference(options);
+  async getPhotoReference(options: {
+    amendmentId: string;
+    kind?: 'face' | 'palm';
+    userId?: string;
+    orderId?: string;
+  }) {
+    const kind = await this.getKind(options);
+    if (kind === 'PROFILE_FIELDS') {
+      if (!options.kind) throw new NotFoundException('Type de photo manquant');
+      return this.profileFields.getPhotoReference({
+        amendmentId: options.amendmentId,
+        kind: options.kind,
+        userId: options.userId,
+        orderId: options.orderId,
+      });
+    }
+    return this.amendments.getPhotoReference({
+      amendmentId: options.amendmentId,
+      userId: options.userId,
+      orderId: options.orderId,
+    });
   }
 
-  /** Claims the approved amendment before any reopen or generation side effect. */
   async createRevisedReading(
     orderId: string,
     amendmentId: string,
     expert: Expert,
     dto: ReviewPalmAmendmentDto,
   ) {
+    const kind = await this.getKind({ amendmentId, orderId });
     const operationId = `rev_${randomUUID()}`;
     const claim = {
       id: operationId,
@@ -209,10 +344,19 @@ export class ReadingAmendmentFacade {
     }
 
     try {
-      const result = await this.amendments.createRevisedReading(orderId, amendmentId, expert, {
+      const reviewDto: ReviewProfileFieldAmendmentDto = {
         ...dto,
         expectedRevision: claimed[0].revision,
-      });
+      };
+      const result =
+        kind === 'PROFILE_FIELDS'
+          ? await this.profileFields.createRevisedReading(
+              orderId,
+              amendmentId,
+              expert,
+              reviewDto,
+            )
+          : await this.amendments.createRevisedReading(orderId, amendmentId, expert, reviewDto);
 
       await this.prisma.$executeRaw(Prisma.sql`
         UPDATE "ReadingIntakeAmendment"
@@ -251,11 +395,31 @@ export class ReadingAmendmentFacade {
     }
   }
 
-  /**
-   * Current orders store their sealed intake in ReadingIntake.data. Older
-   * generation helpers still expect an immutable clientInputs.readingIntake
-   * projection. Materialize that projection once without mutating ReadingIntake.
-   */
+  private async getKind(options: {
+    amendmentId: string;
+    userId?: string;
+    orderId?: string;
+  }): Promise<AmendmentKind> {
+    let rows: Array<{ kind: AmendmentKind }>;
+    if (options.userId) {
+      rows = await this.prisma.$queryRaw<Array<{ kind: AmendmentKind }>>(Prisma.sql`
+        SELECT "kind" FROM "ReadingIntakeAmendment"
+        WHERE "id" = ${options.amendmentId} AND "userId" = ${options.userId}
+        LIMIT 1
+      `);
+    } else if (options.orderId) {
+      rows = await this.prisma.$queryRaw<Array<{ kind: AmendmentKind }>>(Prisma.sql`
+        SELECT "kind" FROM "ReadingIntakeAmendment"
+        WHERE "id" = ${options.amendmentId} AND "orderId" = ${options.orderId}
+        LIMIT 1
+      `);
+    } else {
+      throw new NotFoundException('Périmètre de complément manquant');
+    }
+    if (!rows[0]) throw new NotFoundException('Demande de complément introuvable');
+    return rows[0].kind;
+  }
+
   private async ensureOriginalInputProjection(orderId: string): Promise<void> {
     await this.prisma.$transaction(
       async (tx) => {
@@ -296,6 +460,7 @@ export class ReadingAmendmentFacade {
           throw new ConflictException('Le dossier scellé original est introuvable');
         }
 
+        const rawProfile = this.asRecord(intake.data);
         await tx.order.update({
           where: { id: orderId },
           data: {
@@ -305,7 +470,15 @@ export class ReadingAmendmentFacade {
                 version: 'relational-reading-intake-v1',
                 sealedAt: intake.sealedAt.toISOString(),
                 contentHash: intake.contentHash,
-                profile: intake.data,
+                profile: {
+                  ...rawProfile,
+                  facePhotoUrl:
+                    this.nonEmptyString(rawProfile.facePhotoUrl) ??
+                    this.nonEmptyString(rawProfile.facePhoto),
+                  palmPhotoUrl:
+                    this.nonEmptyString(rawProfile.palmPhotoUrl) ??
+                    this.nonEmptyString(rawProfile.palmPhoto),
+                },
               },
             } as Prisma.InputJsonValue,
           },
@@ -344,7 +517,10 @@ export class ReadingAmendmentFacade {
   }
 
   private toPublic(row: AmendmentRow) {
-    const data = this.asRecord(row.data);
+    const data =
+      row.kind === 'PROFILE_FIELDS'
+        ? this.sanitizeProfileFieldData(row.data)
+        : this.asRecord(row.data);
     return {
       id: row.id,
       orderId: row.orderId,
@@ -366,6 +542,24 @@ export class ReadingAmendmentFacade {
     };
   }
 
+  private sanitizeProfileFieldData(value: Prisma.JsonValue): Record<string, unknown> {
+    const data = { ...this.asRecord(value) };
+    const values = { ...this.asRecord(data.values) };
+    const previousValues = { ...this.asRecord(data.previousValues) };
+    const photoFields: string[] = [];
+    for (const key of ['facePhotoUrl', 'palmPhotoUrl'] as const) {
+      if (this.nonEmptyString(values[key])) photoFields.push(key);
+      delete values[key];
+      delete previousValues[key];
+    }
+    delete data.faceAsset;
+    delete data.palmAsset;
+    data.values = values;
+    data.previousValues = previousValues;
+    data.photoFields = photoFields;
+    return data;
+  }
+
   private asRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
@@ -383,6 +577,6 @@ export class ReadingAmendmentFacade {
       this.config.get<string>('WEB_URL') ||
       this.config.get<string>('FRONTEND_URL') ||
       'http://localhost:3000'
-    );
+    ).replace(/\/$/, '');
   }
 }
