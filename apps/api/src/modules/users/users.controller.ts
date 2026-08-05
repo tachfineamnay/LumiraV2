@@ -19,19 +19,23 @@ import { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { ReadingIntakeService } from './reading-intake.service';
+import { EffectiveClientProfileService } from './effective-client-profile.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateOnboardingProgressDto, UpdateProfileDto } from './dto/update-profile.dto';
 import {
   OnboardingPhotoKind,
   PrivateOnboardingPhotoService,
 } from '../uploads/private-onboarding-photo.service';
+import { S3Service } from '../uploads/s3.service';
 
 @Controller('users')
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly readingIntakeService: ReadingIntakeService,
+    private readonly effectiveProfiles: EffectiveClientProfileService,
     private readonly privateOnboardingPhotoService: PrivateOnboardingPhotoService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Get()
@@ -91,8 +95,8 @@ export class UsersController {
 
   /**
    * GET /api/users/profile/photos/:kind
-   * Streams the authenticated client's private face/palm photo.
-   * Ownership is always taken from the JWT — never from query params.
+   * Streams the latest effective face/palm photo. Approved complements override
+   * the profile projection while the original sealed intake remains immutable.
    */
   @Get('profile/photos/:kind')
   @UseGuards(JwtAuthGuard)
@@ -103,26 +107,40 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const photoKind = this.parsePhotoKind(kind);
-    const { stream, contentType, contentLength, etag, lastModified } =
-      await this.privateOnboardingPhotoService.getPhotoStream({
-        clientId: req.user.userId,
-        kind: photoKind,
-        actorType: 'client',
-        actorId: req.user.userId,
-      });
+    const data = await this.usersService.getUserProfile(req.user.userId);
+    if (!data) throw new NotFoundException('Profil utilisateur non trouvé');
+
+    const persistedReference =
+      photoKind === 'face' ? data.profile?.facePhotoUrl ?? null : data.profile?.palmPhotoUrl ?? null;
+    const storageRef = await this.effectiveProfiles.resolvePhotoReference(
+      req.user.userId,
+      photoKind,
+      persistedReference,
+    );
+    if (!storageRef) throw new NotFoundException('Photo introuvable');
+
+    const key = this.privateOnboardingPhotoService.parseStorageReference(
+      storageRef,
+      req.user.userId,
+    );
+    const object = await this.s3Service.getObject(key, 'uploads');
+    const contentType = this.resolveContentType(object.contentType, key);
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    if (contentLength != null) res.setHeader('Content-Length', String(contentLength));
-    if (etag) res.setHeader('ETag', etag);
-    if (lastModified) res.setHeader('Last-Modified', lastModified.toUTCString());
+    if (object.contentLength != null) {
+      res.setHeader('Content-Length', String(object.contentLength));
+    }
+    if (object.etag) res.setHeader('ETag', object.etag);
+    if (object.lastModified) res.setHeader('Last-Modified', object.lastModified.toUTCString());
 
-    return new StreamableFile(stream);
+    return new StreamableFile(object.stream);
   }
 
-  /** Returns the authenticated user's complete profile data. */
+  /** Returns the authenticated user's complete effective profile data. */
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req: { user: { userId: string } }) {
@@ -130,37 +148,50 @@ export class UsersController {
     if (!data) {
       throw new NotFoundException('Profil utilisateur non trouvé');
     }
+    const effective = await this.effectiveProfiles.resolveProfile(
+      req.user.userId,
+      data.profile,
+    );
+    const profile = effective.profile;
+
     return {
       id: data.user.id,
       email: data.user.email,
       firstName: data.user.firstName,
       lastName: data.user.lastName,
       phone: data.user.phone,
-      profile: data.profile
+      profile: profile
         ? {
-            usageName: data.profile.usageName,
-            birthDate: data.profile.birthDate,
-            birthTime: data.profile.birthTime,
-            birthPlace: data.profile.birthPlace,
-            specificQuestion: data.profile.specificQuestion,
-            objective: data.profile.objective,
-            facePhotoUrl: data.profile.facePhotoUrl,
-            palmPhotoUrl: data.profile.palmPhotoUrl,
-            highs: data.profile.highs,
-            lows: data.profile.lows,
-            lifeEvents: data.profile.lifeEvents,
-            lifeAreas: data.profile.lifeAreas,
-            strongSide: data.profile.strongSide,
-            weakSide: data.profile.weakSide,
-            strongZone: data.profile.strongZone,
-            weakZone: data.profile.weakZone,
-            deliveryStyle: data.profile.deliveryStyle,
-            pace: data.profile.pace,
-            ailments: data.profile.ailments,
-            fears: data.profile.fears,
-            rituals: data.profile.rituals,
-            profileCompleted: data.profile.profileCompleted,
-            submittedAt: data.profile.submittedAt,
+            usageName: profile.usageName,
+            birthDate: profile.birthDate,
+            birthTime: profile.birthTime,
+            birthPlace: profile.birthPlace,
+            specificQuestion: profile.specificQuestion,
+            objective: profile.objective,
+            facePhotoUrl: profile.facePhotoUrl,
+            palmPhotoUrl: profile.palmPhotoUrl,
+            highs: profile.highs,
+            lows: profile.lows,
+            lifeEvents: profile.lifeEvents,
+            lifeAreas: profile.lifeAreas,
+            strongSide: profile.strongSide,
+            weakSide: profile.weakSide,
+            strongZone: profile.strongZone,
+            weakZone: profile.weakZone,
+            deliveryStyle: profile.deliveryStyle,
+            pace: profile.pace,
+            ailments: profile.ailments,
+            fears: profile.fears,
+            rituals: profile.rituals,
+            profileCompleted: profile.profileCompleted,
+            submittedAt: profile.submittedAt,
+          }
+        : null,
+      effectiveSnapshot: effective.snapshotId
+        ? {
+            id: effective.snapshotId,
+            revision: effective.snapshotRevision,
+            effectiveAt: effective.effectiveAt,
           }
         : null,
       stats: data.stats,
@@ -209,6 +240,17 @@ export class UsersController {
 
   private parsePhotoKind(kind: string): OnboardingPhotoKind {
     if (kind === 'face' || kind === 'palm') return kind;
+    throw new BadRequestException('Type de photo invalide');
+  }
+
+  private resolveContentType(contentType: string | undefined, key: string): string {
+    if (contentType === 'image/jpeg' || contentType === 'image/png' || contentType === 'image/webp') {
+      return contentType;
+    }
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.endsWith('.png')) return 'image/png';
+    if (lowerKey.endsWith('.webp')) return 'image/webp';
+    if (lowerKey.endsWith('.jpg') || lowerKey.endsWith('.jpeg')) return 'image/jpeg';
     throw new BadRequestException('Type de photo invalide');
   }
 }
