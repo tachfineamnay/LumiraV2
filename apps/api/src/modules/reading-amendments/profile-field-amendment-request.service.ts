@@ -14,6 +14,7 @@ import {
 import {
   ProfileAmendmentRow,
   asRecord,
+  hasOriginalInputProjection,
   parseAmendmentExpiry,
   resolveOriginalInput,
   toPublicProfileAmendment,
@@ -51,8 +52,15 @@ export class ProfileFieldAmendmentRequestService {
             userId: true,
             orderNumber: true,
             status: true,
+            intakeRequired: true,
             clientInputs: true,
-            user: { select: { email: true, firstName: true } },
+            user: {
+              select: {
+                email: true,
+                firstName: true,
+                profile: true,
+              },
+            },
             readingIntake: {
               select: {
                 id: true,
@@ -70,7 +78,23 @@ export class ProfileFieldAmendmentRequestService {
             `La commande ne peut pas recevoir de complément dans son état actuel (${order.status})`,
           );
         }
-        resolveOriginalInput(asRecord(order.clientInputs), order.readingIntake);
+
+        const clientInputs = asRecord(order.clientInputs);
+        const original = resolveOriginalInput(clientInputs, order.readingIntake, {
+          intakeRequired: order.intakeRequired,
+          legacyProfile: order.user.profile,
+        });
+        if (!hasOriginalInputProjection(clientInputs)) {
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              clientInputs: {
+                ...clientInputs,
+                readingIntake: original,
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
 
         await tx.$executeRaw(Prisma.sql`
           UPDATE "ReadingIntakeAmendment"
@@ -154,7 +178,7 @@ export class ProfileFieldAmendmentRequestService {
     );
 
     try {
-      await this.email.send({
+      await this.email.sendOrThrow({
         to: result.recipient.email,
         subject: 'Votre dossier Lumira doit être complété',
         template: 'reading-amendment-requested',
