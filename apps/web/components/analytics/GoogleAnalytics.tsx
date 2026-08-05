@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import Script from 'next/script';
 import { useConsent } from './ConsentProvider';
 import { GoogleAnalyticsSpaTracker } from './GoogleAnalyticsSpaTracker';
@@ -63,7 +63,9 @@ export function GoogleAnalytics() {
           });
         `}
       </Script>
-      <GoogleAnalyticsSpaTracker />
+      <Suspense fallback={null}>
+        <GoogleAnalyticsSpaTracker />
+      </Suspense>
     </>
   );
 }
