@@ -2,11 +2,23 @@ import { ConflictException } from '@nestjs/common';
 import {
   assertOrderIntakeReady,
   readOrderIntakeReadiness,
+  READING_INTAKE_INCOMPLETE_CODE,
   READING_INTAKE_REQUIRED_CODE,
 } from './reading-intake-readiness';
 
+const completeData = {
+  intentionMode: 'QUESTION',
+  openReading: false,
+  birthDate: '1990-01-01',
+  birthPlace: 'Rabat',
+  specificQuestion: 'Que dois-je comprendre maintenant ?',
+  objective: null,
+  facePhoto: 's3://onboarding/user-1/face-1.jpg',
+  palmPhoto: 's3://onboarding/user-1/palm-1.jpg',
+};
+
 describe('reading intake readiness', () => {
-  it('keeps legacy orders compatible', () => {
+  it('keeps legacy orders readable through the compatibility path', () => {
     expect(readOrderIntakeReadiness({ intakeRequired: false })).toMatchObject({
       required: false,
       ready: true,
@@ -36,10 +48,49 @@ describe('reading intake readiness', () => {
           status: 'SEALED',
           sealedAt: new Date('2026-07-20T10:00:00.000Z'),
           contentHash: null,
-          data: { birthDate: '1990-01-01', birthPlace: 'Rabat' },
+          data: completeData,
         },
       }),
     ).toMatchObject({ ready: false, status: 'INVALID' });
+  });
+
+  it('blocks a sealed intake when either mandatory photo is missing', () => {
+    for (const missing of ['facePhoto', 'palmPhoto'] as const) {
+      const data = { ...completeData, [missing]: null };
+      const readiness = readOrderIntakeReadiness({
+        intakeRequired: true,
+        readingIntake: {
+          status: 'SEALED',
+          sealedAt: '2026-07-20T10:00:00.000Z',
+          contentHash: 'sha256:immutable',
+          data,
+        },
+      });
+      expect(readiness).toMatchObject({ ready: false, status: 'INCOMPLETE' });
+      expect(readiness.missingFields).toContain(
+        missing === 'facePhoto' ? 'facePhotoUrl' : 'palmPhotoUrl',
+      );
+    }
+  });
+
+  it('blocks a sealed intake without a valid intention', () => {
+    const readiness = readOrderIntakeReadiness({
+      intakeRequired: true,
+      readingIntake: {
+        status: 'SEALED',
+        sealedAt: '2026-07-20T10:00:00.000Z',
+        contentHash: 'sha256:immutable',
+        data: {
+          ...completeData,
+          intentionMode: null,
+          specificQuestion: null,
+          objective: null,
+          openReading: false,
+        },
+      },
+    });
+    expect(readiness).toMatchObject({ ready: false, status: 'INCOMPLETE' });
+    expect(readiness.missingFields).toContain('intention');
   });
 
   it('accepts a complete sealed order-scoped intake', () => {
@@ -49,7 +100,7 @@ describe('reading intake readiness', () => {
         status: 'SEALED',
         sealedAt: '2026-07-20T10:00:00.000Z',
         contentHash: 'sha256:immutable',
-        data: { birthDate: '1990-01-01', birthPlace: 'Rabat' },
+        data: completeData,
       },
     };
 
@@ -58,11 +109,13 @@ describe('reading intake readiness', () => {
       ready: true,
       status: 'SEALED',
       contentHash: 'sha256:immutable',
+      missingFields: [],
+      invalidFields: [],
     });
     expect(() => assertOrderIntakeReady(order)).not.toThrow();
   });
 
-  it('exposes a stable application error code', () => {
+  it('exposes the existing code for an unsealed intake', () => {
     try {
       assertOrderIntakeReady({ intakeRequired: true, readingIntake: null });
       throw new Error('Expected readiness guard to throw');
@@ -70,6 +123,27 @@ describe('reading intake readiness', () => {
       expect((error as ConflictException).getResponse()).toMatchObject({
         code: READING_INTAKE_REQUIRED_CODE,
         intakeStatus: 'MISSING',
+      });
+    }
+  });
+
+  it('exposes the incomplete code and missing fields for a sealed dossier', () => {
+    try {
+      assertOrderIntakeReady({
+        intakeRequired: true,
+        readingIntake: {
+          status: 'SEALED',
+          sealedAt: '2026-07-20T10:00:00.000Z',
+          contentHash: 'sha256:immutable',
+          data: { birthDate: '1990-01-01', birthPlace: 'Rabat' },
+        },
+      });
+      throw new Error('Expected readiness guard to throw');
+    } catch (error) {
+      expect((error as ConflictException).getResponse()).toMatchObject({
+        code: READING_INTAKE_INCOMPLETE_CODE,
+        intakeStatus: 'INCOMPLETE',
+        missingFields: expect.arrayContaining(['intention', 'facePhotoUrl', 'palmPhotoUrl']),
       });
     }
   });
