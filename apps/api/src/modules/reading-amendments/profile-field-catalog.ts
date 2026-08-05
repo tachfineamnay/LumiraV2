@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 export const PROFILE_FIELD_KEYS = [
   'birthDate',
   'birthPlace',
+  'specificQuestion',
   'facePhotoUrl',
   'palmPhotoUrl',
   'palmRole',
@@ -11,11 +12,14 @@ export const PROFILE_FIELD_KEYS = [
 export type ProfileFieldKey = (typeof PROFILE_FIELD_KEYS)[number];
 export type RequestableProfileFieldKey = Exclude<ProfileFieldKey, 'palmRole'>;
 
+export type ProfileFieldInput = 'date' | 'text' | 'textarea' | 'photo' | 'palm-role';
+
 export interface ProfileFieldDefinition {
   key: ProfileFieldKey;
   label: string;
-  input: 'text' | 'date' | 'photo' | 'palm-role';
+  input: ProfileFieldInput;
   maxLength: number;
+  requestable: boolean;
 }
 
 export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefinition> = {
@@ -24,42 +28,50 @@ export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefiniti
     label: 'Date de naissance',
     input: 'date',
     maxLength: 10,
+    requestable: true,
   },
   birthPlace: {
     key: 'birthPlace',
     label: 'Lieu de naissance',
     input: 'text',
     maxLength: 180,
+    requestable: true,
+  },
+  specificQuestion: {
+    key: 'specificQuestion',
+    label: 'Question ou intention de lecture',
+    input: 'textarea',
+    maxLength: 2000,
+    requestable: true,
   },
   facePhotoUrl: {
     key: 'facePhotoUrl',
     label: 'Photo du visage',
     input: 'photo',
     maxLength: 512,
+    requestable: true,
   },
   palmPhotoUrl: {
     key: 'palmPhotoUrl',
     label: 'Photo de la paume',
     input: 'photo',
     maxLength: 512,
+    requestable: true,
   },
   palmRole: {
     key: 'palmRole',
     label: 'Main photographiée',
     input: 'palm-role',
     maxLength: 20,
+    requestable: false,
   },
 };
 
 const PROFILE_FIELD_SET = new Set<string>(PROFILE_FIELD_KEYS);
-const REQUESTABLE_FIELD_SET = new Set<string>([
-  'birthDate',
-  'birthPlace',
-  'facePhotoUrl',
-  'palmPhotoUrl',
-]);
+const REQUESTABLE_FIELD_SET = new Set<string>(
+  PROFILE_FIELD_KEYS.filter((key) => PROFILE_FIELD_CATALOG[key].requestable),
+);
 
-/** Parses already persisted fields. */
 export function parseProfileFields(values: string[]): ProfileFieldKey[] {
   const unique = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
   if (unique.length === 0) {
@@ -76,10 +88,6 @@ export function parseProfileFields(values: string[]): ProfileFieldKey[] {
   return unique as ProfileFieldKey[];
 }
 
-/**
- * Validates an expert request and automatically couples the hand side with a
- * requested palm photo. The client never receives an arbitrary JSON path.
- */
 export function normalizeRequestedProfileFields(values: string[]): ProfileFieldKey[] {
   const requested = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
   if (requested.length === 0) {
@@ -92,6 +100,10 @@ export function normalizeRequestedProfileFields(values: string[]): ProfileFieldK
   }
   if (requested.includes('palmPhotoUrl')) requested.push('palmRole');
   return parseProfileFields(requested);
+}
+
+export function publicProfileFields(fields: ProfileFieldKey[]): RequestableProfileFieldKey[] {
+  return fields.filter((field): field is RequestableProfileFieldKey => field !== 'palmRole');
 }
 
 export function profileFieldLabels(fields: ProfileFieldKey[]): string[] {
