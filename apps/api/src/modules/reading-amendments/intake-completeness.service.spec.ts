@@ -70,15 +70,23 @@ describe('IntakeCompletenessService', () => {
 
     expect(result.source).toBe('EFFECTIVE_SNAPSHOT');
     expect(result.complete).toBe(true);
+    expect(result.summary).toMatchObject({ required: 2, present: 2, missing: 0 });
     expect(result.fields.find((field) => field.key === 'birthDate')?.displayValue).toBe(
       '1991-02-03',
     );
     expect(result.fields.find((field) => field.key === 'facePhotoUrl')).toMatchObject({
+      required: false,
+      status: 'PRESENT',
       hasValue: true,
       displayValue: null,
+      requestable: true,
+    });
+    expect(result.fields.find((field) => field.key === 'specificQuestion')).toMatchObject({
+      required: false,
+      status: 'OPTIONAL',
+      requestable: false,
     });
     expect(JSON.stringify(result)).not.toContain('s3://');
-    expect(result.fields.some((field) => field.key === 'specificQuestion')).toBe(false);
   });
 
   it('requires a question when the reading is not open and no objective exists', async () => {
@@ -94,11 +102,16 @@ describe('IntakeCompletenessService', () => {
       'facePhotoUrl',
       'palmPhotoUrl',
     ]);
-    expect(result.summary.missing).toBe(3);
+    expect(result.summary).toMatchObject({ required: 3, present: 2, missing: 1 });
+    expect(result.fields.find((field) => field.key === 'facePhotoUrl')).toMatchObject({
+      required: false,
+      status: 'OPTIONAL',
+      requestable: true,
+    });
     expect(result.complete).toBe(false);
   });
 
-  it('projects active legacy palm requests into the completeness status', async () => {
+  it('promotes an optional palm photo to required while the expert request is active', async () => {
     const prisma = buildPrisma({
       amendments: [
         {
@@ -115,9 +128,21 @@ describe('IntakeCompletenessService', () => {
     const result = await service.getForOrder('order-1');
 
     expect(result.fields.find((field) => field.key === 'palmPhotoUrl')).toMatchObject({
+      required: true,
       status: 'SUBMITTED',
       activeAmendmentId: 'ram-palm',
       requestable: false,
+    });
+    expect(result.complete).toBe(false);
+  });
+
+  it('allows an expert to request a missing optional photo', async () => {
+    const prisma = buildPrisma();
+    const service = new IntakeCompletenessService(prisma as never);
+
+    await expect(service.assertRequestable('order-1', ['facePhotoUrl'])).resolves.toMatchObject({
+      fields: ['facePhotoUrl'],
+      invalidFields: [],
     });
   });
 
@@ -132,6 +157,35 @@ describe('IntakeCompletenessService', () => {
     await expect(
       service.assertRequestable('order-1', ['birthDate'], ['birthDate']),
     ).resolves.toMatchObject({ fields: ['birthDate'], invalidFields: ['birthDate'] });
+  });
+
+  it('rejects a redundant question when an objective already satisfies the intention', async () => {
+    const prisma = buildPrisma({
+      order: {
+        id: 'order-1',
+        intakeRequired: true,
+        clientInputs: {
+          readingIntake: {
+            sealedAt: '2026-08-01T10:00:00.000Z',
+            contentHash: 'sealed-hash',
+            profile: {
+              openReading: false,
+              birthDate: '1990-06-15',
+              birthPlace: 'Lyon, France',
+              objective: 'Faire le point sur ma transition professionnelle',
+              specificQuestion: null,
+            },
+          },
+        },
+        readingIntake: null,
+        user: { profile: null },
+      },
+    });
+    const service = new IntakeCompletenessService(prisma as never);
+
+    await expect(
+      service.assertRequestable('order-1', ['specificQuestion']),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects an invalid marker that is not part of the request', async () => {
