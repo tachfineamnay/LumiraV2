@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -193,9 +192,10 @@ export class ReadingAmendmentFacade {
       };
       return this.profileFields.submit(userId, amendmentId, profileDto);
     }
-    const storageRef = dto.storageRef?.trim();
+    let storageRef = dto.storageRef?.trim();
     if (!storageRef) {
-      throw new BadRequestException('Ajoutez une photo de paume avant de la transmettre');
+      const stored = await this.amendments.getPhotoReference({ amendmentId, userId });
+      storageRef = stored.storageRef;
     }
     const palmDto: SubmitPalmAmendmentDto = {
       expectedRevision: dto.expectedRevision,
@@ -520,7 +520,7 @@ export class ReadingAmendmentFacade {
     const data =
       row.kind === 'PROFILE_FIELDS'
         ? this.sanitizeProfileFieldData(row.data)
-        : this.asRecord(row.data);
+        : this.sanitizePalmData(row.data);
     return {
       id: row.id,
       orderId: row.orderId,
@@ -540,6 +540,15 @@ export class ReadingAmendmentFacade {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  private sanitizePalmData(value: Prisma.JsonValue): Record<string, unknown> {
+    const data = { ...this.asRecord(value) };
+    const hasPhoto = Boolean(this.nonEmptyString(data.storageRef));
+    delete data.storageRef;
+    delete data.asset;
+    data.photoFields = hasPhoto ? ['palmPhotoUrl'] : [];
+    return data;
   }
 
   private sanitizeProfileFieldData(value: Prisma.JsonValue): Record<string, unknown> {
