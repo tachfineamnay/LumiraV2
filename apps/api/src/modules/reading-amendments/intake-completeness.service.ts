@@ -2,6 +2,10 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  evaluateReadingRequirements,
+  resolveIntention,
+} from '../users/reading-intake-policy';
+import {
   PROFILE_FIELD_CATALOG,
   RequestableProfileFieldKey,
   normalizeRequestedProfileFields,
@@ -17,7 +21,6 @@ export type IntakeCompletenessSource =
 export type IntakeCompletenessStatus =
   | 'PRESENT'
   | 'MISSING'
-  | 'OPTIONAL'
   | 'INVALID'
   | 'REQUESTED'
   | 'DRAFT'
@@ -27,11 +30,12 @@ export type IntakeCompletenessStatus =
 export interface IntakeCompletenessField {
   key: RequestableProfileFieldKey;
   label: string;
-  inputType: 'date' | 'text' | 'textarea' | 'photo';
-  required: boolean;
+  inputType: 'date' | 'text' | 'intention' | 'photo';
+  required: true;
   status: IntakeCompletenessStatus;
   hasValue: boolean;
   displayValue: string | null;
+  currentValue: unknown;
   requestable: boolean;
   canMarkInvalid: boolean;
   activeAmendmentId: string | null;
@@ -61,21 +65,12 @@ interface ActiveAmendmentRow {
   data: Prisma.JsonValue;
 }
 
-interface ResolvedProfile {
-  openReading?: boolean;
-  birthDate?: string;
-  birthPlace?: string;
-  objective?: string;
-  specificQuestion?: string;
-  facePhotoUrl?: string;
-  palmPhotoUrl?: string;
-  [key: string]: unknown;
-}
+type ResolvedProfile = Record<string, unknown>;
 
-const PUBLIC_FIELDS: RequestableProfileFieldKey[] = [
+const REQUIRED_FIELDS: RequestableProfileFieldKey[] = [
   'birthDate',
   'birthPlace',
-  'specificQuestion',
+  'intention',
   'facePhotoUrl',
   'palmPhotoUrl',
 ];
@@ -119,34 +114,33 @@ export class IntakeCompletenessService {
       readingIntake: order.readingIntake,
       legacyProfile: order.user.profile,
     });
+    const requirements = evaluateReadingRequirements(profile, {
+      requireExplicitIntentionMode: false,
+      strictIntentionExclusivity: false,
+    });
+    const missing = new Set(requirements.missingFields);
+    const invalid = new Set(requirements.invalidFields);
 
-    const fields = PUBLIC_FIELDS.map((key) => {
+    const fields = REQUIRED_FIELDS.map((key) => {
       const active = activeRows.find((row) => this.amendmentIncludes(row, key));
-      const baseRequired = this.isBaseRequired(key, profile);
-      const required = baseRequired || Boolean(active);
-      const rawValue = profile[key];
-      const hasValue = this.hasUsableValue(key, rawValue);
-      const requestableWithoutActive =
-        baseRequired || this.canRequestWhenOptional(key);
+      const hasValue = this.hasRawValue(key, profile);
       let status: IntakeCompletenessStatus;
-      if (active) {
-        status = active.status;
-      } else if (hasValue) {
-        status = 'PRESENT';
-      } else {
-        status = baseRequired ? 'MISSING' : 'OPTIONAL';
-      }
+      if (active) status = active.status;
+      else if (invalid.has(key)) status = 'INVALID';
+      else if (missing.has(key)) status = 'MISSING';
+      else status = 'PRESENT';
 
       return {
         key,
         label: PROFILE_FIELD_CATALOG[key].label,
         inputType: PROFILE_FIELD_CATALOG[key].input as IntakeCompletenessField['inputType'],
-        required,
+        required: true,
         status,
         hasValue,
-        displayValue: this.displayValue(key, rawValue),
-        requestable: !active && requestableWithoutActive,
-        canMarkInvalid: hasValue && !active && requestableWithoutActive,
+        displayValue: this.displayValue(key, profile),
+        currentValue: this.currentValue(key, profile),
+        requestable: !active && (status === 'MISSING' || status === 'INVALID'),
+        canMarkInvalid: !active && status === 'PRESENT',
         activeAmendmentId: active?.id ?? null,
         photoKind:
           key === 'facePhotoUrl' ? 'face' : key === 'palmPhotoUrl' ? 'palm' : null,
@@ -154,28 +148,18 @@ export class IntakeCompletenessService {
     });
 
     const summary = {
-      required: fields.filter((field) => field.required).length,
-      present: fields.filter(
-        (field) => field.required && field.status === 'PRESENT',
-      ).length,
-      missing: fields.filter(
-        (field) => field.required && field.status === 'MISSING',
-      ).length,
-      invalid: fields.filter(
-        (field) => field.required && field.status === 'INVALID',
-      ).length,
-      requested: fields.filter((field) =>
-        ['REQUESTED', 'DRAFT'].includes(field.status),
-      ).length,
+      required: fields.length,
+      present: fields.filter((field) => field.status === 'PRESENT').length,
+      missing: fields.filter((field) => field.status === 'MISSING').length,
+      invalid: fields.filter((field) => field.status === 'INVALID').length,
+      requested: fields.filter((field) => ['REQUESTED', 'DRAFT'].includes(field.status)).length,
       submitted: fields.filter((field) => field.status === 'SUBMITTED').length,
     };
 
     return {
       orderId,
       source,
-      complete: fields
-        .filter((field) => field.required)
-        .every((field) => field.status === 'PRESENT'),
+      complete: fields.every((field) => field.status === 'PRESENT'),
       summary,
       fields,
     };
@@ -205,17 +189,17 @@ export class IntakeCompletenessService {
       if (field.activeAmendmentId) {
         throw new ConflictException(`Une demande est déjà ouverte pour « ${field.label} »`);
       }
-      if (!field.requestable) {
-        throw new BadRequestException(
-          `L’information « ${field.label} » n’est pas demandable pour ce dossier`,
-        );
-      }
-      if (field.hasValue && !invalidSet.has(key)) {
+      if (field.status === 'PRESENT' && !invalidSet.has(key)) {
         throw new ConflictException(`L’information « ${field.label} » est déjà présente`);
       }
-      if (!field.hasValue && invalidSet.has(key)) {
+      if (field.status === 'MISSING' && invalidSet.has(key)) {
         throw new BadRequestException(
           `L’information « ${field.label} » est absente, pas inexploitable`,
+        );
+      }
+      if (field.status === 'INVALID' && !invalidSet.has(key)) {
+        throw new BadRequestException(
+          `L’information « ${field.label} » doit être signalée comme inexploitable`,
         );
       }
     }
@@ -247,34 +231,44 @@ export class IntakeCompletenessService {
     return row.requestedFields.includes(key);
   }
 
-  private isBaseRequired(key: RequestableProfileFieldKey, profile: ResolvedProfile): boolean {
-    if (key === 'birthDate' || key === 'birthPlace') return true;
-    if (key === 'specificQuestion') {
-      return profile.openReading !== true && !this.clean(profile.objective);
-    }
-    return false;
-  }
-
-  private canRequestWhenOptional(key: RequestableProfileFieldKey): boolean {
-    return key === 'facePhotoUrl' || key === 'palmPhotoUrl';
-  }
-
-  private hasUsableValue(key: RequestableProfileFieldKey, value: unknown): boolean {
-    const cleaned = this.clean(value);
-    if (!cleaned) return false;
-    if (key === 'birthDate') {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return false;
-      const parsed = new Date(`${cleaned}T00:00:00.000Z`);
-      return (
-        Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === cleaned
+  private hasRawValue(key: RequestableProfileFieldKey, profile: ResolvedProfile): boolean {
+    if (key === 'intention') {
+      return Boolean(
+        profile.openReading === true ||
+          this.clean(profile.intentionMode) ||
+          this.clean(profile.specificQuestion) ||
+          this.clean(profile.objective),
       );
     }
-    return true;
+    return Boolean(this.clean(profile[key]));
   }
 
-  private displayValue(key: RequestableProfileFieldKey, value: unknown): string | null {
+  private displayValue(key: RequestableProfileFieldKey, profile: ResolvedProfile): string | null {
     if (key === 'facePhotoUrl' || key === 'palmPhotoUrl') return null;
-    return this.clean(value);
+    if (key !== 'intention') return this.clean(profile[key]);
+    const intention = resolveIntention(profile, { requireExplicitIntentionMode: false });
+    if (intention.mode === 'QUESTION') {
+      return `Question — ${this.clean(profile.specificQuestion) ?? 'incomplète'}`;
+    }
+    if (intention.mode === 'SITUATION') {
+      return `Situation — ${this.clean(profile.objective) ?? 'incomplète'}`;
+    }
+    if (intention.mode === 'OPEN') return 'Lecture ouverte';
+    return null;
+  }
+
+  private currentValue(key: RequestableProfileFieldKey, profile: ResolvedProfile): unknown {
+    if (key === 'facePhotoUrl' || key === 'palmPhotoUrl') return null;
+    if (key !== 'intention') return this.clean(profile[key]);
+    const intention = resolveIntention(profile, { requireExplicitIntentionMode: false });
+    return intention.mode
+      ? {
+          intentionMode: intention.mode,
+          openReading: intention.mode === 'OPEN',
+          specificQuestion: this.clean(profile.specificQuestion),
+          objective: this.clean(profile.objective),
+        }
+      : null;
   }
 
   private resolveProfile(input: {
@@ -333,6 +327,7 @@ export class IntakeCompletenessService {
     if (Object.keys(source).length === 0) return {};
     return {
       ...source,
+      intentionMode: this.clean(source.intentionMode) ?? undefined,
       openReading: source.openReading === true,
       birthDate: this.clean(source.birthDate) ?? undefined,
       birthPlace: this.clean(source.birthPlace) ?? undefined,
@@ -342,6 +337,7 @@ export class IntakeCompletenessService {
         this.clean(source.facePhotoUrl) ?? this.clean(source.facePhoto) ?? undefined,
       palmPhotoUrl:
         this.clean(source.palmPhotoUrl) ?? this.clean(source.palmPhoto) ?? undefined,
+      palmRole: this.clean(source.palmRole) ?? undefined,
     };
   }
 
