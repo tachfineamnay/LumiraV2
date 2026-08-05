@@ -8,9 +8,8 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 /**
- * Last-line HTTP privacy guard. Amendment services keep private storage
- * references internally, while every response sent to Desk or Sanctuaire is
- * recursively stripped of storageRef and prepared asset metadata.
+ * Last-line HTTP privacy guard. It deliberately ignores every ordinary API
+ * response and only sanitizes amendment objects or an `amendment` property.
  */
 @Injectable()
 export class ReadingAmendmentResponseInterceptor implements NestInterceptor {
@@ -20,16 +19,18 @@ export class ReadingAmendmentResponseInterceptor implements NestInterceptor {
 
   private sanitize(value: unknown): unknown {
     if (Array.isArray(value)) return value.map((entry) => this.sanitize(entry));
-    if (!value || typeof value !== 'object') return value;
+    if (!this.isPlainRecord(value)) return value;
 
-    const source = value as Record<string, unknown>;
-    const result = Object.fromEntries(
-      Object.entries(source).map(([key, entry]) => [key, this.sanitize(entry)]),
-    );
-    if (source.kind !== 'PALM_PHOTO' && source.kind !== 'PROFILE_FIELDS') {
-      return result;
+    if (value.kind === 'PALM_PHOTO' || value.kind === 'PROFILE_FIELDS') {
+      return this.sanitizeAmendment(value);
     }
+    if (this.isPlainRecord(value.amendment)) {
+      return { ...value, amendment: this.sanitize(value.amendment) };
+    }
+    return value;
+  }
 
+  private sanitizeAmendment(source: Record<string, unknown>): Record<string, unknown> {
     const data = this.asRecord(source.data);
     const values = { ...this.asRecord(data.values) };
     const previousValues = { ...this.asRecord(data.previousValues) };
@@ -49,14 +50,17 @@ export class ReadingAmendmentResponseInterceptor implements NestInterceptor {
     delete safeData.asset;
     delete safeData.faceAsset;
     delete safeData.palmAsset;
-    result.data = safeData;
-    return result;
+    return { ...source, data: safeData };
+  }
+
+  private isPlainRecord(value: unknown): value is Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
   }
 
   private asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
+    return this.isPlainRecord(value) ? value : {};
   }
 
   private stringArray(value: unknown): string[] {
