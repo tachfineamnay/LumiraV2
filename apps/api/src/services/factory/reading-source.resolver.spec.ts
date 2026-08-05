@@ -171,6 +171,39 @@ describe('ReadingSourceResolver', () => {
     expect(() => resolver.resolve(order)).toThrow(BadRequestException);
   });
 
+  it.each([
+    {
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: 'Ancienne question encore présente',
+      objective: null,
+    },
+    {
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: null,
+      objective: 'Ancienne situation encore présente',
+    },
+    {
+      intentionMode: 'QUESTION',
+      openReading: true,
+      specificQuestion: 'Que dois-je comprendre maintenant ?',
+      objective: null,
+    },
+  ])('rejects a contradictory sealed intention: %j', (intention) => {
+    const order = buildOrder({
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-07-18T12:00:00.000Z',
+          contentHash: 'contradictory-hash',
+          profile: { ...sealedProfile, ...intention },
+        },
+      },
+    });
+
+    expect(() => resolver.resolve(order)).toThrow(BadRequestException);
+  });
+
   it('rejects a sealed snapshot without contentHash', () => {
     const order = buildOrder({
       clientInputs: {
