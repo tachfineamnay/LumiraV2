@@ -20,6 +20,7 @@ export interface ReadingIntakeReadiness {
   required: boolean;
   ready: boolean;
   status: ReadingIntakeReadinessStatus;
+  source: 'LEGACY' | 'READING_INTAKE' | 'EFFECTIVE_SNAPSHOT';
   sealedAt: string | null;
   contentHash: string | null;
   data: Record<string, unknown>;
@@ -30,6 +31,7 @@ export interface ReadingIntakeReadiness {
 
 export interface OrderWithReadingIntake {
   intakeRequired?: boolean | null;
+  clientInputs?: unknown;
   readingIntake?: unknown;
 }
 
@@ -55,10 +57,40 @@ function baseResult(
   };
 }
 
+function semanticResult(input: {
+  source: 'READING_INTAKE' | 'EFFECTIVE_SNAPSHOT';
+  profile: Record<string, unknown>;
+  sealedAt: string | null;
+  contentHash: string | null;
+  requirementsVersion: string | null;
+}): ReadingIntakeReadiness {
+  const requirements = evaluateReadingRequirements(input.profile, {
+    requireExplicitIntentionMode: false,
+    strictIntentionExclusivity: false,
+  });
+  return {
+    required: true,
+    ready: Boolean(input.sealedAt && input.contentHash && requirements.complete),
+    status:
+      input.sealedAt && input.contentHash
+        ? requirements.complete
+          ? 'SEALED'
+          : 'INCOMPLETE'
+        : 'INVALID',
+    source: input.source,
+    sealedAt: input.sealedAt,
+    contentHash: input.contentHash,
+    data: input.profile,
+    requirementsVersion: input.requirementsVersion ?? READING_REQUIREMENTS_VERSION,
+    missingFields: requirements.missingFields,
+    invalidFields: requirements.invalidFields,
+  };
+}
+
 /**
- * New orders have an immutable, order-scoped intake. A SEALED database status
- * is not enough: the stored data must also satisfy the five production inputs.
- * Legacy orders remain readable and are handled by the compatibility workflow.
+ * Approved effective snapshots are the production source of truth. The original
+ * ReadingIntake remains immutable and is used only when no approved projection
+ * exists. A SEALED status alone never makes an incomplete dossier producible.
  */
 export function readOrderIntakeReadiness(order: OrderWithReadingIntake): ReadingIntakeReadiness {
   if (order.intakeRequired !== true) {
@@ -66,9 +98,25 @@ export function readOrderIntakeReadiness(order: OrderWithReadingIntake): Reading
       required: false,
       ready: true,
       status: 'LEGACY',
+      source: 'LEGACY',
       sealedAt: null,
       contentHash: null,
       data: {},
+    });
+  }
+
+  const clientInputs = asRecord(order.clientInputs);
+  const effective = asRecord(clientInputs.readingIntakeEffective);
+  const effectiveProfile = asRecord(effective.profile);
+  const effectiveSnapshotId = nonEmptyString(effective.snapshotId);
+  if (effectiveSnapshotId || Object.keys(effectiveProfile).length > 0) {
+    return semanticResult({
+      source: 'EFFECTIVE_SNAPSHOT',
+      profile: effectiveProfile,
+      sealedAt:
+        nonEmptyString(effective.effectiveAt) ?? nonEmptyString(effective.sealedAt),
+      contentHash: nonEmptyString(effective.contentHash),
+      requirementsVersion: nonEmptyString(effective.requirementsVersion),
     });
   }
 
@@ -78,6 +126,7 @@ export function readOrderIntakeReadiness(order: OrderWithReadingIntake): Reading
       required: true,
       ready: false,
       status: 'MISSING',
+      source: 'READING_INTAKE',
       sealedAt: null,
       contentHash: null,
       data: {},
@@ -88,48 +137,38 @@ export function readOrderIntakeReadiness(order: OrderWithReadingIntake): Reading
   const sealedAt = nonEmptyString(intake.sealedAt);
   const contentHash = nonEmptyString(intake.contentHash);
   const data = asRecord(intake.data);
-  const hasSnapshot = Object.keys(data).length > 0;
 
   if (rawStatus !== 'SEALED') {
     return baseResult({
       required: true,
       ready: false,
       status: rawStatus === 'DRAFT' ? 'DRAFT' : 'INVALID',
+      source: 'READING_INTAKE',
       sealedAt,
       contentHash,
       data,
     });
   }
 
-  if (!sealedAt || !contentHash || !hasSnapshot) {
+  if (Object.keys(data).length === 0) {
     return baseResult({
       required: true,
       ready: false,
       status: 'INVALID',
+      source: 'READING_INTAKE',
       sealedAt,
       contentHash,
       data,
     });
   }
 
-  const requirements = evaluateReadingRequirements(data, {
-    requireExplicitIntentionMode: false,
-    strictIntentionExclusivity: false,
-  });
-  const requirementsVersion =
-    nonEmptyString(data.requirementsVersion) ?? READING_REQUIREMENTS_VERSION;
-
-  return {
-    required: true,
-    ready: requirements.complete,
-    status: requirements.complete ? 'SEALED' : 'INCOMPLETE',
+  return semanticResult({
+    source: 'READING_INTAKE',
+    profile: data,
     sealedAt,
     contentHash,
-    data,
-    requirementsVersion,
-    missingFields: requirements.missingFields,
-    invalidFields: requirements.invalidFields,
-  };
+    requirementsVersion: nonEmptyString(data.requirementsVersion),
+  });
 }
 
 export function assertOrderIntakeReady(order: OrderWithReadingIntake): void {
@@ -141,9 +180,10 @@ export function assertOrderIntakeReady(order: OrderWithReadingIntake): void {
     statusCode: 409,
     code: incomplete ? READING_INTAKE_INCOMPLETE_CODE : READING_INTAKE_REQUIRED_CODE,
     message: incomplete
-      ? 'Le dossier scellé doit être complété avant toute prise en charge ou production.'
+      ? 'Le dossier effectif doit être complété avant toute prise en charge ou production.'
       : 'Le dossier client doit être finalisé et scellé avant toute prise en charge ou production.',
     intakeStatus: readiness.status,
+    intakeSource: readiness.source,
     missingFields: readiness.missingFields,
     invalidFields: readiness.invalidFields,
   });
