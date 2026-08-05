@@ -12,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { INTENTION_MODES, IntentionMode } from '../reading-intake-policy';
 
 export class OnboardingConsentDto {
   @IsBoolean()
@@ -94,6 +95,14 @@ export class UpdateProfileDto {
   birthPlace?: string;
 
   @IsOptional()
+  @IsIn([...INTENTION_MODES])
+  intentionMode?: IntentionMode;
+
+  @IsOptional()
+  @IsBoolean()
+  openReading?: boolean;
+
+  @IsOptional()
   @IsString()
   @MaxLength(2000)
   specificQuestion?: string;
@@ -114,7 +123,7 @@ export class UpdateProfileDto {
   @MaxLength(512)
   palmPhotoUrl?: string | null;
 
-  /** Explicit client-declared hand side; omit when it is not reliable. */
+  /** Explicit client-declared hand side; PALM_UNKNOWN remains a valid declaration. */
   @IsOptional()
   @IsIn(['PALM_LEFT', 'PALM_RIGHT', 'PALM_UNKNOWN'])
   palmRole?: 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
@@ -204,13 +213,17 @@ export class UpdateProfileDto {
 /** Strict, serializable payload persisted for an order-scoped reading intake. */
 export class OnboardingDraftDataDto {
   @IsOptional()
+  @IsIn([...INTENTION_MODES])
+  intentionMode?: IntentionMode;
+
+  @IsOptional()
   @IsBoolean()
   openReading?: boolean;
 
-  /** Frontend form topology marker (five-step mobile/desktop flow). */
+  /** Frontend form topology marker. Version 2 stays readable during rollout. */
   @IsOptional()
   @IsInt()
-  @IsIn([2])
+  @IsIn([2, 3])
   schemaVersion?: number;
 
   @IsOptional()
