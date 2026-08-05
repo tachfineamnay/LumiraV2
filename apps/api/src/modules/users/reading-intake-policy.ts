@@ -28,6 +28,7 @@ export interface ReadingRequirementsProfile {
 }
 
 export interface ReadingRequirementsOptions {
+  /** Retained for callers that want to audit whether the mode was persisted. */
   requireExplicitIntentionMode?: boolean;
   strictIntentionExclusivity?: boolean;
   facePhotoStatus?: ReadingPhotoStatus;
@@ -131,17 +132,11 @@ export function resolveIntention(
   const objective = clean(profile.objective);
   const open = profile.openReading === true;
   const explicitMode = isIntentionMode(profile.intentionMode) ? profile.intentionMode : null;
-  const mode =
-    explicitMode ??
-    (options.requireExplicitIntentionMode
-      ? null
-      : question
-        ? 'QUESTION'
-        : objective
-          ? 'SITUATION'
-          : open
-            ? 'OPEN'
-            : null);
+
+  // During the schema-v2 -> schema-v3 rollout, old drafts do not contain the
+  // technical intentionMode field. Their UI choice is still unambiguous in
+  // openReading/specificQuestion/objective, so infer it without losing data.
+  const mode = explicitMode ?? (open ? 'OPEN' : question ? 'QUESTION' : objective ? 'SITUATION' : null);
 
   const value =
     mode === 'QUESTION'
