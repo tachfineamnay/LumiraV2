@@ -1,8 +1,9 @@
--- Additive extension of the post-delivery amendment workflow.
--- Historical PALM_PHOTO rows and immutable reading snapshots remain untouched.
+-- Additive extension for expert-requested completion of required intake fields.
+-- Historical PALM_PHOTO rows, sealed ReadingIntake data, snapshots, versions,
+-- PDF/audio files and delivery records remain untouched.
 
 ALTER TABLE "ReadingIntakeAmendment"
-  DROP CONSTRAINT "ReadingIntakeAmendment_kind_check";
+  DROP CONSTRAINT IF EXISTS "ReadingIntakeAmendment_kind_check";
 
 ALTER TABLE "ReadingIntakeAmendment"
   ADD CONSTRAINT "ReadingIntakeAmendment_kind_check"
