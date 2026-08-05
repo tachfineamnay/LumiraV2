@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { READING_REQUIREMENTS_VERSION } from '../users/reading-intake-policy';
 import { EmailService } from '../notifications/email.service';
 import { CreateProfileFieldAmendmentDto } from './dto/profile-field-amendment.dto';
 import { IntakeCompletenessService } from './intake-completeness.service';
@@ -123,14 +124,14 @@ export class ProfileFieldAmendmentRequestService {
         }
 
         const currentByKey = new Map(
-          validation.result.fields.map((field) => [field.key, field.displayValue]),
+          validation.result.fields.map((field) => [field.key, field.currentValue]),
         );
         const previousValues = Object.fromEntries(
           visibleFields.map((field) => [field, currentByKey.get(field) ?? null]),
         );
         const id = `ram_${randomUUID()}`;
         const data = {
-          schemaVersion: '2026-08-05-required-profile-fields-v1',
+          schemaVersion: READING_REQUIREMENTS_VERSION,
           fieldLabels: profileFieldLabels(visibleFields),
           previousValues,
           invalidFields,
@@ -162,7 +163,7 @@ export class ProfileFieldAmendmentRequestService {
               orderId: order.id,
               orderNumber: order.orderNumber,
               kind: 'PROFILE_FIELDS',
-              requestedFields: fields,
+              requestedFields: visibleFields,
               expiresAt: expiresAt.toISOString(),
             },
           },
