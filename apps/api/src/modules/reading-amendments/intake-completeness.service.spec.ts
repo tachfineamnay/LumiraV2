@@ -1,67 +1,109 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
 import { IntakeCompletenessService } from './intake-completeness.service';
 
-function buildPrisma(options?: {
-  order?: Record<string, unknown>;
-  amendments?: Array<Record<string, unknown>>;
+const completeProfile = {
+  intentionMode: 'QUESTION',
+  openReading: false,
+  birthDate: '1990-06-15',
+  birthPlace: 'Lyon, France',
+  specificQuestion: 'Que dois-je comprendre dans cette période ?',
+  objective: null,
+  facePhotoUrl: 's3://onboarding/user-1/face.jpg',
+  palmPhotoUrl: 's3://onboarding/user-1/palm.jpg',
+  palmRole: 'PALM_RIGHT',
+};
+
+function buildPrisma(input: {
+  intakeRequired?: boolean;
+  clientInputs?: Record<string, unknown> | null;
+  readingIntake?: Record<string, unknown> | null;
+  profile?: Record<string, unknown> | null;
+  active?: Array<Record<string, unknown>>;
 }) {
   return {
     order: {
-      findUnique: jest.fn().mockResolvedValue(
-        options?.order ?? {
-          id: 'order-1',
-          intakeRequired: true,
-          clientInputs: {
-            readingIntake: {
-              sealedAt: '2026-08-01T10:00:00.000Z',
-              contentHash: 'sealed-hash',
-              profile: {
-                openReading: false,
-                birthDate: '1990-06-15',
-                birthPlace: 'Lyon, France',
-                objective: null,
-                specificQuestion: null,
-                facePhotoUrl: null,
-                palmPhotoUrl: null,
-              },
-            },
-          },
-          readingIntake: null,
-          user: { profile: null },
-        },
-      ),
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'order-1',
+        intakeRequired: input.intakeRequired ?? true,
+        clientInputs: input.clientInputs ?? null,
+        readingIntake: input.readingIntake ?? null,
+        user: { profile: input.profile ?? null },
+      }),
     },
     $executeRaw: jest.fn().mockResolvedValue(0),
-    $queryRaw: jest.fn().mockResolvedValue(options?.amendments ?? []),
+    $queryRaw: jest.fn().mockResolvedValue(input.active ?? []),
   };
 }
 
 describe('IntakeCompletenessService', () => {
-  it('prefers the approved effective snapshot and never exposes private photo refs', async () => {
+  it('reports 5/5 for a complete sealed intake projection', async () => {
     const prisma = buildPrisma({
-      order: {
-        id: 'order-1',
-        intakeRequired: true,
-        clientInputs: {
-          readingIntake: {
-            sealedAt: '2026-08-01T10:00:00.000Z',
-            contentHash: 'sealed-hash',
-            profile: { birthDate: '1990-06-15', birthPlace: 'Lyon, France' },
-          },
-          readingIntakeEffective: {
-            snapshotId: 'ris-1',
-            contentHash: 'effective-hash',
-            profile: {
-              openReading: true,
-              birthDate: '1991-02-03',
-              birthPlace: 'Paris, France',
-              facePhotoUrl: 's3://onboarding/user-1/face.jpg',
-              palmPhotoUrl: 's3://onboarding/user-1/palm.jpg',
-            },
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-08-01T10:00:00.000Z',
+          contentHash: 'sealed-hash',
+          profile: completeProfile,
+        },
+      },
+    });
+    const service = new IntakeCompletenessService(prisma as never);
+
+    const result = await service.getForOrder('order-1');
+
+    expect(result).toMatchObject({
+      source: 'SEALED_INTAKE',
+      complete: true,
+      summary: { required: 5, present: 5, missing: 0, invalid: 0 },
+    });
+    expect(result.fields.map((field) => field.key)).toEqual([
+      'birthDate',
+      'birthPlace',
+      'intention',
+      'facePhotoUrl',
+      'palmPhotoUrl',
+    ]);
+    expect(result.fields.every((field) => field.required)).toBe(true);
+  });
+
+  it('marks face, palm and intention missing independently', async () => {
+    const prisma = buildPrisma({
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-08-01T10:00:00.000Z',
+          contentHash: 'sealed-hash',
+          profile: {
+            birthDate: '1990-06-15',
+            birthPlace: 'Lyon, France',
           },
         },
-        readingIntake: null,
-        user: { profile: null },
+      },
+    });
+    const service = new IntakeCompletenessService(prisma as never);
+
+    const result = await service.getForOrder('order-1');
+
+    expect(result.complete).toBe(false);
+    expect(result.summary).toMatchObject({ required: 5, present: 2, missing: 3 });
+    expect(
+      result.fields
+        .filter((field) => field.status === 'MISSING')
+        .map((field) => field.key),
+    ).toEqual(['intention', 'facePhotoUrl', 'palmPhotoUrl']);
+  });
+
+  it('prefers the approved effective snapshot over the original intake', async () => {
+    const prisma = buildPrisma({
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-08-01T10:00:00.000Z',
+          contentHash: 'original',
+          profile: { ...completeProfile, palmPhotoUrl: null },
+        },
+        readingIntakeEffective: {
+          snapshotId: 'snapshot-2',
+          contentHash: 'effective',
+          effectiveAt: '2026-08-05T10:00:00.000Z',
+          profile: completeProfile,
+        },
       },
     });
     const service = new IntakeCompletenessService(prisma as never);
@@ -70,55 +112,52 @@ describe('IntakeCompletenessService', () => {
 
     expect(result.source).toBe('EFFECTIVE_SNAPSHOT');
     expect(result.complete).toBe(true);
-    expect(result.summary).toMatchObject({ required: 2, present: 2, missing: 0 });
-    expect(result.fields.find((field) => field.key === 'birthDate')?.displayValue).toBe(
-      '1991-02-03',
-    );
-    expect(result.fields.find((field) => field.key === 'facePhotoUrl')).toMatchObject({
-      required: false,
-      status: 'PRESENT',
-      hasValue: true,
-      displayValue: null,
-      requestable: true,
-    });
-    expect(result.fields.find((field) => field.key === 'specificQuestion')).toMatchObject({
-      required: false,
-      status: 'OPTIONAL',
-      requestable: false,
-    });
-    expect(JSON.stringify(result)).not.toContain('s3://');
   });
 
-  it('requires a question when the reading is not open and no objective exists', async () => {
-    const prisma = buildPrisma();
+  it('exposes a safe structured current intention without photo references', async () => {
+    const prisma = buildPrisma({
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-08-01T10:00:00.000Z',
+          contentHash: 'sealed-hash',
+          profile: completeProfile,
+        },
+      },
+    });
     const service = new IntakeCompletenessService(prisma as never);
 
     const result = await service.getForOrder('order-1');
+    const intention = result.fields.find((field) => field.key === 'intention');
+    const face = result.fields.find((field) => field.key === 'facePhotoUrl');
 
-    expect(result.fields.map((field) => field.key)).toEqual([
-      'birthDate',
-      'birthPlace',
-      'specificQuestion',
-      'facePhotoUrl',
-      'palmPhotoUrl',
-    ]);
-    expect(result.summary).toMatchObject({ required: 3, present: 2, missing: 1 });
-    expect(result.fields.find((field) => field.key === 'facePhotoUrl')).toMatchObject({
-      required: false,
-      status: 'OPTIONAL',
-      requestable: true,
+    expect(intention).toMatchObject({
+      displayValue: 'Question — Que dois-je comprendre dans cette période ?',
+      currentValue: {
+        intentionMode: 'QUESTION',
+        openReading: false,
+        specificQuestion: 'Que dois-je comprendre dans cette période ?',
+        objective: null,
+      },
     });
-    expect(result.complete).toBe(false);
+    expect(face?.currentValue).toBeNull();
+    expect(JSON.stringify(result)).not.toContain('s3://');
   });
 
-  it('promotes an optional palm photo to required while the expert request is active', async () => {
+  it('maps an active legacy palm request onto the mandatory palm field', async () => {
     const prisma = buildPrisma({
-      amendments: [
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-08-01T10:00:00.000Z',
+          contentHash: 'sealed-hash',
+          profile: { ...completeProfile, palmPhotoUrl: null },
+        },
+      },
+      active: [
         {
-          id: 'ram-palm',
+          id: 'legacy-amendment',
           kind: 'PALM_PHOTO',
-          requestedFields: ['palmPhotoUrl', 'palmRole'],
-          status: 'SUBMITTED',
+          requestedFields: [],
+          status: 'REQUESTED',
           data: {},
         },
       ],
@@ -126,74 +165,25 @@ describe('IntakeCompletenessService', () => {
     const service = new IntakeCompletenessService(prisma as never);
 
     const result = await service.getForOrder('order-1');
+    const palm = result.fields.find((field) => field.key === 'palmPhotoUrl');
 
-    expect(result.fields.find((field) => field.key === 'palmPhotoUrl')).toMatchObject({
-      required: true,
-      status: 'SUBMITTED',
-      activeAmendmentId: 'ram-palm',
+    expect(palm).toMatchObject({
+      status: 'REQUESTED',
+      activeAmendmentId: 'legacy-amendment',
       requestable: false,
     });
-    expect(result.complete).toBe(false);
   });
 
-  it('allows an expert to request a missing optional photo', async () => {
-    const prisma = buildPrisma();
-    const service = new IntakeCompletenessService(prisma as never);
-
-    await expect(service.assertRequestable('order-1', ['facePhotoUrl'])).resolves.toMatchObject({
-      fields: ['facePhotoUrl'],
-      invalidFields: [],
-    });
-  });
-
-  it('rejects a present value unless the expert explicitly marks it unusable', async () => {
-    const prisma = buildPrisma();
-    const service = new IntakeCompletenessService(prisma as never);
-
-    await expect(service.assertRequestable('order-1', ['birthDate'])).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-
-    await expect(
-      service.assertRequestable('order-1', ['birthDate'], ['birthDate']),
-    ).resolves.toMatchObject({ fields: ['birthDate'], invalidFields: ['birthDate'] });
-  });
-
-  it('rejects a redundant question when an objective already satisfies the intention', async () => {
+  it('falls back to a historical profile for an intakeRequired=false order', async () => {
     const prisma = buildPrisma({
-      order: {
-        id: 'order-1',
-        intakeRequired: true,
-        clientInputs: {
-          readingIntake: {
-            sealedAt: '2026-08-01T10:00:00.000Z',
-            contentHash: 'sealed-hash',
-            profile: {
-              openReading: false,
-              birthDate: '1990-06-15',
-              birthPlace: 'Lyon, France',
-              objective: 'Faire le point sur ma transition professionnelle',
-              specificQuestion: null,
-            },
-          },
-        },
-        readingIntake: null,
-        user: { profile: null },
-      },
+      intakeRequired: false,
+      profile: completeProfile,
     });
     const service = new IntakeCompletenessService(prisma as never);
 
-    await expect(
-      service.assertRequestable('order-1', ['specificQuestion']),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
+    const result = await service.getForOrder('order-1');
 
-  it('rejects an invalid marker that is not part of the request', async () => {
-    const prisma = buildPrisma();
-    const service = new IntakeCompletenessService(prisma as never);
-
-    await expect(
-      service.assertRequestable('order-1', ['facePhotoUrl'], ['birthDate']),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(result.source).toBe('LEGACY_PROFILE');
+    expect(result.complete).toBe(true);
   });
 });
