@@ -66,7 +66,7 @@ function semanticResult(input: {
 }): ReadingIntakeReadiness {
   const requirements = evaluateReadingRequirements(input.profile, {
     requireExplicitIntentionMode: false,
-    strictIntentionExclusivity: false,
+    strictIntentionExclusivity: true,
   });
   return {
     required: true,
