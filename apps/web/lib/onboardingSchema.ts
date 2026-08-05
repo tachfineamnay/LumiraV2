@@ -65,6 +65,19 @@ export function isPersistedPrivatePhoto(value: unknown): value is string {
   );
 }
 
+export function inferIntentionModeFromValues(value: {
+  intentionMode?: IntentionMode;
+  specificQuestion?: string;
+  objective?: string;
+  openReading?: boolean;
+}): IntentionMode | null {
+  if (value.intentionMode) return value.intentionMode;
+  if (value.openReading === true) return 'OPEN';
+  if (value.specificQuestion?.trim()) return 'QUESTION';
+  if (value.objective?.trim()) return 'SITUATION';
+  return null;
+}
+
 function parseCalendarDate(value: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
@@ -122,41 +135,41 @@ export const readingPreparationSchema = z.object({
   consent: z.boolean(),
 });
 
-export const readingPreparationSubmissionSchema = readingPreparationSchema
-  .superRefine((data, context) => {
-    if (!data.intentionMode) {
+export const readingPreparationSubmissionSchema = readingPreparationSchema.superRefine(
+  (data, context) => {
+    const intentionMode = inferIntentionModeFromValues(data);
+    if (!intentionMode) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['specificQuestion'],
         message: 'Choisissez la manière dont vous souhaitez orienter votre lecture.',
       });
-      return;
     }
 
     const question = data.specificQuestion.trim();
     const objective = data.objective.trim();
-    if (data.intentionMode === 'QUESTION' && question.length < 10) {
+    if (intentionMode === 'QUESTION' && question.length < 10) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['specificQuestion'],
         message: 'Formulez votre question en au moins 10 caractères.',
       });
     }
-    if (data.intentionMode === 'SITUATION' && objective.length < 10) {
+    if (intentionMode === 'SITUATION' && objective.length < 10) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['objective'],
         message: 'Décrivez votre situation ou votre direction en au moins 10 caractères.',
       });
     }
-    if (data.intentionMode === 'OPEN' && !data.openReading) {
+    if (intentionMode === 'OPEN' && !data.openReading) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['specificQuestion'],
         message: 'Confirmez explicitement la lecture ouverte.',
       });
     }
-    if (data.intentionMode !== 'OPEN' && data.openReading) {
+    if (intentionMode !== 'OPEN' && data.openReading) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['specificQuestion'],
@@ -185,6 +198,7 @@ export const readingPreparationSubmissionSchema = readingPreparationSchema
         message: 'Relisez puis confirmez la transmission de votre dossier.',
       });
     }
-  });
+  },
+);
 
 export type ReadingPreparationData = z.infer<typeof readingPreparationSchema>;
