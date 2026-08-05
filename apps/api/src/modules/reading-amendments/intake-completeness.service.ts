@@ -17,6 +17,7 @@ export type IntakeCompletenessSource =
 export type IntakeCompletenessStatus =
   | 'PRESENT'
   | 'MISSING'
+  | 'OPTIONAL'
   | 'INVALID'
   | 'REQUESTED'
   | 'DRAFT'
@@ -119,30 +120,33 @@ export class IntakeCompletenessService {
       legacyProfile: order.user.profile,
     });
 
-    const fields = PUBLIC_FIELDS.filter((key) => this.isRequired(key, profile)).map((key) => {
+    const fields = PUBLIC_FIELDS.map((key) => {
       const active = activeRows.find((row) => this.amendmentIncludes(row, key));
-      const invalidFields = new Set(this.stringArray(this.asRecord(active?.data).invalidFields));
+      const baseRequired = this.isBaseRequired(key, profile);
+      const required = baseRequired || Boolean(active);
       const rawValue = profile[key];
       const hasValue = this.hasUsableValue(key, rawValue);
+      const requestableWithoutActive =
+        baseRequired || this.canRequestWhenOptional(key);
       let status: IntakeCompletenessStatus;
       if (active) {
         status = active.status;
-      } else if (invalidFields.has(key)) {
-        status = 'INVALID';
+      } else if (hasValue) {
+        status = 'PRESENT';
       } else {
-        status = hasValue ? 'PRESENT' : 'MISSING';
+        status = baseRequired ? 'MISSING' : 'OPTIONAL';
       }
 
       return {
         key,
         label: PROFILE_FIELD_CATALOG[key].label,
         inputType: PROFILE_FIELD_CATALOG[key].input as IntakeCompletenessField['inputType'],
-        required: true,
+        required,
         status,
         hasValue,
         displayValue: this.displayValue(key, rawValue),
-        requestable: !active,
-        canMarkInvalid: hasValue && !active,
+        requestable: !active && requestableWithoutActive,
+        canMarkInvalid: hasValue && !active && requestableWithoutActive,
         activeAmendmentId: active?.id ?? null,
         photoKind:
           key === 'facePhotoUrl' ? 'face' : key === 'palmPhotoUrl' ? 'palm' : null,
@@ -150,10 +154,16 @@ export class IntakeCompletenessService {
     });
 
     const summary = {
-      required: fields.length,
-      present: fields.filter((field) => field.status === 'PRESENT').length,
-      missing: fields.filter((field) => field.status === 'MISSING').length,
-      invalid: fields.filter((field) => field.status === 'INVALID').length,
+      required: fields.filter((field) => field.required).length,
+      present: fields.filter(
+        (field) => field.required && field.status === 'PRESENT',
+      ).length,
+      missing: fields.filter(
+        (field) => field.required && field.status === 'MISSING',
+      ).length,
+      invalid: fields.filter(
+        (field) => field.required && field.status === 'INVALID',
+      ).length,
       requested: fields.filter((field) =>
         ['REQUESTED', 'DRAFT'].includes(field.status),
       ).length,
@@ -163,7 +173,9 @@ export class IntakeCompletenessService {
     return {
       orderId,
       source,
-      complete: fields.every((field) => field.status === 'PRESENT'),
+      complete: fields
+        .filter((field) => field.required)
+        .every((field) => field.status === 'PRESENT'),
       summary,
       fields,
     };
@@ -185,20 +197,25 @@ export class IntakeCompletenessService {
 
     for (const key of fields) {
       const field = result.fields.find((candidate) => candidate.key === key);
-      if (!field || !field.required) {
+      if (!field) {
         throw new BadRequestException(
-          `L’information « ${PROFILE_FIELD_CATALOG[key].label} » n’est pas requise pour ce dossier`,
+          `L’information « ${PROFILE_FIELD_CATALOG[key].label} » est inconnue`,
         );
       }
       if (field.activeAmendmentId) {
         throw new ConflictException(`Une demande est déjà ouverte pour « ${field.label} »`);
+      }
+      if (!field.requestable) {
+        throw new BadRequestException(
+          `L’information « ${field.label} » n’est pas demandable pour ce dossier`,
+        );
       }
       if (field.hasValue && !invalidSet.has(key)) {
         throw new ConflictException(`L’information « ${field.label} » est déjà présente`);
       }
       if (!field.hasValue && invalidSet.has(key)) {
         throw new BadRequestException(
-          `L’information « ${field.label} » est manquante, pas invalide`,
+          `L’information « ${field.label} » est absente, pas inexploitable`,
         );
       }
     }
@@ -230,11 +247,16 @@ export class IntakeCompletenessService {
     return row.requestedFields.includes(key);
   }
 
-  private isRequired(key: RequestableProfileFieldKey, profile: ResolvedProfile): boolean {
+  private isBaseRequired(key: RequestableProfileFieldKey, profile: ResolvedProfile): boolean {
+    if (key === 'birthDate' || key === 'birthPlace') return true;
     if (key === 'specificQuestion') {
       return profile.openReading !== true && !this.clean(profile.objective);
     }
-    return true;
+    return false;
+  }
+
+  private canRequestWhenOptional(key: RequestableProfileFieldKey): boolean {
+    return key === 'facePhotoUrl' || key === 'palmPhotoUrl';
   }
 
   private hasUsableValue(key: RequestableProfileFieldKey, value: unknown): boolean {
@@ -346,13 +368,5 @@ export class IntakeCompletenessService {
     if (typeof value !== 'string') return null;
     const cleaned = value.trim();
     return cleaned || null;
-  }
-
-  private stringArray(value: unknown): string[] {
-    return Array.isArray(value)
-      ? value.filter(
-          (entry): entry is string => typeof entry === 'string' && entry.length > 0,
-        )
-      : [];
   }
 }
