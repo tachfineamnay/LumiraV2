@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
 import { PreparedOnboardingPhoto } from '../uploads/private-onboarding-photo.service';
+import { IntentionMode } from '../users/reading-intake-policy';
+import { ProfileFieldKey } from './profile-field-catalog';
 
 export type ProfileAmendmentStatus =
   | 'REQUESTED'
@@ -10,7 +12,6 @@ export type ProfileAmendmentStatus =
   | 'APPROVED'
   | 'REJECTED'
   | 'CANCELLED';
-
 export type PalmRole = 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
 export type AmendmentPhotoKind = 'face' | 'palm';
 
@@ -27,9 +28,9 @@ export interface ProfileAmendmentRow {
   contentHash: string | null;
   revision: number;
   requestedByExpertId: string;
-  reviewedByExpertId: string | null;
   requestedAt: Date;
   submittedAt: Date | null;
+  reviewedByExpertId: string | null;
   reviewedAt: Date | null;
   expiresAt: Date;
   createdAt: Date;
@@ -55,18 +56,39 @@ export const ACTIVE_PROFILE_AMENDMENT_STATUSES: ProfileAmendmentStatus[] = [
   'SUBMITTED',
 ];
 
+const PUBLIC_STATUS: Record<ProfileAmendmentStatus, string> = {
+  REQUESTED: 'REQUESTED',
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+};
+
+const LEGACY_TEXT_FIELDS = [
+  'usageName',
+  'birthDate',
+  'birthTime',
+  'birthPlace',
+  'specificQuestion',
+  'objective',
+  'highs',
+  'lows',
+  'lifeEvents',
+  'strongSide',
+  'weakSide',
+  'strongZone',
+  'weakZone',
+  'deliveryStyle',
+  'ailments',
+  'fears',
+  'rituals',
+] as const;
+
 export function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-export function asStringRecord(value: unknown): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(asRecord(value)).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string',
-    ),
-  );
 }
 
 export function nonEmptyString(value: unknown): string | null {
@@ -107,13 +129,35 @@ export function staleAmendmentConflict(): ConflictException {
   });
 }
 
+/**
+ * Build a strict reading-only JSON projection from either a Prisma UserProfile,
+ * an intake draft or a previously sealed profile. No technical Prisma columns,
+ * relation objects, Date instances, BigInt or undefined values survive.
+ */
 export function normalizeSnapshotProfile(value: unknown): Record<string, unknown> {
-  const profile = asRecord(value);
-  return {
-    ...profile,
-    facePhotoUrl: nonEmptyString(profile.facePhotoUrl) ?? nonEmptyString(profile.facePhoto),
-    palmPhotoUrl: nonEmptyString(profile.palmPhotoUrl) ?? nonEmptyString(profile.palmPhoto),
-  };
+  const source = asRecord(value);
+  const profile: Record<string, unknown> = {};
+
+  for (const field of LEGACY_TEXT_FIELDS) {
+    profile[field] = nullableText(source[field]);
+  }
+
+  const facePhotoUrl =
+    nonEmptyString(source.facePhotoUrl) ?? nonEmptyString(source.facePhoto);
+  const palmPhotoUrl =
+    nonEmptyString(source.palmPhotoUrl) ?? nonEmptyString(source.palmPhoto);
+  profile.facePhotoUrl = facePhotoUrl;
+  profile.palmPhotoUrl = palmPhotoUrl;
+  profile.palmRole = palmRole(source.palmRole);
+  profile.openReading = source.openReading === true;
+  profile.intentionMode = normalizeIntentionMode(source, profile);
+  profile.lifeAreas = normalizeLifeAreas(source.lifeAreas);
+  profile.pace =
+    typeof source.pace === 'number' && Number.isFinite(source.pace)
+      ? Math.min(100, Math.max(0, Math.round(source.pace)))
+      : null;
+
+  return profile;
 }
 
 export function hasOriginalInputProjection(clientInputs: Record<string, unknown>): boolean {
@@ -144,32 +188,34 @@ export function resolveOriginalInput(
       contentHash: intake.contentHash,
       profile: normalizeSnapshotProfile(intake.data),
       assets: {},
+      amendmentIds: [],
     };
   }
 
-  if (options.intakeRequired !== false) {
-    throw new ConflictException('Le dossier scellé original est introuvable');
+  if (options.intakeRequired === false) {
+    const capturedAt = options.capturedAt ?? new Date();
+    const profile = normalizeSnapshotProfile(options.legacyProfile);
+    const core = {
+      version: 'legacy-profile-capture-v1',
+      sealedAt: capturedAt.toISOString(),
+      capturedAt: capturedAt.toISOString(),
+      capturedFrom: 'LEGACY_USER_PROFILE',
+      profile,
+      assets: {},
+      amendmentIds: [],
+    };
+    return {
+      ...core,
+      contentHash: hashCanonicalJson(core),
+    };
   }
 
-  const profile = normalizeSnapshotProfile(options.legacyProfile);
-  if (Object.keys(profile).length === 0) {
-    throw new ConflictException('Le profil historique servant de base est introuvable');
-  }
-  const sealedAt = (options.capturedAt ?? new Date()).toISOString();
-  const core = {
-    version: 'legacy-profile-capture-v1',
-    sealedAt,
-    legacy: true,
-    profile,
-    assets: {},
-  };
-  return {
-    ...core,
-    contentHash: hashCanonicalJson(core),
-  };
+  throw new ConflictException('Le dossier scellé original est introuvable');
 }
 
-export function persistablePreparedAsset(asset: PreparedOnboardingPhoto) {
+export function persistablePreparedAsset(
+  asset: PreparedOnboardingPhoto,
+): Record<string, unknown> {
   return {
     storageRef: asset.storageRef,
     key: asset.key,
@@ -191,46 +237,19 @@ export function persistablePreparedAssets(
   assets: PreparedProfileAssets,
 ): Record<string, unknown> {
   return {
-    ...(assets.face ? { faceAsset: persistablePreparedAsset(assets.face) } : {}),
-    ...(assets.palm ? { palmAsset: persistablePreparedAsset(assets.palm) } : {}),
+    preparedAssets: {
+      face: assets.face ? persistablePreparedAsset(assets.face) : null,
+      palm: assets.palm ? persistablePreparedAsset(assets.palm) : null,
+    },
   };
 }
 
 export function hashCanonicalJson(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
-}
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (!value || typeof value !== 'object') return value;
-  return Object.keys(value as Record<string, unknown>)
-    .sort()
-    .reduce<Record<string, unknown>>((acc, key) => {
-      acc[key] = canonicalize((value as Record<string, unknown>)[key]);
-      return acc;
-    }, {});
-}
-
-export function sanitizePublicAmendmentData(value: Prisma.JsonValue): Record<string, unknown> {
-  const data = { ...asRecord(value) };
-  const values = { ...asRecord(data.values) };
-  const previousValues = { ...asRecord(data.previousValues) };
-  const photoFields: string[] = [];
-  for (const key of ['facePhotoUrl', 'palmPhotoUrl'] as const) {
-    if (nonEmptyString(values[key])) photoFields.push(key);
-    delete values[key];
-    delete previousValues[key];
-  }
-  delete data.faceAsset;
-  delete data.palmAsset;
-  data.values = values;
-  data.previousValues = previousValues;
-  data.photoFields = photoFields;
-  return data;
+  return createHash('sha256').update(canonicalStringify(value)).digest('hex');
 }
 
 export function toPublicProfileAmendment(row: ProfileAmendmentRow) {
-  const data = sanitizePublicAmendmentData(row.data);
+  const sanitizedData = sanitizeAmendmentData(asRecord(row.data));
   return {
     id: row.id,
     orderId: row.orderId,
@@ -238,16 +257,117 @@ export function toPublicProfileAmendment(row: ProfileAmendmentRow) {
     requestedFields: row.requestedFields,
     reason: row.reason,
     status: row.status,
-    displayStatus:
-      row.status === 'CANCELLED' && data.cancelReason === 'EXPIRED' ? 'EXPIRED' : row.status,
-    data,
-    contentHash: row.contentHash,
+    displayStatus: displayStatus(row),
+    data: sanitizedData,
     revision: row.revision,
-    requestedAt: row.requestedAt.toISOString(),
-    submittedAt: row.submittedAt?.toISOString() ?? null,
-    reviewedAt: row.reviewedAt?.toISOString() ?? null,
-    expiresAt: row.expiresAt.toISOString(),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    requestedAt: row.requestedAt,
+    submittedAt: row.submittedAt,
+    reviewedAt: row.reviewedAt,
+    expiresAt: row.expiresAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
+}
+
+export function sanitizeAmendmentData(value: Record<string, unknown>) {
+  const photoFields = new Set<string>(stringArray(value.photoFields));
+  collectPrivatePhotoFields(value, photoFields);
+  const sanitized = sanitizePrivateReferences(value);
+  const output = asRecord(sanitized);
+  if (photoFields.size > 0) output.photoFields = Array.from(photoFields).sort();
+  return output;
+}
+
+function displayStatus(row: ProfileAmendmentRow): string {
+  if (
+    (row.status === 'REQUESTED' || row.status === 'DRAFT') &&
+    row.expiresAt.getTime() <= Date.now()
+  ) {
+    return 'EXPIRED';
+  }
+  return PUBLIC_STATUS[row.status];
+}
+
+function collectPrivatePhotoFields(value: unknown, output: Set<string>) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectPrivatePhotoFields(item, output));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (isPrivateStorageRef(nested)) output.add(key);
+    collectPrivatePhotoFields(nested, output);
+  }
+}
+
+function sanitizePrivateReferences(value: unknown): unknown {
+  if (isPrivateStorageRef(value)) return null;
+  if (Array.isArray(value)) return value.map((item) => sanitizePrivateReferences(item));
+  if (!value || typeof value !== 'object' || value instanceof Date) return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
+      key,
+      sanitizePrivateReferences(nested),
+    ]),
+  );
+}
+
+function isPrivateStorageRef(value: unknown): value is string {
+  return typeof value === 'string' && value.startsWith('s3://onboarding/');
+}
+
+function canonicalStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalStringify).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .filter((key) => record[key] !== undefined)
+    .map((key) => `${JSON.stringify(key)}:${canonicalStringify(record[key])}`)
+    .join(',')}}`;
+}
+
+function nullableText(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function normalizeIntentionMode(
+  source: Record<string, unknown>,
+  normalized: Record<string, unknown>,
+): IntentionMode | null {
+  if (
+    source.intentionMode === 'QUESTION' ||
+    source.intentionMode === 'SITUATION' ||
+    source.intentionMode === 'OPEN'
+  ) {
+    return source.intentionMode;
+  }
+  if (source.openReading === true) return 'OPEN';
+  if (nonEmptyString(normalized.specificQuestion)) return 'QUESTION';
+  if (nonEmptyString(normalized.objective)) return 'SITUATION';
+  return null;
+}
+
+function normalizeLifeAreas(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const output: Record<string, unknown> = {};
+  for (const [key, rawEntry] of Object.entries(value as Record<string, unknown>)) {
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue;
+    const entry = asRecord(rawEntry);
+    const state = nonEmptyString(entry.state);
+    if (!state) continue;
+    const note = nonEmptyString(entry.note);
+    output[key] = note ? { state, note } : { state };
+  }
+  return Object.keys(output).length > 0 ? output : null;
+}
+
+export function requestedPhotoFields(fields: ProfileFieldKey[]): AmendmentPhotoKind[] {
+  return [
+    ...(fields.includes('facePhotoUrl') ? (['face'] as AmendmentPhotoKind[]) : []),
+    ...(fields.includes('palmPhotoUrl') ? (['palm'] as AmendmentPhotoKind[]) : []),
+  ];
 }
