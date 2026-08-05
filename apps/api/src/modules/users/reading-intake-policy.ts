@@ -143,16 +143,25 @@ export function resolveIntention(
             ? 'OPEN'
             : null);
 
-  const value = mode === 'QUESTION' ? question : mode === 'SITUATION' ? objective : mode === 'OPEN' ? 'OPEN' : null;
+  const value =
+    mode === 'QUESTION'
+      ? question
+      : mode === 'SITUATION'
+        ? objective
+        : mode === 'OPEN'
+          ? 'OPEN'
+          : null;
   let valid = false;
   if (mode === 'QUESTION') valid = Boolean(question && question.length >= MIN_INTENTION_LENGTH);
   if (mode === 'SITUATION') valid = Boolean(objective && objective.length >= MIN_INTENTION_LENGTH);
   if (mode === 'OPEN') valid = open;
 
   if (options.strictIntentionExclusivity && mode) {
+    // A question may retain an objective as secondary context, and a situation
+    // may retain a secondary question. Only the OPEN mode must be text-free,
+    // while text modes must never also be flagged as open readings.
     const contradictory =
-      (mode === 'QUESTION' && (open || Boolean(objective))) ||
-      (mode === 'SITUATION' && (open || Boolean(question))) ||
+      ((mode === 'QUESTION' || mode === 'SITUATION') && open) ||
       (mode === 'OPEN' && (Boolean(question) || Boolean(objective)));
     if (contradictory) valid = false;
   }
