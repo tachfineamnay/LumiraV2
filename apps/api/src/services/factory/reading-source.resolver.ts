@@ -199,6 +199,7 @@ export class ReadingSourceResolver {
       objective: profile.objective ?? undefined,
       facePhotoUrl: profile.facePhotoUrl ?? undefined,
       palmPhotoUrl: profile.palmPhotoUrl ?? undefined,
+      palmRole: profile.palmRole,
       highs: profile.highs ?? undefined,
       lows: profile.lows ?? undefined,
       lifeEvents: profile.lifeEvents ?? undefined,
