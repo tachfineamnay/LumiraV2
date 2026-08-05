@@ -4,6 +4,7 @@ import { CreateOrderDto, UpdateOrderDto } from './dto/order.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ServiceApiKeyGuard } from '../../guards/service-api-key.guard';
 import { Order } from '@prisma/client';
 import { Request as ExpressRequest } from 'express';
 
@@ -71,5 +72,11 @@ export class OrdersController {
   @Roles('EXPERT', 'ADMIN')
   update(@Param('id') id: string, @Body() updateOrderDto: UpdateOrderDto): Promise<Order> {
     return this.ordersService.update(id, updateOrderDto);
+  }
+
+  @UseGuards(ServiceApiKeyGuard)
+  @Get(':id/status')
+  async getStatusForAutomation(@Param('id') id: string) {
+    return this.ordersService.getStatusForAutomation(id);
   }
 }

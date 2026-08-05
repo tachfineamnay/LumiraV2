@@ -3,15 +3,33 @@ import { Readable } from 'stream';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { ReadingIntakeService } from './reading-intake.service';
+import { EffectiveClientProfileService } from './effective-client-profile.service';
 import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-photo.service';
+import { S3Service } from '../uploads/s3.service';
 
 describe('UsersController private photos', () => {
-  const usersService = {} as UsersService;
+  const usersService = {
+    getUserProfile: jest.fn(),
+  } as unknown as jest.Mocked<UsersService>;
   const readingIntakeService = {} as ReadingIntakeService;
+  const effectiveProfiles = {
+    resolvePhotoReference: jest.fn(),
+    resolveProfile: jest.fn(),
+  } as unknown as jest.Mocked<EffectiveClientProfileService>;
   const photoService = {
+    parseStorageReference: jest.fn(),
     getPhotoStream: jest.fn(),
   } as unknown as jest.Mocked<PrivateOnboardingPhotoService>;
-  const controller = new UsersController(usersService, readingIntakeService, photoService);
+  const s3Service = {
+    getObject: jest.fn(),
+  } as unknown as jest.Mocked<S3Service>;
+  const controller = new UsersController(
+    usersService,
+    readingIntakeService,
+    effectiveProfiles,
+    photoService,
+    s3Service,
+  );
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -22,7 +40,9 @@ describe('UsersController private photos', () => {
     const sealingController = new UsersController(
       { updateProfile } as unknown as UsersService,
       { seal, assertProfileEditable } as unknown as ReadingIntakeService,
+      effectiveProfiles,
       photoService,
+      s3Service,
     );
     const dto = {
       orderId: 'order-draft',
@@ -40,8 +60,19 @@ describe('UsersController private photos', () => {
     expect(assertProfileEditable).not.toHaveBeenCalled();
   });
 
-  it('streams the authenticated user face photo and never accepts a foreign userId', async () => {
-    photoService.getPhotoStream.mockResolvedValue({
+  it('streams the effective authenticated-user photo and never accepts a foreign userId', async () => {
+    usersService.getUserProfile.mockResolvedValue({
+      user: { id: 'user-1' },
+      profile: { facePhotoUrl: 's3://onboarding/user-1/face-old.jpg' },
+      stats: { totalOrders: 1, completedOrders: 1 },
+    } as never);
+    effectiveProfiles.resolvePhotoReference.mockResolvedValue(
+      's3://onboarding/user-1/face-effective.jpg',
+    );
+    photoService.parseStorageReference.mockReturnValue(
+      'onboarding/user-1/face-effective.jpg',
+    );
+    s3Service.getObject.mockResolvedValue({
       stream: Readable.from(['img']),
       contentType: 'image/jpeg',
       contentLength: 3,
@@ -52,24 +83,36 @@ describe('UsersController private photos', () => {
 
     await controller.streamOwnPhoto('face', { user: { userId: 'user-1' } }, response as never);
 
-    expect(photoService.getPhotoStream).toHaveBeenCalledWith({
-      clientId: 'user-1',
-      kind: 'face',
-      actorType: 'client',
-      actorId: 'user-1',
-    });
+    expect(effectiveProfiles.resolvePhotoReference).toHaveBeenCalledWith(
+      'user-1',
+      'face',
+      's3://onboarding/user-1/face-old.jpg',
+    );
+    expect(photoService.parseStorageReference).toHaveBeenCalledWith(
+      's3://onboarding/user-1/face-effective.jpg',
+      'user-1',
+    );
+    expect(s3Service.getObject).toHaveBeenCalledWith(
+      'onboarding/user-1/face-effective.jpg',
+      'uploads',
+    );
     expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
-    expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, max-age=300');
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private, no-store, no-cache, must-revalidate',
+    );
     expect(response.setHeader).toHaveBeenCalledWith('Content-Disposition', 'inline');
     expect(response.setHeader).toHaveBeenCalledWith('X-Content-Type-Options', 'nosniff');
   });
 
-  it('rejects an invalid photo kind', async () => {
+  it('rejects an invalid photo kind before any storage lookup', async () => {
     await expect(
       controller.streamOwnPhoto('nose', { user: { userId: 'user-1' } }, {
         setHeader: jest.fn(),
       } as never),
     ).rejects.toThrow(BadRequestException);
-    expect(photoService.getPhotoStream).not.toHaveBeenCalled();
+    expect(usersService.getUserProfile).not.toHaveBeenCalled();
+    expect(effectiveProfiles.resolvePhotoReference).not.toHaveBeenCalled();
+    expect(s3Service.getObject).not.toHaveBeenCalled();
   });
 });
