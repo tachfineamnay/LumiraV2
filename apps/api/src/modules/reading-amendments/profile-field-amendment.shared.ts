@@ -65,9 +65,17 @@ const PUBLIC_STATUS: Record<ProfileAmendmentStatus, string> = {
   CANCELLED: 'CANCELLED',
 };
 
+const PRIVATE_ASSET_KEYS = new Set([
+  'storageRef',
+  'key',
+  'etag',
+  'versionId',
+  'sha256',
+  'base64',
+]);
+
 const LEGACY_TEXT_FIELDS = [
   'usageName',
-  'birthDate',
   'birthTime',
   'birthPlace',
   'specificQuestion',
@@ -142,12 +150,11 @@ export function normalizeSnapshotProfile(value: unknown): Record<string, unknown
     profile[field] = nullableText(source[field]);
   }
 
-  const facePhotoUrl =
+  profile.birthDate = normalizeCalendarDate(source.birthDate);
+  profile.facePhotoUrl =
     nonEmptyString(source.facePhotoUrl) ?? nonEmptyString(source.facePhoto);
-  const palmPhotoUrl =
+  profile.palmPhotoUrl =
     nonEmptyString(source.palmPhotoUrl) ?? nonEmptyString(source.palmPhoto);
-  profile.facePhotoUrl = facePhotoUrl;
-  profile.palmPhotoUrl = palmPhotoUrl;
   profile.palmRole = palmRole(source.palmRole);
   profile.openReading = source.openReading === true;
   profile.intentionMode = normalizeIntentionMode(source, profile);
@@ -270,10 +277,15 @@ export function toPublicProfileAmendment(row: ProfileAmendmentRow) {
 }
 
 export function sanitizeAmendmentData(value: Record<string, unknown>) {
-  const photoFields = new Set<string>(stringArray(value.photoFields));
-  collectPrivatePhotoFields(value, photoFields);
+  const photoFields = new Set<string>();
+  const currentValues = asRecord(value.values);
+  for (const field of ['facePhotoUrl', 'palmPhotoUrl'] as const) {
+    if (isPrivateStorageRef(currentValues[field])) photoFields.add(field);
+  }
+
   const sanitized = sanitizePrivateReferences(value);
   const output = asRecord(sanitized);
+  delete output.photoFields;
   if (photoFields.size > 0) output.photoFields = Array.from(photoFields).sort();
   return output;
 }
@@ -288,27 +300,14 @@ function displayStatus(row: ProfileAmendmentRow): string {
   return PUBLIC_STATUS[row.status];
 }
 
-function collectPrivatePhotoFields(value: unknown, output: Set<string>) {
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectPrivatePhotoFields(item, output));
-    return;
-  }
-  if (!value || typeof value !== 'object') return;
-  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (isPrivateStorageRef(nested)) output.add(key);
-    collectPrivatePhotoFields(nested, output);
-  }
-}
-
 function sanitizePrivateReferences(value: unknown): unknown {
   if (isPrivateStorageRef(value)) return null;
   if (Array.isArray(value)) return value.map((item) => sanitizePrivateReferences(item));
   if (!value || typeof value !== 'object' || value instanceof Date) return value;
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
-      key,
-      sanitizePrivateReferences(nested),
-    ]),
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !PRIVATE_ASSET_KEYS.has(key))
+      .map(([key, nested]) => [key, sanitizePrivateReferences(nested)]),
   );
 }
 
@@ -317,7 +316,10 @@ function isPrivateStorageRef(value: unknown): value is string {
 }
 
 function canonicalStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (value === undefined) return 'null';
+  if (typeof value === 'bigint') return JSON.stringify(value.toString());
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
   if (Array.isArray(value)) return `[${value.map(canonicalStringify).join(',')}]`;
   const record = value as Record<string, unknown>;
   return `{${Object.keys(record)
@@ -332,6 +334,16 @@ function nullableText(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return normalized || null;
+}
+
+function normalizeCalendarDate(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  const normalized = nonEmptyString(value);
+  if (!normalized) return null;
+  const dateOnly = normalized.includes('T') ? normalized.slice(0, 10) : normalized;
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateOnly) ? dateOnly : normalized;
 }
 
 function normalizeIntentionMode(
