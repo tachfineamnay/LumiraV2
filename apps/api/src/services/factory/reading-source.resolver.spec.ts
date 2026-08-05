@@ -204,6 +204,45 @@ describe('ReadingSourceResolver', () => {
     expect(vertexProfile.openReading).toBe(false);
   });
 
+  it('turns an explicit OPEN mode into visible prompt context without mutating the snapshot', () => {
+    const openProfile = {
+      ...sealedProfile,
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: null,
+      objective: null,
+    };
+    const order = buildOrder({
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-07-18T12:00:00.000Z',
+          contentHash: 'open-hash',
+          profile: openProfile,
+        },
+      },
+    });
+
+    const resolved = resolver.resolve(order);
+    const vertexProfile = resolver.toVertexUserProfile(order.user, resolved) as {
+      intentionMode?: string;
+      openReading?: boolean;
+      specificQuestion?: string;
+    };
+
+    expect(resolved.profile).toMatchObject({
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: null,
+      objective: null,
+    });
+    expect(vertexProfile).toMatchObject({
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: 'Lecture ouverte explicitement choisie par le client.',
+    });
+    expect(openProfile.specificQuestion).toBeNull();
+  });
+
   it('does not mutate the sealed snapshot while resolving', () => {
     const snapshot = {
       readingIntake: {
