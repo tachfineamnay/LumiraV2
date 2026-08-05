@@ -16,7 +16,7 @@ import {
 export class CreateProfileFieldAmendmentDto {
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(8)
+  @ArrayMaxSize(4)
   @IsString({ each: true })
   fields!: string[];
 
