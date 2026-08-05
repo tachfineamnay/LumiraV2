@@ -14,6 +14,7 @@ import { ProfileFieldAmendmentRequestService } from './profile-field-amendment-r
 import { ProfileFieldAmendmentReviewService } from './profile-field-amendment-review.service';
 import { ProfileFieldAmendmentService } from './profile-field-amendment.service';
 import { ProfileFieldRevisionService } from './profile-field-revision.service';
+import { ReadingAmendmentResponseInterceptor } from './reading-amendment-response.interceptor';
 import { ReadingAmendmentFacade } from './reading-amendment.facade';
 import { ReadingAmendmentService } from './reading-amendment.service';
 
@@ -33,6 +34,7 @@ import { ReadingAmendmentService } from './reading-amendment.service';
     ProfileFieldRevisionService,
     IntakeCompletenessService,
     ReadingAmendmentFacade,
+    ReadingAmendmentResponseInterceptor,
   ],
   exports: [ReadingAmendmentFacade, IntakeCompletenessService],
 })
