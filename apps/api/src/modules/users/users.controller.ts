@@ -41,7 +41,7 @@ export class UsersController {
   @Get()
   @UseGuards(JwtAuthGuard)
   findAll(
-    @Request() req,
+    @Request() req: { user: { role: string } },
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
@@ -53,17 +53,12 @@ export class UsersController {
     return this.usersService.findAll(skip, limit);
   }
 
-  /**
-   * GET /api/users/entitlements
-   * Returns the authenticated user's capabilities based on their purchased products.
-   */
   @Get('entitlements')
   @UseGuards(JwtAuthGuard)
   async getEntitlements(@Request() req: { user: { userId: string } }) {
     return this.usersService.getEntitlements(req.user.userId);
   }
 
-  /** Streams the exact private photo referenced by the current order-scoped intake. */
   @Get('onboarding/photos/:kind')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 60, ttl: 60000 } })
@@ -93,11 +88,6 @@ export class UsersController {
     return new StreamableFile(stream);
   }
 
-  /**
-   * GET /api/users/profile/photos/:kind
-   * Streams the latest effective face/palm photo. Approved complements override
-   * the profile projection while the original sealed intake remains immutable.
-   */
   @Get('profile/photos/:kind')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 60, ttl: 60000 } })
@@ -111,7 +101,9 @@ export class UsersController {
     if (!data) throw new NotFoundException('Profil utilisateur non trouvé');
 
     const persistedReference =
-      photoKind === 'face' ? data.profile?.facePhotoUrl ?? null : data.profile?.palmPhotoUrl ?? null;
+      photoKind === 'face'
+        ? data.profile?.facePhotoUrl ?? null
+        : data.profile?.palmPhotoUrl ?? null;
     const storageRef = await this.effectiveProfiles.resolvePhotoReference(
       req.user.userId,
       photoKind,
@@ -140,7 +132,6 @@ export class UsersController {
     return new StreamableFile(object.stream);
   }
 
-  /** Returns the authenticated user's complete effective profile data. */
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req: { user: { userId: string } }) {
@@ -166,10 +157,13 @@ export class UsersController {
             birthDate: profile.birthDate,
             birthTime: profile.birthTime,
             birthPlace: profile.birthPlace,
+            intentionMode: profile.intentionMode ?? null,
+            openReading: profile.openReading === true,
             specificQuestion: profile.specificQuestion,
             objective: profile.objective,
             facePhotoUrl: profile.facePhotoUrl,
             palmPhotoUrl: profile.palmPhotoUrl,
+            palmRole: profile.palmRole ?? 'PALM_UNKNOWN',
             highs: profile.highs,
             lows: profile.lows,
             lifeEvents: profile.lifeEvents,
@@ -185,6 +179,7 @@ export class UsersController {
             rituals: profile.rituals,
             profileCompleted: profile.profileCompleted,
             submittedAt: profile.submittedAt,
+            effectiveSnapshotId: effective.snapshotId,
           }
         : null,
       effectiveSnapshot: effective.snapshotId
@@ -198,18 +193,12 @@ export class UsersController {
     };
   }
 
-  /** Returns the authenticated user's completed/delivered orders. */
   @Get('orders/completed')
   @UseGuards(JwtAuthGuard)
   async getCompletedOrders(@Request() req: { user: { userId: string } }) {
     return this.usersService.getCompletedOrders(req.user.userId);
   }
 
-  /**
-   * PATCH /api/users/profile
-   * Normal profile edits remain possible outside an active reading. A completion
-   * request is different: it atomically seals the client intake into the paid order.
-   */
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   async updateProfile(
@@ -226,7 +215,52 @@ export class UsersController {
   @Get('onboarding')
   @UseGuards(JwtAuthGuard)
   async getOnboardingProgress(@Request() req: { user: { userId: string } }) {
-    return this.usersService.getOnboardingProgress(req.user.userId);
+    const progress = await this.usersService.getOnboardingProgress(req.user.userId);
+    const progressRecord = this.asRecord(progress);
+    if (progressRecord.status !== 'COMPLETED') return progress;
+
+    const userData = await this.usersService.getUserProfile(req.user.userId);
+    if (!userData) return progress;
+    const effective = await this.effectiveProfiles.resolveProfile(
+      req.user.userId,
+      userData.profile,
+    );
+    const profile = effective.profile;
+    if (!effective.snapshotId || !profile) return progress;
+
+    return {
+      ...progressRecord,
+      data: {
+        ...this.asRecord(progressRecord.data),
+        usageName: profile.usageName,
+        birthDate: profile.birthDate,
+        birthTime: profile.birthTime,
+        birthPlace: profile.birthPlace,
+        intentionMode: profile.intentionMode ?? null,
+        openReading: profile.openReading === true,
+        specificQuestion: profile.specificQuestion,
+        objective: profile.objective,
+        facePhoto: profile.facePhotoUrl,
+        facePhotoUrl: profile.facePhotoUrl,
+        palmPhoto: profile.palmPhotoUrl,
+        palmPhotoUrl: profile.palmPhotoUrl,
+        palmRole: profile.palmRole ?? 'PALM_UNKNOWN',
+        highs: profile.highs,
+        lows: profile.lows,
+        lifeEvents: profile.lifeEvents,
+        lifeAreas: profile.lifeAreas,
+        strongSide: profile.strongSide,
+        weakSide: profile.weakSide,
+        strongZone: profile.strongZone,
+        weakZone: profile.weakZone,
+        deliveryStyle: profile.deliveryStyle,
+        pace: profile.pace,
+        ailments: profile.ailments,
+        fears: profile.fears,
+        rituals: profile.rituals,
+        effectiveSnapshotId: effective.snapshotId,
+      },
+    };
   }
 
   @Patch('onboarding')
@@ -236,6 +270,12 @@ export class UsersController {
     @Body() dto: UpdateOnboardingProgressDto,
   ) {
     return this.usersService.saveOnboardingProgress(req.user.userId, dto);
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   }
 
   private parsePhotoKind(kind: string): OnboardingPhotoKind {
