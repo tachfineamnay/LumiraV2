@@ -3,7 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 export const PROFILE_FIELD_KEYS = [
   'birthDate',
   'birthPlace',
-  'specificQuestion',
+  'intention',
   'facePhotoUrl',
   'palmPhotoUrl',
   'palmRole',
@@ -12,7 +12,12 @@ export const PROFILE_FIELD_KEYS = [
 export type ProfileFieldKey = (typeof PROFILE_FIELD_KEYS)[number];
 export type RequestableProfileFieldKey = Exclude<ProfileFieldKey, 'palmRole'>;
 
-export type ProfileFieldInput = 'date' | 'text' | 'textarea' | 'photo' | 'palm-role';
+export type ProfileFieldInput =
+  | 'date'
+  | 'text'
+  | 'intention'
+  | 'photo'
+  | 'palm-role';
 
 export interface ProfileFieldDefinition {
   key: ProfileFieldKey;
@@ -20,6 +25,7 @@ export interface ProfileFieldDefinition {
   input: ProfileFieldInput;
   maxLength: number;
   requestable: boolean;
+  required: boolean;
 }
 
 export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefinition> = {
@@ -29,6 +35,7 @@ export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefiniti
     input: 'date',
     maxLength: 10,
     requestable: true,
+    required: true,
   },
   birthPlace: {
     key: 'birthPlace',
@@ -36,13 +43,15 @@ export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefiniti
     input: 'text',
     maxLength: 180,
     requestable: true,
+    required: true,
   },
-  specificQuestion: {
-    key: 'specificQuestion',
-    label: 'Question ou intention de lecture',
-    input: 'textarea',
+  intention: {
+    key: 'intention',
+    label: 'Intention de lecture',
+    input: 'intention',
     maxLength: 2000,
     requestable: true,
+    required: true,
   },
   facePhotoUrl: {
     key: 'facePhotoUrl',
@@ -50,6 +59,7 @@ export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefiniti
     input: 'photo',
     maxLength: 512,
     requestable: true,
+    required: true,
   },
   palmPhotoUrl: {
     key: 'palmPhotoUrl',
@@ -57,6 +67,7 @@ export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefiniti
     input: 'photo',
     maxLength: 512,
     requestable: true,
+    required: true,
   },
   palmRole: {
     key: 'palmRole',
@@ -64,6 +75,7 @@ export const PROFILE_FIELD_CATALOG: Record<ProfileFieldKey, ProfileFieldDefiniti
     input: 'palm-role',
     maxLength: 20,
     requestable: false,
+    required: false,
   },
 };
 
@@ -107,5 +119,26 @@ export function publicProfileFields(fields: ProfileFieldKey[]): RequestableProfi
 }
 
 export function profileFieldLabels(fields: ProfileFieldKey[]): string[] {
-  return fields.map((field) => PROFILE_FIELD_CATALOG[field].label);
+  return publicProfileFields(fields).map((field) => PROFILE_FIELD_CATALOG[field].label);
+}
+
+export function expandProfileAmendmentValues(
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (key !== 'intention') {
+      patch[key] = value;
+      continue;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new BadRequestException('Le bloc intention est invalide');
+    }
+    const intention = value as Record<string, unknown>;
+    patch.intentionMode = intention.intentionMode;
+    patch.openReading = intention.openReading === true;
+    patch.specificQuestion = intention.specificQuestion ?? null;
+    patch.objective = intention.objective ?? null;
+  }
+  return patch;
 }
