@@ -94,6 +94,8 @@ const PROFILE_FIELDS = [
   'rituals',
 ] as const;
 
+const OPEN_READING_CONTEXT = 'Lecture ouverte explicitement choisie par le client.';
+
 @Injectable()
 export class ReadingSourceResolver {
   private readonly logger = new Logger(ReadingSourceResolver.name);
@@ -192,7 +194,9 @@ export class ReadingSourceResolver {
       birthDate: profile.birthDate,
       birthTime: profile.birthTime ?? undefined,
       birthPlace: profile.birthPlace ?? undefined,
-      specificQuestion: profile.specificQuestion ?? undefined,
+      specificQuestion:
+        profile.specificQuestion ??
+        (profile.intentionMode === 'OPEN' ? OPEN_READING_CONTEXT : undefined),
       objective: profile.objective ?? undefined,
       facePhotoUrl: profile.facePhotoUrl ?? undefined,
       palmPhotoUrl: profile.palmPhotoUrl ?? undefined,
