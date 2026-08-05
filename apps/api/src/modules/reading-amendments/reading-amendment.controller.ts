@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Request,
   Res,
   StreamableFile,
@@ -19,13 +20,16 @@ import { CurrentExpert, Roles } from '../expert/decorators';
 import { ExpertAuthGuard, RolesGuard } from '../expert/guards';
 import { S3Service } from '../uploads/s3.service';
 import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-photo.service';
+import { CreateProfileFieldAmendmentDto } from './dto/profile-field-amendment.dto';
 import {
   CreatePalmAmendmentDto,
   ReviewPalmAmendmentDto,
-  SavePalmAmendmentDraftDto,
-  SubmitPalmAmendmentDto,
+  SaveReadingAmendmentDraftDto,
+  SubmitReadingAmendmentDto,
 } from './dto/reading-amendment.dto';
 import { ReadingAmendmentFacade } from './reading-amendment.facade';
+
+type PhotoKind = 'face' | 'palm';
 
 @Controller('users/reading-amendments')
 @UseGuards(JwtAuthGuard)
@@ -45,32 +49,40 @@ export class ClientReadingAmendmentController {
   async saveDraft(
     @Param('id') amendmentId: string,
     @Request() req: { user: { userId: string } },
-    @Body() dto: SavePalmAmendmentDraftDto,
+    @Body() dto: SaveReadingAmendmentDraftDto,
   ) {
-    return this.amendments.savePalmDraft(req.user.userId, amendmentId, dto);
+    return this.amendments.saveDraft(req.user.userId, amendmentId, dto);
   }
 
   @Post(':id/submit')
   async submit(
     @Param('id') amendmentId: string,
     @Request() req: { user: { userId: string } },
-    @Body() dto: SubmitPalmAmendmentDto,
+    @Body() dto: SubmitReadingAmendmentDto,
   ) {
-    return this.amendments.submitPalm(req.user.userId, amendmentId, dto);
+    return this.amendments.submit(req.user.userId, amendmentId, dto);
   }
 
   @Get(':id/photo')
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   async streamOwnAmendmentPhoto(
     @Param('id') amendmentId: string,
+    @Query('kind') kind: string | undefined,
     @Request() req: { user: { userId: string } },
     @Res({ passthrough: true }) res: Response,
   ) {
     const reference = await this.amendments.getPhotoReference({
       amendmentId,
+      kind: this.parseOptionalPhotoKind(kind),
       userId: req.user.userId,
     });
     return this.streamPhoto(reference.storageRef, reference.userId, res);
+  }
+
+  private parseOptionalPhotoKind(kind?: string): PhotoKind | undefined {
+    if (!kind) return undefined;
+    if (kind === 'face' || kind === 'palm') return kind;
+    throw new BadRequestException('Type de photo invalide');
   }
 
   private async streamPhoto(storageRef: string, userId: string, res: Response) {
@@ -79,7 +91,7 @@ export class ClientReadingAmendmentController {
     const contentType = this.resolveContentType(object.contentType, key);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (object.contentLength != null) res.setHeader('Content-Length', String(object.contentLength));
     if (object.etag) res.setHeader('ETag', object.etag);
@@ -97,6 +109,18 @@ export class ClientReadingAmendmentController {
       return 'image/jpeg';
     }
     throw new BadRequestException('Type de photo invalide');
+  }
+}
+
+@Controller('expert/orders/:orderId/intake-completeness')
+@UseGuards(ExpertAuthGuard, RolesGuard)
+@Roles('EXPERT', 'ADMIN')
+export class ExpertIntakeCompletenessController {
+  constructor(private readonly amendments: ReadingAmendmentFacade) {}
+
+  @Get()
+  async get(@Param('orderId') orderId: string) {
+    return this.amendments.getCompleteness(orderId);
   }
 }
 
@@ -124,6 +148,15 @@ export class ExpertReadingAmendmentController {
     return this.amendments.requestPalmPhoto(orderId, expert.id, dto);
   }
 
+  @Post('required-fields')
+  async requestProfileFields(
+    @Param('orderId') orderId: string,
+    @CurrentExpert() expert: Expert,
+    @Body() dto: CreateProfileFieldAmendmentDto,
+  ) {
+    return this.amendments.requestProfileFields(orderId, expert.id, dto);
+  }
+
   @Post(':id/approve')
   async approve(
     @Param('orderId') orderId: string,
@@ -131,7 +164,7 @@ export class ExpertReadingAmendmentController {
     @CurrentExpert() expert: Expert,
     @Body() dto: ReviewPalmAmendmentDto,
   ) {
-    return this.amendments.approvePalm(orderId, amendmentId, expert.id, dto);
+    return this.amendments.approve(orderId, amendmentId, expert.id, dto);
   }
 
   @Post(':id/reject')
@@ -141,7 +174,7 @@ export class ExpertReadingAmendmentController {
     @CurrentExpert() expert: Expert,
     @Body() dto: ReviewPalmAmendmentDto,
   ) {
-    return this.amendments.rejectPalm(orderId, amendmentId, expert.id, dto);
+    return this.amendments.reject(orderId, amendmentId, expert.id, dto);
   }
 
   @Post(':id/retake')
@@ -179,20 +212,31 @@ export class ExpertReadingAmendmentController {
   async streamAmendmentPhoto(
     @Param('orderId') orderId: string,
     @Param('id') amendmentId: string,
+    @Query('kind') kind: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const reference = await this.amendments.getPhotoReference({ amendmentId, orderId });
+    const reference = await this.amendments.getPhotoReference({
+      amendmentId,
+      orderId,
+      kind: this.parseOptionalPhotoKind(kind),
+    });
     const key = this.privatePhotos.parseStorageReference(reference.storageRef, reference.userId);
     const object = await this.s3.getObject(key, 'uploads');
     const contentType = this.resolveContentType(object.contentType, key);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (object.contentLength != null) res.setHeader('Content-Length', String(object.contentLength));
     if (object.etag) res.setHeader('ETag', object.etag);
     if (object.lastModified) res.setHeader('Last-Modified', object.lastModified.toUTCString());
     return new StreamableFile(object.stream);
+  }
+
+  private parseOptionalPhotoKind(kind?: string): PhotoKind | undefined {
+    if (!kind) return undefined;
+    if (kind === 'face' || kind === 'palm') return kind;
+    throw new BadRequestException('Type de photo invalide');
   }
 
   private resolveContentType(contentType: string | undefined, key: string): string {
