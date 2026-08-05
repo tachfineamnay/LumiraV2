@@ -93,7 +93,6 @@ export const SmartPhotoUploader = ({
   privatePreviewNode,
 }: SmartPhotoUploaderProps) => {
   const sectionRef = useRef<HTMLElement>(null);
-  const requiredInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const attemptRef = useRef(0);
@@ -122,19 +121,8 @@ export const SmartPhotoUploader = ({
   }, []);
 
   useEffect(() => {
-    const input = requiredInputRef.current;
-    if (!input) return;
-    if (!requiredByReadingIntake || isPrivateStorageReference) {
-      input.setCustomValidity('');
-      setRequiredError(null);
-      return;
-    }
-    input.setCustomValidity(
-      inferredKind === 'FACE'
-        ? 'Ajoutez et enregistrez une photo du visage avant de continuer.'
-        : 'Ajoutez et enregistrez une photo de la paume avant de continuer.',
-    );
-  }, [inferredKind, isPrivateStorageReference, requiredByReadingIntake]);
+    if (isPrivateStorageReference) setRequiredError(null);
+  }, [isPrivateStorageReference]);
 
   useEffect(() => {
     uploadStateCallbackRef.current = onUploadStateChange;
@@ -147,6 +135,18 @@ export const SmartPhotoUploader = ({
   useEffect(() => {
     setPrivatePreviewFailed(false);
   }, [privatePreviewUrl, value]);
+
+  const showRequiredError = useCallback(() => {
+    const message =
+      inferredKind === 'FACE'
+        ? 'Ajoutez et enregistrez une photo du visage avant de continuer.'
+        : 'Ajoutez et enregistrez une photo de la paume avant de continuer.';
+    setRequiredError(message);
+    window.requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      fileInputRef.current?.focus({ preventScroll: true });
+    });
+  }, [inferredKind]);
 
   const revokeObjectUrl = useCallback(() => {
     if (objectUrlRef.current) {
@@ -394,38 +394,19 @@ export const SmartPhotoUploader = ({
       } ${className}`}
       aria-label={label}
     >
-      {requiredByReadingIntake && (
-        <input
-          ref={requiredInputRef}
-          type="text"
-          required
-          readOnly
-          value={isPrivateStorageReference ? value : ''}
-          name={`required-${(inferredKind ?? label).toLowerCase()}`}
-          aria-label={`${label} obligatoire`}
-          aria-describedby={requiredError ? `${label}-required-error` : undefined}
-          className="sr-only"
-          onInvalid={(event) => {
-            event.preventDefault();
-            const message =
-              inferredKind === 'FACE'
-                ? 'Ajoutez et enregistrez une photo du visage avant de continuer.'
-                : 'Ajoutez et enregistrez une photo de la paume avant de continuer.';
-            setRequiredError(message);
-            window.requestAnimationFrame(() => {
-              sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              requiredInputRef.current?.focus({ preventScroll: true });
-            });
-          }}
-        />
-      )}
       <input
         ref={fileInputRef}
         type="file"
         tabIndex={-1}
+        required={requiredByReadingIntake && !isPrivateStorageReference}
         accept={ACCEPTED_PHOTO_FORMATS}
+        onInvalid={(event) => {
+          event.preventDefault();
+          showRequiredError();
+        }}
         onChange={(event) => void processFile(event.target.files?.[0])}
         aria-label={`Choisir une photo pour ${label.toLowerCase()}`}
+        aria-describedby={requiredError ? `${label}-required-error` : undefined}
         className="sr-only"
       />
       <input
