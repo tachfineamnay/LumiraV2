@@ -304,7 +304,11 @@ model Order {
   // Upsell tracking
   addons             Json? // Array of purchased addons: [{type: 'FORECAST_6M', amount: 2700, paidAt: Date}]
   upsellOfferedAt    DateTime? // When upsell was shown
-  upsellAcceptedAt   DateTime? // When upsell was accepted
+  // GA4 Analytics Context (consented)
+  analyticsConsentGranted Boolean   @default(false)
+  ga4ClientId              String?
+  ga4SessionId             String?
+  ga4ContextCapturedAt     DateTime?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -501,6 +505,40 @@ model DeliveryRecord {
   @@unique([orderId, readingVersionId])
   @@index([emailStatus, updatedAt(sort: Desc)])
   @@index([contentHash])
+}
+
+enum AnalyticsDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// Ledger pour la livraison asynchrone et résiliente des événements analytiques serveur (ex: GA4 Measurement Protocol).
+model AnalyticsDelivery {
+  id            String                  @id @default(cuid())
+  provider      String                  @default("ga4")
+  eventName     String
+  eventKey      String                  @unique
+  transactionId String
+  orderId       String?
+  clientId      String?
+  sessionId     String?
+  payload       Json
+  status        AnalyticsDeliveryStatus @default(PENDING)
+  attempts      Int                     @default(0)
+  lockedAt      DateTime?
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  skippedReason String?
+  lastError     String?                 @db.Text
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([transactionId])
+  @@index([orderId])
 }
 
 model OrderFile {

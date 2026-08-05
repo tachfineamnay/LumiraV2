@@ -33,6 +33,12 @@ import {
   saveCheckoutAttempt,
 } from '../../lib/checkoutAttempt';
 import { trackInitiateCheckout, trackPurchase } from '../../lib/pixel';
+import {
+  getGaClientContext,
+  trackGaAddPaymentInfo,
+  trackGaBeginCheckout,
+  trackGaViewItem,
+} from '../../lib/analytics';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
@@ -121,6 +127,7 @@ function CheckoutContent() {
     };
     fetchConnectedUser();
     trackInitiateCheckout(SUBSCRIPTION.price);
+    trackGaViewItem();
   }, []);
 
   const checkoutInitialValues = useMemo(
@@ -251,6 +258,9 @@ function CheckoutContent() {
     setPaymentError(null);
     setStripeConfigurationError(null);
 
+    const gaContext = await getGaClientContext();
+    trackGaBeginCheckout();
+
     try {
       const storedAttempt = readCheckoutAttempt();
       const checkoutAttemptId =
@@ -266,6 +276,10 @@ function CheckoutContent() {
         phone: formData.phone || undefined,
         productLevel: 'lumira_early_v1',
         checkoutAttemptId,
+        analyticsConsentGranted: Boolean(gaContext),
+        gaClientId: gaContext?.clientId,
+        gaSessionId: gaContext?.sessionId,
+        gaContextCapturedAt: gaContext?.capturedAt,
       });
 
       const secret = response.data?.clientSecret;
@@ -321,6 +335,7 @@ function CheckoutContent() {
 
   const handlePaymentAttemptStart = () => {
     if (!clientSecret || !paymentIntentId || !checkoutAttemptIdRef.current) return;
+    trackGaAddPaymentInfo();
     saveCheckoutAttempt({
       checkoutAttemptId: checkoutAttemptIdRef.current,
       clientSecret,
