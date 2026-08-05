@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { UserProfile as PrismaUserProfile } from '@prisma/client';
-import { UserProfile as VertexUserProfile } from './VertexOracle';
 import {
   IntentionMode,
   READING_REQUIREMENTS_VERSION,
   evaluateReadingRequirements,
   resolveIntention,
 } from '../../modules/users/reading-intake-policy';
+import { UserProfile as VertexUserProfile } from './VertexOracle';
 
 export type ReadingSourceKind =
   | 'EFFECTIVE_SNAPSHOT'
@@ -15,7 +15,6 @@ export type ReadingSourceKind =
 
 export type ReadingLifeAreas = Record<string, { state: string; note?: string }>;
 
-/** Normalized reading fields shared by effective snapshot, sealed intake and legacy profile. */
 export interface ReadingSourceProfile {
   intentionMode: IntentionMode | null;
   openReading: boolean;
@@ -244,7 +243,7 @@ export class ReadingSourceResolver {
   ): void {
     const requirements = evaluateReadingRequirements(this.asRecord(profileRaw), {
       requireExplicitIntentionMode: false,
-      strictIntentionExclusivity: false,
+      strictIntentionExclusivity: true,
     });
     this.logger.warn(
       JSON.stringify({
@@ -264,14 +263,14 @@ export class ReadingSourceResolver {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     return evaluateReadingRequirements(value as Record<string, unknown>, {
       requireExplicitIntentionMode: false,
-      strictIntentionExclusivity: false,
+      strictIntentionExclusivity: true,
     }).complete;
   }
 
   private incompleteSourceError(message: string, profileRaw: unknown): BadRequestException {
     const requirements = evaluateReadingRequirements(this.asRecord(profileRaw), {
       requireExplicitIntentionMode: false,
-      strictIntentionExclusivity: false,
+      strictIntentionExclusivity: true,
     });
     return new BadRequestException({
       statusCode: 400,
@@ -283,7 +282,10 @@ export class ReadingSourceResolver {
   }
 
   private normalizeSealedProfile(raw: Record<string, unknown>): ReadingSourceProfile {
-    const intention = resolveIntention(raw, { requireExplicitIntentionMode: false });
+    const intention = resolveIntention(raw, {
+      requireExplicitIntentionMode: false,
+      strictIntentionExclusivity: true,
+    });
     return {
       intentionMode: intention.mode,
       openReading: intention.mode === 'OPEN',
