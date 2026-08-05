@@ -1,8 +1,12 @@
-# Compléments d’informations obligatoires — runbook
+# Compléments d’informations du dossier — runbook
 
 ## Périmètre
 
-Ce chantier permet à l’expert de consulter la complétude effective d’un dossier, de demander uniquement les informations requises manquantes ou explicitement inexploitées, puis d’approuver la réponse du client.
+Ce chantier permet à l’expert de consulter la complétude effective d’un dossier, de demander les informations obligatoires manquantes ou explicitement inexploitées, puis d’approuver la réponse du client.
+
+Les obligations actuelles sont dérivées du scellement existant : date de naissance, lieu de naissance et intention de lecture lorsque le client n’a pas choisi une lecture ouverte ou renseigné un objectif.
+
+Les photos du visage et de la paume restent facultatives dans l’onboarding. Elles sont visibles dans le diagnostic et restent demandables par l’expert lorsqu’elles sont utiles à la lecture, absentes ou inexploitées. Elles ne sont jamais sélectionnées automatiquement comme informations obligatoires.
 
 Il ne contient aucun paiement, upsell, nouvelle offre ou génération automatique de lecture.
 
@@ -41,6 +45,7 @@ pnpm --filter api build
 pnpm --filter web typecheck
 pnpm --filter web lint
 pnpm --filter web build
+pnpm --filter web exec playwright test e2e/required-intake-complements.spec.ts
 ```
 
 Les commandes exactes peuvent être ajustées uniquement si les scripts du `package.json` local portent un autre nom. Ne masquer aucune erreur.
@@ -63,9 +68,10 @@ Utiliser une commande de test ou un client interne, jamais un dossier client act
 1. Ouvrir le dossier.
 2. Vérifier la section **Complétude du dossier**.
 3. Vérifier les valeurs texte exactes et les photos privées.
-4. Sélectionner un champ réellement manquant, ou une valeur existante à signaler comme inexploitable.
-5. Envoyer la demande.
-6. Vérifier qu’une seule demande active existe.
+4. Vérifier que les photos absentes sont indiquées comme facultatives et ne sont pas présélectionnées.
+5. Sélectionner un champ réellement manquant, une photo utile, ou une valeur existante à signaler comme inexploitable.
+6. Envoyer la demande.
+7. Vérifier qu’une seule demande active existe.
 
 ### Sanctuaire
 
