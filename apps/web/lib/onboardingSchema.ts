@@ -165,14 +165,21 @@ export const readingPreparationSubmissionSchema = readingPreparationSchema.super
     if (intentionMode === 'OPEN' && !data.openReading) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['specificQuestion'],
+        path: ['openReading'],
         message: 'Confirmez explicitement la lecture ouverte.',
+      });
+    }
+    if (intentionMode === 'OPEN' && (question.length > 0 || objective.length > 0)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['intentionMode'],
+        message: 'Une lecture ouverte ne doit conserver ni question ni situation ciblée.',
       });
     }
     if (intentionMode !== 'OPEN' && data.openReading) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['specificQuestion'],
+        path: ['openReading'],
         message: 'Le mode d’intention sélectionné ne correspond pas à une lecture ouverte.',
       });
     }
