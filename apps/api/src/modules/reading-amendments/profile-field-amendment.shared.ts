@@ -116,27 +116,56 @@ export function normalizeSnapshotProfile(value: unknown): Record<string, unknown
   };
 }
 
+export function hasOriginalInputProjection(clientInputs: Record<string, unknown>): boolean {
+  const existing = asRecord(clientInputs.readingIntake);
+  return Boolean(
+    nonEmptyString(existing.sealedAt) &&
+      nonEmptyString(existing.contentHash) &&
+      Object.keys(asRecord(existing.profile)).length > 0,
+  );
+}
+
 export function resolveOriginalInput(
   clientInputs: Record<string, unknown>,
   intake: ReadingIntakeRow | null,
+  options: {
+    intakeRequired?: boolean;
+    legacyProfile?: unknown;
+    capturedAt?: Date;
+  } = {},
 ): Record<string, unknown> {
   const existing = asRecord(clientInputs.readingIntake);
-  if (
-    nonEmptyString(existing.sealedAt) &&
-    nonEmptyString(existing.contentHash) &&
-    Object.keys(asRecord(existing.profile)).length > 0
-  ) {
-    return existing;
+  if (hasOriginalInputProjection(clientInputs)) return existing;
+
+  if (intake?.status === 'SEALED' && intake.sealedAt && intake.contentHash) {
+    return {
+      version: 'relational-reading-intake-v1',
+      sealedAt: intake.sealedAt.toISOString(),
+      contentHash: intake.contentHash,
+      profile: normalizeSnapshotProfile(intake.data),
+      assets: {},
+    };
   }
-  if (intake?.status !== 'SEALED' || !intake.sealedAt || !intake.contentHash) {
+
+  if (options.intakeRequired !== false) {
     throw new ConflictException('Le dossier scellé original est introuvable');
   }
-  return {
-    version: 'relational-reading-intake-v1',
-    sealedAt: intake.sealedAt.toISOString(),
-    contentHash: intake.contentHash,
-    profile: normalizeSnapshotProfile(intake.data),
+
+  const profile = normalizeSnapshotProfile(options.legacyProfile);
+  if (Object.keys(profile).length === 0) {
+    throw new ConflictException('Le profil historique servant de base est introuvable');
+  }
+  const sealedAt = (options.capturedAt ?? new Date()).toISOString();
+  const core = {
+    version: 'legacy-profile-capture-v1',
+    sealedAt,
+    legacy: true,
+    profile,
     assets: {},
+  };
+  return {
+    ...core,
+    contentHash: hashCanonicalJson(core),
   };
 }
 
