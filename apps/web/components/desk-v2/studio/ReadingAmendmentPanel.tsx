@@ -24,6 +24,7 @@ type FieldKey =
 type FieldStatus =
   | 'PRESENT'
   | 'MISSING'
+  | 'OPTIONAL'
   | 'INVALID'
   | 'REQUESTED'
   | 'DRAFT'
@@ -136,7 +137,10 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
         if (!showRequest) {
           setSelected(
             diagnostic.data.fields
-              .filter((field) => field.status === 'MISSING' && field.requestable)
+              .filter(
+                (field) =>
+                  field.required && field.status === 'MISSING' && field.requestable,
+              )
               .map((field) => field.key),
           );
         }
@@ -287,7 +291,7 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
               >
                 <Send className="h-4 w-4" />
                 {completeness?.complete
-                  ? 'Demander la correction d’une information'
+                  ? 'Demander une photo ou une correction'
                   : 'Demander les informations manquantes'}
               </button>
             )}
@@ -329,7 +333,7 @@ function CompletenessCard({
     <div className="rounded-xl border border-desk-border bg-desk-card p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-desk-text">
-          {completeness.summary.present}/{completeness.summary.required} éléments complets
+          {completeness.summary.present}/{completeness.summary.required} éléments obligatoires complets
         </p>
         <span className="text-[11px] text-desk-subtle">
           {sourceLabel(completeness.source)}
@@ -347,7 +351,7 @@ function CompletenessCard({
               </span>
             </div>
             {field.photoKind ? (
-              field.hasValue && (
+              field.hasValue ? (
                 <div className="mt-2 max-w-[150px]">
                   <ExpertPrivatePhoto
                     orderId={orderId}
@@ -356,10 +360,15 @@ function CompletenessCard({
                     aspectClassName="aspect-[4/5]"
                   />
                 </div>
+              ) : (
+                <p className="mt-1 text-xs leading-relaxed text-desk-muted">
+                  Photo facultative non transmise. L’expert peut la demander si elle est utile à la lecture.
+                </p>
               )
             ) : (
               <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-desk-muted">
-                {field.displayValue || 'Aucune valeur transmise'}
+                {field.displayValue ||
+                  (field.required ? 'Aucune valeur transmise' : 'Non requis pour ce dossier')}
               </p>
             )}
           </div>
@@ -412,7 +421,9 @@ function RequestForm({
               <span className="block text-xs text-desk-muted">
                 {field.hasValue
                   ? 'Valeur présente : elle sera signalée comme inexploitable puis remplacée.'
-                  : 'Information absente du dossier effectif.'}
+                  : field.required
+                    ? 'Information obligatoire absente du dossier effectif.'
+                    : 'Photo facultative : demandez-la seulement si elle est nécessaire à cette lecture.'}
               </span>
             </span>
           </label>
@@ -636,6 +647,7 @@ function fieldStatusLabel(status: FieldStatus): string {
   const labels: Record<FieldStatus, string> = {
     PRESENT: 'Présent',
     MISSING: 'Manquant',
+    OPTIONAL: 'Facultatif',
     INVALID: 'Inexploitable',
     REQUESTED: 'Demandé',
     DRAFT: 'Brouillon',
@@ -652,6 +664,7 @@ function fieldStatusClass(status: FieldStatus): string {
   if (status === 'MISSING' || status === 'INVALID') {
     return 'bg-rose-500/10 text-rose-600';
   }
+  if (status === 'OPTIONAL') return 'bg-slate-500/10 text-desk-muted';
   if (status === 'SUBMITTED') return 'bg-blue-500/10 text-blue-600';
   return 'bg-amber-500/10 text-amber-600';
 }
