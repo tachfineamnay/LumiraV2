@@ -101,6 +101,30 @@ export class OrdersService {
     return order;
   }
 
+  async getStatusForAutomation(id: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        userEmail: true,
+        userName: true,
+        intakeRequired: true,
+        deliveredAt: true,
+        paidAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${id} not found`);
+    }
+
+    return order;
+  }
+
   async update(id: string, updateOrderDto: UpdateOrderDto) {
     const currentOrder = await this.prisma.order.findUnique({
       where: { id },
