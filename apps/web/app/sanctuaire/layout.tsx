@@ -4,6 +4,7 @@ import { LegacyStorageCleanup } from '../../components/sanctuary/LegacyStorageCl
 import SanctuaireLayoutClient from './SanctuaireLayoutClient';
 import type { Metadata } from 'next';
 import { PRIVATE_ROBOTS } from '../../lib/seo';
+import './required-intake.css';
 
 // Forces the entire route segment to be dynamic, skipping static generation.
 // This is critical because the dashboard relies on authentication and URL parameters (useSearchParams)
