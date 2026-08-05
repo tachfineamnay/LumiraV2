@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ExpertModule } from '../expert/expert.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -15,6 +16,7 @@ import { ProfileFieldAmendmentReviewService } from './profile-field-amendment-re
 import { ProfileFieldAmendmentService } from './profile-field-amendment.service';
 import { ProfileFieldRevisionService } from './profile-field-revision.service';
 import { ReadingAmendmentFacade } from './reading-amendment.facade';
+import { ReadingAmendmentResponseInterceptor } from './reading-amendment-response.interceptor';
 import { ReadingAmendmentService } from './reading-amendment.service';
 
 @Module({
@@ -33,6 +35,10 @@ import { ReadingAmendmentService } from './reading-amendment.service';
     ProfileFieldRevisionService,
     IntakeCompletenessService,
     ReadingAmendmentFacade,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ReadingAmendmentResponseInterceptor,
+    },
   ],
   exports: [ReadingAmendmentFacade, IntakeCompletenessService],
 })
