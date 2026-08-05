@@ -1,4 +1,14 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class CheckoutIntentDto {
   @IsEmail()
@@ -27,6 +37,24 @@ export class CheckoutIntentDto {
   @IsUUID()
   @IsOptional()
   checkoutAttemptId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  analyticsConsentGranted?: boolean;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(128)
+  gaClientId?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(128)
+  gaSessionId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  gaContextCapturedAt?: string;
 }
 
 export class CheckoutPaymentProofDto {

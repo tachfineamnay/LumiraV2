@@ -53,19 +53,6 @@ interface AmendmentRow {
   updatedAt: Date;
 }
 
-interface SnapshotRow {
-  id: string;
-  orderId: string;
-  userId: string;
-  baseIntakeId: string | null;
-  revision: number;
-  parentSnapshotId: string | null;
-  data: Prisma.JsonValue;
-  contentHash: string;
-  amendmentIds: string[];
-  createdAt: Date;
-}
-
 const ACTIVE_STATUSES: ReadingAmendmentStatus[] = ['REQUESTED', 'DRAFT', 'SUBMITTED'];
 const REVISION_MARKER = '[COMPLEMENT_PAUME_APPROUVE]';
 const REVISION_INSTRUCTION = `${REVISION_MARKER}
@@ -88,7 +75,7 @@ export class ReadingAmendmentService {
       throw new BadRequestException("La date d'expiration doit être dans le futur");
     }
     if (expiresAt.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000) {
-      throw new BadRequestException("Une demande de complément ne peut pas dépasser 30 jours");
+      throw new BadRequestException('Une demande de complément ne peut pas dépasser 30 jours');
     }
 
     return this.prisma.$transaction(
@@ -113,7 +100,9 @@ export class ReadingAmendmentService {
 
         const sealedInput = this.resolveOriginalSealedInput(order.clientInputs);
         if (order.readingIntake?.status !== 'SEALED' && !sealedInput) {
-          throw new ConflictException('Aucun dossier scellé ne peut servir de base à ce complément');
+          throw new ConflictException(
+            'Aucun dossier scellé ne peut servir de base à ce complément',
+          );
         }
 
         await this.expireOpenRequests(tx, orderId);
@@ -467,7 +456,7 @@ export class ReadingAmendmentService {
             type: 'SYSTEM',
             title: 'Votre photo de paume a été acceptée',
             message:
-              "Votre expert a validé le complément. Il peut maintenant préparer une version révisée de votre lecture.",
+              'Votre expert a validé le complément. Il peut maintenant préparer une version révisée de votre lecture.',
             metadata: {
               event: 'READING_AMENDMENT_APPROVED',
               amendmentId,
@@ -540,7 +529,9 @@ export class ReadingAmendmentService {
   ) {
     const amendment = await this.getOrderAmendment(orderId, amendmentId);
     if (!['SUBMITTED', 'REJECTED'].includes(amendment.status)) {
-      throw new ConflictException('Cette demande ne peut pas être rouverte pour une nouvelle photo');
+      throw new ConflictException(
+        'Cette demande ne peut pas être rouverte pour une nouvelle photo',
+      );
     }
     if (amendment.revision !== dto.expectedRevision) throw this.staleConflict();
     const reason = dto.reason?.trim();
@@ -889,7 +880,9 @@ export class ReadingAmendmentService {
   }
 
   private hashJson(value: unknown): string {
-    return createHash('sha256').update(JSON.stringify(this.canonicalize(value))).digest('hex');
+    return createHash('sha256')
+      .update(JSON.stringify(this.canonicalize(value)))
+      .digest('hex');
   }
 
   private canonicalize(value: unknown): unknown {

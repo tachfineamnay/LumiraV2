@@ -6,10 +6,18 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { ServicesModule } from '../../services/services.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { IdGenerator } from '../../utils/IdGenerator';
 
 @Module({
-  imports: [OrdersModule, PrismaModule, NotificationsModule, ServicesModule, AuthModule],
+  imports: [
+    OrdersModule,
+    PrismaModule,
+    NotificationsModule,
+    ServicesModule,
+    AuthModule,
+    AnalyticsModule,
+  ],
   controllers: [PaymentsController],
   providers: [PaymentsService, IdGenerator],
 })

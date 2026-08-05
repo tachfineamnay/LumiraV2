@@ -33,7 +33,12 @@ import {
   saveCheckoutAttempt,
 } from '../../lib/checkoutAttempt';
 import { trackInitiateCheckout, trackPurchase } from '../../lib/pixel';
-import { trackGaBeginCheckout, trackGaPurchase } from '../../lib/analytics';
+import {
+  getGaClientContext,
+  trackGaAddPaymentInfo,
+  trackGaBeginCheckout,
+  trackGaViewItem,
+} from '../../lib/analytics';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
@@ -122,6 +127,7 @@ function CheckoutContent() {
     };
     fetchConnectedUser();
     trackInitiateCheckout(SUBSCRIPTION.price);
+    trackGaViewItem();
   }, []);
 
   const checkoutInitialValues = useMemo(
@@ -230,7 +236,6 @@ function CheckoutContent() {
         await completeCheckoutSession(intentId, secret);
         clearCheckoutAttempt();
         trackPurchase(SUBSCRIPTION.price, intentId);
-        trackGaPurchase(intentId);
         window.location.assign(buildSanctuairePostCheckoutUrl());
       } catch (err) {
         console.error('[Checkout] Post-payment session failed:', err);
@@ -252,6 +257,8 @@ function CheckoutContent() {
     setIsLoading(true);
     setPaymentError(null);
     setStripeConfigurationError(null);
+
+    const gaContext = await getGaClientContext();
     trackGaBeginCheckout();
 
     try {
@@ -269,6 +276,10 @@ function CheckoutContent() {
         phone: formData.phone || undefined,
         productLevel: 'lumira_early_v1',
         checkoutAttemptId,
+        analyticsConsentGranted: Boolean(gaContext),
+        gaClientId: gaContext?.clientId,
+        gaSessionId: gaContext?.sessionId,
+        gaContextCapturedAt: gaContext?.capturedAt,
       });
 
       const secret = response.data?.clientSecret;
@@ -324,6 +335,7 @@ function CheckoutContent() {
 
   const handlePaymentAttemptStart = () => {
     if (!clientSecret || !paymentIntentId || !checkoutAttemptIdRef.current) return;
+    trackGaAddPaymentInfo();
     saveCheckoutAttempt({
       checkoutAttemptId: checkoutAttemptIdRef.current,
       clientSecret,

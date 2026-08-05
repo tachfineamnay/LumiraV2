@@ -22,6 +22,8 @@ import {
   LUMIRA_EARLY_OFFER,
 } from '@packages/shared';
 
+import { AnalyticsDeliveryService } from '../analytics/analytics-delivery.service';
+
 export { CheckoutIntentDto };
 
 /** Server-side product catalog — never trust client amounts */
@@ -98,6 +100,7 @@ export class PaymentsService {
     private notificationsService: NotificationsService,
     private idGenerator: IdGenerator,
     private authService: AuthService,
+    private analyticsDeliveryService: AnalyticsDeliveryService,
   ) {
     this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY')!, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -282,6 +285,20 @@ export class PaymentsService {
         throw new ForbiddenException('Checkout attempt does not match this purchase');
       }
 
+      if (dto.analyticsConsentGranted !== undefined || dto.gaClientId) {
+        order = await this.prisma.order.update({
+          where: { id: order.id },
+          data: {
+            analyticsConsentGranted: dto.analyticsConsentGranted ?? order.analyticsConsentGranted,
+            ga4ClientId: dto.gaClientId || order.ga4ClientId,
+            ga4SessionId: dto.gaSessionId || order.ga4SessionId,
+            ga4ContextCapturedAt: dto.gaContextCapturedAt
+              ? new Date(dto.gaContextCapturedAt)
+              : order.ga4ContextCapturedAt,
+          },
+        });
+      }
+
       if (order.paymentIntentId) {
         const existingIntent = await this.stripe.paymentIntents.retrieve(order.paymentIntentId);
         if (!CHECKOUT_RESUMABLE_STATUSES.has(existingIntent.status as CheckoutPaymentStatus)) {
@@ -312,6 +329,12 @@ export class PaymentsService {
             status: 'PENDING',
             intakeRequired: true,
             checkoutAttemptId,
+            analyticsConsentGranted: dto.analyticsConsentGranted ?? false,
+            ga4ClientId: dto.gaClientId || null,
+            ga4SessionId: dto.gaSessionId || null,
+            ga4ContextCapturedAt: dto.gaContextCapturedAt
+              ? new Date(dto.gaContextCapturedAt)
+              : null,
             formData: {
               phone: dto.phone || '',
               productLevel: LUMIRA_EARLY_OFFER.code,
@@ -450,6 +473,22 @@ export class PaymentsService {
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
           await this.handlePaymentSucceeded(paymentIntent);
+          break;
+        }
+
+        case 'charge.refunded': {
+          const charge = event.data.object as Stripe.Charge;
+          if (charge.payment_intent && typeof charge.payment_intent === 'string') {
+            const refund = charge.refunds?.data?.[0];
+            const refundId = refund?.id || event.id;
+            const amountCents = refund?.amount || charge.amount_refunded || charge.amount;
+            await this.analyticsDeliveryService.recordRefund(
+              charge.payment_intent,
+              refundId,
+              amountCents,
+              charge.currency,
+            );
+          }
           break;
         }
 
@@ -812,6 +851,14 @@ export class PaymentsService {
           `checkout_confirmation_notification_failed payment_intent=${this.paymentIntentRef(paymentIntent.id)}`,
         );
       }
+    }
+
+    try {
+      await this.analyticsDeliveryService.recordPurchase(order, paymentIntent.id);
+    } catch (err) {
+      this.logger.error(
+        `checkout_analytics_delivery_failed payment_intent=${this.paymentIntentRef(paymentIntent.id)}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     this.logger.log(
@@ -1267,7 +1314,7 @@ export class PaymentsService {
       where: { id: orderId },
       data: {
         addons: updatedAddons as unknown as Prisma.InputJsonValue,
-        upsellAcceptedAt: new Date(),
+        upsellOfferedAt: new Date(),
         // Also update total amount for records
         amount: order.amount + product.amount,
       },

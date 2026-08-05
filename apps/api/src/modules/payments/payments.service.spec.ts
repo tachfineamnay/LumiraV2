@@ -51,6 +51,7 @@ function createService() {
     notifications as never,
     { generateOrderNumber: jest.fn() } as never,
     auth as never,
+    { recordPurchase: jest.fn(), recordRefund: jest.fn() } as never,
   );
   (
     service as unknown as { stripe: { paymentIntents: { retrieve: jest.Mock; create: jest.Mock } } }

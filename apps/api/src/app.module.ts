@@ -1,5 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
@@ -22,6 +23,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { DreamsModule } from './modules/dreams/dreams.module';
 import { GuidanceRequestsModule } from './modules/guidance-requests/guidance-requests.module';
 import { ReadingAmendmentModule } from './modules/reading-amendments/reading-amendment.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 import { validateEnvironment } from './config/validate-env';
 
@@ -32,6 +34,7 @@ import { validateEnvironment } from './config/validate-env';
       envFilePath: ['../../.env', '.env'],
       validate: validateEnvironment,
     }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
@@ -44,6 +47,7 @@ import { validateEnvironment } from './config/validate-env';
     AuthModule,
     OrdersModule,
     PaymentsModule,
+    AnalyticsModule,
     UploadsModule,
     WebhooksModule,
     NotificationsModule,
