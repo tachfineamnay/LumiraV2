@@ -1,0 +1,33 @@
+/* Scoped compatibility layer for the existing multi-step intake component.
+ * The actual constraints are enforced by the Zod submission schema, native
+ * uploader controls and API policy. These selectors only remove obsolete copy
+ * while the large onboarding component remains otherwise untouched. */
+#dossier-preparation form:has(section[aria-label='Visage']):has(section[aria-label='Paume'])
+  #reading-preparation-description {
+  font-size: 0;
+}
+
+#dossier-preparation form:has(section[aria-label='Visage']):has(section[aria-label='Paume'])
+  #reading-preparation-description::after {
+  content: 'Deux photos sont nécessaires pour préparer votre lecture : votre visage et la paume de votre main. Elles restent privées et sont utilisées uniquement pour votre dossier.';
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+
+#dossier-preparation
+  .space-y-4:has(> .grid > section[aria-label='Visage']):has(
+    > .grid > section[aria-label='Paume']
+  )
+  > p:last-child {
+  font-size: 0;
+}
+
+#dossier-preparation
+  .space-y-4:has(> .grid > section[aria-label='Visage']):has(
+    > .grid > section[aria-label='Paume']
+  )
+  > p:last-child::after {
+  content: 'Les deux photos sont obligatoires. Une photo réussie est enregistrée immédiatement dans votre espace privé afin de rester disponible après un abandon ou un changement d’appareil.';
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
