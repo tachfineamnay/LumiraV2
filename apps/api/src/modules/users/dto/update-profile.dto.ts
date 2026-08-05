@@ -11,8 +11,16 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { INTENTION_MODES, IntentionMode } from '../reading-intake-policy';
+
+function inferIntentionMode(value: unknown, object: Record<string, unknown>): unknown {
+  if (typeof value === 'string' && INTENTION_MODES.includes(value as IntentionMode)) return value;
+  if (object.openReading === true) return 'OPEN';
+  if (typeof object.specificQuestion === 'string' && object.specificQuestion.trim()) return 'QUESTION';
+  if (typeof object.objective === 'string' && object.objective.trim()) return 'SITUATION';
+  return value;
+}
 
 export class OnboardingConsentDto {
   @IsBoolean()
@@ -94,6 +102,7 @@ export class UpdateProfileDto {
   @MaxLength(180)
   birthPlace?: string;
 
+  @Transform(({ value, obj }) => inferIntentionMode(value, obj as Record<string, unknown>))
   @IsOptional()
   @IsIn([...INTENTION_MODES])
   intentionMode?: IntentionMode;
@@ -212,6 +221,7 @@ export class UpdateProfileDto {
 
 /** Strict, serializable payload persisted for an order-scoped reading intake. */
 export class OnboardingDraftDataDto {
+  @Transform(({ value, obj }) => inferIntentionMode(value, obj as Record<string, unknown>))
   @IsOptional()
   @IsIn([...INTENTION_MODES])
   intentionMode?: IntentionMode;
