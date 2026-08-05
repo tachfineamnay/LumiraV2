@@ -19,7 +19,12 @@ const IMPORTANT_ERROR_FRAGMENTS = [
 const SAFE_SERVER_ERROR =
   'Un problème technique empêche momentanément la transmission. Votre brouillon est bien conservé. Réessayez dans un instant.';
 
-const NAVIGATION_STEP_LABELS = new Set(['Repères', 'Intention', 'Photos', 'Transmission']);
+const PHOTO_STEP_ACTION_LABELS = new Set([
+  'Continuer',
+  'Repères',
+  'Intention',
+  'Transmission',
+]);
 
 function findReadingForm(): HTMLFormElement | null {
   const title = document.getElementById('reading-preparation-title');
@@ -54,9 +59,7 @@ export function OnboardingMobileEnhancer() {
       const alert = Array.from(form.querySelectorAll('[role="alert"]')).find(isImportantAlert);
       const messageNode = alert?.querySelector('p');
       const rawMessage = messageNode?.textContent?.trim() || alert?.textContent?.trim() || '';
-      const nextMessage = rawMessage ? normalizedMessage(rawMessage) : null;
-
-      setMessage(nextMessage);
+      setMessage(rawMessage ? normalizedMessage(rawMessage) : null);
     };
 
     const preventPhotoStepBypass = (event: MouseEvent) => {
@@ -68,7 +71,7 @@ export function OnboardingMobileEnhancer() {
       if (title.textContent?.trim() !== 'Vos photos privées') return;
 
       const label = button.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-      if (!NAVIGATION_STEP_LABELS.has(label) || label === 'Photos') return;
+      if (!PHOTO_STEP_ACTION_LABELS.has(label)) return;
 
       const missing = firstMissingRequiredPhoto(form);
       if (!missing) return;
