@@ -10,12 +10,16 @@ const IMPORTANT_ERROR_FRAGMENTS = [
   'Une version plus récente',
   'Une photo n’a pas pu',
   "Une photo n'a pas pu",
+  'Ajoutez et enregistrez une photo du visage',
+  'Ajoutez et enregistrez une photo de la paume',
   'Votre commande vient d’être confirmée',
   'Ce dossier vient d’être scellé',
 ];
 
 const SAFE_SERVER_ERROR =
   'Un problème technique empêche momentanément la transmission. Votre brouillon est bien conservé. Réessayez dans un instant.';
+
+const NAVIGATION_STEP_LABELS = new Set(['Repères', 'Intention', 'Photos', 'Transmission']);
 
 function findReadingForm(): HTMLFormElement | null {
   const title = document.getElementById('reading-preparation-title');
@@ -29,6 +33,10 @@ function isImportantAlert(element: Element): element is HTMLElement {
 
 function normalizedMessage(message: string): string {
   return /internal server error/i.test(message) ? SAFE_SERVER_ERROR : message;
+}
+
+function firstMissingRequiredPhoto(form: HTMLFormElement): HTMLInputElement | null {
+  return form.querySelector<HTMLInputElement>('input[type="file"][required]:invalid');
 }
 
 export function OnboardingMobileEnhancer() {
@@ -51,6 +59,24 @@ export function OnboardingMobileEnhancer() {
       setMessage(nextMessage);
     };
 
+    const preventPhotoStepBypass = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const button = target?.closest<HTMLButtonElement>('button');
+      const form = findReadingForm();
+      const title = document.getElementById('reading-preparation-title');
+      if (!button || !form || !title || !form.contains(button)) return;
+      if (title.textContent?.trim() !== 'Vos photos privées') return;
+
+      const label = button.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      if (!NAVIGATION_STEP_LABELS.has(label) || label === 'Photos') return;
+
+      const missing = firstMissingRequiredPhoto(form);
+      if (!missing) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      missing.reportValidity();
+    };
+
     inspect();
     const observer = new MutationObserver(inspect);
     observer.observe(document.body, {
@@ -58,8 +84,12 @@ export function OnboardingMobileEnhancer() {
       childList: true,
       characterData: true,
     });
+    document.addEventListener('click', preventPhotoStepBypass, true);
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('click', preventPhotoStepBypass, true);
+    };
   }, []);
 
   const retry = () => {
