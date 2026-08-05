@@ -8,8 +8,17 @@ import {
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  READING_REQUIREMENTS_VERSION,
+  evaluateReadingRequirements,
+} from '../users/reading-intake-policy';
 import { ReviewProfileFieldAmendmentDto } from './dto/profile-field-amendment.dto';
-import { parseProfileFields, profileFieldLabels, publicProfileFields } from './profile-field-catalog';
+import {
+  expandProfileAmendmentValues,
+  parseProfileFields,
+  profileFieldLabels,
+  publicProfileFields,
+} from './profile-field-catalog';
 import { ProfileFieldAmendmentClientService } from './profile-field-amendment-client.service';
 import {
   ACTIVE_PROFILE_AMENDMENT_STATUSES,
@@ -109,12 +118,21 @@ export class ProfileFieldAmendmentReviewService {
         const base = Object.keys(previousEffective).length > 0 ? previousEffective : original;
         const profile = asRecord(base.profile);
         const baseAssets = asRecord(base.assets);
-        const nextProfile = { ...profile, ...values };
+        const nextProfile = {
+          ...profile,
+          ...expandProfileAmendmentValues(values),
+        };
         const nextAssets = {
           ...baseAssets,
           ...(assets.face ? { face: persistablePreparedAsset(assets.face) } : {}),
           ...(assets.palm ? { palm: persistablePreparedAsset(assets.palm) } : {}),
         };
+        const requirements = evaluateReadingRequirements(nextProfile, {
+          requireExplicitIntentionMode: false,
+          strictIntentionExclusivity: true,
+          facePhotoStatus: nextAssets.face ? 'VALID' : undefined,
+          palmPhotoStatus: nextAssets.palm ? 'VALID' : undefined,
+        });
 
         const revisionRows = await tx.$queryRaw<Array<{ revision: number }>>(Prisma.sql`
           SELECT (COALESCE(MAX("revision"), 0) + 1)::INTEGER AS "revision"
@@ -128,9 +146,17 @@ export class ProfileFieldAmendmentReviewService {
           new Set([...stringArray(base.amendmentIds), amendmentId]),
         );
         const effectiveAt = new Date();
+        const {
+          snapshotId: _previousSnapshotId,
+          contentHash: _previousContentHash,
+          ...baseWithoutIdentity
+        } = base;
+        void _previousSnapshotId;
+        void _previousContentHash;
         const snapshotCore = {
-          ...base,
-          version: '2026-08-05-effective-profile-fields-v1',
+          ...baseWithoutIdentity,
+          version: '2026-08-05-effective-intake-v2',
+          requirementsVersion: READING_REQUIREMENTS_VERSION,
           revision: nextRevision,
           effectiveAt: effectiveAt.toISOString(),
           parentSnapshotId,
@@ -140,6 +166,9 @@ export class ProfileFieldAmendmentReviewService {
           profile: nextProfile,
           assets: nextAssets,
           amendmentIds,
+          requirementsComplete: requirements.complete,
+          missingFields: requirements.missingFields,
+          invalidFields: requirements.invalidFields,
         };
         const snapshotHash = hashCanonicalJson(snapshotCore);
         const effectiveSnapshot = {
@@ -168,6 +197,9 @@ export class ProfileFieldAmendmentReviewService {
           snapshotId,
           snapshotRevision: nextRevision,
           snapshotContentHash: snapshotHash,
+          requirementsComplete: requirements.complete,
+          missingFields: requirements.missingFields,
+          invalidFields: requirements.invalidFields,
         };
         const approvedHash = hashCanonicalJson({
           amendmentId,
@@ -211,16 +243,22 @@ export class ProfileFieldAmendmentReviewService {
           data: {
             userId: order.userId,
             type: 'SYSTEM',
-            title: 'Votre dossier est maintenant complet',
-            message:
-              'Votre expert a validé les informations demandées. Elles sont désormais rattachées à votre dossier.',
+            title: requirements.complete
+              ? 'Votre dossier est maintenant complet'
+              : 'Vos informations ont été validées',
+            message: requirements.complete
+              ? 'Votre expert a validé les informations demandées. Votre dossier contient désormais tous les éléments obligatoires.'
+              : 'Votre expert a validé les informations demandées. D’autres éléments restent nécessaires avant la production.',
             metadata: {
               event: 'READING_PROFILE_FIELDS_APPROVED',
               amendmentId,
               orderId,
               orderNumber: order.orderNumber,
               snapshotId,
-              requestedFields: fields,
+              requestedFields: publicProfileFields(fields),
+              requirementsComplete: requirements.complete,
+              missingFields: requirements.missingFields,
+              invalidFields: requirements.invalidFields,
             },
           },
         });
@@ -232,6 +270,9 @@ export class ProfileFieldAmendmentReviewService {
             revision: nextRevision,
             contentHash: snapshotHash,
             amendmentIds,
+            requirementsComplete: requirements.complete,
+            missingFields: requirements.missingFields,
+            invalidFields: requirements.invalidFields,
           },
         };
       },
@@ -271,7 +312,7 @@ export class ProfileFieldAmendmentReviewService {
     `);
     if (rows.length !== 1) throw staleAmendmentConflict();
     await this.notify(amendment.userId, {
-      title: 'Informations à corriger',
+      title: 'Informations refusées',
       message: reason,
       event: 'READING_PROFILE_FIELDS_REJECTED',
       amendmentId,
@@ -296,7 +337,7 @@ export class ProfileFieldAmendmentReviewService {
     const previousData = asRecord(amendment.data);
     const fields = parseProfileFields(amendment.requestedFields);
     const nextData = {
-      schemaVersion: '2026-08-05-required-profile-fields-v1',
+      schemaVersion: READING_REQUIREMENTS_VERSION,
       fieldLabels:
         previousData.fieldLabels ?? profileFieldLabels(publicProfileFields(fields)),
       previousValues: previousData.previousValues ?? {},
