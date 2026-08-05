@@ -68,4 +68,17 @@ describe('ReadingAmendmentResponseInterceptor', () => {
     expect(JSON.stringify(result)).not.toContain('s3://');
     expect(JSON.stringify(result)).not.toContain('private-key');
   });
+
+  it('leaves ordinary API payloads and Date instances untouched', async () => {
+    const interceptor = new ReadingAmendmentResponseInterceptor();
+    const createdAt = new Date('2026-08-05T12:00:00.000Z');
+    const payload = { id: 'order-1', createdAt, nested: { value: 'unchanged' } };
+
+    const result = await lastValueFrom(
+      interceptor.intercept({} as never, { handle: () => of(payload) }),
+    );
+
+    expect(result).toBe(payload);
+    expect((result as typeof payload).createdAt).toBe(createdAt);
+  });
 });
