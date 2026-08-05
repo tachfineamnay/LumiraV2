@@ -3,7 +3,7 @@
 import Script from 'next/script';
 import { useConsent } from './ConsentProvider';
 
-export const GA_TRACKING_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-NTCVR1YYN8';
+export const GA_TRACKING_ID = process.env.NEXT_PUBLIC_GA_ID;
 
 /**
  * Loads Google Analytics (gtag.js).
