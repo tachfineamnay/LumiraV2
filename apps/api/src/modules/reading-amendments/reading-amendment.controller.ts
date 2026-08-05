@@ -11,15 +11,16 @@ import {
   Res,
   StreamableFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { Expert } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
+import { Expert } from '@prisma/client';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentExpert, Roles } from '../expert/decorators';
 import { ExpertAuthGuard, RolesGuard } from '../expert/guards';
-import { S3Service } from '../uploads/s3.service';
 import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-photo.service';
+import { S3Service } from '../uploads/s3.service';
 import { CreateProfileFieldAmendmentDto } from './dto/profile-field-amendment.dto';
 import {
   CreatePalmAmendmentDto,
@@ -27,12 +28,14 @@ import {
   SaveReadingAmendmentDraftDto,
   SubmitReadingAmendmentDto,
 } from './dto/reading-amendment.dto';
+import { ReadingAmendmentResponseInterceptor } from './reading-amendment-response.interceptor';
 import { ReadingAmendmentFacade } from './reading-amendment.facade';
 
 type PhotoKind = 'face' | 'palm';
 
 @Controller('users/reading-amendments')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(ReadingAmendmentResponseInterceptor)
 export class ClientReadingAmendmentController {
   constructor(
     private readonly amendments: ReadingAmendmentFacade,
@@ -126,6 +129,7 @@ export class ExpertIntakeCompletenessController {
 
 @Controller('expert/orders/:orderId/amendments')
 @UseGuards(ExpertAuthGuard, RolesGuard)
+@UseInterceptors(ReadingAmendmentResponseInterceptor)
 @Roles('EXPERT', 'ADMIN')
 export class ExpertReadingAmendmentController {
   constructor(
