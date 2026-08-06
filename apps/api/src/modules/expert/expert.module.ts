@@ -9,6 +9,7 @@ import { ClientPurgeController } from './client-purge.controller';
 import { AiProductionReadinessController } from './ai-production-readiness.controller';
 import { ReadingWorkspaceController } from './reading-workspace.controller';
 import { ExpertService } from './expert.service';
+import { ExpertOrderPhotoService } from './expert-order-photo.service';
 import { ClientPurgeService } from './client-purge.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { AiProviderDiagnosticsService } from './ai-provider-diagnostics.service';
@@ -57,6 +58,7 @@ import { ReadingWorkspaceService } from './reading-workspace.service';
   ],
   providers: [
     ExpertService,
+    ExpertOrderPhotoService,
     ClientPurgeService,
     AdminSettingsService,
     AiProviderDiagnosticsService,
