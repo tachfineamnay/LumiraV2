@@ -27,6 +27,8 @@ describe('ReadingAmendmentFacade', () => {
     };
     const facade = new ReadingAmendmentFacade(
       core as never,
+      {} as never,
+      {} as never,
       prisma as never,
       {} as never,
       {} as never,
@@ -54,6 +56,8 @@ describe('ReadingAmendmentFacade', () => {
     };
     const facade = new ReadingAmendmentFacade(
       core as never,
+      {} as never,
+      {} as never,
       prisma as never,
       {} as never,
       {} as never,
@@ -90,9 +94,12 @@ describe('ReadingAmendmentFacade', () => {
     };
     const prisma = {
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      $queryRaw: jest.fn().mockResolvedValue([{ kind: 'PALM_PHOTO' }]),
     };
     const facade = new ReadingAmendmentFacade(
       core as never,
+      {} as never,
+      {} as never,
       prisma as never,
       {} as never,
       {} as never,
@@ -113,17 +120,15 @@ describe('ReadingAmendmentFacade', () => {
               birthDate: '1990-06-15',
               birthPlace: 'Lyon, France',
               facePhotoUrl: 's3://onboarding/user-1/face.jpg',
+              palmPhotoUrl: null,
             },
           },
         },
       },
     });
-    expect(core.approvePalm).toHaveBeenCalledWith(
-      'order-1',
-      'ram-1',
-      'expert-1',
-      { expectedRevision: 2 },
-    );
+    expect(core.approvePalm).toHaveBeenCalledWith('order-1', 'ram-1', 'expert-1', {
+      expectedRevision: 2,
+    });
   });
 
   it('claims the amendment before delegating revision generation', async () => {
@@ -138,6 +143,8 @@ describe('ReadingAmendmentFacade', () => {
     };
     const facade = new ReadingAmendmentFacade(
       core as never,
+      {} as never,
+      {} as never,
       prisma as never,
       {} as never,
       {} as never,
@@ -163,19 +170,13 @@ describe('ReadingAmendmentFacade', () => {
       },
     ] as never);
 
-    const result = await facade.createRevisedReading(
-      'order-1',
-      'ram-1',
-      expert,
-      { expectedRevision: 7 },
-    );
+    const result = await facade.createRevisedReading('order-1', 'ram-1', expert, {
+      expectedRevision: 7,
+    });
 
-    expect(core.createRevisedReading).toHaveBeenCalledWith(
-      'order-1',
-      'ram-1',
-      expert,
-      { expectedRevision: 8 },
-    );
+    expect(core.createRevisedReading).toHaveBeenCalledWith('order-1', 'ram-1', expert, {
+      expectedRevision: 8,
+    });
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
       success: true,
@@ -193,18 +194,15 @@ describe('ReadingAmendmentFacade', () => {
     };
     const facade = new ReadingAmendmentFacade(
       core as never,
+      {} as never,
+      {} as never,
       prisma as never,
       {} as never,
       {} as never,
     );
 
     await expect(
-      facade.createRevisedReading(
-        'order-1',
-        'ram-1',
-        expert,
-        { expectedRevision: 3 },
-      ),
+      facade.createRevisedReading('order-1', 'ram-1', expert, { expectedRevision: 3 }),
     ).rejects.toThrow('queue unavailable');
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
   });

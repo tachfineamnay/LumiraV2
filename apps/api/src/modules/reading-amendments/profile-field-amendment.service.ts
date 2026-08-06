@@ -26,11 +26,7 @@ export class ProfileFieldAmendmentService {
     return this.requests.request(orderId, expertId, dto);
   }
 
-  saveDraft(
-    userId: string,
-    amendmentId: string,
-    dto: SaveProfileFieldAmendmentDraftDto,
-  ) {
+  saveDraft(userId: string, amendmentId: string, dto: SaveProfileFieldAmendmentDraftDto) {
     return this.client.saveDraft(userId, amendmentId, dto);
   }
 
@@ -80,7 +76,7 @@ export class ProfileFieldAmendmentService {
     expert: Expert,
     dto: ReviewProfileFieldAmendmentDto,
   ) {
-    return this.revisions.create(orderId, amendmentId, expert, dto);
+    return this.revisions.createRevision(orderId, amendmentId, expert, dto);
   }
 
   getPhotoReference(options: {

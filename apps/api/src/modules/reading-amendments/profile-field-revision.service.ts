@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, Expert } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ExpertService } from '../expert/expert.service';
@@ -60,7 +65,8 @@ export class ProfileFieldRevisionService {
     if (!requirements.complete || effective.requirementsComplete === false) {
       throw new ConflictException({
         code: 'READING_INTAKE_INCOMPLETE',
-        message: 'Le dossier effectif doit contenir les cinq éléments obligatoires avant une révision.',
+        message:
+          'Le dossier effectif doit contenir les cinq éléments obligatoires avant une révision.',
         missingFields: requirements.missingFields,
         invalidFields: requirements.invalidFields,
       });
@@ -69,7 +75,9 @@ export class ProfileFieldRevisionService {
     const userPrompt =
       dto.reason?.trim() ||
       'Créer une révision corrective fondée uniquement sur le snapshot de dossier approuvé.';
-    const result = await this.expertService.generateReading(orderId, expert);
+    const result = (await this.expertService.generateReading(orderId, expert)) as {
+      jobId?: string;
+    };
     if (!result?.jobId) {
       throw new BadRequestException('La révision n’a pas pu être mise en attente');
     }

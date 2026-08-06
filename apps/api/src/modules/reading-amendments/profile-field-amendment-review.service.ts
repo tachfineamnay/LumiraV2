@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   READING_REQUIREMENTS_VERSION,
+  RequiredReadingField,
   evaluateReadingRequirements,
 } from '../users/reading-intake-policy';
 import { ReviewProfileFieldAmendmentDto } from './dto/profile-field-amendment.dto';
@@ -49,7 +50,27 @@ export class ProfileFieldAmendmentReviewService {
     dto: ReviewProfileFieldAmendmentDto,
   ) {
     const amendment = await this.getForOrder(amendmentId, orderId);
-    if (amendment.status === 'APPROVED') return toPublicProfileAmendment(amendment);
+    if (amendment.status === 'APPROVED') {
+      const data = asRecord(amendment.data);
+      const snapshotId = nonEmptyString(data.snapshotId);
+      return {
+        amendment: toPublicProfileAmendment(amendment),
+        snapshot: snapshotId
+          ? {
+              id: snapshotId,
+              revision:
+                typeof data.snapshotRevision === 'number'
+                  ? data.snapshotRevision
+                  : amendment.revision,
+              contentHash: nonEmptyString(data.snapshotContentHash) ?? '',
+              amendmentIds: [amendment.id],
+              requirementsComplete: data.requirementsComplete === true,
+              missingFields: stringArray(data.missingFields) as RequiredReadingField[],
+              invalidFields: stringArray(data.invalidFields) as RequiredReadingField[],
+            }
+          : undefined,
+      };
+    }
     this.assertReviewable(amendment, dto.expectedRevision);
     const fields = parseProfileFields(amendment.requestedFields);
     const values = await this.client.sanitizeValues(
@@ -142,9 +163,7 @@ export class ProfileFieldAmendmentReviewService {
         const nextRevision = revisionRows[0]?.revision ?? 1;
         const snapshotId = `ris_${randomUUID()}`;
         const parentSnapshotId = nonEmptyString(previousEffective.snapshotId);
-        const amendmentIds = Array.from(
-          new Set([...stringArray(base.amendmentIds), amendmentId]),
-        );
+        const amendmentIds = Array.from(new Set([...stringArray(base.amendmentIds), amendmentId]));
         const effectiveAt = new Date();
         const {
           snapshotId: _previousSnapshotId,
@@ -338,8 +357,7 @@ export class ProfileFieldAmendmentReviewService {
     const fields = parseProfileFields(amendment.requestedFields);
     const nextData = {
       schemaVersion: READING_REQUIREMENTS_VERSION,
-      fieldLabels:
-        previousData.fieldLabels ?? profileFieldLabels(publicProfileFields(fields)),
+      fieldLabels: previousData.fieldLabels ?? profileFieldLabels(publicProfileFields(fields)),
       previousValues: previousData.previousValues ?? {},
       invalidFields: previousData.invalidFields ?? [],
       previousSubmission: previousData,

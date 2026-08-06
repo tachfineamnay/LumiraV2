@@ -228,8 +228,10 @@ describe('ReadingSourceResolver', () => {
       },
     });
 
-    const vertexProfile = resolver.toVertexUserProfile(order.user, resolver.resolve(order)) as
-      typeof legacyProfile & { intentionMode?: string; openReading?: boolean };
+    const vertexProfile = resolver.toVertexUserProfile(
+      order.user,
+      resolver.resolve(order),
+    ) as unknown as typeof legacyProfile & { intentionMode?: string; openReading?: boolean };
 
     expect(vertexProfile.facePhotoUrl).toBe('s3://onboarding/user-1/sealed-face.jpg');
     expect(vertexProfile.palmPhotoUrl).toBe('s3://onboarding/user-1/sealed-palm.jpg');

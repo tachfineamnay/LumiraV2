@@ -1,17 +1,22 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  INTENTION_MODES,
-  IntentionMode,
-  resolveIntention,
-} from '../users/reading-intake-policy';
+import { INTENTION_MODES, IntentionMode, resolveIntention } from '../users/reading-intake-policy';
 import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-photo.service';
 import {
   SaveProfileFieldAmendmentDraftDto,
   SubmitProfileFieldAmendmentDto,
 } from './dto/profile-field-amendment.dto';
-import { PROFILE_FIELD_CATALOG, ProfileFieldKey, parseProfileFields } from './profile-field-catalog';
+import {
+  PROFILE_FIELD_CATALOG,
+  ProfileFieldKey,
+  parseProfileFields,
+} from './profile-field-catalog';
 import {
   PreparedProfileAssets,
   ProfileAmendmentRow,
@@ -33,12 +38,7 @@ type IntentionValue = {
   objective?: string | null;
 };
 
-const INTENTION_KEYS = new Set([
-  'intentionMode',
-  'openReading',
-  'specificQuestion',
-  'objective',
-]);
+const INTENTION_KEYS = new Set(['intentionMode', 'openReading', 'specificQuestion', 'objective']);
 
 @Injectable()
 export class ProfileFieldAmendmentClientService {
@@ -47,11 +47,7 @@ export class ProfileFieldAmendmentClientService {
     private readonly privatePhotos: PrivateOnboardingPhotoService,
   ) {}
 
-  async saveDraft(
-    userId: string,
-    amendmentId: string,
-    dto: SaveProfileFieldAmendmentDraftDto,
-  ) {
+  async saveDraft(userId: string, amendmentId: string, dto: SaveProfileFieldAmendmentDraftDto) {
     const amendment = await this.getOwned(amendmentId, userId);
     this.assertEditable(amendment, dto.expectedRevision);
     const fields = parseProfileFields(amendment.requestedFields);
@@ -196,17 +192,14 @@ export class ProfileFieldAmendmentClientService {
   ): Promise<PreparedProfileAssets> {
     const faceRef = nonEmptyString(values.facePhotoUrl);
     const palmRef = nonEmptyString(values.palmPhotoUrl);
-    const face = fields.includes('facePhotoUrl') && faceRef
-      ? await this.privatePhotos.prepareForAi(faceRef, userId, 'face', 'FACE_FRONTAL')
-      : null;
-    const palm = fields.includes('palmPhotoUrl') && palmRef
-      ? await this.privatePhotos.prepareForAi(
-          palmRef,
-          userId,
-          'palm',
-          palmRole(values.palmRole),
-        )
-      : null;
+    const face =
+      fields.includes('facePhotoUrl') && faceRef
+        ? await this.privatePhotos.prepareForAi(faceRef, userId, 'face', 'FACE_FRONT')
+        : null;
+    const palm =
+      fields.includes('palmPhotoUrl') && palmRef
+        ? await this.privatePhotos.prepareForAi(palmRef, userId, 'palm', palmRole(values.palmRole))
+        : null;
     return { face, palm };
   }
 

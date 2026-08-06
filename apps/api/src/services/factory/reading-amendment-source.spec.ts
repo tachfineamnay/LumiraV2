@@ -15,6 +15,7 @@ const original = {
     birthDate: '1990-06-15',
     birthPlace: 'Lyon, France',
     specificQuestion: 'Question originale',
+    facePhotoUrl: 's3://onboarding/user-1/face.jpg',
     palmPhotoUrl: null,
   },
 };

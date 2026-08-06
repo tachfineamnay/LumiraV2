@@ -70,21 +70,26 @@ function json(route: Route, body: unknown, status = 200) {
 }
 
 async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
-  const draft =
-    options.draft ??
-    ({
-      currentStep: 0,
-      status: 'NOT_STARTED',
-      data: {},
-      completedAt: null,
-      revision: 1,
-      updatedAt: new Date().toISOString(),
-    } as const);
+  const draft = {
+    orderId: 'order-1',
+    currentStep: 0,
+    status: 'NOT_STARTED',
+    data: {},
+    completedAt: null,
+    revision: 1,
+    updatedAt: new Date().toISOString(),
+    ...options.draft,
+  };
   const calls = {
     onboardingPatches: [] as IntakeData[],
     profilePatches: [] as IntakeData[],
     photoUploads: [] as Array<'face' | 'palm'>,
   };
+
+  page.on('pageerror', (err) => console.log('PAGE ERROR:', err));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') console.log('CONSOLE ERROR:', msg.text());
+  });
 
   await page.route('**/api/auth/sanctuaire/session', (route) =>
     json(route, { authenticated: true }),
@@ -125,8 +130,21 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
       return;
     }
 
-    if (request.method() === 'GET' && path === '/users/orders/completed') {
+    if (request.method() === 'GET' && path === '/users/reading-amendments') {
       await json(route, []);
+      return;
+    }
+
+    if (request.method() === 'GET' && path === '/users/orders/completed') {
+      await json(route, [
+        {
+          id: 'order-1',
+          orderNumber: 'LUM-001',
+          status: 'PAID',
+          intakeRequired: true,
+          intakeStatus: 'DRAFT',
+        },
+      ]);
       return;
     }
 
@@ -183,7 +201,14 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
 }
 
 async function openIntake(page: Page, expectedHeading = 'Vos repères essentiels') {
-  await page.goto('/sanctuaire?onboarding=1');
+  await page.goto('/sanctuaire/dossier');
+  const editButton = page.getByRole('button', { name: /reprendre et modifier/i });
+  try {
+    await editButton.waitFor({ state: 'visible', timeout: 2500 });
+    await editButton.click();
+  } catch {
+    // ReadingPreparation is rendered directly when no draft content summary exists
+  }
   await expect(page.getByRole('heading', { name: expectedHeading })).toBeVisible();
 }
 
@@ -222,12 +247,16 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
 
     await page.getByRole('button', { name: /^Continuer$/i }).click();
     await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
-    await expect(page.getByText(/photo du visage avant de continuer/i)).toBeVisible();
+    await expect(
+      page.getByRole('alert').getByText(/photo du visage avant de continuer/i),
+    ).toBeVisible();
 
     await uploadRequiredPhoto(page, 'visage');
     await page.getByRole('button', { name: /^Continuer$/i }).click();
     await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
-    await expect(page.getByText(/photo de la paume avant de continuer/i)).toBeVisible();
+    await expect(
+      page.getByRole('alert').getByText(/photo de la paume avant de continuer/i),
+    ).toBeVisible();
 
     await uploadRequiredPhoto(page, 'paume');
     await continueTo(page, 'Relecture et transmission');
@@ -359,7 +388,7 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
       },
     });
 
-    await openIntake(page, 'Relecture et transmission');
+    await openIntake(page, 'Ce qui vous amène');
     await page.getByLabel(/j’ai relu.*je choisis.*transmettre/i).check();
     await page.getByRole('button', { name: 'Confirmer et transmettre mon dossier' }).click();
 
