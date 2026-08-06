@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { SocketEvents, DeskStats } from '../types';
 
@@ -19,6 +19,189 @@ export interface OrderViewer {
   expertEmail: string;
 }
 
+interface SharedSocketState {
+  isConnected: boolean;
+  onlineCount: number;
+  latency: number | null;
+  orderViewers: Record<string, OrderViewer[]>;
+}
+
+type SocketCallbacks = Omit<UseSocketOptions, 'autoConnect'>;
+
+interface SocketSubscriber {
+  update: (state: SharedSocketState) => void;
+  callbacks: { current: SocketCallbacks };
+}
+
+const INITIAL_STATE: SharedSocketState = {
+  isConnected: false,
+  onlineCount: 0,
+  latency: null,
+  orderViewers: {},
+};
+
+let sharedSocket: Socket | null = null;
+let sharedState: SharedSocketState = INITIAL_STATE;
+let pingInterval: ReturnType<typeof setInterval> | null = null;
+let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let activeConsumers = 0;
+const subscribers = new Set<SocketSubscriber>();
+
+function publish(patch: Partial<SharedSocketState>) {
+  sharedState = { ...sharedState, ...patch };
+  subscribers.forEach((subscriber) => subscriber.update(sharedState));
+}
+
+function notify<K extends keyof SocketCallbacks>(
+  callback: K,
+  payload: Parameters<NonNullable<SocketCallbacks[K]>>[0],
+) {
+  subscribers.forEach((subscriber) => {
+    const handler = subscriber.callbacks.current[callback] as
+      | ((value: typeof payload) => void)
+      | undefined;
+    handler?.(payload);
+  });
+}
+
+function ensureSocket(): Socket | null {
+  if (disconnectTimer) {
+    clearTimeout(disconnectTimer);
+    disconnectTimer = null;
+  }
+  if (sharedSocket) {
+    if (!sharedSocket.connected) sharedSocket.connect();
+    return sharedSocket;
+  }
+
+  const token = localStorage.getItem('expert_token');
+  if (!token) {
+    console.warn('[Socket] No expert token found');
+    return null;
+  }
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const socket = io(`${apiUrl}/expert`, {
+    auth: { token },
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  });
+  sharedSocket = socket;
+
+  socket.on('connect', () => {
+    console.log('[Socket] ✅ Connected');
+    publish({ isConnected: true });
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('[Socket] ❌ Disconnected:', reason);
+    publish({ isConnected: false });
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('[Socket] Connection error:', error.message);
+    publish({ isConnected: false });
+  });
+
+  socket.on('online-count', (data: { count: number }) => {
+    publish({ onlineCount: data.count });
+  });
+
+  socket.on('order:new', (data: SocketEvents['order:new']) => {
+    console.log('[Socket] 📦 New order:', data.orderNumber);
+    notify('onNewOrder', data);
+  });
+
+  socket.on('order:intake-ready', (data: SocketEvents['order:intake-ready']) => {
+    notify('onIntakeReady', data);
+  });
+
+  socket.on('order:status-changed', (data: SocketEvents['order:status-changed']) => {
+    console.log('[Socket] 🔄 Status changed:', data.orderNumber, data.newStatus);
+    notify('onStatusChange', data);
+  });
+
+  socket.on('order:generation-complete', (data: SocketEvents['order:generation-complete']) => {
+    console.log('[Socket] 🤖 Generation complete:', data.orderNumber, data.success);
+    notify('onGenerationComplete', data);
+  });
+
+  socket.on('order:claimed', (data: SocketEvents['order:claimed']) => {
+    console.log('[Socket] 🙋 Order claimed:', data.orderNumber, 'by', data.expertName);
+    notify('onOrderClaimed', data);
+  });
+
+  socket.on('order:viewer-joined', (data: SocketEvents['order:viewer-joined']) => {
+    const viewers = sharedState.orderViewers[data.orderId] || [];
+    if (viewers.some((viewer) => viewer.expertId === data.expertId)) return;
+    publish({
+      orderViewers: {
+        ...sharedState.orderViewers,
+        [data.orderId]: [
+          ...viewers,
+          { expertId: data.expertId, expertEmail: data.expertEmail },
+        ],
+      },
+    });
+  });
+
+  socket.on('order:viewer-left', (data: SocketEvents['order:viewer-left']) => {
+    const viewers = sharedState.orderViewers[data.orderId];
+    if (!viewers) return;
+    const filtered = viewers.filter((viewer) => viewer.expertId !== data.expertId);
+    const orderViewers = { ...sharedState.orderViewers };
+    if (filtered.length === 0) delete orderViewers[data.orderId];
+    else orderViewers[data.orderId] = filtered;
+    publish({ orderViewers });
+  });
+
+  socket.on('stats:update', (stats: DeskStats) => {
+    notify('onStatsUpdate', stats);
+  });
+
+  socket.on('pong', (data: { timestamp: number }) => {
+    publish({ latency: Date.now() - data.timestamp });
+  });
+
+  pingInterval = setInterval(() => {
+    if (socket.connected) socket.emit('ping');
+  }, 30_000);
+
+  return socket;
+}
+
+function destroySocket() {
+  if (disconnectTimer) {
+    clearTimeout(disconnectTimer);
+    disconnectTimer = null;
+  }
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = null;
+  }
+  if (sharedSocket) {
+    sharedSocket.removeAllListeners();
+    sharedSocket.disconnect();
+    sharedSocket = null;
+  }
+  publish(INITIAL_STATE);
+}
+
+function acquireSocket() {
+  activeConsumers += 1;
+  ensureSocket();
+}
+
+function releaseSocket() {
+  activeConsumers = Math.max(0, activeConsumers - 1);
+  if (activeConsumers > 0) return;
+  disconnectTimer = setTimeout(() => {
+    if (activeConsumers === 0) destroySocket();
+  }, 1_000);
+}
+
 export function useSocket(options: UseSocketOptions = {}) {
   const {
     autoConnect = true,
@@ -29,15 +212,8 @@ export function useSocket(options: UseSocketOptions = {}) {
     onOrderClaimed,
     onStatsUpdate,
   } = options;
-
-  const socketRef = useRef<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [onlineCount, setOnlineCount] = useState(0);
-  const [latency, setLatency] = useState<number | null>(null);
-  const [orderViewers, setOrderViewers] = useState<Record<string, OrderViewer[]>>({});
-
-  // Store callbacks in refs to avoid reconnection loops
-  const callbacksRef = useRef({
+  const [state, setState] = useState<SharedSocketState>(sharedState);
+  const callbacksRef = useRef<SocketCallbacks>({
     onNewOrder,
     onIntakeReady,
     onStatusChange,
@@ -46,7 +222,6 @@ export function useSocket(options: UseSocketOptions = {}) {
     onStatsUpdate,
   });
 
-  // Update refs when callbacks change
   useEffect(() => {
     callbacksRef.current = {
       onNewOrder,
@@ -65,161 +240,51 @@ export function useSocket(options: UseSocketOptions = {}) {
     onStatsUpdate,
   ]);
 
-  const connect = useCallback(() => {
-    // Prevent multiple connections
-    if (socketRef.current?.connected) {
-      return;
-    }
-
-    const token = localStorage.getItem('expert_token');
-    if (!token) {
-      console.warn('[Socket] No expert token found');
-      return;
-    }
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-    socketRef.current = io(`${apiUrl}/expert`, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
-
-    const socket = socketRef.current;
-
-    socket.on('connect', () => {
-      console.log('[Socket] ✅ Connected');
-      setIsConnected(true);
-    });
-
-    socket.on('disconnect', (reason) => {
-      console.log('[Socket] ❌ Disconnected:', reason);
-      setIsConnected(false);
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('[Socket] Connection error:', error.message);
-      setIsConnected(false);
-    });
-
-    socket.on('online-count', (data: { count: number }) => {
-      setOnlineCount(data.count);
-    });
-
-    socket.on('order:new', (data: SocketEvents['order:new']) => {
-      console.log('[Socket] 📦 New order:', data.orderNumber);
-      callbacksRef.current.onNewOrder?.(data);
-    });
-
-    socket.on('order:intake-ready', (data: SocketEvents['order:intake-ready']) => {
-      callbacksRef.current.onIntakeReady?.(data);
-    });
-
-    socket.on('order:status-changed', (data) => {
-      console.log('[Socket] 🔄 Status changed:', data.orderNumber, data.newStatus);
-      callbacksRef.current.onStatusChange?.(data);
-    });
-
-    socket.on('order:generation-complete', (data) => {
-      console.log('[Socket] 🤖 Generation complete:', data.orderNumber, data.success);
-      callbacksRef.current.onGenerationComplete?.(data);
-    });
-
-    socket.on('order:claimed', (data) => {
-      console.log('[Socket] 🙋 Order claimed:', data.orderNumber, 'by', data.expertName);
-      callbacksRef.current.onOrderClaimed?.(data);
-    });
-
-    socket.on('order:viewer-joined', (data: SocketEvents['order:viewer-joined']) => {
-      setOrderViewers((prev) => {
-        const viewers = prev[data.orderId] || [];
-        if (viewers.some((v) => v.expertId === data.expertId)) return prev;
-        return {
-          ...prev,
-          [data.orderId]: [...viewers, { expertId: data.expertId, expertEmail: data.expertEmail }],
-        };
-      });
-    });
-
-    socket.on('order:viewer-left', (data: SocketEvents['order:viewer-left']) => {
-      setOrderViewers((prev) => {
-        const viewers = prev[data.orderId];
-        if (!viewers) return prev;
-        const filtered = viewers.filter((v) => v.expertId !== data.expertId);
-        if (filtered.length === 0) {
-          const next = { ...prev };
-          delete next[data.orderId];
-          return next;
-        }
-        return { ...prev, [data.orderId]: filtered };
-      });
-    });
-
-    socket.on('stats:update', (stats) => {
-      callbacksRef.current.onStatsUpdate?.(stats);
-    });
-
-    socket.on('pong', (data: { timestamp: number }) => {
-      setLatency(Date.now() - data.timestamp);
-    });
-
-    // Start ping interval
-    const pingInterval = setInterval(() => {
-      if (socket.connected) {
-        socket.emit('ping');
-      }
-    }, 30000);
+  useEffect(() => {
+    const subscriber: SocketSubscriber = {
+      update: setState,
+      callbacks: callbacksRef,
+    };
+    subscribers.add(subscriber);
+    setState(sharedState);
+    if (autoConnect) acquireSocket();
 
     return () => {
-      clearInterval(pingInterval);
+      subscribers.delete(subscriber);
+      if (autoConnect) releaseSocket();
     };
-  }, []); // No dependencies - callbacks are accessed via ref
+  }, [autoConnect]);
+
+  const connect = useCallback(() => {
+    ensureSocket();
+  }, []);
 
   const disconnect = useCallback(() => {
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
-      setIsConnected(false);
-    }
+    destroySocket();
   }, []);
 
   const focusOrder = useCallback((orderId: string) => {
-    socketRef.current?.emit('order:focus', { orderId });
+    sharedSocket?.emit('order:focus', { orderId });
   }, []);
 
   const blurOrder = useCallback((orderId: string) => {
-    socketRef.current?.emit('order:blur', { orderId });
+    sharedSocket?.emit('order:blur', { orderId });
   }, []);
 
   const sendCursor = useCallback(
     (orderId: string, position: number, selection?: { from: number; to: number }) => {
-      socketRef.current?.emit('editor:cursor', { orderId, position, selection });
+      sharedSocket?.emit('editor:cursor', { orderId, position, selection });
     },
     [],
   );
 
-  useEffect(() => {
-    if (autoConnect) {
-      const cleanup = connect();
-      return () => {
-        cleanup?.();
-        disconnect();
-      };
-    }
-  }, [autoConnect]); // Removed connect/disconnect from deps - they're stable now
-
   return {
-    isConnected,
-    onlineCount,
-    latency,
-    orderViewers,
+    ...state,
     connect,
     disconnect,
     focusOrder,
     blurOrder,
     sendCursor,
-    socket: socketRef.current,
+    socket: sharedSocket,
   };
 }
