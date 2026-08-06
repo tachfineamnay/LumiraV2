@@ -38,7 +38,9 @@ const EMPTY_PROFILE = {
 };
 
 const COMPLETE_DATA = {
-  schemaVersion: 2,
+  schemaVersion: 3,
+  intentionMode: 'QUESTION',
+  openReading: false,
   birthDate: '1990-03-21',
   birthTime: '06:45',
   birthPlace: 'Casablanca, Maroc',
@@ -51,9 +53,12 @@ const COMPLETE_DATA = {
   rituals: 'Dix minutes de journal et une marche quotidienne sans téléphone.',
   deliveryStyle: 'DIRECT_ET_CONCRET',
   pace: 80,
-  facePhoto: '',
-  palmPhoto: '',
+  facePhoto: 's3://onboarding/client-sealing-e2e/face-test.jpg',
+  palmPhoto: 's3://onboarding/client-sealing-e2e/palm-test.jpg',
+  palmRole: 'PALM_RIGHT',
 };
+
+const TEST_JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 
 function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({
@@ -65,20 +70,26 @@ function json(route: Route, body: unknown, status = 200) {
 }
 
 async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
-  const draft =
-    options.draft ??
-    ({
-      currentStep: 0,
-      status: 'NOT_STARTED',
-      data: {},
-      completedAt: null,
-      revision: 1,
-      updatedAt: new Date().toISOString(),
-    } as const);
+  const draft = {
+    orderId: 'order-1',
+    currentStep: 0,
+    status: 'NOT_STARTED',
+    data: {},
+    completedAt: null,
+    revision: 1,
+    updatedAt: new Date().toISOString(),
+    ...options.draft,
+  };
   const calls = {
     onboardingPatches: [] as IntakeData[],
     profilePatches: [] as IntakeData[],
+    photoUploads: [] as Array<'face' | 'palm'>,
   };
+
+  page.on('pageerror', (err) => console.log('PAGE ERROR:', err));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') console.log('CONSOLE ERROR:', msg.text());
+  });
 
   await page.route('**/api/auth/sanctuaire/session', (route) =>
     json(route, { authenticated: true }),
@@ -119,13 +130,39 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
       return;
     }
 
-    if (request.method() === 'GET' && path === '/users/orders/completed') {
+    if (request.method() === 'GET' && path === '/users/reading-amendments') {
       await json(route, []);
+      return;
+    }
+
+    if (request.method() === 'GET' && path === '/users/orders/completed') {
+      await json(route, [
+        {
+          id: 'order-1',
+          orderNumber: 'LUM-001',
+          status: 'PAID',
+          intakeRequired: true,
+          intakeStatus: 'DRAFT',
+        },
+      ]);
       return;
     }
 
     if (request.method() === 'GET' && path === '/users/onboarding') {
       await json(route, draft);
+      return;
+    }
+
+    if (request.method() === 'POST' && path === '/uploads/onboarding-normalize') {
+      const multipart = request.postData() || '';
+      const kind: 'face' | 'palm' = multipart.includes('FACE') ? 'face' : 'palm';
+      calls.photoUploads.push(kind);
+      await json(route, {
+        key: `onboarding/client-sealing-e2e/${kind}-test.jpg`,
+        storageRef: `s3://onboarding/client-sealing-e2e/${kind}-test.jpg`,
+        contentType: 'image/jpeg',
+        normalizedBytes: TEST_JPEG.length,
+      });
       return;
     }
 
@@ -164,13 +201,31 @@ async function installSanctuaireMocks(page: Page, options: MockOptions = {}) {
 }
 
 async function openIntake(page: Page, expectedHeading = 'Vos repères essentiels') {
-  await page.goto('/sanctuaire?onboarding=1');
+  await page.goto('/sanctuaire/dossier');
+  const editButton = page.getByRole('button', { name: /reprendre et modifier/i });
+  try {
+    await editButton.waitFor({ state: 'visible', timeout: 2500 });
+    await editButton.click();
+  } catch {
+    // ReadingPreparation is rendered directly when no draft content summary exists
+  }
   await expect(page.getByRole('heading', { name: expectedHeading })).toBeVisible();
 }
 
 async function continueTo(page: Page, heading: string) {
   await page.getByRole('button', { name: /^Continuer$/i }).click();
   await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+}
+
+async function uploadRequiredPhoto(page: Page, kind: 'visage' | 'paume') {
+  await page.getByLabel(new RegExp(`choisir une photo pour ${kind}`, 'i')).setInputFiles({
+    name: `${kind}.jpg`,
+    mimeType: 'image/jpeg',
+    buffer: TEST_JPEG,
+  });
+  await expect(
+    page.getByRole('region', { name: new RegExp(kind, 'i') }).getByText(/enregistrée en privé/i),
+  ).toBeVisible();
 }
 
 async function openOptionalSection(page: Page, name: RegExp) {
@@ -180,6 +235,34 @@ async function openOptionalSection(page: Page, name: RegExp) {
 }
 
 test.describe('Relecture et scellement du dossier de lecture', () => {
+  test('exige séparément le visage puis la paume avant la relecture', async ({ page }) => {
+    const calls = await installSanctuaireMocks(page);
+    await openIntake(page);
+
+    await page.getByLabel(/date de naissance/i).fill(COMPLETE_DATA.birthDate);
+    await page.getByLabel(/lieu de naissance/i).fill(COMPLETE_DATA.birthPlace);
+    await continueTo(page, 'Ce qui vous amène');
+    await page.getByLabel(/éclairer une seule question/i).fill(COMPLETE_DATA.specificQuestion);
+    await continueTo(page, 'Vos photos privées');
+
+    await page.getByRole('button', { name: /^Continuer$/i }).click();
+    await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
+    await expect(
+      page.getByRole('alert').getByText(/photo du visage avant de continuer/i),
+    ).toBeVisible();
+
+    await uploadRequiredPhoto(page, 'visage');
+    await page.getByRole('button', { name: /^Continuer$/i }).click();
+    await expect(page.getByRole('heading', { name: 'Vos photos privées' })).toBeVisible();
+    await expect(
+      page.getByRole('alert').getByText(/photo de la paume avant de continuer/i),
+    ).toBeVisible();
+
+    await uploadRequiredPhoto(page, 'paume');
+    await continueTo(page, 'Relecture et transmission');
+    expect(calls.photoUploads).toEqual(['face', 'palm']);
+  });
+
   test('relit chaque réponse puis transmet exactement la version confirmée', async ({ page }) => {
     const calls = await installSanctuaireMocks(page);
     await openIntake(page);
@@ -194,6 +277,8 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
     await page.getByLabel(/comprendre, décider|voir autrement/i).fill(COMPLETE_DATA.objective);
     await continueTo(page, 'Vos photos privées');
 
+    await uploadRequiredPhoto(page, 'visage');
+    await uploadRequiredPhoto(page, 'paume');
     await continueTo(page, 'Relecture et transmission');
     await openOptionalSection(page, /Ce qui me porte et ce qui me pèse/i);
     await page.getByLabel(/soutient actuellement/i).fill(COMPLETE_DATA.highs);
@@ -224,6 +309,8 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
       birthPlace: COMPLETE_DATA.birthPlace,
       specificQuestion: COMPLETE_DATA.specificQuestion,
       objective: COMPLETE_DATA.objective,
+      facePhotoUrl: COMPLETE_DATA.facePhoto,
+      palmPhotoUrl: COMPLETE_DATA.palmPhoto,
       highs: COMPLETE_DATA.highs,
       lows: COMPLETE_DATA.lows,
       ailments: COMPLETE_DATA.ailments,
@@ -263,7 +350,6 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
       name: 'Confirmer et transmettre mon dossier',
     });
 
-    // Deux événements synchrones reproduisent le double tap avant le prochain rendu React.
     await submit.evaluate((element) => {
       element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -280,21 +366,21 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
     ).toBeVisible();
   });
 
-  test('revient au champ invalide sans perdre le focus au profit du titre de l’étape', async ({
-    page,
-  }) => {
+  test('revient au champ d’intention invalide sans perdre le focus', async ({ page }) => {
     const calls = await installSanctuaireMocks(page, {
       draft: {
         currentStep: 3,
         status: 'IN_PROGRESS',
         data: {
-          schemaVersion: 2,
+          schemaVersion: 3,
           birthDate: '1990-03-21',
           birthPlace: 'Casablanca, Maroc',
           specificQuestion: '',
           objective: '',
-          facePhoto: '',
-          palmPhoto: '',
+          openReading: false,
+          facePhoto: COMPLETE_DATA.facePhoto,
+          palmPhoto: COMPLETE_DATA.palmPhoto,
+          palmRole: 'PALM_RIGHT',
         },
         completedAt: null,
         revision: 12,
@@ -302,7 +388,7 @@ test.describe('Relecture et scellement du dossier de lecture', () => {
       },
     });
 
-    await openIntake(page, 'Relecture et transmission');
+    await openIntake(page, 'Ce qui vous amène');
     await page.getByLabel(/j’ai relu.*je choisis.*transmettre/i).check();
     await page.getByRole('button', { name: 'Confirmer et transmettre mon dossier' }).click();
 

@@ -10,24 +10,30 @@ import {
   ValidatedOnboardingPhoto,
 } from '../uploads/private-onboarding-photo.service';
 import { ExpertGateway } from '../expert/expert.gateway';
+import {
+  IntentionMode,
+  READING_REQUIREMENTS_VERSION,
+  evaluateReadingRequirements,
+} from './reading-intake-policy';
 
 const CONSENT_PURPOSE = 'PERSONALIZED_SPIRITUAL_EXPERIENCE';
 const CONSENT_VERSION = '2026-07-18-user-agency-v1';
-const INTAKE_SCHEMA_VERSION = '2026-07-20-order-intake-v1';
+const INTAKE_SCHEMA_VERSION = '2026-08-05-order-intake-v2';
 const ACTIVE_READING_STATUSES = ['PAID', 'PROCESSING', 'AWAITING_VALIDATION'] as const;
 
 type IntakeLifeAreas = Record<string, { state: string; note?: string }>;
 
 type IntakeProfile = {
-  openReading?: boolean;
+  intentionMode: IntentionMode;
+  openReading: boolean;
   usageName: string | null;
   birthDate: string;
   birthTime: string | null;
   birthPlace: string;
   specificQuestion: string | null;
   objective: string | null;
-  facePhotoUrl: string | null;
-  palmPhotoUrl: string | null;
+  facePhotoUrl: string;
+  palmPhotoUrl: string;
   palmRole: 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
   highs: string | null;
   lows: string | null;
@@ -55,6 +61,7 @@ type SnapshotAsset = {
 
 type ReadingIntakeSnapshot = {
   version: string;
+  requirementsVersion: typeof READING_REQUIREMENTS_VERSION;
   revision: number;
   sealedAt: string;
   sealedBy: 'CLIENT';
@@ -62,8 +69,8 @@ type ReadingIntakeSnapshot = {
   contentHash: string;
   profile: IntakeProfile;
   assets: {
-    face: SnapshotAsset | null;
-    palm: SnapshotAsset | null;
+    face: SnapshotAsset;
+    palm: SnapshotAsset;
   };
 };
 
@@ -130,10 +137,6 @@ export class ReadingIntakeService {
       ? await this.sealOrderScoped(userId, dto, requiredOrder)
       : await this.sealLegacy(userId, dto);
 
-    // A Desk can stay open while the client confirms their dossier.  The
-    // websocket event makes the now-eligible order actionable immediately,
-    // instead of leaving an expert with a stale "dossier en brouillon" card
-    // until the next polling interval.
     this.expertGateway?.notifyOrderIntakeReady({
       orderId: result.orderId,
       sealedAt: result.sealedAt,
@@ -184,7 +187,7 @@ export class ReadingIntakeService {
 
     const draft = this.validateStoredDraft(order.readingIntake.data);
     const profilePayload = this.profileFromDraft(draft);
-    this.assertRequiredBirthData(profilePayload);
+    this.assertRequiredIntake(profilePayload);
     const assets = await this.validatePhotoAssets(userId, profilePayload);
     const normalizedDraft = this.toJson(draft);
     const contentHash = this.hashSnapshot(order.readingIntake.revision, profilePayload, assets);
@@ -266,6 +269,7 @@ export class ReadingIntakeService {
         },
         data: {
           status: 'SEALED',
+          schemaVersion: INTAKE_SCHEMA_VERSION,
           currentStep: 4,
           data: normalizedDraft,
           contentHash,
@@ -301,8 +305,6 @@ export class ReadingIntakeService {
       }
 
       const profile = await this.upsertProfile(tx, userId, profilePayload, sealedAt);
-      // Keep the sealed content in the compatibility projection so the client
-      // dossier and Desk views can still display what was transmitted.
       await tx.onboardingProgress.upsert({
         where: { userId },
         create: {
@@ -335,7 +337,7 @@ export class ReadingIntakeService {
   /** Compatibility path for orders created before intakeRequired existed. */
   private async sealLegacy(userId: string, dto: UpdateProfileDto): Promise<SealResult> {
     const profilePayload = this.profileFromLegacyDto(dto);
-    this.assertRequiredBirthData(profilePayload);
+    this.assertRequiredIntake(profilePayload);
     const assets = await this.validatePhotoAssets(userId, profilePayload);
     const contentHash = this.hashSnapshot(0, profilePayload, assets);
     const sealedAt = new Date();
@@ -418,7 +420,6 @@ export class ReadingIntakeService {
         },
       });
 
-      // Populate the new relation for legacy orders sealed after this release.
       await tx.readingIntake.create({
         data: {
           orderId: order.id,
@@ -466,11 +467,6 @@ export class ReadingIntakeService {
     }
   }
 
-  /**
-   * Keep sealing on the same order-scoped draft selected by GET/PATCH
-   * onboarding.  A user can own several paid readings; the DRAFT they are
-   * editing must never be displaced by a newer empty or terminal order.
-   */
   private async findRequiredIntakeOrderId(
     userId: string,
     client: Pick<Prisma.TransactionClient, 'order'>,
@@ -513,17 +509,12 @@ export class ReadingIntakeService {
         'Le brouillon contient des données invalides. Relisez les champs.',
       );
     }
-    if (draft.openReading !== true && !draft.specificQuestion?.trim() && !draft.objective?.trim()) {
-      throw new BadRequestException(
-        'Ajoutez une question ou choisissez explicitement une lecture ouverte',
-      );
-    }
-
     return draft;
   }
 
   private profileFromDraft(draft: OnboardingDraftDataDto): IntakeProfile {
     return {
+      intentionMode: draft.intentionMode as IntentionMode,
       openReading: draft.openReading === true,
       usageName: this.clean(draft.usageName),
       birthDate: this.clean(draft.birthDate) || '',
@@ -531,8 +522,8 @@ export class ReadingIntakeService {
       birthPlace: this.clean(draft.birthPlace) || '',
       specificQuestion: this.clean(draft.specificQuestion),
       objective: this.clean(draft.objective),
-      facePhotoUrl: this.clean(draft.facePhoto) || this.clean(draft.facePhotoUrl),
-      palmPhotoUrl: this.clean(draft.palmPhoto) || this.clean(draft.palmPhotoUrl),
+      facePhotoUrl: this.clean(draft.facePhoto) || this.clean(draft.facePhotoUrl) || '',
+      palmPhotoUrl: this.clean(draft.palmPhoto) || this.clean(draft.palmPhotoUrl) || '',
       palmRole:
         draft.palmRole === 'PALM_LEFT' || draft.palmRole === 'PALM_RIGHT'
           ? draft.palmRole
@@ -555,15 +546,20 @@ export class ReadingIntakeService {
 
   private profileFromLegacyDto(dto: UpdateProfileDto): IntakeProfile {
     return {
+      intentionMode: dto.intentionMode as IntentionMode,
+      openReading: dto.openReading === true,
       usageName: this.clean(dto.usageName),
       birthDate: this.clean(dto.birthDate) || '',
       birthTime: this.clean(dto.birthTime),
       birthPlace: this.clean(dto.birthPlace) || '',
       specificQuestion: this.clean(dto.specificQuestion),
       objective: this.clean(dto.objective),
-      facePhotoUrl: this.clean(dto.facePhotoUrl),
-      palmPhotoUrl: this.clean(dto.palmPhotoUrl),
-      palmRole: 'PALM_UNKNOWN',
+      facePhotoUrl: this.clean(dto.facePhotoUrl) || '',
+      palmPhotoUrl: this.clean(dto.palmPhotoUrl) || '',
+      palmRole:
+        dto.palmRole === 'PALM_LEFT' || dto.palmRole === 'PALM_RIGHT'
+          ? dto.palmRole
+          : 'PALM_UNKNOWN',
       highs: this.clean(dto.highs),
       lows: this.clean(dto.lows),
       lifeEvents: this.clean(dto.lifeEvents),
@@ -580,23 +576,28 @@ export class ReadingIntakeService {
     };
   }
 
-  private assertRequiredBirthData(profile: IntakeProfile) {
-    if (!profile.birthDate || !profile.birthPlace) {
-      throw new BadRequestException('La date et le lieu de naissance sont requis');
-    }
+  private assertRequiredIntake(profile: IntakeProfile): void {
+    const requirements = evaluateReadingRequirements(profile, {
+      requireExplicitIntentionMode: true,
+      strictIntentionExclusivity: true,
+    });
+    if (requirements.complete) return;
+    throw new BadRequestException({
+      statusCode: 400,
+      code: 'READING_INTAKE_INCOMPLETE',
+      message: 'Le dossier doit être complété avant sa transmission.',
+      missingFields: requirements.missingFields,
+      invalidFields: requirements.invalidFields,
+    });
   }
 
   private async validatePhotoAssets(
     userId: string,
     profile: IntakeProfile,
-  ): Promise<{ face: SnapshotAsset | null; palm: SnapshotAsset | null }> {
+  ): Promise<{ face: SnapshotAsset; palm: SnapshotAsset }> {
     const [face, palm] = await Promise.all([
-      profile.facePhotoUrl
-        ? this.privatePhotos.validateOnboardingPhoto(profile.facePhotoUrl, userId, 'face')
-        : Promise.resolve(null),
-      profile.palmPhotoUrl
-        ? this.privatePhotos.validateOnboardingPhoto(profile.palmPhotoUrl, userId, 'palm')
-        : Promise.resolve(null),
+      this.privatePhotos.validateOnboardingPhoto(profile.facePhotoUrl, userId, 'face'),
+      this.privatePhotos.validateOnboardingPhoto(profile.palmPhotoUrl, userId, 'palm'),
     ]);
     return {
       face: this.snapshotAsset(face),
@@ -604,8 +605,7 @@ export class ReadingIntakeService {
     };
   }
 
-  private snapshotAsset(value: ValidatedOnboardingPhoto | null): SnapshotAsset | null {
-    if (!value) return null;
+  private snapshotAsset(value: ValidatedOnboardingPhoto): SnapshotAsset {
     return {
       storageRef: value.storageRef,
       key: value.key,
@@ -625,6 +625,7 @@ export class ReadingIntakeService {
       .update(
         JSON.stringify({
           schemaVersion: INTAKE_SCHEMA_VERSION,
+          requirementsVersion: READING_REQUIREMENTS_VERSION,
           revision,
           profile,
           assets,
@@ -642,6 +643,7 @@ export class ReadingIntakeService {
   ): ReadingIntakeSnapshot {
     return {
       version: INTAKE_SCHEMA_VERSION,
+      requirementsVersion: READING_REQUIREMENTS_VERSION,
       revision,
       sealedAt: sealedAt.toISOString(),
       sealedBy: 'CLIENT',
@@ -658,9 +660,8 @@ export class ReadingIntakeService {
     profile: IntakeProfile,
     submittedAt: Date,
   ) {
-    // Json columns reject plain null: use an explicit JsonNull sentinel.
-    // openReading and palmRole are intake metadata without UserProfile columns.
-    const { lifeAreas, openReading, palmRole, ...scalarFields } = profile;
+    const { lifeAreas, intentionMode, openReading, palmRole, ...scalarFields } = profile;
+    void intentionMode;
     void openReading;
     void palmRole;
     const payload = {
@@ -706,8 +707,9 @@ export class ReadingIntakeService {
 
   private draftFromProfile(profile: IntakeProfile): OnboardingDraftDataDto {
     return {
-      schemaVersion: 2,
-      openReading: profile.openReading === true,
+      schemaVersion: 3,
+      intentionMode: profile.intentionMode,
+      openReading: profile.openReading,
       usageName: profile.usageName,
       birthDate: profile.birthDate,
       birthTime: profile.birthTime,
@@ -716,6 +718,7 @@ export class ReadingIntakeService {
       objective: profile.objective,
       facePhoto: profile.facePhotoUrl,
       palmPhoto: profile.palmPhotoUrl,
+      palmRole: profile.palmRole,
       highs: profile.highs,
       lows: profile.lows,
       lifeEvents: profile.lifeEvents,
@@ -737,7 +740,6 @@ export class ReadingIntakeService {
     return cleaned ? cleaned : null;
   }
 
-  /** Keeps only valid life-area entries and drops empty notes. */
   private cleanLifeAreas(value: object | null | undefined): IntakeLifeAreas | null {
     if (!value || typeof value !== 'object') return null;
     const cleaned: IntakeLifeAreas = {};

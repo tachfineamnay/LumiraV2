@@ -32,6 +32,7 @@ import { hashReadingWorkspaceSnapshot } from './reading-version';
 import {
   assertOrderIntakeReady,
   readOrderIntakeReadiness,
+  READING_INTAKE_INCOMPLETE_CODE,
   READING_INTAKE_REQUIRED_CODE,
 } from './reading-intake-readiness';
 
@@ -580,6 +581,7 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
                 orderNumber: true,
                 status: true,
                 intakeRequired: true,
+                clientInputs: true,
                 expertReview: true,
                 readingIntake: true,
               },
@@ -594,6 +596,7 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
             const intakeReadiness = readOrderIntakeReadiness(currentOrder);
             if (currentJob.type === 'READING_GENERATION' && !intakeReadiness.ready) {
               const review = readExpertReview(currentOrder.expertReview);
+              const incomplete = intakeReadiness.status === 'INCOMPLETE';
               const failed: ProductionJobState = {
                 ...currentJob,
                 status: 'FAILED',
@@ -601,9 +604,15 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
                 failedAt: now,
                 heartbeatAt: now,
                 error: {
-                  code: READING_INTAKE_REQUIRED_CODE,
-                  message:
-                    'Le dossier client n’est plus prêt : la production reste bloquée jusqu’au scellement.',
+                  code: incomplete
+                    ? READING_INTAKE_INCOMPLETE_CODE
+                    : READING_INTAKE_REQUIRED_CODE,
+                  message: incomplete
+                    ? `Le dossier effectif est incomplet : ${[
+                        ...intakeReadiness.missingFields,
+                        ...intakeReadiness.invalidFields,
+                      ].join(', ')}.`
+                    : 'Le dossier client n’est plus prêt : la production reste bloquée jusqu’au scellement.',
                 },
               };
               await tx.order.update({
@@ -611,7 +620,7 @@ export class ProductionControlService implements OnModuleInit, OnModuleDestroy {
                 data: { expertReview: toJson({ ...review, production: failed }) },
               });
               this.logger.warn(
-                `Blocked queued reading ${currentJob.id} for ${currentOrder.orderNumber}: intake ${intakeReadiness.status}`,
+                `Blocked queued reading ${currentJob.id} for ${currentOrder.orderNumber}: intake ${intakeReadiness.status} (${intakeReadiness.source})`,
               );
               return null;
             }

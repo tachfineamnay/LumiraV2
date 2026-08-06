@@ -11,7 +11,16 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { INTENTION_MODES, IntentionMode } from '../reading-intake-policy';
+
+function inferIntentionMode(value: unknown, object: Record<string, unknown>): unknown {
+  if (typeof value === 'string' && INTENTION_MODES.includes(value as IntentionMode)) return value;
+  if (object.openReading === true) return 'OPEN';
+  if (typeof object.specificQuestion === 'string' && object.specificQuestion.trim()) return 'QUESTION';
+  if (typeof object.objective === 'string' && object.objective.trim()) return 'SITUATION';
+  return value;
+}
 
 export class OnboardingConsentDto {
   @IsBoolean()
@@ -93,6 +102,15 @@ export class UpdateProfileDto {
   @MaxLength(180)
   birthPlace?: string;
 
+  @Transform(({ value, obj }) => inferIntentionMode(value, obj as Record<string, unknown>))
+  @IsOptional()
+  @IsIn([...INTENTION_MODES])
+  intentionMode?: IntentionMode;
+
+  @IsOptional()
+  @IsBoolean()
+  openReading?: boolean;
+
   @IsOptional()
   @IsString()
   @MaxLength(2000)
@@ -114,7 +132,7 @@ export class UpdateProfileDto {
   @MaxLength(512)
   palmPhotoUrl?: string | null;
 
-  /** Explicit client-declared hand side; omit when it is not reliable. */
+  /** Explicit client-declared hand side; PALM_UNKNOWN remains a valid declaration. */
   @IsOptional()
   @IsIn(['PALM_LEFT', 'PALM_RIGHT', 'PALM_UNKNOWN'])
   palmRole?: 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
@@ -203,14 +221,19 @@ export class UpdateProfileDto {
 
 /** Strict, serializable payload persisted for an order-scoped reading intake. */
 export class OnboardingDraftDataDto {
+  @Transform(({ value, obj }) => inferIntentionMode(value, obj as Record<string, unknown>))
+  @IsOptional()
+  @IsIn([...INTENTION_MODES])
+  intentionMode?: IntentionMode;
+
   @IsOptional()
   @IsBoolean()
   openReading?: boolean;
 
-  /** Frontend form topology marker (five-step mobile/desktop flow). */
+  /** Frontend form topology marker. Version 2 stays readable during rollout. */
   @IsOptional()
   @IsInt()
-  @IsIn([2])
+  @IsIn([2, 3])
   schemaVersion?: number;
 
   @IsOptional()

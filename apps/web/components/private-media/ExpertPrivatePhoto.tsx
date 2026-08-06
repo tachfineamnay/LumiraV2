@@ -53,7 +53,7 @@ export function ExpertPrivatePhoto({
 
     const endpoint =
       orderId && amendmentId
-        ? `/expert/orders/${orderId}/amendments/${amendmentId}/photo`
+        ? `/expert/orders/${orderId}/amendments/${amendmentId}/photo?kind=${kind}`
         : orderId
           ? `/expert/orders/${orderId}/photos/${kind}`
           : clientId

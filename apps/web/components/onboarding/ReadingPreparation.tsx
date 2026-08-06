@@ -33,6 +33,7 @@ import {
   LIFE_AREA_LABELS,
   LIFE_AREA_STATES,
   LIFE_AREA_STATE_LABELS,
+  isPersistedPrivatePhoto,
   lifeAreasSchema,
   readingPreparationSchema,
   readingPreparationSubmissionSchema,
@@ -96,7 +97,7 @@ const STEPS: StepDefinition[] = [
     label: 'Photos',
     title: 'Vos photos privées',
     description:
-      'Ajoutez les photos que vous souhaitez utiliser. Vous pouvez continuer avec une seule photo ou sans photo.',
+      'Ajoutez la photo de votre visage et la photo de votre paume. Les deux photos sont obligatoires.',
     icon: ImageIcon,
   },
   {
@@ -869,6 +870,19 @@ export function ReadingPreparation({
           return;
         }
       }
+      if (target > 2) {
+        const faceRef = formValuesRef.current.facePhoto;
+        const palmRef = formValuesRef.current.palmPhoto;
+        if (!isPersistedPrivatePhoto(faceRef) || !isPersistedPrivatePhoto(palmRef)) {
+          setActionError(
+            'Ajoutez et enregistrez les photos obligatoires (visage et paume) avant de passer à la relecture.',
+          );
+          setStep(2);
+          stepRef.current = 2;
+          void queueDraftSave(makeSnapshot(2, formValuesRef.current));
+          return;
+        }
+      }
       setActionError(null);
       setStep(target);
       stepRef.current = target;
@@ -888,12 +902,19 @@ export function ReadingPreparation({
       const valid = await trigger(['birthDate', 'birthPlace'], { shouldFocus: true });
       if (!valid) return;
     }
-    if (
-      current.key === 'photos' &&
-      (photoStates.face === 'error' || photoStates.palm === 'error')
-    ) {
-      setActionError('Réessayez l’envoi de la photo en erreur ou retirez-la pour continuer.');
-      return;
+    if (current.key === 'photos') {
+      if (photoStates.face === 'error' || photoStates.palm === 'error') {
+        setActionError('Réessayez l’envoi de la photo en erreur ou retirez-la pour continuer.');
+        return;
+      }
+      const faceRef = formValuesRef.current.facePhoto;
+      const palmRef = formValuesRef.current.palmPhoto;
+      if (!isPersistedPrivatePhoto(faceRef) || !isPersistedPrivatePhoto(palmRef)) {
+        setActionError(
+          'Ajoutez et enregistrez la photo du visage et la photo de la paume avant de continuer.',
+        );
+        return;
+      }
     }
     const target = Math.min(stepRef.current + 1, STEPS.length - 1);
     setActionError(null);

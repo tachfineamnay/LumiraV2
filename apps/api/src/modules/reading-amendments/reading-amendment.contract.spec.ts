@@ -17,10 +17,7 @@ describe('Reading amendment production contracts', () => {
     join(__dirname, '../../prisma/reading-input-snapshot.middleware.ts'),
     'utf8',
   );
-  const prismaService = readFileSync(
-    join(__dirname, '../../prisma/prisma.service.ts'),
-    'utf8',
-  );
+  const prismaService = readFileSync(join(__dirname, '../../prisma/prisma.service.ts'), 'utf8');
   const purgeController = readFileSync(
     join(__dirname, '../expert/client-purge.controller.ts'),
     'utf8',
@@ -73,9 +70,9 @@ describe('Reading amendment production contracts', () => {
 
   it('keeps snapshot lineage and retakes coherent at database level', () => {
     expect(migration).toContain('ReadingIntakeAmendment_extend_retake_expiry');
-    expect(migration).toContain('CURRENT_TIMESTAMP + INTERVAL \'7 days\'');
+    expect(migration).toContain("CURRENT_TIMESTAMP + INTERVAL '7 days'");
     expect(migration).toContain('ReadingInputSnapshot_sync_amendment_ids');
-    expect(migration).toContain("NEW.\"data\"->'amendmentIds'");
+    expect(migration).toContain('NEW."data"->\'amendmentIds\'');
     expect(migration).toContain('ON DELETE SET NULL ON UPDATE CASCADE');
   });
 
@@ -116,9 +113,10 @@ describe('Reading amendment production contracts', () => {
   });
 
   it('never expires a complement already submitted for expert review', () => {
-    expect(facade).toContain("AND \"status\" = 'SUBMITTED'");
-    expect(facade).toContain("AND \"status\" IN ('REQUESTED', 'DRAFT')");
-    expect(facade).not.toContain(
+    const code = service + facade;
+    expect(code).toContain('AND "status" = \'SUBMITTED\'');
+    expect(code).toContain("AND \"status\" IN ('REQUESTED', 'DRAFT')");
+    expect(code).not.toContain(
       "AND \"status\" IN ('REQUESTED', 'DRAFT', 'SUBMITTED')\n          AND \"expiresAt\"",
     );
   });

@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { UserProfile as PrismaUserProfile } from '@prisma/client';
+import {
+  IntentionMode,
+  READING_REQUIREMENTS_VERSION,
+  evaluateReadingRequirements,
+  resolveIntention,
+} from '../../modules/users/reading-intake-policy';
 import { UserProfile as VertexUserProfile } from './VertexOracle';
 
 export type ReadingSourceKind =
@@ -9,8 +15,9 @@ export type ReadingSourceKind =
 
 export type ReadingLifeAreas = Record<string, { state: string; note?: string }>;
 
-/** Normalized reading fields shared by effective snapshot, sealed intake and legacy profile. */
 export interface ReadingSourceProfile {
+  intentionMode: IntentionMode | null;
+  openReading: boolean;
   usageName: string | null;
   birthDate: string;
   birthTime: string | null;
@@ -37,6 +44,7 @@ export interface ReadingSourceProfile {
 
 export interface ResolvedReadingSource {
   source: ReadingSourceKind;
+  requirementsVersion?: string;
   sealedAt?: string;
   contentHash?: string;
   inputSnapshotId?: string;
@@ -59,6 +67,8 @@ export interface OrderForReadingSource {
 }
 
 const PROFILE_FIELDS = [
+  'intentionMode',
+  'openReading',
   'usageName',
   'birthDate',
   'birthTime',
@@ -83,6 +93,8 @@ const PROFILE_FIELDS = [
   'rituals',
 ] as const;
 
+const OPEN_READING_CONTEXT = 'Lecture ouverte explicitement choisie par le client.';
+
 @Injectable()
 export class ReadingSourceResolver {
   private readonly logger = new Logger(ReadingSourceResolver.name);
@@ -97,21 +109,27 @@ export class ReadingSourceResolver {
       const profileRaw = effective.profile;
       if (!contentHash || !this.isValidSealedProfile(profileRaw)) {
         this.logInvalid(order, 'EFFECTIVE_SNAPSHOT', Boolean(contentHash), profileRaw);
-        throw new BadRequestException(
+        throw this.incompleteSourceError(
           'Le snapshot effectif de cette commande est incomplet ou invalide pour la génération',
+          profileRaw,
         );
       }
       const profile = this.normalizeSealedProfile(profileRaw as Record<string, unknown>);
       const effectiveAt =
-        this.nonEmptyString(effective.effectiveAt) ?? this.nonEmptyString(effective.sealedAt) ?? undefined;
+        this.nonEmptyString(effective.effectiveAt) ??
+        this.nonEmptyString(effective.sealedAt) ??
+        undefined;
       const revision =
         typeof effective.revision === 'number' && Number.isInteger(effective.revision)
           ? effective.revision
           : undefined;
       const amendmentIds = this.stringArray(effective.amendmentIds);
+      const requirementsVersion =
+        this.nonEmptyString(effective.requirementsVersion) ?? READING_REQUIREMENTS_VERSION;
       this.logResolved(order, 'EFFECTIVE_SNAPSHOT', contentHash, effectiveSnapshotId);
       return {
         source: 'EFFECTIVE_SNAPSHOT',
+        requirementsVersion,
         sealedAt: effectiveAt,
         contentHash,
         inputSnapshotId: effectiveSnapshotId,
@@ -128,13 +146,22 @@ export class ReadingSourceResolver {
       const profileRaw = readingIntake.profile;
       if (!contentHash || !this.isValidSealedProfile(profileRaw)) {
         this.logInvalid(order, 'SEALED_INTAKE', Boolean(contentHash), profileRaw);
-        throw new BadRequestException(
+        throw this.incompleteSourceError(
           'Le dossier scellé de cette commande est incomplet ou invalide pour la génération',
+          profileRaw,
         );
       }
       const profile = this.normalizeSealedProfile(profileRaw as Record<string, unknown>);
+      const requirementsVersion =
+        this.nonEmptyString(readingIntake.requirementsVersion) ?? READING_REQUIREMENTS_VERSION;
       this.logResolved(order, 'SEALED_INTAKE', contentHash);
-      return { source: 'SEALED_INTAKE', sealedAt, contentHash, profile };
+      return {
+        source: 'SEALED_INTAKE',
+        requirementsVersion,
+        sealedAt,
+        contentHash,
+        profile,
+      };
     }
 
     const legacyProfile = this.fromLegacyProfile(order.user.profile);
@@ -155,19 +182,24 @@ export class ReadingSourceResolver {
     resolved: ResolvedReadingSource,
   ): VertexUserProfile {
     const profile = resolved.profile;
-    return {
+    const vertexProfile = {
       userId: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
+      intentionMode: profile.intentionMode ?? undefined,
+      openReading: profile.openReading,
       usageName: profile.usageName ?? undefined,
       birthDate: profile.birthDate,
       birthTime: profile.birthTime ?? undefined,
       birthPlace: profile.birthPlace ?? undefined,
-      specificQuestion: profile.specificQuestion ?? undefined,
+      specificQuestion:
+        profile.specificQuestion ??
+        (profile.intentionMode === 'OPEN' ? OPEN_READING_CONTEXT : undefined),
       objective: profile.objective ?? undefined,
       facePhotoUrl: profile.facePhotoUrl ?? undefined,
       palmPhotoUrl: profile.palmPhotoUrl ?? undefined,
+      palmRole: profile.palmRole,
       highs: profile.highs ?? undefined,
       lows: profile.lows ?? undefined,
       lifeEvents: profile.lifeEvents ?? undefined,
@@ -182,6 +214,7 @@ export class ReadingSourceResolver {
       fears: profile.fears ?? undefined,
       rituals: profile.rituals ?? undefined,
     };
+    return vertexProfile as VertexUserProfile;
   }
 
   private logResolved(
@@ -209,6 +242,10 @@ export class ReadingSourceResolver {
     hasContentHash: boolean,
     profileRaw: unknown,
   ): void {
+    const requirements = evaluateReadingRequirements(this.asRecord(profileRaw), {
+      requireExplicitIntentionMode: false,
+      strictIntentionExclusivity: true,
+    });
     this.logger.warn(
       JSON.stringify({
         event: 'Invalid reading source',
@@ -216,27 +253,53 @@ export class ReadingSourceResolver {
         orderNumber: order.orderNumber ?? null,
         source,
         hasContentHash,
-        hasValidProfile: this.isValidSealedProfile(profileRaw),
+        hasValidProfile: requirements.complete,
+        missingFields: requirements.missingFields,
+        invalidFields: requirements.invalidFields,
       }),
     );
   }
 
   private isValidSealedProfile(value: unknown): value is Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const profile = value as Record<string, unknown>;
-    return Boolean(this.nonEmptyString(profile.birthDate) && this.nonEmptyString(profile.birthPlace));
+    return evaluateReadingRequirements(value as Record<string, unknown>, {
+      requireExplicitIntentionMode: false,
+      strictIntentionExclusivity: true,
+    }).complete;
+  }
+
+  private incompleteSourceError(message: string, profileRaw: unknown): BadRequestException {
+    const requirements = evaluateReadingRequirements(this.asRecord(profileRaw), {
+      requireExplicitIntentionMode: false,
+      strictIntentionExclusivity: true,
+    });
+    return new BadRequestException({
+      statusCode: 400,
+      code: 'READING_INTAKE_INCOMPLETE',
+      message,
+      missingFields: requirements.missingFields,
+      invalidFields: requirements.invalidFields,
+    });
   }
 
   private normalizeSealedProfile(raw: Record<string, unknown>): ReadingSourceProfile {
+    const intention = resolveIntention(raw, {
+      requireExplicitIntentionMode: false,
+      strictIntentionExclusivity: true,
+    });
     return {
+      intentionMode: intention.mode,
+      openReading: intention.mode === 'OPEN',
       usageName: this.nullableString(raw.usageName),
       birthDate: this.nonEmptyString(raw.birthDate) ?? '',
       birthTime: this.nullableString(raw.birthTime),
       birthPlace: this.nonEmptyString(raw.birthPlace) ?? '',
       specificQuestion: this.nullableString(raw.specificQuestion),
       objective: this.nullableString(raw.objective),
-      facePhotoUrl: this.nullableString(raw.facePhotoUrl),
-      palmPhotoUrl: this.nullableString(raw.palmPhotoUrl),
+      facePhotoUrl:
+        this.nullableString(raw.facePhotoUrl) ?? this.nullableString(raw.facePhoto),
+      palmPhotoUrl:
+        this.nullableString(raw.palmPhotoUrl) ?? this.nullableString(raw.palmPhoto),
       palmRole: this.palmRole(raw.palmRole),
       highs: this.nullableString(raw.highs),
       lows: this.nullableString(raw.lows),
@@ -255,7 +318,17 @@ export class ReadingSourceResolver {
   }
 
   private fromLegacyProfile(profile: PrismaUserProfile | null): ReadingSourceProfile {
+    const intention = resolveIntention(
+      {
+        specificQuestion: profile?.specificQuestion,
+        objective: profile?.objective,
+        openReading: false,
+      },
+      { requireExplicitIntentionMode: false },
+    );
     return {
+      intentionMode: intention.mode,
+      openReading: false,
       usageName: profile?.usageName ?? null,
       birthDate: profile?.birthDate ?? '',
       birthTime: profile?.birthTime ?? null,
@@ -309,7 +382,6 @@ export class ReadingSourceResolver {
     return value === 'PALM_LEFT' || value === 'PALM_RIGHT' ? value : 'PALM_UNKNOWN';
   }
 
-  /** Accepts only well-formed { key: { state, note? } } life-area records. */
   private nullableLifeAreas(value: unknown): ReadingLifeAreas | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const areas: ReadingLifeAreas = {};

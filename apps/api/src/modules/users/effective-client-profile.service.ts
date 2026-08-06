@@ -14,10 +14,13 @@ const PROFILE_KEYS = [
   'birthDate',
   'birthTime',
   'birthPlace',
+  'intentionMode',
+  'openReading',
   'specificQuestion',
   'objective',
   'facePhotoUrl',
   'palmPhotoUrl',
+  'palmRole',
   'highs',
   'lows',
   'lifeEvents',
@@ -34,6 +37,13 @@ const PROFILE_KEYS = [
 ] as const;
 
 type PhotoKind = 'face' | 'palm';
+export type EffectiveIntentionMode = 'QUESTION' | 'SITUATION' | 'OPEN';
+export type EffectivePalmRole = 'PALM_LEFT' | 'PALM_RIGHT' | 'PALM_UNKNOWN';
+export type EffectiveUserProfile = UserProfile & {
+  intentionMode?: EffectiveIntentionMode | null;
+  openReading?: boolean;
+  palmRole?: EffectivePalmRole | null;
+};
 
 interface EffectiveSnapshot {
   snapshotId: string | null;
@@ -43,7 +53,7 @@ interface EffectiveSnapshot {
 }
 
 export interface EffectiveProfileResolution {
-  profile: UserProfile | null;
+  profile: EffectiveUserProfile | null;
   snapshotId: string | null;
   snapshotRevision: number | null;
   effectiveAt: string | null;
@@ -80,7 +90,7 @@ export class EffectiveClientProfileService {
     }
 
     return {
-      profile: { ...persistedProfile, ...overlay } as UserProfile,
+      profile: { ...persistedProfile, ...overlay } as EffectiveUserProfile,
       snapshotId: snapshot.snapshotId,
       snapshotRevision: snapshot.revision,
       effectiveAt: snapshot.effectiveAt,

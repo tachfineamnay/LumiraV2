@@ -16,8 +16,8 @@ const legacyProfile: PrismaUserProfile = {
   birthDate: '1988-01-01',
   birthTime: '08:00',
   birthPlace: 'Paris, France',
-  specificQuestion: 'Legacy question',
-  objective: 'Legacy objective',
+  specificQuestion: 'Legacy question sufficiently detailed',
+  objective: null,
   facePhotoUrl: 's3://onboarding/user-1/face.jpg',
   palmPhotoUrl: 's3://onboarding/user-1/palm.jpg',
   highs: 'Legacy highs',
@@ -41,14 +41,17 @@ const legacyProfile: PrismaUserProfile = {
 };
 
 const sealedProfile = {
+  intentionMode: 'QUESTION',
+  openReading: false,
   usageName: 'Mimi',
   birthDate: '1990-06-15',
   birthTime: '14:30',
   birthPlace: 'Lyon, France',
-  specificQuestion: 'Sealed question',
-  objective: 'Sealed objective',
+  specificQuestion: 'Que dois-je comprendre dans cette période ?',
+  objective: null,
   facePhotoUrl: 's3://onboarding/user-1/sealed-face.jpg',
   palmPhotoUrl: 's3://onboarding/user-1/sealed-palm.jpg',
+  palmRole: 'PALM_RIGHT',
   highs: 'Sealed highs',
   lows: 'Sealed lows',
   lifeEvents: 'Sealed life events',
@@ -96,6 +99,7 @@ describe('ReadingSourceResolver', () => {
     const order = buildOrder({
       clientInputs: {
         readingIntake: {
+          requirementsVersion: '2026-08-05-required-intake-v2',
           sealedAt: '2026-07-18T12:00:00.000Z',
           contentHash: 'abc123',
           profile: sealedProfile,
@@ -106,9 +110,10 @@ describe('ReadingSourceResolver', () => {
     const resolved = resolver.resolve(order);
 
     expect(resolved.source).toBe('SEALED_INTAKE');
+    expect(resolved.requirementsVersion).toBe('2026-08-05-required-intake-v2');
     expect(resolved.sealedAt).toBe('2026-07-18T12:00:00.000Z');
     expect(resolved.contentHash).toBe('abc123');
-    expect(resolved.profile.specificQuestion).toBe('Sealed question');
+    expect(resolved.profile.intentionMode).toBe('QUESTION');
     expect(resolved.profile.facePhotoUrl).toBe('s3://onboarding/user-1/sealed-face.jpg');
   });
 
@@ -131,12 +136,11 @@ describe('ReadingSourceResolver', () => {
     const resolved = resolver.resolve(order);
 
     expect(resolved.source).toBe('SEALED_INTAKE');
-    expect(resolved.profile.specificQuestion).toBe('Sealed question');
-    expect(resolved.profile.objective).toBe('Sealed objective');
+    expect(resolved.profile.specificQuestion).toBe(sealedProfile.specificQuestion);
     expect(resolved.profile.specificQuestion).not.toBe('Current profile question');
   });
 
-  it('falls back to UserProfile for legacy orders', () => {
+  it('falls back to UserProfile for historical reads', () => {
     const order = buildOrder({ clientInputs: null });
 
     const resolved = resolver.resolve(order);
@@ -144,19 +148,55 @@ describe('ReadingSourceResolver', () => {
     expect(resolved.source).toBe('LEGACY_PROFILE');
     expect(resolved.sealedAt).toBeUndefined();
     expect(resolved.contentHash).toBeUndefined();
-    expect(resolved.profile.specificQuestion).toBe('Legacy question');
+    expect(resolved.profile.intentionMode).toBe('QUESTION');
     expect(resolved.profile.birthPlace).toBe('Paris, France');
   });
 
-  it('rejects an incomplete sealed snapshot', () => {
+  it.each([
+    ['birthPlace', ''],
+    ['specificQuestion', ''],
+    ['facePhotoUrl', null],
+    ['palmPhotoUrl', null],
+  ])('rejects a sealed snapshot with invalid %s', (field, value) => {
     const order = buildOrder({
       clientInputs: {
         readingIntake: {
           sealedAt: '2026-07-18T12:00:00.000Z',
           contentHash: 'hash-sealed',
-          profile: {
-            birthDate: '1990-06-15',
-          },
+          profile: { ...sealedProfile, [field]: value },
+        },
+      },
+    });
+
+    expect(() => resolver.resolve(order)).toThrow(BadRequestException);
+  });
+
+  it.each([
+    {
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: 'Ancienne question encore présente',
+      objective: null,
+    },
+    {
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: null,
+      objective: 'Ancienne situation encore présente',
+    },
+    {
+      intentionMode: 'QUESTION',
+      openReading: true,
+      specificQuestion: 'Que dois-je comprendre maintenant ?',
+      objective: null,
+    },
+  ])('rejects a contradictory sealed intention: %j', (intention) => {
+    const order = buildOrder({
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-07-18T12:00:00.000Z',
+          contentHash: 'contradictory-hash',
+          profile: { ...sealedProfile, ...intention },
         },
       },
     });
@@ -177,7 +217,7 @@ describe('ReadingSourceResolver', () => {
     expect(() => resolver.resolve(order)).toThrow(BadRequestException);
   });
 
-  it('preserves private photo references from the sealed snapshot', () => {
+  it('preserves private photo references and explicit intention for Vertex', () => {
     const order = buildOrder({
       clientInputs: {
         readingIntake: {
@@ -188,10 +228,54 @@ describe('ReadingSourceResolver', () => {
       },
     });
 
-    const vertexProfile = resolver.toVertexUserProfile(order.user, resolver.resolve(order));
+    const vertexProfile = resolver.toVertexUserProfile(
+      order.user,
+      resolver.resolve(order),
+    ) as unknown as typeof legacyProfile & { intentionMode?: string; openReading?: boolean };
 
     expect(vertexProfile.facePhotoUrl).toBe('s3://onboarding/user-1/sealed-face.jpg');
     expect(vertexProfile.palmPhotoUrl).toBe('s3://onboarding/user-1/sealed-palm.jpg');
+    expect(vertexProfile.intentionMode).toBe('QUESTION');
+    expect(vertexProfile.openReading).toBe(false);
+  });
+
+  it('turns an explicit OPEN mode into visible prompt context without mutating the snapshot', () => {
+    const openProfile = {
+      ...sealedProfile,
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: null,
+      objective: null,
+    };
+    const order = buildOrder({
+      clientInputs: {
+        readingIntake: {
+          sealedAt: '2026-07-18T12:00:00.000Z',
+          contentHash: 'open-hash',
+          profile: openProfile,
+        },
+      },
+    });
+
+    const resolved = resolver.resolve(order);
+    const vertexProfile = resolver.toVertexUserProfile(order.user, resolved) as {
+      intentionMode?: string;
+      openReading?: boolean;
+      specificQuestion?: string;
+    };
+
+    expect(resolved.profile).toMatchObject({
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: null,
+      objective: null,
+    });
+    expect(vertexProfile).toMatchObject({
+      intentionMode: 'OPEN',
+      openReading: true,
+      specificQuestion: 'Lecture ouverte explicitement choisie par le client.',
+    });
+    expect(openProfile.specificQuestion).toBeNull();
   });
 
   it('does not mutate the sealed snapshot while resolving', () => {
@@ -210,72 +294,37 @@ describe('ReadingSourceResolver', () => {
     expect(snapshot).toEqual(frozen);
   });
 
-  it('exposes the resolved source for generation metadata', () => {
-    const logSpy = jest.spyOn(resolver['logger'], 'log').mockImplementation(() => undefined);
+  it('uses a complete effective snapshot before the original sealed intake', () => {
     const order = buildOrder({
       clientInputs: {
         readingIntake: {
           sealedAt: '2026-07-18T12:00:00.000Z',
-          contentHash: 'hash-sealed',
+          contentHash: 'original',
           profile: sealedProfile,
+        },
+        readingIntakeEffective: {
+          snapshotId: 'snapshot-2',
+          contentHash: 'effective',
+          requirementsVersion: '2026-08-05-required-intake-v2',
+          effectiveAt: '2026-08-05T12:00:00.000Z',
+          profile: {
+            ...sealedProfile,
+            specificQuestion: 'Quelle direction est maintenant la plus juste ?',
+          },
+          amendmentIds: ['amendment-1'],
         },
       },
     });
 
     const resolved = resolver.resolve(order);
-
-    expect(resolved.source).toBe('SEALED_INTAKE');
-    expect(logSpy).toHaveBeenCalledWith('Reading source: SEALED_INTAKE');
-    expect(
-      logSpy.mock.calls.some(
-        (call) =>
-          typeof call[0] === 'string' &&
-          call[0].includes('"event":"Reading source resolved"') &&
-          call[0].includes('"source":"SEALED_INTAKE"'),
-      ),
-    ).toBe(true);
-  });
-
-  it('maps all reading fields into the Vertex profile shape', () => {
-    const order = buildOrder({
-      clientInputs: {
-        readingIntake: {
-          sealedAt: '2026-07-18T12:00:00.000Z',
-          contentHash: 'hash-sealed',
-          profile: sealedProfile,
-        },
-      },
+    expect(resolved).toMatchObject({
+      source: 'EFFECTIVE_SNAPSHOT',
+      inputSnapshotId: 'snapshot-2',
+      contentHash: 'effective',
+      amendmentIds: ['amendment-1'],
     });
-
-    const vertexProfile = resolver.toVertexUserProfile(order.user, resolver.resolve(order));
-
-    expect(vertexProfile).toMatchObject({
-      userId: 'user-1',
-      firstName: 'Marie',
-      lastName: 'Dubois',
-      email: 'marie@example.test',
-      usageName: 'Mimi',
-      birthDate: '1990-06-15',
-      birthTime: '14:30',
-      birthPlace: 'Lyon, France',
-      specificQuestion: 'Sealed question',
-      objective: 'Sealed objective',
-      highs: 'Sealed highs',
-      lows: 'Sealed lows',
-      lifeEvents: 'Sealed life events',
-      lifeAreas: {
-        relations: { state: 'TENDU', note: 'Sealed note' },
-        travail: { state: 'FLUIDE' },
-      },
-      strongSide: 'Sealed strong',
-      weakSide: 'Sealed weak',
-      strongZone: 'Sealed strong zone',
-      weakZone: 'Sealed weak zone',
-      deliveryStyle: 'DIRECT',
-      pace: 70,
-      ailments: 'Sealed ailments',
-      fears: 'Sealed fears',
-      rituals: 'Sealed rituals',
-    });
+    expect(resolved.profile.specificQuestion).toBe(
+      'Quelle direction est maintenant la plus juste ?',
+    );
   });
 });

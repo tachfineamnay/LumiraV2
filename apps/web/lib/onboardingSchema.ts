@@ -6,6 +6,9 @@ export const DELIVERY_STYLES = [
   'SYMBOLIQUE_ET_PROFOND',
 ] as const;
 
+export const INTENTION_MODES = ['QUESTION', 'SITUATION', 'OPEN'] as const;
+export type IntentionMode = (typeof INTENTION_MODES)[number];
+
 export const LIFE_AREA_KEYS = [
   'relations',
   'travail',
@@ -51,6 +54,29 @@ export const lifeAreasSchema = z.object({
 export type LifeAreas = Partial<Record<LifeAreaKey, LifeAreaEntry>>;
 
 const optionalText = (maximum: number, message: string) => z.string().max(maximum, message);
+const PRIVATE_PHOTO_PREFIX = 's3://onboarding/';
+
+export function isPersistedPrivatePhoto(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.startsWith(PRIVATE_PHOTO_PREFIX) &&
+    !value.includes('..') &&
+    !/^https?:\/\//i.test(value)
+  );
+}
+
+export function inferIntentionModeFromValues(value: {
+  intentionMode?: IntentionMode;
+  specificQuestion?: string;
+  objective?: string;
+  openReading?: boolean;
+}): IntentionMode | null {
+  if (value.intentionMode) return value.intentionMode;
+  if (value.openReading === true) return 'OPEN';
+  if (value.specificQuestion?.trim()) return 'QUESTION';
+  if (value.objective?.trim()) return 'SITUATION';
+  return null;
+}
 
 function parseCalendarDate(value: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -71,6 +97,7 @@ function parseCalendarDate(value: string): number | null {
 }
 
 export const readingPreparationSchema = z.object({
+  intentionMode: z.enum(INTENTION_MODES).optional(),
   usageName: optionalText(120, "Ce prénom d'usage ne peut pas dépasser 120 caractères."),
   birthDate: z
     .string()
@@ -108,17 +135,77 @@ export const readingPreparationSchema = z.object({
   consent: z.boolean(),
 });
 
-export const readingPreparationSubmissionSchema = readingPreparationSchema
-  .refine(
-    (data) => Boolean(data.specificQuestion.trim() || data.objective.trim() || data.openReading),
-    {
-      path: ['specificQuestion'],
-      message: 'Écrivez une question, une intention, ou choisissez une lecture ouverte.',
-    },
-  )
-  .refine((data) => data.consent, {
-    path: ['consent'],
-    message: 'Relisez puis confirmez la transmission de votre dossier.',
-  });
+export const readingPreparationSubmissionSchema = readingPreparationSchema.superRefine(
+  (data, context) => {
+    const intentionMode = inferIntentionModeFromValues(data);
+    if (!intentionMode) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['specificQuestion'],
+        message: 'Choisissez la manière dont vous souhaitez orienter votre lecture.',
+      });
+    }
+
+    const question = data.specificQuestion.trim();
+    const objective = data.objective.trim();
+    if (intentionMode === 'QUESTION' && question.length < 10) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['specificQuestion'],
+        message: 'Formulez votre question en au moins 10 caractères.',
+      });
+    }
+    if (intentionMode === 'SITUATION' && objective.length < 10) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['objective'],
+        message: 'Décrivez votre situation ou votre direction en au moins 10 caractères.',
+      });
+    }
+    if (intentionMode === 'OPEN' && !data.openReading) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['openReading'],
+        message: 'Confirmez explicitement la lecture ouverte.',
+      });
+    }
+    if (intentionMode === 'OPEN' && (question.length > 0 || objective.length > 0)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['intentionMode'],
+        message: 'Une lecture ouverte ne doit conserver ni question ni situation ciblée.',
+      });
+    }
+    if (intentionMode !== 'OPEN' && data.openReading) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['openReading'],
+        message: 'Le mode d’intention sélectionné ne correspond pas à une lecture ouverte.',
+      });
+    }
+
+    if (!isPersistedPrivatePhoto(data.facePhoto)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['facePhoto'],
+        message: 'Ajoutez et enregistrez une photo du visage avant de transmettre.',
+      });
+    }
+    if (!isPersistedPrivatePhoto(data.palmPhoto)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['palmPhoto'],
+        message: 'Ajoutez et enregistrez une photo de la paume avant de transmettre.',
+      });
+    }
+    if (!data.consent) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['consent'],
+        message: 'Relisez puis confirmez la transmission de votre dossier.',
+      });
+    }
+  },
+);
 
 export type ReadingPreparationData = z.infer<typeof readingPreparationSchema>;

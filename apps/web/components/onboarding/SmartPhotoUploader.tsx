@@ -92,6 +92,7 @@ export const SmartPhotoUploader = ({
   privatePreviewUrl,
   privatePreviewNode,
 }: SmartPhotoUploaderProps) => {
+  const sectionRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const attemptRef = useRef(0);
@@ -105,10 +106,23 @@ export const SmartPhotoUploader = ({
   const [previewFailed, setPreviewFailed] = useState(false);
   const [uploadState, setUploadState] = useState<PhotoUploadState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [requiredError, setRequiredError] = useState<string | null>(null);
+  const [requiredByReadingIntake, setRequiredByReadingIntake] = useState(false);
   const [privatePreviewFailed, setPrivatePreviewFailed] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCameraStarting, setIsCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const inferredKind = inferPhotoKind(label, captureFacingMode);
+  const isPrivateStorageReference = Boolean(value?.startsWith('s3://onboarding/'));
+
+  useEffect(() => {
+    setRequiredByReadingIntake(Boolean(sectionRef.current?.closest('#dossier-preparation')));
+  }, []);
+
+  useEffect(() => {
+    if (isPrivateStorageReference) setRequiredError(null);
+  }, [isPrivateStorageReference]);
 
   useEffect(() => {
     uploadStateCallbackRef.current = onUploadStateChange;
@@ -121,6 +135,18 @@ export const SmartPhotoUploader = ({
   useEffect(() => {
     setPrivatePreviewFailed(false);
   }, [privatePreviewUrl, value]);
+
+  const showRequiredError = useCallback(() => {
+    const message =
+      inferredKind === 'FACE'
+        ? 'Ajoutez et enregistrez une photo du visage avant de continuer.'
+        : 'Ajoutez et enregistrez une photo de la paume avant de continuer.';
+    setRequiredError(message);
+    window.requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      fileInputRef.current?.focus({ preventScroll: true });
+    });
+  }, [inferredKind]);
 
   const revokeObjectUrl = useCallback(() => {
     if (objectUrlRef.current) {
@@ -147,6 +173,7 @@ export const SmartPhotoUploader = ({
       retryFileRef.current = file;
       setUploadState('preparing');
       setError(null);
+      setRequiredError(null);
       setFilePreview(file);
 
       try {
@@ -155,10 +182,10 @@ export const SmartPhotoUploader = ({
           throw new Error('Cette photo dépasse 30 Mo.');
         }
 
-        const inferredKind = inferPhotoKind(label, captureFacingMode);
-        if (inferredKind) {
+        const photoKind = inferPhotoKind(label, captureFacingMode);
+        if (photoKind) {
           setUploadState('uploading');
-          const storageRef = await uploadOriginalOnboardingPhoto(file, inferredKind);
+          const storageRef = await uploadOriginalOnboardingPhoto(file, photoKind);
           if (attempt !== attemptRef.current) return;
           onChange(storageRef);
           retryFileRef.current = null;
@@ -306,7 +333,6 @@ export const SmartPhotoUploader = ({
   }, [closeWebcam, processFile]);
 
   const isBusy = uploadState === 'preparing' || uploadState === 'uploading';
-  const isPrivateStorageReference = Boolean(value?.startsWith('s3://onboarding/'));
   const hasPhoto = Boolean(localPreview || value);
   const statusText =
     uploadState === 'preparing'
@@ -362,16 +388,25 @@ export const SmartPhotoUploader = ({
 
   return (
     <section
-      className={`rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3 sm:p-4 ${className}`}
+      ref={sectionRef}
+      className={`rounded-2xl border bg-white/[0.025] p-3 sm:p-4 ${
+        requiredError ? 'border-rose-400/50' : 'border-white/[0.08]'
+      } ${className}`}
       aria-label={label}
     >
       <input
         ref={fileInputRef}
         type="file"
         tabIndex={-1}
+        required={requiredByReadingIntake && !isPrivateStorageReference}
         accept={ACCEPTED_PHOTO_FORMATS}
+        onInvalid={(event) => {
+          event.preventDefault();
+          showRequiredError();
+        }}
         onChange={(event) => void processFile(event.target.files?.[0])}
         aria-label={`Choisir une photo pour ${label.toLowerCase()}`}
+        aria-describedby={requiredError ? `${label}-required-error` : undefined}
         className="sr-only"
       />
       <input
@@ -387,7 +422,10 @@ export const SmartPhotoUploader = ({
 
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-stellar-100">{label}</h3>
+          <h3 className="text-sm font-semibold text-stellar-100">
+            {label}
+            {requiredByReadingIntake && <span className="ml-1 text-horizon-300">*</span>}
+          </h3>
           <p className="mt-1 text-xs leading-5 text-stellar-500">{description}</p>
         </div>
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">
@@ -469,6 +507,16 @@ export const SmartPhotoUploader = ({
             </button>
           </div>
         </div>
+      )}
+
+      {requiredError && (
+        <p
+          id={`${label}-required-error`}
+          className="mt-3 text-xs leading-5 text-rose-200"
+          role="alert"
+        >
+          {requiredError}
+        </p>
       )}
 
       {statusText && !isBusy && !error && (

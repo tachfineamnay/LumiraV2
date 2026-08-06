@@ -4,7 +4,7 @@ import { PrivateOnboardingPhotoService } from '../uploads/private-onboarding-pho
 import { ReadingIntakeService } from './reading-intake.service';
 
 describe('ReadingIntakeService profile persistence', () => {
-  it('keeps palmRole in the sealed intake only and never sends it to UserProfile', async () => {
+  it('keeps intake-only intention and palm metadata out of UserProfile', async () => {
     const upsert = jest.fn().mockResolvedValue({ id: 'profile-1', userId: 'user-1' });
     const tx = { userProfile: { upsert } } as unknown as Prisma.TransactionClient;
     const service = new ReadingIntakeService(
@@ -25,15 +25,16 @@ describe('ReadingIntakeService profile persistence', () => {
       tx,
       'user-1',
       {
-        openReading: false,
+        intentionMode: 'OPEN',
+        openReading: true,
         usageName: 'Greg',
         birthDate: '1986-02-22',
         birthTime: '15:16',
         birthPlace: 'Reims',
         specificQuestion: null,
         objective: null,
-        facePhotoUrl: null,
-        palmPhotoUrl: null,
+        facePhotoUrl: 's3://onboarding/user-1/face.jpg',
+        palmPhotoUrl: 's3://onboarding/user-1/palm.jpg',
         palmRole: 'PALM_RIGHT',
         highs: null,
         lows: null,
@@ -54,14 +55,16 @@ describe('ReadingIntakeService profile persistence', () => {
 
     expect(upsert).toHaveBeenCalledTimes(1);
     const payload = upsert.mock.calls[0][0];
-    expect(payload.create).not.toHaveProperty('palmRole');
-    expect(payload.update).not.toHaveProperty('palmRole');
-    expect(payload.create).not.toHaveProperty('openReading');
-    expect(payload.update).not.toHaveProperty('openReading');
+    for (const metadata of ['palmRole', 'openReading', 'intentionMode']) {
+      expect(payload.create).not.toHaveProperty(metadata);
+      expect(payload.update).not.toHaveProperty(metadata);
+    }
     expect(payload.create).toMatchObject({
       userId: 'user-1',
       birthDate: '1986-02-22',
       birthPlace: 'Reims',
+      facePhotoUrl: 's3://onboarding/user-1/face.jpg',
+      palmPhotoUrl: 's3://onboarding/user-1/palm.jpg',
       profileCompleted: true,
     });
   });
