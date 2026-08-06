@@ -54,8 +54,8 @@ describe('reading intake readiness', () => {
     ).toMatchObject({ ready: false, status: 'INVALID' });
   });
 
-  it('blocks a sealed intake when either mandatory photo is missing', () => {
-    for (const missing of ['facePhoto', 'palmPhoto'] as const) {
+  it('blocks a sealed intake when birthDate or birthPlace is missing', () => {
+    for (const missing of ['birthDate', 'birthPlace'] as const) {
       const data = { ...completeData, [missing]: null };
       const readiness = readOrderIntakeReadiness({
         intakeRequired: true,
@@ -67,10 +67,49 @@ describe('reading intake readiness', () => {
         },
       });
       expect(readiness).toMatchObject({ ready: false, status: 'INCOMPLETE' });
-      expect(readiness.missingFields).toContain(
-        missing === 'facePhoto' ? 'facePhotoUrl' : 'palmPhotoUrl',
-      );
+      expect(readiness.missingFields).toContain(missing);
+      expect(() =>
+        assertOrderIntakeReady({
+          intakeRequired: true,
+          readingIntake: {
+            status: 'SEALED',
+            sealedAt: '2026-07-20T10:00:00.000Z',
+            contentHash: 'sha256:immutable',
+            data,
+          },
+        }),
+      ).toThrow(ConflictException);
     }
+  });
+
+  it('blocks a sealed intake when face photo is missing', () => {
+    const data = { ...completeData, facePhoto: null };
+    const readiness = readOrderIntakeReadiness({
+      intakeRequired: true,
+      readingIntake: {
+        status: 'SEALED',
+        sealedAt: '2026-07-20T10:00:00.000Z',
+        contentHash: 'sha256:immutable',
+        data,
+      },
+    });
+    expect(readiness).toMatchObject({ ready: false, status: 'INCOMPLETE' });
+    expect(readiness.missingFields).toContain('facePhotoUrl');
+  });
+
+  it('blocks a sealed intake when palm photo is missing', () => {
+    const data = { ...completeData, palmPhoto: null };
+    const readiness = readOrderIntakeReadiness({
+      intakeRequired: true,
+      readingIntake: {
+        status: 'SEALED',
+        sealedAt: '2026-07-20T10:00:00.000Z',
+        contentHash: 'sha256:immutable',
+        data,
+      },
+    });
+    expect(readiness).toMatchObject({ ready: false, status: 'INCOMPLETE' });
+    expect(readiness.missingFields).toContain('palmPhotoUrl');
   });
 
   it('blocks a sealed intake without a valid intention', () => {
@@ -93,7 +132,7 @@ describe('reading intake readiness', () => {
     expect(readiness.missingFields).toContain('intention');
   });
 
-  it('accepts a complete sealed order-scoped intake', () => {
+  it('allows generation when all 5 elements are complete', () => {
     const order = {
       intakeRequired: true,
       readingIntake: {
@@ -113,6 +152,18 @@ describe('reading intake readiness', () => {
       invalidFields: [],
     });
     expect(() => assertOrderIntakeReady(order)).not.toThrow();
+  });
+
+  it('photo streaming changes do not affect or alter the production readiness guard', () => {
+    const order = {
+      intakeRequired: true,
+      readingIntake: {
+        status: 'DRAFT',
+        data: { birthDate: '1990-01-01' },
+      },
+    };
+
+    expect(() => assertOrderIntakeReady(order)).toThrow(ConflictException);
   });
 
   it('exposes the existing code for an unsealed intake', () => {
