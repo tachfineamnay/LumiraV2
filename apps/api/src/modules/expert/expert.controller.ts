@@ -18,6 +18,7 @@ import {
 import { Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ExpertService } from './expert.service';
+import { ExpertOrderPhotoService } from './expert-order-photo.service';
 import { AdminSettingsService, ModelConfig } from './admin-settings.service';
 import { AiModelCatalogService } from './ai-model-catalog.service';
 import { AudioGenerationService } from '../../services/factory/AudioGenerationService';
@@ -60,6 +61,7 @@ import {
 export class ExpertController {
   constructor(
     private readonly expertService: ExpertService,
+    private readonly orderPhotos: ExpertOrderPhotoService,
     private readonly adminSettingsService: AdminSettingsService,
     private readonly aiModelCatalogService: AiModelCatalogService,
     private readonly audioGenerationService: AudioGenerationService,
@@ -522,7 +524,7 @@ export class ExpertController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const photoKind = this.parsePhotoKind(kind);
-    const reference = await this.expertService.getOrderPhotoReference(orderId, photoKind);
+    const reference = await this.orderPhotos.getReference(orderId, photoKind);
     const key = this.privateOnboardingPhotoService.parseStorageReference(
       reference.storageRef,
       reference.userId,

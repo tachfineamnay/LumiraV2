@@ -112,19 +112,28 @@ export class ProfileFieldAmendmentRequestService {
             AND "expiresAt" <= CURRENT_TIMESTAMP
         `);
 
-        const active = await tx.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
-          SELECT "id", "status"
-          FROM "ReadingIntakeAmendment"
-          WHERE "orderId" = ${orderId}
-            AND "status" IN ('REQUESTED', 'DRAFT', 'SUBMITTED')
-          LIMIT 1
-        `);
+        const active = await tx.$queryRaw<Array<{ id: string; status: string; kind: string }>>(
+          Prisma.sql`
+            SELECT "id", "status", "kind"
+            FROM "ReadingIntakeAmendment"
+            WHERE "orderId" = ${orderId}
+              AND "status" IN ('REQUESTED', 'DRAFT', 'SUBMITTED')
+            ORDER BY "createdAt" DESC
+            LIMIT 1
+          `,
+        );
         if (active.length > 0) {
-          throw new ConflictException(
-            active[0].status === 'SUBMITTED'
-              ? 'Des informations transmises attendent encore la vérification'
-              : 'Une demande d’informations est déjà ouverte',
-          );
+          throw new ConflictException({
+            statusCode: 409,
+            code: 'AMENDMENT_ALREADY_OPEN',
+            message:
+              active[0].status === 'SUBMITTED'
+                ? 'Des informations transmises attendent encore la vérification'
+                : 'Une demande d’informations est déjà ouverte',
+            amendmentId: active[0].id,
+            amendmentStatus: active[0].status,
+            amendmentKind: active[0].kind,
+          });
         }
 
         const currentByKey = new Map(
