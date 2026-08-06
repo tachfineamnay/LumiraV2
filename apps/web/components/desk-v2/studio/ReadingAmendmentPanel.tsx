@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Clock3,
@@ -136,6 +136,7 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const createLockRef = useRef(false);
 
   const load = useCallback(
     async (silent = false) => {
@@ -182,6 +183,7 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
   );
 
   const createRequest = async () => {
+    if (createLockRef.current || creating) return;
     if (!completeness || selected.length === 0) {
       toast.error('Sélectionnez au moins une information.');
       return;
@@ -194,6 +196,7 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
       const field = completeness.fields.find((candidate) => candidate.key === key);
       return field?.status === 'INVALID' || field?.status === 'PRESENT';
     });
+    createLockRef.current = true;
     setCreating(true);
     try {
       await expertApi.post(`/expert/orders/${orderId}/amendments/required-fields`, {
@@ -207,7 +210,12 @@ export function ReadingAmendmentPanel({ orderId }: { orderId: string }) {
       await load();
     } catch (error) {
       toast.error('Demande impossible', { description: responseMessage(error) });
+      if ((error as { response?: { status?: number } })?.response?.status === 409) {
+        await load();
+        if (responseCode(error) === 'AMENDMENT_ALREADY_OPEN') setShowRequest(false);
+      }
     } finally {
+      createLockRef.current = false;
       setCreating(false);
     }
   };
@@ -649,8 +657,36 @@ function actionSuccess(action: string): string {
   return 'Demande annulée';
 }
 
+function responsePayload(error: unknown): Record<string, unknown> {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : {};
+}
+
+function responseCode(error: unknown): string | null {
+  const payload = responsePayload(error);
+  if (typeof payload.code === 'string') return payload.code;
+  const message = payload.message;
+  if (message && typeof message === 'object' && !Array.isArray(message)) {
+    const nestedCode = (message as Record<string, unknown>).code;
+    if (typeof nestedCode === 'string') return nestedCode;
+  }
+  return null;
+}
+
 function responseMessage(error: unknown): string {
-  const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
-  if (Array.isArray(message)) return message.filter((entry): entry is string => typeof entry === 'string').join(' ');
-  return typeof message === 'string' ? message : 'Vérifiez le dossier puis réessayez.';
+  const payload = responsePayload(error);
+  const message = payload.message;
+  if (Array.isArray(message)) {
+    return message.filter((entry): entry is string => typeof entry === 'string').join(' ');
+  }
+  if (typeof message === 'string') return message;
+  if (message && typeof message === 'object' && !Array.isArray(message)) {
+    const nested = (message as Record<string, unknown>).message;
+    if (typeof nested === 'string') return nested;
+  }
+  const errorValue = payload.error;
+  if (typeof errorValue === 'string') return errorValue;
+  return 'Vérifiez le dossier puis réessayez.';
 }
