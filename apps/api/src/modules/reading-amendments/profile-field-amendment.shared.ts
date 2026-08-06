@@ -169,8 +169,11 @@ export function normalizeSnapshotProfile(value: unknown): Record<string, unknown
 
 export function hasOriginalInputProjection(clientInputs: Record<string, unknown>): boolean {
   const existing = asRecord(clientInputs.readingIntake);
+  const hasCaptureBoundary = Boolean(
+    nonEmptyString(existing.sealedAt) || nonEmptyString(existing.capturedAt),
+  );
   return Boolean(
-    nonEmptyString(existing.sealedAt) &&
+    hasCaptureBoundary &&
       nonEmptyString(existing.contentHash) &&
       Object.keys(asRecord(existing.profile)).length > 0,
   );
@@ -217,7 +220,25 @@ export function resolveOriginalInput(
     };
   }
 
-  throw new ConflictException('Le dossier scellé original est introuvable');
+  const capturedAt = options.capturedAt ?? new Date();
+  const capturedFrom = !intake
+    ? 'MISSING_READING_INTAKE'
+    : intake.status === 'DRAFT'
+      ? 'READING_INTAKE_DRAFT'
+      : 'READING_INTAKE_INCOMPLETE';
+  const core = {
+    version: 'incomplete-reading-intake-capture-v1',
+    capturedAt: capturedAt.toISOString(),
+    capturedFrom,
+    sourceStatus: intake?.status ?? 'MISSING',
+    profile: normalizeSnapshotProfile(intake?.data ?? options.legacyProfile),
+    assets: {},
+    amendmentIds: [],
+  };
+  return {
+    ...core,
+    contentHash: hashCanonicalJson(core),
+  };
 }
 
 export function persistablePreparedAsset(
