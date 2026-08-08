@@ -1,5 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { SUBSCRIPTION } from '../../lib/products';
 
 export function HowItWorks() {
   return (
@@ -11,18 +12,19 @@ export function HowItWorks() {
         <div className="flex flex-col md:flex-row justify-between items-end mb-12 md:mb-20 gap-8">
           <div>
             <span className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-bold block mb-4">
-              Le Protocole
+              Comment ça marche
             </span>
             <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-7xl text-white">
-              Simple comme
+              Personnel.
               <br />
-              <span className="text-cosmic-gold opacity-80">respirer.</span>
+              <span className="text-cosmic-gold opacity-80">Simple. Encadré.</span>
             </h2>
           </div>
           <div className="max-w-sm">
             <p className="text-white/50 text-sm leading-relaxed font-light">
-              Vous n&apos;avez pas besoin de connaître l&apos;astrologie. Vous n&apos;avez pas
-              besoin de croire quoi que ce soit. Il vous suffit d&apos;être curieux de vous-même.
+              Vous n&apos;avez pas besoin de connaître l&apos;astrologie ni d&apos;adhérer à une croyance.
+              Lumira part de ce que vous vivez, de vos repères et de l&apos;intention que vous choisissez
+              de transmettre.
             </p>
             <Link
               href="/commande"
@@ -48,19 +50,18 @@ export function HowItWorks() {
               </div>
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 mb-5">
                 <span className="text-[10px] font-bold tracking-widest uppercase text-amber-300">
-                  En 2 minutes
+                  Après votre commande
                 </span>
               </div>
               <h3 className="text-2xl md:text-3xl lg:text-4xl font-playfair italic text-white mb-4">
-                Vous choisissez votre accès
+                Vous constituez votre dossier
               </h3>
               <p className="text-white/55 text-lg font-light leading-relaxed max-w-md">
-                Une seule offre, conçue pour tout inclure. Votre email suffit pour commander — vous
-                transmettez ensuite votre date, heure et lieu de naissance dans votre sanctuaire
-                privé.
+                Dans votre Sanctuaire privé, vous transmettez vos repères, votre intention et vos
+                photos. Vous pouvez relire et modifier votre dossier avant de le sceller.
               </p>
               <p className="text-white/25 text-sm mt-4 italic">
-                Pas de quiz sans fin. Pas de formulaire interminable.
+                L&apos;essentiel d&apos;abord. Le contexte complémentaire reste facultatif.
               </p>
             </div>
           </div>
@@ -74,11 +75,11 @@ export function HowItWorks() {
                 <span className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-xl">
                   ⚡
                 </span>
-                L&apos;Oracle vous analyse
+                L&apos;IA prépare, l&apos;expert affine
               </h3>
               <p className="text-white/50 text-sm font-light leading-relaxed mt-3">
-                47 paramètres astraux. Une IA avancée. Un expert humain qui vérifie. Résultat : une
-                lecture d&apos;une précision troublante.
+                La lecture est préparée à partir de votre dossier scellé. Un expert humain peut
+                orienter le travail, relire, corriger et valider le contenu avant toute livraison.
               </p>
             </div>
 
@@ -90,12 +91,14 @@ export function HowItWorks() {
                 <span className="w-10 h-10 rounded-full border border-cosmic-gold/30 flex items-center justify-center text-xl text-cosmic-gold">
                   ✨
                 </span>
-                Votre révélation arrive
+                Votre lecture vous attend
               </h3>
               <p className="text-white/65 text-sm font-light leading-relaxed mt-3">
-                PDF, audio, mandala, chat Lumira, parcours 30 jours.{' '}
-                <span className="text-amber-300/80 font-medium">Tout, sous 24h.</span> Dans votre
-                sanctuaire personnel.
+                PDF privé, narration audio et accès au Sanctuaire pendant{' '}
+                {SUBSCRIPTION.accessDurationMonths} mois.{' '}
+                <span className="text-amber-300/80 font-medium">
+                  Livraison sous 24 à 48h après scellement du dossier.
+                </span>
               </p>
               <ArrowRight
                 className="absolute bottom-10 right-10 text-cosmic-gold opacity-40 w-6 h-6 -rotate-45 group-hover:opacity-80 transition-opacity duration-500"
@@ -107,8 +110,8 @@ export function HowItWorks() {
 
         <div className="mt-16 border-t border-white/5 pt-10 flex flex-wrap justify-center gap-x-12 gap-y-4 text-white/25 text-[10px] uppercase tracking-widest">
           <span>🔒 Paiement sécurisé Stripe</span>
-          <span>⚡ Livraison sous 24h garantie</span>
-          <span>💎 Expert humain inclus</span>
+          <span>⚡ Livraison 24 à 48h après scellement</span>
+          <span>💎 Révision humaine incluse</span>
           <span>↩️ Satisfait ou remboursé 14 jours</span>
         </div>
       </div>
