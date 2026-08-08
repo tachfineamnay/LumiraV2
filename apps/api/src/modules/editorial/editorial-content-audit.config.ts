@@ -16,21 +16,26 @@ export const EDITORIAL_AUDIT_CONFIG = {
   seo: {
     description: 'Signaux techniques et éditoriaux contrôlables avant rendu public.',
     rules: {
-      'seo-title': 8,
+      'seo-title': 7,
       'seo-title-length': 6,
-      'seo-description': 8,
+      'seo-description': 7,
       'seo-description-length': 5,
       slug: 3,
       canonical: 2,
       'rendered-canonical': 1,
+      'runtime-sitemap': 1,
+      'runtime-robots': 1,
+      'runtime-http': 1,
+      'runtime-image-cdn': 1,
+      'runtime-cwv': 1,
       'content-present': 5,
       h1: 5,
       'heading-structure': 5,
       'section-headings': 5,
       paragraphs: 5,
       'focus-keyword-present': 2,
-      'focus-keyword-title': 8,
-      'focus-keyword-introduction': 8,
+      'focus-keyword-title': 7,
+      'focus-keyword-introduction': 7,
       cover: 5,
       'cover-alt': 3,
       'internal-links': 3,
@@ -38,7 +43,7 @@ export const EDITORIAL_AUDIT_CONFIG = {
       category: 3,
       tags: 3,
       indexability: 3,
-      'runtime-indexability': 2,
+      'runtime-indexability': 1,
     },
   },
   aeo: {
@@ -82,5 +87,8 @@ export const EDITORIAL_AUDIT_CONFIG = {
 } as const;
 
 export function editorialAuditWeightTotal(dimension: EditorialAuditDimension) {
-  return Object.values(EDITORIAL_AUDIT_CONFIG[dimension].rules).reduce((sum, weight) => sum + weight, 0);
+  return Object.values(EDITORIAL_AUDIT_CONFIG[dimension].rules).reduce(
+    (sum, weight) => sum + weight,
+    0,
+  );
 }

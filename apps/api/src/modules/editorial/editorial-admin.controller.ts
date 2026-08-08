@@ -15,6 +15,7 @@ import { ExpertAuthGuard, RolesGuard } from '../expert/guards';
 import { Roles, CurrentExpert } from '../expert/decorators';
 import { Expert } from '@prisma/client';
 import { EditorialService } from './editorial.service';
+import { EditorialLinkingService } from './editorial-linking.service';
 import {
   CreateEditorialArticleDto,
   UpdateEditorialArticleDto,
@@ -30,7 +31,10 @@ import {
 @UseGuards(ExpertAuthGuard, RolesGuard)
 @Roles('ADMIN')
 export class EditorialAdminController {
-  constructor(private readonly editorialService: EditorialService) {}
+  constructor(
+    private readonly editorialService: EditorialService,
+    private readonly editorialLinkingService: EditorialLinkingService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Articles
@@ -84,6 +88,55 @@ export class EditorialAdminController {
   @HttpCode(HttpStatus.OK)
   recalculateArticleAudit(@Param('id') id: string) {
     return this.editorialService.recalculateArticleAudit(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Deterministic internal-link graph. Suggestions are explicit records only;
+  // accepting one never mutates an article's canonical Tiptap document.
+  // ---------------------------------------------------------------------------
+
+  @Get('graph/orphans')
+  findOrphans() {
+    return this.editorialLinkingService.listOrphans();
+  }
+
+  @Get('graph/cluster-health')
+  clusterHealth() {
+    return this.editorialLinkingService.getClusterHealth();
+  }
+
+  @Get('graph/articles/:id')
+  articleGraph(@Param('id') id: string) {
+    return this.editorialLinkingService.getArticleGraph(id);
+  }
+
+  @Get('graph/articles/:id/suggestions')
+  articleSuggestions(@Param('id') id: string) {
+    return this.editorialLinkingService.listSuggestions(id);
+  }
+
+  @Post('graph/articles/:id/suggestions')
+  @HttpCode(HttpStatus.OK)
+  generateSuggestions(@Param('id') id: string) {
+    return this.editorialLinkingService.generateSuggestions(id);
+  }
+
+  @Post('graph/links/:id/accept')
+  @HttpCode(HttpStatus.OK)
+  acceptSuggestion(@Param('id') id: string) {
+    return this.editorialLinkingService.acceptSuggestion(id);
+  }
+
+  @Post('graph/links/:id/ignore')
+  @HttpCode(HttpStatus.OK)
+  ignoreSuggestion(@Param('id') id: string) {
+    return this.editorialLinkingService.ignoreSuggestion(id);
+  }
+
+  @Post('graph/links/:id/remove')
+  @HttpCode(HttpStatus.OK)
+  removeLink(@Param('id') id: string) {
+    return this.editorialLinkingService.removeLink(id);
   }
 
   // ---------------------------------------------------------------------------

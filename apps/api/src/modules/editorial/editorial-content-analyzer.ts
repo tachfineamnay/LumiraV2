@@ -16,6 +16,11 @@ export type EditorialFaqEntry = {
   questionBlockIndex: number;
 };
 
+export type EditorialContentEvidence = {
+  text: string;
+  blockIndex: number;
+};
+
 export type EditorialContentFacts = {
   headings: Array<{ level: number; text: string; blockIndex: number }>;
   paragraphs: Array<{ text: string; blockIndex: number }>;
@@ -30,6 +35,8 @@ export type EditorialContentFacts = {
   firstParagraph: string;
   questionSections: Array<{ level: number; text: string; blockIndex: number }>;
   faq: EditorialFaqEntry[];
+  numericClaims: EditorialContentEvidence[];
+  quotations: EditorialContentEvidence[];
 };
 
 type TiptapNode = {
@@ -61,7 +68,9 @@ function linksOf(node: TiptapNode, blockIndex: number): EditorialContentLink[] {
     ? node.marks.flatMap((mark) => {
         if (!isRecord(mark) || mark.type !== 'link' || !isRecord(mark.attrs)) return [];
         const href = mark.attrs.href;
-        return typeof href === 'string' ? [{ href, text: typeof node.text === 'string' ? node.text : '', blockIndex }] : [];
+        return typeof href === 'string'
+          ? [{ href, text: typeof node.text === 'string' ? node.text : '', blockIndex }]
+          : [];
       })
     : [];
   return [...directLinks, ...childNodes(node).flatMap((child) => linksOf(child, blockIndex))];
@@ -72,23 +81,54 @@ function linkKind(link: EditorialContentLink) {
   return /^https?:\/\//i.test(link.href) ? 'external' : 'other';
 }
 
-function extractFaq(blocks: EditorialContentBlock[], headings: EditorialContentFacts['headings']) {
-  const faqHeading = headings.find((heading) => /\bfaq\b|questions? frequentes?/i.test(heading.text));
-  if (!faqHeading) return [];
+function normalizeForMatch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
 
+function extractFaq(blocks: EditorialContentBlock[], headings: EditorialContentFacts['headings']) {
+  const faqHeadings = headings.filter((heading) =>
+    /\bfaq\b|questions? frequentes?/i.test(normalizeForMatch(heading.text)),
+  );
   const faq: EditorialFaqEntry[] = [];
-  const sortedHeadings = headings.filter((heading) => heading.blockIndex > faqHeading.blockIndex);
-  for (const question of sortedHeadings.filter((heading) => /\?$/.test(heading.text))) {
-    const nextHeading = sortedHeadings.find((heading) => heading.blockIndex > question.blockIndex);
-    const answerBlocks = blocks.filter(
-      (block) =>
-        block.index > question.blockIndex &&
-        (nextHeading === undefined || block.index < nextHeading.blockIndex) &&
-        ['paragraph', 'list', 'blockquote'].includes(block.type),
+
+  for (const faqHeading of faqHeadings) {
+    const sectionEnd = headings.find(
+      (heading) => heading.blockIndex > faqHeading.blockIndex && heading.level <= faqHeading.level,
+    )?.blockIndex;
+    const questions = headings.filter(
+      (heading) =>
+        heading.blockIndex > faqHeading.blockIndex &&
+        (sectionEnd === undefined || heading.blockIndex < sectionEnd) &&
+        heading.level > faqHeading.level &&
+        /\?$/.test(heading.text),
     );
-    const answer = answerBlocks.map((block) => block.text).filter(Boolean).join('\n').trim();
-    faq.push({ question: question.text, answer, questionBlockIndex: question.blockIndex });
+
+    for (const question of questions) {
+      const answerEnd =
+        headings.find(
+          (heading) =>
+            heading.blockIndex > question.blockIndex &&
+            (sectionEnd === undefined || heading.blockIndex < sectionEnd) &&
+            heading.level <= question.level,
+        )?.blockIndex ?? sectionEnd;
+      const answer = blocks
+        .filter(
+          (block) =>
+            block.index > question.blockIndex &&
+            (answerEnd === undefined || block.index < answerEnd) &&
+            ['paragraph', 'list', 'blockquote'].includes(block.type),
+        )
+        .map((block) => block.text)
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+      faq.push({ question: question.text, answer, questionBlockIndex: question.blockIndex });
+    }
   }
+
   return faq;
 }
 
@@ -111,7 +151,10 @@ export function analyzeEditorialContent(contentJson: unknown): EditorialContentF
     if (type === 'heading') {
       const attrs = isRecord(node.attrs) ? node.attrs : {};
       const requestedLevel = Number(attrs.level ?? 1);
-      const level = Number.isInteger(requestedLevel) && requestedLevel >= 1 && requestedLevel <= 6 ? requestedLevel : 1;
+      const level =
+        Number.isInteger(requestedLevel) && requestedLevel >= 1 && requestedLevel <= 6
+          ? requestedLevel
+          : 1;
       headings.push({ level, text, blockIndex: index });
       blocks.push({ index, type: 'heading', text });
     } else if (type === 'paragraph') {
@@ -133,8 +176,21 @@ export function analyzeEditorialContent(contentJson: unknown): EditorialContentF
 
   const internalLinks = links.filter((link) => linkKind(link) === 'internal');
   const externalLinks = links.filter((link) => linkKind(link) === 'external');
-  const wordCount = blocks.map((block) => block.text).join(' ').split(/\s+/).filter(Boolean).length;
+  const wordCount = blocks
+    .map((block) => block.text)
+    .join(' ')
+    .split(/\s+/)
+    .filter(Boolean).length;
   const questionSections = headings.filter((heading) => /\?$/.test(heading.text));
+  const evidenceBlocks = blocks.filter((block) =>
+    ['paragraph', 'list', 'blockquote'].includes(block.type),
+  );
+  const numericClaims = evidenceBlocks
+    .filter((block) => /\b\d+(?:[\s.,]\d+)*(?:\s?%|\b)/u.test(block.text))
+    .map(({ text, index }) => ({ text, blockIndex: index }));
+  const quotations = evidenceBlocks
+    .filter((block) => /[«»“”]|(?:^|\s)"[^"\n]+"/u.test(block.text))
+    .map(({ text, index }) => ({ text, blockIndex: index }));
 
   return {
     headings,
@@ -150,5 +206,7 @@ export function analyzeEditorialContent(contentJson: unknown): EditorialContentF
     firstParagraph: paragraphs[0]?.text ?? '',
     questionSections,
     faq: extractFaq(blocks, headings),
+    numericClaims,
+    quotations,
   };
 }

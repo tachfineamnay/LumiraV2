@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EditorialAdminController } from './editorial-admin.controller';
 import { EditorialPublicController } from './editorial-public.controller';
 import { EditorialService } from './editorial.service';
+import { EditorialLinkingService } from './editorial-linking.service';
 import { ExpertAuthGuard, RolesGuard } from '../expert/guards';
 import { Reflector } from '@nestjs/core';
 import { EditorialArticleStatus } from '@prisma/client';
@@ -10,6 +11,7 @@ describe('EditorialControllers (Admin & Public Routing)', () => {
   let adminController: EditorialAdminController;
   let publicController: EditorialPublicController;
   let service: jest.Mocked<EditorialService>;
+  let linkingService: jest.Mocked<EditorialLinkingService>;
 
   const mockAdminUser = {
     id: 'expert-admin-1',
@@ -50,10 +52,24 @@ describe('EditorialControllers (Admin & Public Routing)', () => {
       findPublicCategories: jest.fn(),
       findPublicCategoryBySlug: jest.fn(),
     };
+    const mockLinkingService = {
+      getArticleGraph: jest.fn(),
+      listSuggestions: jest.fn(),
+      generateSuggestions: jest.fn(),
+      acceptSuggestion: jest.fn(),
+      ignoreSuggestion: jest.fn(),
+      removeLink: jest.fn(),
+      listOrphans: jest.fn(),
+      getClusterHealth: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [EditorialAdminController, EditorialPublicController],
-      providers: [{ provide: EditorialService, useValue: mockService }, Reflector],
+      providers: [
+        { provide: EditorialService, useValue: mockService },
+        { provide: EditorialLinkingService, useValue: mockLinkingService },
+        Reflector,
+      ],
     })
       .overrideGuard(ExpertAuthGuard)
       .useValue({ canActivate: () => true })
@@ -64,6 +80,7 @@ describe('EditorialControllers (Admin & Public Routing)', () => {
     adminController = module.get<EditorialAdminController>(EditorialAdminController);
     publicController = module.get<EditorialPublicController>(EditorialPublicController);
     service = module.get(EditorialService);
+    linkingService = module.get(EditorialLinkingService);
   });
 
   describe('EditorialAdminController', () => {
@@ -131,6 +148,18 @@ describe('EditorialControllers (Admin & Public Routing)', () => {
       service.recalculateArticleAudit.mockResolvedValue(mockArticle as any);
       await adminController.recalculateArticleAudit('art-1');
       expect(service.recalculateArticleAudit).toHaveBeenCalledWith('art-1');
+    });
+
+    it('delegates graph actions to the deterministic linking service', async () => {
+      linkingService.generateSuggestions.mockResolvedValue({
+        suggestions: [],
+        ruleVersion: '2026.08.v1',
+      } as any);
+      linkingService.acceptSuggestion.mockResolvedValue({ id: 'link-1' } as any);
+      await adminController.generateSuggestions('art-1');
+      await adminController.acceptSuggestion('link-1');
+      expect(linkingService.generateSuggestions).toHaveBeenCalledWith('art-1');
+      expect(linkingService.acceptSuggestion).toHaveBeenCalledWith('link-1');
     });
 
     it('delegates resolveTagAlias to service', async () => {

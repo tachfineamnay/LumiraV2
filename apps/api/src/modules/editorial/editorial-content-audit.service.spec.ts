@@ -1,19 +1,84 @@
 import { EditorialArticleStatus } from '@prisma/client';
-import { editorialAuditWeightTotal, EDITORIAL_AUDIT_RULE_VERSION } from './editorial-content-audit.config';
+import {
+  editorialAuditWeightTotal,
+  EDITORIAL_AUDIT_RULE_VERSION,
+} from './editorial-content-audit.config';
 import { EditorialContentAuditService } from './editorial-content-audit.service';
 
 const optimizedContent = {
   type: 'doc',
   content: [
-    { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: "Comprendre la peur de l'abandon" }] },
-    { type: 'paragraph', content: [{ type: 'text', text: "La peur de l'abandon est une réaction émotionnelle fréquente. Selon 42 % des personnes interrogées, elle peut s'exprimer dans les relations." }, { type: 'text', text: ' Étude relationnelle', marks: [{ type: 'link', attrs: { href: 'https://example.org/study' } }] }] },
-    { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: "Peur de l'abandon : repères essentiels" }] },
-    { type: 'paragraph', content: [{ type: 'text', text: "Elle désigne un sentiment d'insécurité relationnelle qui peut apparaître lors d'une séparation, d'un silence ou d'un changement de rythme." }] },
-    { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: "Nommer l'émotion sans la juger." }] }] }] },
-    { type: 'paragraph', content: [{ type: 'text', text: "Prendre quelques minutes pour respirer, écrire et demander du soutien permet de créer un espace avant de réagir et de formuler une demande respectueuse." }] },
+    {
+      type: 'heading',
+      attrs: { level: 1 },
+      content: [{ type: 'text', text: "Comprendre la peur de l'abandon" }],
+    },
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: "La peur de l'abandon est une réaction émotionnelle fréquente. Selon 42 % des personnes interrogées, elle peut s'exprimer dans les relations.",
+        },
+        {
+          type: 'text',
+          text: ' Étude relationnelle',
+          marks: [{ type: 'link', attrs: { href: 'https://example.org/study' } }],
+        },
+      ],
+    },
+    {
+      type: 'heading',
+      attrs: { level: 2 },
+      content: [{ type: 'text', text: "Peur de l'abandon : repères essentiels" }],
+    },
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: "Elle désigne un sentiment d'insécurité relationnelle qui peut apparaître lors d'une séparation, d'un silence ou d'un changement de rythme.",
+        },
+      ],
+    },
+    {
+      type: 'bulletList',
+      content: [
+        {
+          type: 'listItem',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: "Nommer l'émotion sans la juger." }],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: 'Prendre quelques minutes pour respirer, écrire et demander du soutien permet de créer un espace avant de réagir et de formuler une demande respectueuse.',
+        },
+      ],
+    },
     { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'FAQ' }] },
-    { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: "Comment apaiser la peur de l'abandon ?" }] },
-    { type: 'paragraph', content: [{ type: 'text', text: "Commencez par identifier le besoin qui se manifeste, puis formulez une demande simple et respectueuse à la personne concernée." }] },
+    {
+      type: 'heading',
+      attrs: { level: 3 },
+      content: [{ type: 'text', text: "Comment apaiser la peur de l'abandon ?" }],
+    },
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: 'Commencez par identifier le besoin qui se manifeste, puis formulez une demande simple et respectueuse à la personne concernée.',
+        },
+      ],
+    },
   ],
 };
 
@@ -24,7 +89,8 @@ const input = {
   contentJson: optimizedContent,
   status: EditorialArticleStatus.PUBLISHED,
   seoTitle: "Comprendre la peur de l'abandon avec douceur",
-  seoDescription: "Un guide clair pour comprendre la peur de l'abandon, identifier ses manifestations relationnelles et adopter des repères concrets avec douceur.",
+  seoDescription:
+    "Un guide clair pour comprendre la peur de l'abandon, identifier ses manifestations relationnelles et adopter des repères concrets avec douceur.",
   focusKeyword: "peur de l'abandon",
   canonical: 'https://oraclelumira.com/blog/comprendre-la-peur-de-labandon',
   category: { id: 'cat-1', isActive: true },
@@ -69,12 +135,38 @@ describe('EditorialContentAuditService', () => {
     expect(result.score).toBeGreaterThan(0);
     expect(result.score).toBeLessThan(100);
     expect(result.coverage).toBeLessThan(100);
+    for (const id of [
+      'runtime-sitemap',
+      'runtime-robots',
+      'runtime-http',
+      'runtime-image-cdn',
+      'runtime-cwv',
+    ]) {
+      expect(result.rules.find((rule) => rule.id === id)?.status).toBe('DEFERRED');
+    }
   });
 
   it('uses soft title, description and content-length signals rather than false hard failures', () => {
-    const result = service.auditSeo({ ...input, seoTitle: 'Court', seoDescription: 'Trop brève.', contentJson: { type: 'doc', content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Sujet valable' }] }, { type: 'paragraph', content: [{ type: 'text', text: 'Un texte court.' }] }] } });
+    const result = service.auditSeo({
+      ...input,
+      seoTitle: 'Court',
+      seoDescription: 'Trop brève.',
+      contentJson: {
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 1 },
+            content: [{ type: 'text', text: 'Sujet valable' }],
+          },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Un texte court.' }] },
+        ],
+      },
+    });
     expect(result.rules.find((rule) => rule.id === 'seo-title-length')?.status).toBe('WARNING');
-    expect(result.rules.find((rule) => rule.id === 'seo-description-length')?.status).toBe('WARNING');
+    expect(result.rules.find((rule) => rule.id === 'seo-description-length')?.status).toBe(
+      'WARNING',
+    );
     expect(result.rules.find((rule) => rule.id === 'content-present')?.status).toBe('WARNING');
   });
 
@@ -86,14 +178,43 @@ describe('EditorialContentAuditService', () => {
   });
 
   it('returns NA for optional FAQ and focus-keyword rules', () => {
-    const result = service.auditAll({ ...input, focusKeyword: null, contentJson: { type: 'doc', content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Sujet relationnel' }] }, { type: 'paragraph', content: [{ type: 'text', text: 'Une introduction suffisamment explicite pour être analysée.' }] }] } });
+    const result = service.auditAll({
+      ...input,
+      focusKeyword: null,
+      contentJson: {
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 1 },
+            content: [{ type: 'text', text: 'Sujet relationnel' }],
+          },
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Une introduction suffisamment explicite pour être analysée.' },
+            ],
+          },
+        ],
+      },
+    });
     expect(result.seo.rules.find((rule) => rule.id === 'focus-keyword-present')?.status).toBe('NA');
     expect(result.aeo.rules.find((rule) => rule.id === 'faq-detected')?.status).toBe('NA');
   });
 
   it('exposes PASS, WARNING, FAIL, NA and DEFERRED without network checks', () => {
-    const bundle = service.auditAll({ ...input, seoTitle: null, focusKeyword: null, contentJson: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Bref' }] }] } });
-    const statuses = new Set([...bundle.seo.rules, ...bundle.aeo.rules, ...bundle.geo.rules].map((rule) => rule.status));
+    const bundle = service.auditAll({
+      ...input,
+      seoTitle: null,
+      focusKeyword: null,
+      contentJson: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Bref' }] }],
+      },
+    });
+    const statuses = new Set(
+      [...bundle.seo.rules, ...bundle.aeo.rules, ...bundle.geo.rules].map((rule) => rule.status),
+    );
     for (const status of ['PASS', 'WARNING', 'FAIL', 'NA', 'DEFERRED']) {
       expect(statuses).toContain(status);
     }
@@ -102,14 +223,80 @@ describe('EditorialContentAuditService', () => {
   it('passes evidence proximity only when an external source is near an observable claim', () => {
     const result = service.auditGeo(input);
     expect(result.rules.find((rule) => rule.id === 'evidence-proximity')?.status).toBe('PASS');
-    const separated = service.auditGeo({ ...input, contentJson: { type: 'doc', content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Sujet relationnel' }] }, { type: 'paragraph', content: [{ type: 'text', text: 'Un contexte sans chiffre ni citation.' }] }, { type: 'paragraph', content: [{ type: 'text', text: 'Source externe', marks: [{ type: 'link', attrs: { href: 'https://example.org/source' } }] }] }] } });
-    expect(separated.rules.find((rule) => rule.id === 'evidence-proximity')?.status).toBe('WARNING');
+    const separated = service.auditGeo({
+      ...input,
+      contentJson: {
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 1 },
+            content: [{ type: 'text', text: 'Sujet relationnel' }],
+          },
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: '42 % des personnes concernées signalent ce contexte.' },
+            ],
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Un contexte intermédiaire sans source.' }],
+          },
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: 'Source externe',
+                marks: [{ type: 'link', attrs: { href: 'https://example.org/source' } }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(separated.rules.find((rule) => rule.id === 'evidence-proximity')?.status).toBe(
+      'WARNING',
+    );
+  });
+
+  it('does not score evidence proximity when there is no numeric claim or quotation to attribute', () => {
+    const result = service.auditGeo({
+      ...input,
+      contentJson: {
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 1 },
+            content: [{ type: 'text', text: 'Sujet relationnel' }],
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Une explication qualitative sans fait chiffré.' }],
+          },
+        ],
+      },
+    });
+    expect(result.rules.find((rule) => rule.id === 'evidence-proximity')?.status).toBe('NA');
   });
 
   it('blocks only controlled publication invariants and leaves recommendations as warnings', () => {
     expect(service.auditAll({ ...input, seoTitle: null }).publicationGate.status).toBe('WARNING');
-    const blocked = service.auditAll({ ...input, slug: 'slug invalide', category: null, contentJson: { type: 'doc', content: [] } });
+    const blocked = service.auditAll({
+      ...input,
+      slug: 'slug invalide',
+      category: null,
+      contentJson: { type: 'doc', content: [] },
+    });
     expect(blocked.publicationGate.status).toBe('BLOCKED');
-    expect(blocked.publicationGate.reasons).toEqual(expect.arrayContaining(['Le contenu éditorial est vide ou invalide.', 'Le slug est invalide.', 'Une catégorie active est requise.']));
+    expect(blocked.publicationGate.reasons).toEqual(
+      expect.arrayContaining([
+        'Le contenu éditorial est vide ou invalide.',
+        'Le slug est invalide.',
+        'Une catégorie active est requise.',
+      ]),
+    );
   });
 });
