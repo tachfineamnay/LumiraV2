@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { LandingAnchorLink } from './LandingAnchorLink';
+import { SUBSCRIPTION } from '../../lib/products';
 
 /**
  * Hero above the fold — fully server-rendered for LCP.
@@ -14,17 +15,9 @@ export function LandingHero() {
       />
 
       <div className="relative mx-auto flex w-full max-w-[1600px] flex-col items-center motion-safe:animate-hero-enter">
-        <div className="mb-8 flex items-center gap-3 md:mb-12">
-          <div className="flex -space-x-3" aria-hidden>
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="h-7 w-7 rounded-full border border-white/20 bg-gradient-to-br from-white/10 to-white/5 md:h-8 md:w-8"
-              />
-            ))}
-          </div>
+        <div className="mb-8 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 md:mb-12">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-cosmic-ethereal/60 md:text-xs md:tracking-[0.2em]">
-            2 500+ âmes éveillées · 4.9/5
+            Lecture personnalisée · IA assistée · Révision humaine
           </p>
         </div>
 
@@ -36,15 +29,16 @@ export function LandingHero() {
             </span>
           </h1>
 
-          <div className="mx-auto mt-8 max-w-xl px-2 md:mt-12">
-            <p className="text-base font-light leading-relaxed tracking-wide text-white/85 md:text-xl lg:text-2xl">
-              Ce que les autres mettent des années à comprendre sur eux-mêmes —
+          <div className="mx-auto mt-8 max-w-2xl px-2 md:mt-12">
+            <p className="font-playfair text-2xl italic leading-relaxed text-white/90 md:text-3xl lg:text-4xl">
+              Voir plus clair en soi.
             </p>
-            <p className="mt-2 text-base font-light leading-relaxed tracking-wide text-cosmic-gold/90 md:text-xl lg:text-2xl">
-              Lumira vous le révèle en 24 heures.
+            <p className="mx-auto mt-4 max-w-xl text-sm font-light leading-relaxed tracking-wide text-white/65 md:text-lg lg:text-xl">
+              Une lecture personnelle pour mettre des mots sur ce que vous traversez et regarder
+              votre situation autrement.
             </p>
-            <p className="mt-4 text-[11px] uppercase tracking-[0.15em] text-white/40 md:mt-5 md:text-sm md:tracking-[0.2em]">
-              Analyse vibratoire · Intelligence IA · Expert humain
+            <p className="mt-5 text-[11px] uppercase tracking-[0.15em] text-white/40 md:text-sm md:tracking-[0.2em]">
+              Votre dossier · Préparation par IA · Validation par un expert
             </p>
           </div>
         </div>
@@ -63,25 +57,29 @@ export function LandingHero() {
             </span>
           </LandingAnchorLink>
 
-          <div className="mt-4 flex items-center gap-5 opacity-50 md:mt-6 md:gap-8">
+          <div className="mt-4 flex items-center gap-5 opacity-60 md:mt-6 md:gap-8">
             <div className="flex flex-col items-center">
-              <span className="font-playfair text-lg italic text-white md:text-xl">4.9</span>
+              <span className="font-playfair text-lg italic text-white md:text-xl">
+                {SUBSCRIPTION.price}€
+              </span>
               <span className="text-[9px] uppercase tracking-widest text-white/40 md:text-[10px]">
-                Note
+                paiement unique
               </span>
             </div>
             <div className="h-6 w-px bg-white/10 md:h-8" />
             <div className="flex flex-col items-center">
-              <span className="font-playfair text-lg italic text-white md:text-xl">24h</span>
+              <span className="font-playfair text-lg italic text-white md:text-xl">24–48h</span>
               <span className="text-[9px] uppercase tracking-widest text-white/40 md:text-[10px]">
-                Livraison
+                après scellement
               </span>
             </div>
             <div className="h-6 w-px bg-white/10 md:h-8" />
             <div className="flex flex-col items-center">
-              <span className="font-playfair text-lg italic text-white md:text-xl">17€</span>
+              <span className="font-playfair text-lg italic text-white md:text-xl">
+                {SUBSCRIPTION.accessDurationMonths} mois
+              </span>
               <span className="text-[9px] uppercase tracking-widest text-white/40 md:text-[10px]">
-                early · 3 mois
+                Sanctuaire
               </span>
             </div>
           </div>
