@@ -27,13 +27,13 @@ export function LandingPricing() {
             L&apos;offre de lancement
           </span>
           <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-6xl text-cosmic-divine mt-4 mb-6">
-            Tout. Pour le prix d&apos;un déjeuner.
+            Une lecture complète. Un seul paiement.
           </h2>
           <p className="text-cosmic-ethereal max-w-2xl mx-auto text-lg leading-relaxed font-light">
-            Nous aurions pu facturer chaque livrable séparément. Nous avons choisi l&apos;accès
-            complet à{' '}
-            <span className="text-white/80 font-medium">{SUBSCRIPTION.price}€ une seule fois</span>{' '}
-            — accès Sanctuaire {SUBSCRIPTION.accessDurationMonths} mois pour les early adopters.
+            Votre lecture personnalisée, sa révision humaine, le PDF, l&apos;audio et l&apos;accès au
+            Sanctuaire sont réunis dans une seule offre à{' '}
+            <span className="text-white/80 font-medium">{SUBSCRIPTION.price}€</span> pour les early
+            adopters.
           </p>
         </div>
 
@@ -51,9 +51,6 @@ export function LandingPricing() {
                     </span>
                   </div>
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="whitespace-nowrap text-2xl font-light text-white/30 line-through">
-                      97€
-                    </span>
                     <span className="whitespace-nowrap text-5xl font-playfair italic text-white md:text-6xl">
                       {SUBSCRIPTION.price}€
                     </span>
@@ -70,7 +67,7 @@ export function LandingPricing() {
                     className="group/btn relative inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 text-center text-base font-bold text-abyss-900 transition-all duration-300 hover:from-amber-400 hover:to-amber-500 hover:shadow-[0_0_40px_rgba(245,158,11,0.4)] md:w-auto md:px-8 md:hover:scale-105"
                   >
                     <Sparkles className="w-5 h-5" aria-hidden />
-                    Commencer mon voyage — {SUBSCRIPTION.price}€
+                    Recevoir ma lecture — {SUBSCRIPTION.price}€
                   </Link>
                   <div className="flex items-center gap-1.5 text-emerald-400/70 text-xs">
                     <ShieldCheck className="w-3.5 h-3.5" aria-hidden />
@@ -121,7 +118,7 @@ export function LandingPricing() {
             <div className="p-4 md:p-6 md:px-12 flex flex-wrap items-center justify-center gap-x-4 md:gap-x-6 gap-y-2 text-white/40 text-xs">
               <div className="flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-emerald-400/60" aria-hidden />
-                <span>Accès immédiat au sanctuaire</span>
+                <span>Accès immédiat au Sanctuaire</span>
               </div>
               <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
               <div className="flex items-center gap-1.5">
@@ -131,7 +128,7 @@ export function LandingPricing() {
               <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
               <div className="flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-emerald-400/60" aria-hidden />
-                <span>Lecture livrée sous 24h</span>
+                <span>Lecture livrée sous 24 à 48h après scellement</span>
               </div>
               <div className="w-1 h-1 rounded-full bg-white/20 hidden sm:block" />
               <div className="flex items-center gap-1.5">
