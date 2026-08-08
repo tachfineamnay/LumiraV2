@@ -970,6 +970,7 @@ model EditorialArticle {
   inboundLinks  EditorialArticleLink[] @relation("EditorialLinkTarget")
 
   publicationEvents EditorialPublicationEvent[]
+  performanceSnapshots EditorialPerformanceSnapshot[]
 
   @@index([status, publishedAt])
   @@index([status, scheduledAt])
@@ -991,6 +992,8 @@ model EditorialCategory {
   updatedAt      DateTime @updatedAt
 
   articles EditorialArticle[]
+  researchQueries EditorialResearchQuery[]
+  opportunities   EditorialOpportunity[]
 
   @@index([isActive])
   @@index([sortOrder])
@@ -1080,3 +1083,161 @@ model EditorialPublicationEvent {
   @@index([articleId, createdAt(sort: Desc)])
   @@index([scheduledFor])
 }
+
+// =============================================================================
+// EDITORIAL INTELLIGENCE MODULE — Foundation & Intelligence Models
+// =============================================================================
+
+enum EditorialOpportunityStatus {
+  NEW
+  SAVED
+  PLANNED
+  COVERED
+  IGNORED
+}
+
+enum EditorialModelProfile {
+  RESEARCH_FAST
+  RESEARCH_DEEP
+  SERP_ANALYSIS
+  LINKING
+  SEO_COPILOT
+}
+
+model EditorialIntelligenceSettings {
+  id                      String   @id @default("default")
+  enabled                 Boolean  @default(false)
+  projectId               String?
+  location                String   @default("europe-west9")
+  authStatus              String   @default("NOT_CONFIGURED")
+  vertexStatus            String   @default("UNCHECKED")
+  models                  Json
+  country                 String   @default("FR")
+  language                String   @default("fr")
+  locale                  String   @default("fr-FR")
+  secondaryMarkets        String[] @default([])
+  groundingEnabled        Boolean  @default(true)
+  confidenceMinimum       Float    @default(0.7)
+  opportunityWeights      Json
+  opportunityScanEnabled Boolean  @default(false)
+  opportunityScanFrequency String  @default("DAILY")
+  competitorScanEnabled   Boolean  @default(false)
+  competitorScanFrequency String  @default("WEEKLY")
+  performanceSyncEnabled  Boolean  @default(false)
+  dailyCallLimit          Int      @default(100)
+  monthlyWarningThreshold Int      @default(2000)
+  concurrencyLimit        Int      @default(5)
+  timeoutMs               Int      @default(30000)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model EditorialCompetitor {
+  id             String   @id @default(cuid())
+  domain         String   @unique
+  name           String
+  isTracked      Boolean  @default(true)
+  targetKeywords String[]
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isTracked])
+}
+
+model EditorialResearchQuery {
+  id        String   @id @default(cuid())
+  query     String
+  country   String   @default("FR")
+  language  String   @default("fr")
+  status    String   @default("NEW")
+  inputHash String   @unique
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categoryId String?
+  category   EditorialCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  snapshots EditorialResearchSnapshot[]
+
+  @@index([country, language])
+  @@index([status])
+}
+
+model EditorialOpportunity {
+  id               String                     @id @default(cuid())
+  topic            String
+  slugCandidate    String?
+  status           EditorialOpportunityStatus @default(NEW)
+  score            Float                      @default(0)
+  intentScore      Float                      @default(0)
+  weaknessScore    Float                      @default(0)
+  demandScore      Float                      @default(0)
+  topicalFitScore  Float                      @default(0)
+  trendScore       Float                      @default(0)
+  specificityScore Float                      @default(0)
+  clusterGapScore  Float                      @default(0)
+  inputHash        String?
+  metadata         Json?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  categoryId String?
+  category   EditorialCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  snapshots EditorialResearchSnapshot[]
+
+  @@index([status, score(sort: Desc)])
+  @@index([categoryId])
+}
+
+model EditorialResearchSnapshot {
+  id          String   @id @default(cuid())
+  source      String
+  data        Json
+  contentHash String
+  createdAt   DateTime @default(now())
+
+  queryId String?
+  query   EditorialResearchQuery? @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  opportunityId String?
+  opportunity   EditorialOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([queryId])
+  @@index([opportunityId])
+  @@index([createdAt(sort: Desc)])
+}
+
+model EditorialAiInsight {
+  id           String                @id @default(cuid())
+  targetType   String
+  targetId     String
+  insightType  String
+  payload      Json
+  modelProfile EditorialModelProfile
+  modelUsed    String
+  inputHash    String
+  createdAt    DateTime              @default(now())
+
+  @@index([targetType, targetId])
+  @@index([insightType])
+  @@index([createdAt(sort: Desc)])
+}
+
+model EditorialPerformanceSnapshot {
+  id          String   @id @default(cuid())
+  metricType  String
+  data        Json
+  contentHash String
+  createdAt   DateTime @default(now())
+
+  articleId String?
+  article   EditorialArticle? @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId])
+  @@index([metricType])
+  @@index([createdAt(sort: Desc)])
+}
+

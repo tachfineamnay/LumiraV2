@@ -25,6 +25,7 @@ import { GuidanceRequestsModule } from './modules/guidance-requests/guidance-req
 import { ReadingAmendmentModule } from './modules/reading-amendments/reading-amendment.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { EditorialModule } from './modules/editorial/editorial.module';
+import { EditorialIntelligenceModule } from './modules/editorial-intelligence/editorial-intelligence.module';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 import { validateEnvironment } from './config/validate-env';
 
@@ -54,6 +55,7 @@ import { validateEnvironment } from './config/validate-env';
     NotificationsModule,
     ExpertModule,
     EditorialModule,
+    EditorialIntelligenceModule,
     ReadingAmendmentModule,
     GuidanceRequestsModule,
     ProductsModule,
