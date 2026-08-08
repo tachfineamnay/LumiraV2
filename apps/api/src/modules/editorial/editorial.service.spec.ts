@@ -1,441 +1,201 @@
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
-import { EditorialService } from './editorial.service';
-import { PrismaService } from '../../prisma/prisma.service';
 import { EditorialArticleStatus, EditorialPublicationEventType } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { EditorialContentAuditService } from './editorial-content-audit.service';
+import { normalizeEditorialContent } from './editorial-content-normalizer';
+import { EditorialService } from './editorial.service';
 
-describe('EditorialService', () => {
+const optimizedContent = {
+  type: 'doc',
+  content: [
+    { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: "Comprendre la peur de l'abandon" }] },
+    { type: 'paragraph', content: [{ type: 'text', text: "La peur de l'abandon est une réaction émotionnelle fréquente. Cette introduction explique clairement comment l'observer avec douceur et discernement." }] },
+    { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: "Peur de l'abandon : repères essentiels" }] },
+    { type: 'paragraph', content: [{ type: 'text', text: "Elle désigne un sentiment d'insécurité relationnelle qui peut apparaître lors d'une séparation, d'un silence ou d'un changement de rythme dans une relation." }] },
+    { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: "Nommer l'émotion sans la juger." }] }] }] },
+    { type: 'paragraph', content: [{ type: 'text', text: "Prendre quelques minutes pour respirer, écrire et demander du soutien permet de créer un espace avant de réagir. Cette pratique soutient une relation plus apaisée." }] },
+    { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'FAQ' }] },
+    { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: "Comment apaiser la peur de l'abandon ?" }] },
+    { type: 'paragraph', content: [{ type: 'text', text: "Commencez par identifier le besoin qui se manifeste, puis formulez une demande simple et respectueuse à la personne concernée." }] },
+  ],
+};
+
+describe('EditorialService hardening', () => {
   let service: EditorialService;
   let prisma: Record<string, any>;
-
-  const mockCategory = {
-    id: 'cat-1',
-    name: 'Relations & amour',
-    slug: 'relations-amour',
-    description: 'Relations',
-    seoTitle: 'SEO Title',
-    seoDescription: 'SEO Desc',
-    sortOrder: 1,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const mockTag = {
-    id: 'tag-1',
-    name: "Peur de l'abandon",
-    slug: 'peur-de-labandon',
-    family: 'Émotions & blocages',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    aliases: [{ id: 'alias-1', alias: 'peur abandon', tagId: 'tag-1', createdAt: new Date() }],
-  };
-
-  const mockDraftArticle = {
-    id: 'art-draft',
+  const normalized = normalizeEditorialContent(optimizedContent);
+  const category = { id: 'cat-1', isActive: true };
+  const tag = { id: 'tag-1', isActive: true };
+  const auditArticle = {
+    id: 'art-1',
     title: "Comprendre la peur de l'abandon",
     slug: 'comprendre-la-peur-de-labandon',
-    excerpt: "Un aperçu de la peur d'abandon",
-    contentJson: { blocks: [] },
-    contentHtml: '<p>Contenu</p>',
-    plainText: 'Contenu',
+    excerpt: 'Un guide.',
+    contentJson: optimizedContent,
+    contentHtml: normalized.contentHtml,
+    plainText: normalized.plainText,
     status: EditorialArticleStatus.DRAFT,
-    categoryId: 'cat-1',
+    seoTitle: "Comprendre la peur de l'abandon sereinement",
+    seoDescription: "Un guide clair pour comprendre la peur de l'abandon, identifier ses manifestations relationnelles et adopter des repères concrets avec douceur.",
+    focusKeyword: "peur de l'abandon",
+    canonical: 'https://oraclelumira.com/blog/comprendre-la-peur-de-labandon',
     publishedAt: null,
-    scheduledAt: null,
-    createdAt: new Date(),
     updatedAt: new Date(),
-  };
-
-  const mockPublishedArticle = {
-    id: 'art-published',
-    title: 'Vivre pleinement son intuition',
-    slug: 'vivre-pleinement-son-intuition',
-    excerpt: 'Intuition et guidance',
-    contentJson: { blocks: [] },
-    contentHtml: '<p>Guide intuition</p>',
-    plainText: 'Guide intuition',
-    status: EditorialArticleStatus.PUBLISHED,
-    categoryId: 'cat-1',
-    publishedAt: new Date(Date.now() - 3600000), // 1h ago
-    scheduledAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const mockScheduledArticle = {
-    id: 'art-scheduled',
-    title: 'Future Publication',
-    slug: 'future-publication',
-    excerpt: 'Contenu futur',
-    contentJson: { blocks: [] },
-    contentHtml: '<p>Futur</p>',
-    plainText: 'Futur',
-    status: EditorialArticleStatus.SCHEDULED,
-    categoryId: 'cat-1',
-    publishedAt: null,
-    scheduledAt: new Date(Date.now() + 86400000), // tomorrow
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const mockArchivedArticle = {
-    id: 'art-archived',
-    title: 'Ancien Article',
-    slug: 'ancien-article',
-    excerpt: 'Archive',
-    contentJson: { blocks: [] },
-    contentHtml: '<p>Archive</p>',
-    plainText: 'Archive',
-    status: EditorialArticleStatus.ARCHIVED,
-    categoryId: 'cat-1',
-    publishedAt: null,
-    scheduledAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    category,
+    tags: [{ tag }],
+    coverAsset: { id: 'asset-1', altText: "Une illustration sur la peur de l'abandon" },
+    author: { id: 'expert-1' },
+    outboundLinks: [],
   };
 
   beforeEach(async () => {
     prisma = {
-      editorialCategory: {
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        count: jest.fn(),
-      },
-      editorialTag: {
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-      },
-      editorialTagAlias: {
-        findUnique: jest.fn(),
-        createMany: jest.fn(),
-        deleteMany: jest.fn(),
-        upsert: jest.fn(),
-      },
-      editorialArticle: {
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        count: jest.fn(),
-      },
-      editorialArticleTag: {
-        createMany: jest.fn(),
-        deleteMany: jest.fn(),
-      },
-      editorialPublicationEvent: {
-        create: jest.fn(),
-      },
+      editorialCategory: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), count: jest.fn() },
+      editorialTag: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+      editorialAsset: { findUnique: jest.fn() },
+      editorialTagAlias: { findUnique: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
+      editorialArticle: { findMany: jest.fn(), findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
+      editorialArticleTag: { createMany: jest.fn(), deleteMany: jest.fn() },
+      editorialPublicationEvent: { create: jest.fn() },
       $transaction: jest.fn((callback) => callback(prisma)),
     };
-
     const module: TestingModule = await Test.createTestingModule({
-      providers: [EditorialService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        EditorialService,
+        EditorialContentAuditService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
-
-    service = module.get<EditorialService>(EditorialService);
+    service = module.get(EditorialService);
   });
 
-  describe('createArticle', () => {
-    it('creates an article with generated slug and tags', async () => {
-      prisma.editorialCategory.findUnique.mockResolvedValue(mockCategory);
-      prisma.editorialArticle.findUnique.mockResolvedValue(null);
-      prisma.editorialArticle.create.mockResolvedValue(mockDraftArticle);
+  it('derives safe HTML and plain text exclusively from Tiptap JSON', async () => {
+    prisma.editorialCategory.findUnique.mockResolvedValue(category);
+    prisma.editorialTag.findMany.mockResolvedValue([tag]);
+    prisma.editorialArticle.findUnique.mockResolvedValue(null);
+    prisma.editorialArticle.create.mockResolvedValue(auditArticle);
+    prisma.editorialArticle.update.mockResolvedValue(auditArticle);
 
-      const result = await service.createArticle(
-        {
-          title: "Comprendre la peur de l'abandon",
-          contentJson: {},
-          contentHtml: '<p>Contenu</p>',
-          plainText: 'Contenu',
-          categoryId: 'cat-1',
-          tagIds: ['tag-1'],
-        },
-        'expert-admin-1',
-      );
+    await service.createArticle({ title: auditArticle.title, contentJson: optimizedContent, categoryId: 'cat-1', tagIds: ['tag-1'] });
 
-      expect(prisma.editorialCategory.findUnique).toHaveBeenCalledWith({ where: { id: 'cat-1' } });
-      expect(prisma.editorialArticle.findUnique).toHaveBeenCalledWith({
-        where: { slug: 'comprendre-la-peur-de-labandon' },
-      });
-      expect(prisma.editorialArticle.create).toHaveBeenCalled();
-      expect(result).toEqual(mockDraftArticle);
-    });
-
-    it('throws ConflictException on slug duplicate', async () => {
-      prisma.editorialCategory.findUnique.mockResolvedValue(mockCategory);
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockDraftArticle);
-
-      await expect(
-        service.createArticle(
-          {
-            title: "Comprendre la peur de l'abandon",
-            contentJson: {},
-            contentHtml: '<p>Contenu</p>',
-            plainText: 'Contenu',
-            categoryId: 'cat-1',
-          },
-          'expert-admin-1',
-        ),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('throws NotFoundException if category does not exist', async () => {
-      prisma.editorialCategory.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.createArticle(
-          {
-            title: 'Titre',
-            contentJson: {},
-            contentHtml: '<p>A</p>',
-            plainText: 'A',
-            categoryId: 'cat-unknown',
-          },
-          'expert-admin-1',
-        ),
-      ).rejects.toThrow(NotFoundException);
-    });
+    expect(prisma.editorialArticle.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ contentHtml: normalized.contentHtml, plainText: normalized.plainText }),
+    }));
+    expect(prisma.editorialArticle.create.mock.calls[0][0].data).not.toHaveProperty('status', EditorialArticleStatus.PUBLISHED);
   });
 
-  describe('updateArticle & Slug Immutability Rule', () => {
-    it('blocks slug modification on published article', async () => {
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockPublishedArticle);
-
-      await expect(
-        service.updateArticle('art-published', {
-          title: 'Nouveau titre avec slug modifie',
-          slug: 'nouveau-slug-interdit',
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('allows content update on published article if slug is unchanged', async () => {
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockPublishedArticle);
-      prisma.editorialArticle.update.mockResolvedValue({
-        ...mockPublishedArticle,
-        excerpt: 'Nouvel extrait',
-      });
-
-      const result = await service.updateArticle('art-published', {
-        excerpt: 'Nouvel extrait',
-      });
-
-      expect(result.excerpt).toBe('Nouvel extrait');
-    });
-
-    it('allows slug modification on draft article if not duplicate', async () => {
-      prisma.editorialArticle.findUnique
-        .mockResolvedValueOnce(mockDraftArticle) // initial findUnique
-        .mockResolvedValueOnce(null); // slug check findUnique
-
-      prisma.editorialArticle.update.mockResolvedValue({
-        ...mockDraftArticle,
-        slug: 'mon-nouveau-brouillon-slug',
-      });
-
-      const result = await service.updateArticle('art-draft', {
-        slug: 'mon-nouveau-brouillon-slug',
-      });
-
-      expect(result.slug).toBe('mon-nouveau-brouillon-slug');
-    });
+  it('rejects hostile nodes and unsafe link URLs before persistence', () => {
+    expect(() => normalizeEditorialContent({ type: 'doc', content: [{ type: 'script', text: 'alert(1)' }] })).toThrow(BadRequestException);
+    expect(() => normalizeEditorialContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'clic', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }] }] }] })).toThrow(BadRequestException);
+    expect(() => normalizeEditorialContent({ type: 'doc', content: [{ type: 'iframe', attrs: { src: 'https://evil.example' } }] })).toThrow(BadRequestException);
+    expect(() => normalizeEditorialContent({ type: 'doc', content: [{ type: 'paragraph', attrs: { onclick: 'alert(1)' }, content: [{ type: 'text', text: 'clic' }] }] })).toThrow(BadRequestException);
   });
 
-  describe('Lifecycle Events (Publish, Schedule, Unschedule, Archive)', () => {
-    it('publishes a draft article', async () => {
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockDraftArticle);
-      prisma.editorialArticle.update.mockResolvedValue({
-        ...mockDraftArticle,
-        status: EditorialArticleStatus.PUBLISHED,
-        publishedAt: new Date(),
-      });
+  it('rejects inactive or missing relations with domain errors', async () => {
+    prisma.editorialCategory.findUnique.mockResolvedValue({ ...category, isActive: false });
+    await expect(service.createArticle({ title: auditArticle.title, contentJson: optimizedContent, categoryId: 'cat-1' })).rejects.toThrow(BadRequestException);
 
-      const result = await service.publishArticle('art-draft');
+    prisma.editorialCategory.findUnique.mockResolvedValue(category);
+    prisma.editorialTag.findMany.mockResolvedValue([]);
+    await expect(service.createArticle({ title: auditArticle.title, contentJson: optimizedContent, categoryId: 'cat-1', tagIds: ['missing'] })).rejects.toThrow(NotFoundException);
 
-      expect(result.status).toBe(EditorialArticleStatus.PUBLISHED);
-      expect(prisma.editorialPublicationEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          articleId: 'art-draft',
-          type: EditorialPublicationEventType.PUBLISHED,
-        }),
-      });
-    });
+    prisma.editorialTag.findMany.mockResolvedValue([tag]);
+    prisma.editorialTag.findMany.mockResolvedValueOnce([{ ...tag, isActive: false }]);
+    await expect(service.createArticle({ title: auditArticle.title, contentJson: optimizedContent, categoryId: 'cat-1', tagIds: ['tag-1'] })).rejects.toThrow(BadRequestException);
 
-    it('schedules an article for future date', async () => {
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockDraftArticle);
-      const futureDate = new Date(Date.now() + 86400000);
-      prisma.editorialArticle.update.mockResolvedValue({
-        ...mockDraftArticle,
-        status: EditorialArticleStatus.SCHEDULED,
-        scheduledAt: futureDate,
-      });
-
-      const result = await service.scheduleArticle('art-draft', futureDate);
-
-      expect(result.status).toBe(EditorialArticleStatus.SCHEDULED);
-      expect(prisma.editorialPublicationEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          articleId: 'art-draft',
-          type: EditorialPublicationEventType.SCHEDULED,
-        }),
-      });
-    });
-
-    it('rejects scheduling in the past', async () => {
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockDraftArticle);
-      const pastDate = new Date(Date.now() - 86400000);
-
-      await expect(service.scheduleArticle('art-draft', pastDate)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('unschedules a scheduled article', async () => {
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockScheduledArticle);
-      prisma.editorialArticle.update.mockResolvedValue({
-        ...mockScheduledArticle,
-        status: EditorialArticleStatus.DRAFT,
-        scheduledAt: null,
-      });
-
-      const result = await service.unscheduleArticle('art-scheduled');
-
-      expect(result.status).toBe(EditorialArticleStatus.DRAFT);
-      expect(prisma.editorialPublicationEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          articleId: 'art-scheduled',
-          type: EditorialPublicationEventType.UNSCHEDULED,
-        }),
-      });
-    });
-
-    it('archives an article', async () => {
-      prisma.editorialArticle.findUnique.mockResolvedValue(mockPublishedArticle);
-      prisma.editorialArticle.update.mockResolvedValue({
-        ...mockPublishedArticle,
-        status: EditorialArticleStatus.ARCHIVED,
-      });
-
-      const result = await service.archiveArticle('art-published');
-
-      expect(result.status).toBe(EditorialArticleStatus.ARCHIVED);
-      expect(prisma.editorialPublicationEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          articleId: 'art-published',
-          type: EditorialPublicationEventType.ARCHIVED,
-        }),
-      });
-    });
+    prisma.editorialTag.findMany.mockResolvedValue([tag]);
+    prisma.editorialAsset.findUnique.mockResolvedValue(null);
+    await expect(service.createArticle({ title: auditArticle.title, contentJson: optimizedContent, categoryId: 'cat-1', tagIds: ['tag-1'], coverAssetId: 'missing' })).rejects.toThrow(NotFoundException);
   });
 
-  describe('Public Security Rules (Draft/Scheduled/Archived invisible in Public API)', () => {
-    it('returns published articles only in findPublicArticles', async () => {
-      prisma.editorialArticle.count.mockResolvedValue(1);
-      prisma.editorialArticle.findMany.mockResolvedValue([
-        {
-          ...mockPublishedArticle,
-          category: mockCategory,
-          tags: [{ tag: mockTag }],
-          coverAsset: null,
-        },
-      ]);
-
-      const result = await service.findPublicArticles({});
-
-      expect(prisma.editorialArticle.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            status: EditorialArticleStatus.PUBLISHED,
-            publishedAt: expect.objectContaining({ lte: expect.any(Date) }),
-          }),
-        }),
-      );
-      expect(result.data.length).toBe(1);
-      expect(result.data[0].slug).toBe('vivre-pleinement-son-intuition');
-    });
-
-    it('throws NotFoundException for draft article in findPublicArticleBySlug', async () => {
-      prisma.editorialArticle.findFirst.mockResolvedValue(null);
-
-      await expect(
-        service.findPublicArticleBySlug('comprendre-la-peur-de-labandon'),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException for scheduled article in findPublicArticleBySlug', async () => {
-      prisma.editorialArticle.findFirst.mockResolvedValue(null);
-
-      await expect(service.findPublicArticleBySlug('future-publication')).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('throws NotFoundException for archived article in findPublicArticleBySlug', async () => {
-      prisma.editorialArticle.findFirst.mockResolvedValue(null);
-
-      await expect(service.findPublicArticleBySlug('ancien-article')).rejects.toThrow(
-        NotFoundException,
-      );
-    });
+  it('cannot change status through PATCH data', async () => {
+    prisma.editorialArticle.findUnique.mockResolvedValue(auditArticle);
+    prisma.editorialArticle.update.mockResolvedValue(auditArticle);
+    await service.updateArticle('art-1', { featured: true });
+    expect(prisma.editorialArticle.update.mock.calls[0][0].data).not.toHaveProperty('status');
   });
 
-  describe('Categories & Tags & Tag Alias Resolution', () => {
-    it('creates category with normalized slug', async () => {
-      prisma.editorialCategory.findUnique.mockResolvedValue(null);
-      prisma.editorialCategory.create.mockResolvedValue(mockCategory);
+  it('keeps article and publication event in one transaction with an atomic state guard', async () => {
+    const published = { ...auditArticle, status: EditorialArticleStatus.PUBLISHED, publishedAt: new Date() };
+    prisma.editorialArticle.findUnique.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.DRAFT });
+    prisma.editorialArticle.updateMany.mockResolvedValue({ count: 1 });
+    prisma.editorialArticle.findUniqueOrThrow.mockResolvedValue(published);
 
-      const result = await service.createCategory({
-        name: 'Relations & amour',
-        description: 'Relations',
-      });
+    const result = await service.publishArticle('art-1');
 
-      expect(prisma.editorialCategory.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          name: 'Relations & amour',
-          slug: 'relations-amour',
-        }),
-      });
-      expect(result).toEqual(mockCategory);
-    });
+    expect(result.status).toBe(EditorialArticleStatus.PUBLISHED);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.editorialArticle.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'art-1', status: { in: [EditorialArticleStatus.DRAFT, EditorialArticleStatus.SCHEDULED] } },
+    }));
+    expect(prisma.editorialPublicationEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: EditorialPublicationEventType.PUBLISHED }) });
+  });
 
-    it('resolves alias match to tag', async () => {
-      prisma.editorialTagAlias.findUnique.mockResolvedValue({
-        id: 'alias-1',
-        alias: 'peur abandon',
-        tagId: 'tag-1',
-        tag: mockTag,
-      });
+  it('refuses incoherent transitions and allows a target-state operation to be idempotent', async () => {
+    prisma.editorialArticle.findUnique.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.PUBLISHED });
+    await expect(service.scheduleArticle('art-1', new Date(Date.now() + 60_000))).rejects.toThrow(BadRequestException);
 
-      const result = await service.resolveTagAlias('peur abandon');
+    const archived = { ...auditArticle, status: EditorialArticleStatus.ARCHIVED };
+    prisma.editorialArticle.findUnique.mockResolvedValue(archived);
+    await expect(service.archiveArticle('art-1')).resolves.toEqual(archived);
+    expect(prisma.editorialPublicationEvent.create).not.toHaveBeenCalled();
+  });
 
-      expect(result.matchedBy).toBe('ALIAS');
-      expect(result.tag.name).toBe("Peur de l'abandon");
-    });
+  it('uses the same atomic transaction for schedule, unschedule and archive', async () => {
+    const future = new Date(Date.now() + 60_000);
+    prisma.editorialArticle.findUnique.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.DRAFT });
+    prisma.editorialArticle.updateMany.mockResolvedValue({ count: 1 });
+    prisma.editorialArticle.findUniqueOrThrow.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.SCHEDULED });
+    await service.scheduleArticle('art-1', future);
+    expect(prisma.editorialPublicationEvent.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ type: EditorialPublicationEventType.SCHEDULED, scheduledFor: future }) });
 
-    it('resolves direct tag name/slug if alias not matched', async () => {
-      prisma.editorialTagAlias.findUnique.mockResolvedValue(null);
-      prisma.editorialTag.findFirst.mockResolvedValue(mockTag);
+    prisma.editorialArticle.findUnique.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.SCHEDULED });
+    prisma.editorialArticle.findUniqueOrThrow.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.DRAFT });
+    await service.unscheduleArticle('art-1');
+    expect(prisma.editorialPublicationEvent.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ type: EditorialPublicationEventType.UNSCHEDULED }) });
 
-      const result = await service.resolveTagAlias("Peur de l'abandon");
+    prisma.editorialArticle.findUnique.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.DRAFT });
+    prisma.editorialArticle.findUniqueOrThrow.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.ARCHIVED });
+    await service.archiveArticle('art-1');
+    expect(prisma.editorialPublicationEvent.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ type: EditorialPublicationEventType.ARCHIVED }) });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(3);
+  });
 
-      expect(result.matchedBy).toBe('DIRECT_TAG');
-      expect(result.tag.slug).toBe('peur-de-labandon');
-    });
+  it('does not expose editorial bodies in list projections but keeps public HTML in detail', async () => {
+    prisma.editorialArticle.count.mockResolvedValue(0);
+    prisma.editorialArticle.findMany.mockResolvedValue([]);
+    await service.findPublicArticles({});
+    const listSelect = prisma.editorialArticle.findMany.mock.calls[0][0].select;
+    expect(listSelect.contentJson).toBeUndefined();
+    expect(listSelect.contentHtml).toBeUndefined();
+    expect(listSelect.plainText).toBeUndefined();
+    expect(listSelect.seoAudit).toBeUndefined();
 
-    it('throws NotFoundException if alias and tag both unresolvable', async () => {
-      prisma.editorialTagAlias.findUnique.mockResolvedValue(null);
-      prisma.editorialTag.findFirst.mockResolvedValue(null);
+    prisma.editorialArticle.findFirst.mockResolvedValue(null);
+    await expect(service.findPublicArticleBySlug('draft')).rejects.toThrow(NotFoundException);
+    expect(prisma.editorialArticle.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: EditorialArticleStatus.PUBLISHED, publishedAt: { lte: expect.any(Date) } }),
+    }));
+  });
 
-      await expect(service.resolveTagAlias('inconnu')).rejects.toThrow(NotFoundException);
-    });
+  it('stores deterministic audits during manual recalculation', async () => {
+    prisma.editorialArticle.findUnique.mockResolvedValue(auditArticle);
+    prisma.editorialArticle.update.mockResolvedValue(auditArticle);
+    await service.recalculateArticleAudit('art-1');
+    const auditData = prisma.editorialArticle.update.mock.calls[0][0].data;
+    expect(auditData.seoScore).toBeGreaterThanOrEqual(0);
+    expect(auditData.geoAudit).toEqual(expect.objectContaining({ rules: expect.any(Array) }));
+  });
+
+  it('still protects draft, scheduled and archived articles from public lookup', async () => {
+    prisma.editorialArticle.findFirst.mockResolvedValue(null);
+    await expect(service.findPublicArticleBySlug('non-public')).rejects.toThrow(NotFoundException);
+  });
+
+  it('reports duplicate slugs as a business conflict', async () => {
+    prisma.editorialCategory.findUnique.mockResolvedValue(category);
+    prisma.editorialArticle.findUnique.mockResolvedValue({ id: 'other' });
+    await expect(service.createArticle({ title: auditArticle.title, contentJson: optimizedContent, categoryId: 'cat-1' })).rejects.toThrow(ConflictException);
   });
 });

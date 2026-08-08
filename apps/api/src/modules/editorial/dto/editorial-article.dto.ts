@@ -6,10 +6,8 @@ import {
   IsArray,
   IsObject,
   IsDate,
-  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { EditorialArticleStatus } from '@prisma/client';
 
 export class CreateEditorialArticleDto {
   @IsString()
@@ -26,14 +24,6 @@ export class CreateEditorialArticleDto {
 
   @IsObject()
   contentJson: Record<string, unknown>;
-
-  @IsString()
-  @IsNotEmpty()
-  contentHtml: string;
-
-  @IsString()
-  @IsNotEmpty()
-  plainText: string;
 
   @IsString()
   @IsNotEmpty()
@@ -88,14 +78,6 @@ export class UpdateEditorialArticleDto {
 
   @IsString()
   @IsOptional()
-  contentHtml?: string;
-
-  @IsString()
-  @IsOptional()
-  plainText?: string;
-
-  @IsString()
-  @IsOptional()
   categoryId?: string;
 
   @IsArray()
@@ -127,9 +109,6 @@ export class UpdateEditorialArticleDto {
   @IsOptional()
   featured?: boolean;
 
-  @IsEnum(EditorialArticleStatus)
-  @IsOptional()
-  status?: EditorialArticleStatus;
 }
 
 export class ScheduleArticleDto {

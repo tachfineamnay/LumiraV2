@@ -37,6 +37,7 @@ describe('EditorialControllers (Admin & Public Routing)', () => {
       scheduleArticle: jest.fn(),
       unscheduleArticle: jest.fn(),
       archiveArticle: jest.fn(),
+      recalculateArticleAudit: jest.fn(),
       findAllCategories: jest.fn(),
       createCategory: jest.fn(),
       updateCategory: jest.fn(),
@@ -90,8 +91,6 @@ describe('EditorialControllers (Admin & Public Routing)', () => {
         {
           title: 'Test',
           contentJson: {},
-          contentHtml: '<p>T</p>',
-          plainText: 'T',
           categoryId: 'cat-1',
         },
         mockAdminUser as any,
@@ -126,6 +125,12 @@ describe('EditorialControllers (Admin & Public Routing)', () => {
       service.archiveArticle.mockResolvedValue(mockArticle as any);
       await adminController.archiveArticle('art-1');
       expect(service.archiveArticle).toHaveBeenCalledWith('art-1');
+    });
+
+    it('delegates a manual audit to the service', async () => {
+      service.recalculateArticleAudit.mockResolvedValue(mockArticle as any);
+      await adminController.recalculateArticleAudit('art-1');
+      expect(service.recalculateArticleAudit).toHaveBeenCalledWith('art-1');
     });
 
     it('delegates resolveTagAlias to service', async () => {

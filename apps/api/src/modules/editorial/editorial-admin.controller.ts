@@ -80,6 +80,12 @@ export class EditorialAdminController {
     return this.editorialService.archiveArticle(id);
   }
 
+  @Post('articles/:id/audit')
+  @HttpCode(HttpStatus.OK)
+  recalculateArticleAudit(@Param('id') id: string) {
+    return this.editorialService.recalculateArticleAudit(id);
+  }
+
   // ---------------------------------------------------------------------------
   // Categories
   // ---------------------------------------------------------------------------

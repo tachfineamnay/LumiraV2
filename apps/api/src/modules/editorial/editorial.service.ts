@@ -17,10 +17,33 @@ import {
 } from './dto';
 import { slugify } from './editorial-slug.utils';
 import { EditorialArticleStatus, EditorialPublicationEventType, Prisma } from '@prisma/client';
+import { normalizeEditorialContent } from './editorial-content-normalizer';
+import {
+  EditorialContentAuditInput,
+  EditorialContentAuditService,
+} from './editorial-content-audit.service';
+
+const ARTICLE_AUDIT_INCLUDE = {
+  category: { select: { id: true, isActive: true } },
+  tags: { select: { tag: { select: { id: true, isActive: true } } } },
+  coverAsset: { select: { id: true, altText: true } },
+  author: { select: { id: true } },
+  outboundLinks: {
+    where: { status: 'ACTIVE' },
+    select: { anchorText: true, targetArticle: { select: { slug: true } } },
+  },
+} satisfies Prisma.EditorialArticleInclude;
+
+type EditorialArticleForAudit = Prisma.EditorialArticleGetPayload<{
+  include: typeof ARTICLE_AUDIT_INCLUDE;
+}>;
 
 @Injectable()
 export class EditorialService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly contentAudit: EditorialContentAuditService,
+  ) {}
 
   // ===========================================================================
   // ADMIN — Articles
@@ -117,58 +140,43 @@ export class EditorialService {
       throw new BadRequestException('Un slug valide ne peut pas être généré à partir du titre.');
     }
 
-    // Verify category existence
-    const category = await this.prisma.editorialCategory.findUnique({
-      where: { id: dto.categoryId },
-    });
-    if (!category) {
-      throw new NotFoundException(`Catégorie introuvable (${dto.categoryId})`);
-    }
+    const content = normalizeEditorialContent(dto.contentJson);
+    return this.prisma.$transaction(async (tx) => {
+      await this.validateArticleRelations(tx, dto.categoryId, dto.tagIds, dto.coverAssetId);
 
-    // Verify slug uniqueness
-    const existing = await this.prisma.editorialArticle.findUnique({
-      where: { slug: normalizedSlug },
-    });
-    if (existing) {
-      throw new ConflictException(`Un article avec le slug '${normalizedSlug}' existe déjà.`);
-    }
+      const existing = await tx.editorialArticle.findUnique({ where: { slug: normalizedSlug } });
+      if (existing) {
+        throw new ConflictException(`Un article avec le slug '${normalizedSlug}' existe déjà.`);
+      }
 
-    return this.prisma.editorialArticle.create({
-      data: {
-        title: dto.title,
-        slug: normalizedSlug,
-        excerpt: dto.excerpt,
-        contentJson: dto.contentJson,
-        contentHtml: dto.contentHtml,
-        plainText: dto.plainText,
-        categoryId: dto.categoryId,
-        coverAssetId: dto.coverAssetId,
-        seoTitle: dto.seoTitle,
-        seoDescription: dto.seoDescription,
-        focusKeyword: dto.focusKeyword,
-        canonical: dto.canonical,
-        featured: dto.featured ?? false,
-        authorId: authorId || null,
-        status: EditorialArticleStatus.DRAFT,
-        tags: dto.tagIds?.length
-          ? {
-              create: dto.tagIds.map((tagId) => ({ tagId })),
-            }
-          : undefined,
-      },
-      include: {
-        category: true,
-        tags: { include: { tag: true } },
-        coverAsset: true,
-      },
+      const article = await tx.editorialArticle.create({
+        data: {
+          title: dto.title,
+          slug: normalizedSlug,
+          excerpt: dto.excerpt,
+          contentJson: dto.contentJson as Prisma.InputJsonValue,
+          contentHtml: content.contentHtml,
+          plainText: content.plainText,
+          categoryId: dto.categoryId,
+          coverAssetId: dto.coverAssetId,
+          seoTitle: dto.seoTitle,
+          seoDescription: dto.seoDescription,
+          focusKeyword: dto.focusKeyword,
+          canonical: dto.canonical,
+          featured: dto.featured ?? false,
+          authorId: authorId || null,
+          status: EditorialArticleStatus.DRAFT,
+          tags: dto.tagIds?.length ? { create: dto.tagIds.map((tagId) => ({ tagId })) } : undefined,
+        },
+        include: ARTICLE_AUDIT_INCLUDE,
+      });
+
+      return this.persistAudit(tx, article);
     });
   }
 
   async updateArticle(id: string, dto: UpdateEditorialArticleDto) {
-    const article = await this.prisma.editorialArticle.findUnique({
-      where: { id },
-      include: { tags: true },
-    });
+    const article = await this.prisma.editorialArticle.findUnique({ where: { id } });
 
     if (!article) {
       throw new NotFoundException(`Article introuvable (${id})`);
@@ -199,16 +207,31 @@ export class EditorialService {
       }
     }
 
-    if (dto.categoryId && dto.categoryId !== article.categoryId) {
-      const category = await this.prisma.editorialCategory.findUnique({
-        where: { id: dto.categoryId },
-      });
-      if (!category) {
-        throw new NotFoundException(`Catégorie introuvable (${dto.categoryId})`);
-      }
-    }
+    const content = dto.contentJson === undefined ? undefined : normalizeEditorialContent(dto.contentJson);
+    const affectsAudit =
+      dto.title !== undefined ||
+      dto.slug !== undefined ||
+      dto.excerpt !== undefined ||
+      dto.contentJson !== undefined ||
+      dto.categoryId !== undefined ||
+      dto.tagIds !== undefined ||
+      dto.coverAssetId !== undefined ||
+      dto.seoTitle !== undefined ||
+      dto.seoDescription !== undefined ||
+      dto.focusKeyword !== undefined ||
+      dto.canonical !== undefined;
 
     return this.prisma.$transaction(async (tx) => {
+      if (dto.categoryId !== undefined) {
+        await this.validateArticleRelations(tx, dto.categoryId, undefined, undefined);
+      }
+      if (dto.tagIds !== undefined) {
+        await this.validateTags(tx, dto.tagIds);
+      }
+      if (dto.coverAssetId !== undefined) {
+        await this.validateCoverAsset(tx, dto.coverAssetId);
+      }
+
       if (dto.tagIds !== undefined) {
         await tx.editorialArticleTag.deleteMany({
           where: { articleId: id },
@@ -220,15 +243,15 @@ export class EditorialService {
         }
       }
 
-      return tx.editorialArticle.update({
+      const updated = await tx.editorialArticle.update({
         where: { id },
         data: {
           title: dto.title,
           slug: normalizedSlug,
           excerpt: dto.excerpt,
-          contentJson: dto.contentJson,
-          contentHtml: dto.contentHtml,
-          plainText: dto.plainText,
+          contentJson: dto.contentJson === undefined ? undefined : (dto.contentJson as Prisma.InputJsonValue),
+          contentHtml: content?.contentHtml,
+          plainText: content?.plainText,
           categoryId: dto.categoryId,
           coverAssetId: dto.coverAssetId,
           seoTitle: dto.seoTitle,
@@ -236,119 +259,168 @@ export class EditorialService {
           focusKeyword: dto.focusKeyword,
           canonical: dto.canonical,
           featured: dto.featured,
-          status: dto.status,
         },
-        include: {
-          category: true,
-          tags: { include: { tag: true } },
-          coverAsset: true,
-        },
+        include: ARTICLE_AUDIT_INCLUDE,
       });
+
+      return affectsAudit ? this.persistAudit(tx, updated) : updated;
     });
   }
 
   async publishArticle(id: string) {
-    const article = await this.prisma.editorialArticle.findUnique({ where: { id } });
-    if (!article) {
-      throw new NotFoundException(`Article introuvable (${id})`);
-    }
-
     const now = new Date();
-    const updated = await this.prisma.editorialArticle.update({
-      where: { id },
-      data: {
-        status: EditorialArticleStatus.PUBLISHED,
-        publishedAt: article.publishedAt || now,
-        scheduledAt: null,
-      },
+    return this.transitionArticle({
+      id,
+      target: EditorialArticleStatus.PUBLISHED,
+      allowedFrom: [EditorialArticleStatus.DRAFT, EditorialArticleStatus.SCHEDULED],
+      data: { publishedAt: now, scheduledAt: null },
+      event: { type: EditorialPublicationEventType.PUBLISHED, executedAt: now },
     });
-
-    await this.prisma.editorialPublicationEvent.create({
-      data: {
-        articleId: id,
-        type: EditorialPublicationEventType.PUBLISHED,
-        executedAt: now,
-      },
-    });
-
-    return updated;
   }
 
   async scheduleArticle(id: string, scheduledAt: Date) {
-    const article = await this.prisma.editorialArticle.findUnique({ where: { id } });
-    if (!article) {
-      throw new NotFoundException(`Article introuvable (${id})`);
-    }
-
     const targetDate = new Date(scheduledAt);
     if (isNaN(targetDate.getTime()) || targetDate <= new Date()) {
       throw new BadRequestException('La date de programmation doit être dans le futur.');
     }
 
-    const updated = await this.prisma.editorialArticle.update({
-      where: { id },
-      data: {
-        status: EditorialArticleStatus.SCHEDULED,
-        scheduledAt: targetDate,
-      },
+    return this.transitionArticle({
+      id,
+      target: EditorialArticleStatus.SCHEDULED,
+      allowedFrom: [EditorialArticleStatus.DRAFT],
+      data: { scheduledAt: targetDate },
+      event: { type: EditorialPublicationEventType.SCHEDULED, scheduledFor: targetDate },
     });
-
-    await this.prisma.editorialPublicationEvent.create({
-      data: {
-        articleId: id,
-        type: EditorialPublicationEventType.SCHEDULED,
-        scheduledFor: targetDate,
-      },
-    });
-
-    return updated;
   }
 
   async unscheduleArticle(id: string) {
-    const article = await this.prisma.editorialArticle.findUnique({ where: { id } });
-    if (!article) {
-      throw new NotFoundException(`Article introuvable (${id})`);
-    }
-
-    const updated = await this.prisma.editorialArticle.update({
-      where: { id },
-      data: {
-        status: EditorialArticleStatus.DRAFT,
-        scheduledAt: null,
-      },
+    const now = new Date();
+    return this.transitionArticle({
+      id,
+      target: EditorialArticleStatus.DRAFT,
+      allowedFrom: [EditorialArticleStatus.SCHEDULED],
+      data: { scheduledAt: null },
+      event: { type: EditorialPublicationEventType.UNSCHEDULED, executedAt: now },
     });
-
-    await this.prisma.editorialPublicationEvent.create({
-      data: {
-        articleId: id,
-        type: EditorialPublicationEventType.UNSCHEDULED,
-      },
-    });
-
-    return updated;
   }
 
   async archiveArticle(id: string) {
-    const article = await this.prisma.editorialArticle.findUnique({ where: { id } });
-    if (!article) {
-      throw new NotFoundException(`Article introuvable (${id})`);
-    }
+    const now = new Date();
+    return this.transitionArticle({
+      id,
+      target: EditorialArticleStatus.ARCHIVED,
+      allowedFrom: [
+        EditorialArticleStatus.DRAFT,
+        EditorialArticleStatus.SCHEDULED,
+        EditorialArticleStatus.PUBLISHED,
+      ],
+      data: { scheduledAt: null },
+      event: { type: EditorialPublicationEventType.ARCHIVED, executedAt: now },
+    });
+  }
 
-    const updated = await this.prisma.editorialArticle.update({
+  async recalculateArticleAudit(id: string) {
+    const article = await this.prisma.editorialArticle.findUnique({
       where: { id },
-      data: {
-        status: EditorialArticleStatus.ARCHIVED,
-      },
+      include: ARTICLE_AUDIT_INCLUDE,
     });
+    if (!article) throw new NotFoundException(`Article introuvable (${id})`);
+    return this.persistAudit(this.prisma, article);
+  }
 
-    await this.prisma.editorialPublicationEvent.create({
-      data: {
-        articleId: id,
-        type: EditorialPublicationEventType.ARCHIVED,
-      },
+  private async validateArticleRelations(
+    tx: Prisma.TransactionClient,
+    categoryId: string,
+    tagIds?: string[],
+    coverAssetId?: string,
+  ) {
+    const category = await tx.editorialCategory.findUnique({ where: { id: categoryId } });
+    if (!category) throw new NotFoundException(`Catégorie introuvable (${categoryId})`);
+    if (!category.isActive) throw new BadRequestException(`La catégorie (${categoryId}) est inactive.`);
+    if (tagIds !== undefined) await this.validateTags(tx, tagIds);
+    if (coverAssetId !== undefined) await this.validateCoverAsset(tx, coverAssetId);
+  }
+
+  private async validateTags(tx: Prisma.TransactionClient, tagIds: string[]) {
+    const uniqueTagIds = [...new Set(tagIds)];
+    if (uniqueTagIds.length !== tagIds.length) {
+      throw new BadRequestException('Un tag ne peut être associé qu’une seule fois à un article.');
+    }
+    if (!uniqueTagIds.length) return;
+    const tags = await tx.editorialTag.findMany({ where: { id: { in: uniqueTagIds } } });
+    if (tags.length !== uniqueTagIds.length) {
+      throw new NotFoundException('Au moins un tag est introuvable.');
+    }
+    if (tags.some((tag) => !tag.isActive)) {
+      throw new BadRequestException('Les tags associés à un article doivent être actifs.');
+    }
+  }
+
+  private async validateCoverAsset(tx: Prisma.TransactionClient, coverAssetId: string) {
+    const asset = await tx.editorialAsset.findUnique({ where: { id: coverAssetId } });
+    if (!asset) throw new NotFoundException(`Asset de couverture introuvable (${coverAssetId})`);
+  }
+
+  private async transitionArticle(options: {
+    id: string;
+    target: EditorialArticleStatus;
+    allowedFrom: EditorialArticleStatus[];
+    data: Prisma.EditorialArticleUpdateManyMutationInput;
+    event: Prisma.EditorialPublicationEventCreateWithoutArticleInput;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.editorialArticle.findUnique({ where: { id: options.id } });
+      if (!current) throw new NotFoundException(`Article introuvable (${options.id})`);
+      if (current.status === options.target) return current;
+      if (!options.allowedFrom.includes(current.status)) {
+        throw new BadRequestException(`Transition ${current.status} → ${options.target} non autorisée.`);
+      }
+
+      const update = await tx.editorialArticle.updateMany({
+        where: { id: options.id, status: { in: options.allowedFrom } },
+        data: { ...options.data, status: options.target },
+      });
+      if (update.count !== 1) {
+        throw new ConflictException('La transition éditoriale a été modifiée par une autre opération.');
+      }
+      await tx.editorialPublicationEvent.create({ data: { articleId: options.id, ...options.event } });
+      return tx.editorialArticle.findUniqueOrThrow({ where: { id: options.id } });
     });
+  }
 
-    return updated;
+  private async persistAudit(tx: Prisma.TransactionClient | PrismaService, article: EditorialArticleForAudit) {
+    const input: EditorialContentAuditInput = {
+      title: article.title,
+      slug: article.slug,
+      excerpt: article.excerpt,
+      contentHtml: article.contentHtml,
+      plainText: article.plainText,
+      status: article.status,
+      seoTitle: article.seoTitle,
+      seoDescription: article.seoDescription,
+      focusKeyword: article.focusKeyword,
+      canonical: article.canonical,
+      category: article.category,
+      tags: article.tags.map(({ tag }) => tag),
+      coverAsset: article.coverAsset,
+      author: article.author,
+      publishedAt: article.publishedAt,
+      updatedAt: article.updatedAt,
+      outboundLinks: article.outboundLinks,
+    };
+    const audit = this.contentAudit.auditAll(input);
+    return tx.editorialArticle.update({
+      where: { id: article.id },
+      data: {
+        seoScore: audit.seo.score,
+        aeoScore: audit.aeo.score,
+        geoScore: audit.geo.score,
+        seoAudit: audit.seo as Prisma.InputJsonValue,
+        aeoAudit: audit.aeo as Prisma.InputJsonValue,
+        geoAudit: audit.geo as Prisma.InputJsonValue,
+      },
+      include: ARTICLE_AUDIT_INCLUDE,
+    });
   }
 
   // ===========================================================================
@@ -628,8 +700,6 @@ export class EditorialService {
           title: true,
           slug: true,
           excerpt: true,
-          contentJson: true,
-          contentHtml: true,
           publishedAt: true,
           featured: true,
           seoTitle: true,
@@ -677,14 +747,11 @@ export class EditorialService {
         title: true,
         slug: true,
         excerpt: true,
-        contentJson: true,
         contentHtml: true,
-        plainText: true,
         publishedAt: true,
         featured: true,
         seoTitle: true,
         seoDescription: true,
-        focusKeyword: true,
         canonical: true,
         category: {
           select: { id: true, name: true, slug: true, description: true },
