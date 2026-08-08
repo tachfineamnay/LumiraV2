@@ -24,6 +24,7 @@ import { DreamsModule } from './modules/dreams/dreams.module';
 import { GuidanceRequestsModule } from './modules/guidance-requests/guidance-requests.module';
 import { ReadingAmendmentModule } from './modules/reading-amendments/reading-amendment.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { EditorialModule } from './modules/editorial/editorial.module';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 import { validateEnvironment } from './config/validate-env';
 
@@ -52,6 +53,7 @@ import { validateEnvironment } from './config/validate-env';
     WebhooksModule,
     NotificationsModule,
     ExpertModule,
+    EditorialModule,
     ReadingAmendmentModule,
     GuidanceRequestsModule,
     ProductsModule,

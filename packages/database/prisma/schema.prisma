@@ -174,20 +174,20 @@ model User {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  profile       UserProfile?
-  orders        Order[]
-  spiritualPaths SpiritualPath[]
-  chatSessions  ChatSession[]
-  akashicRecord AkashicRecord?
-  notifications Notification[]
-  subscription  Subscription? // V2: Single-offer subscription
-  dreams        Dream[] // V2: Dream journal entries
+  profile               UserProfile?
+  orders                Order[]
+  spiritualPaths        SpiritualPath[]
+  chatSessions          ChatSession[]
+  akashicRecord         AkashicRecord?
+  notifications         Notification[]
+  subscription          Subscription? // V2: Single-offer subscription
+  dreams                Dream[] // V2: Dream journal entries
   sanctuaireLoginTokens SanctuaireLoginToken[]
-  consents      ConsentRecord[]
-  onboardingProgress OnboardingProgress?
-  readingIntakes ReadingIntake[]
-  memories      UserMemory[]
-  memorySyncJobs MemorySyncJob[]
+  consents              ConsentRecord[]
+  onboardingProgress    OnboardingProgress?
+  readingIntakes        ReadingIntake[]
+  memories              UserMemory[]
+  memorySyncJobs        MemorySyncJob[]
 
   @@index([email])
   @@index([refId])
@@ -199,13 +199,13 @@ model User {
 /// Single-use magic links for Sanctuaire access. Only a SHA-256 digest of the
 /// bearer token is persisted, so a database dump cannot be used to log in.
 model SanctuaireLoginToken {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String   @unique
-  expiresAt DateTime
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
   consumedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([userId, expiresAt])
   @@index([expiresAt])
@@ -236,22 +236,22 @@ model Notification {
 }
 
 model UserProfile {
-  id               String    @id @default(cuid())
-  userId           String    @unique
-  user             User      @relation(fields: [userId], references: [id])
+  id               String      @id @default(cuid())
+  userId           String      @unique
+  user             User        @relation(fields: [userId], references: [id])
   /// Prénom d'usage ou surnom utilisé pour la symbolique du nom.
   usageName        String?
   birthDate        String?
   birthTime        String?
   birthPlace       String?
-  specificQuestion String?   @db.Text
-  objective        String?   @db.Text
+  specificQuestion String?     @db.Text
+  objective        String?     @db.Text
   facePhotoUrl     String?
   palmPhotoUrl     String?
-  highs            String?   @db.Text
-  lows             String?   @db.Text
+  highs            String?     @db.Text
+  lows             String?     @db.Text
   /// Période ou événement de vie marquant déclaré par le client.
-  lifeEvents       String?   @db.Text
+  lifeEvents       String?     @db.Text
   /// Météo de vie par domaine: { relations?: { state, note? }, travail?, corps?, creativite?, interieur?, direction? }
   lifeAreas        Json?
   strongSide       String?
@@ -260,66 +260,66 @@ model UserProfile {
   weakZone         String?
   deliveryStyle    String?
   pace             Int?
-  ailments         String?   @db.Text
-  fears            String?   @db.Text
-  rituals          String?   @db.Text
+  ailments         String?     @db.Text
+  fears            String?     @db.Text
+  rituals          String?     @db.Text
   preferredVoice   AudioVoice? // Voix préférée pour le TTS (MASCULINE/FEMININE)
-  profileCompleted Boolean   @default(false)
+  profileCompleted Boolean     @default(false)
   submittedAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 }
 
 model Order {
-  id                 String          @id @default(cuid())
-  orderNumber        String          @unique
-  userId             String
-  user               User            @relation(fields: [userId], references: [id])
-  userEmail          String
-  userName           String?
-  amount             Int
-  currency           String          @default("eur")
-  status             OrderStatus     @default(PENDING)
-  paymentIntentId    String?
+  id                      String          @id @default(cuid())
+  orderNumber             String          @unique
+  userId                  String
+  user                    User            @relation(fields: [userId], references: [id])
+  userEmail               String
+  userName                String?
+  amount                  Int
+  currency                String          @default("eur")
+  status                  OrderStatus     @default(PENDING)
+  paymentIntentId         String?
   /// Opaque browser-generated key used to resume a single Stripe checkout safely.
-  checkoutAttemptId  String?         @unique
-  stripeSessionId    String?
-  paidAt             DateTime?
-  formData           Json
-  clientInputs       Json?
+  checkoutAttemptId       String?         @unique
+  stripeSessionId         String?
+  paidAt                  DateTime?
+  formData                Json
+  clientInputs            Json?
   /// New purchases require an order-scoped, client-sealed intake before production.
   /// Existing orders default to false and retain the legacy profile fallback.
-  intakeRequired     Boolean         @default(false)
-  expertPrompt       String?         @db.Text
-  expertInstructions String?         @db.Text
-  generatedContent   Json?
-  errorLog           String?         @db.Text
-  expertReview       Json?
-  expertValidation   Json?
-  revisionCount      Int             @default(0)
-  deliveredAt        DateTime?
-  deliveryMethod     DeliveryFormat?
+  intakeRequired          Boolean         @default(false)
+  expertPrompt            String?         @db.Text
+  expertInstructions      String?         @db.Text
+  generatedContent        Json?
+  errorLog                String?         @db.Text
+  expertReview            Json?
+  expertValidation        Json?
+  revisionCount           Int             @default(0)
+  deliveredAt             DateTime?
+  deliveryMethod          DeliveryFormat?
   // V2: Subscription link
-  subscriptionId     String? // Optional link to the Subscription that generated this order
+  subscriptionId          String? // Optional link to the Subscription that generated this order
   // Upsell tracking
-  addons             Json? // Array of purchased addons: [{type: 'FORECAST_6M', amount: 2700, paidAt: Date}]
-  upsellOfferedAt    DateTime? // When upsell was shown
+  addons                  Json? // Array of purchased addons: [{type: 'FORECAST_6M', amount: 2700, paidAt: Date}]
+  upsellOfferedAt         DateTime? // When upsell was shown
   // GA4 Analytics Context (consented)
-  analyticsConsentGranted Boolean   @default(false)
-  ga4ClientId              String?
-  ga4SessionId             String?
-  ga4ContextCapturedAt     DateTime?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  analyticsConsentGranted Boolean         @default(false)
+  ga4ClientId             String?
+  ga4SessionId            String?
+  ga4ContextCapturedAt    DateTime?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
   // Relations for interconnected ecosystem
-  files          OrderFile[]
+  files           OrderFile[]
   readingVersions ReadingVersion[]
-  deliveries     DeliveryRecord[]
-  generatedSteps PathStep[] // Steps generated from this reading
-  chatContexts   ChatSession[] // Chat sessions related to this order
-  aiRuns         AiRun[]
-  readingIntake  ReadingIntake?
+  deliveries      DeliveryRecord[]
+  generatedSteps  PathStep[] // Steps generated from this reading
+  chatContexts    ChatSession[] // Chat sessions related to this order
+  aiRuns          AiRun[]
+  readingIntake   ReadingIntake?
 
   @@index([userId])
   @@index([userEmail])
@@ -336,14 +336,14 @@ model Order {
 /// Legal, versioned acceptance records. They are append-only so a later policy
 /// revision never erases the evidence of the prior acceptance.
 model ConsentRecord {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  purpose    String
-  version    String
-  acceptedAt DateTime @default(now())
-  revokedAt  DateTime?
-  createdAt  DateTime @default(now())
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose        String
+  version        String
+  acceptedAt     DateTime        @default(now())
+  revokedAt      DateTime?
+  createdAt      DateTime        @default(now())
   readingIntakes ReadingIntake[]
 
   @@unique([userId, purpose, version])
@@ -392,27 +392,27 @@ model ReadingIntake {
 }
 
 model ReadingVersion {
-  id              String               @id @default(cuid())
-  orderId         String
-  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  version         Int
-  status          ReadingVersionStatus @default(DRAFT)
+  id               String               @id @default(cuid())
+  orderId          String
+  order            Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  version          Int
+  status           ReadingVersionStatus @default(DRAFT)
   /// Immutable canonical payload rendered to PDF after an expert seal.
-  content         Json
-  contentHash     String
-  source          String
-  parentVersionId String?
-  parentVersion   ReadingVersion?     @relation("ReadingVersionLineage", fields: [parentVersionId], references: [id], onDelete: Restrict)
-  childVersions   ReadingVersion[]    @relation("ReadingVersionLineage")
+  content          Json
+  contentHash      String
+  source           String
+  parentVersionId  String?
+  parentVersion    ReadingVersion?      @relation("ReadingVersionLineage", fields: [parentVersionId], references: [id], onDelete: Restrict)
+  childVersions    ReadingVersion[]     @relation("ReadingVersionLineage")
   sealedByExpertId String?
-  sealedAt        DateTime?
-  reopenedAt      DateTime?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  deliveries      DeliveryRecord[]
-  spiritualPath   SpiritualPath?
-  memorySyncJob   MemorySyncJob?
-  memories        UserMemory[]
+  sealedAt         DateTime?
+  reopenedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deliveries       DeliveryRecord[]
+  spiritualPath    SpiritualPath?
+  memorySyncJob    MemorySyncJob?
+  memories         UserMemory[]
 
   @@unique([orderId, version])
   @@index([orderId, status, version(sort: Desc)])
@@ -423,29 +423,29 @@ model ReadingVersion {
 /// Local source of truth for every continuity fact. The fact is deliberately
 /// short and sanitized; sealed reading text itself is never copied here.
 model UserMemory {
-  id                 String           @id @default(cuid())
-  userId             String
-  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sourceType         MemorySourceType
-  sourceId           String
-  sourceVersionId    String?
-  readingVersion     ReadingVersion?  @relation(fields: [sourceVersionId], references: [id], onDelete: SetNull)
-  category           String
-  fact               String           @db.Text
-  status             UserMemoryStatus @default(PENDING)
-  contentHash        String
-  vertexMemoryName   String?          @unique
-  confidence         Float
-  approvedByExpertId String?
-  approvedAt         DateTime?
-  syncedAt           DateTime?
-  lastSyncError      String?          @db.Text
-  pendingOperation   MemoryMutationOperation?
-  conflictResolution MemoryConflictResolution?
-  conflictResolvedAt DateTime?
+  id                         String                    @id @default(cuid())
+  userId                     String
+  user                       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceType                 MemorySourceType
+  sourceId                   String
+  sourceVersionId            String?
+  readingVersion             ReadingVersion?           @relation(fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  category                   String
+  fact                       String                    @db.Text
+  status                     UserMemoryStatus          @default(PENDING)
+  contentHash                String
+  vertexMemoryName           String?                   @unique
+  confidence                 Float
+  approvedByExpertId         String?
+  approvedAt                 DateTime?
+  syncedAt                   DateTime?
+  lastSyncError              String?                   @db.Text
+  pendingOperation           MemoryMutationOperation?
+  conflictResolution         MemoryConflictResolution?
+  conflictResolvedAt         DateTime?
   conflictResolvedByExpertId String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
 
   @@unique([userId, contentHash])
   @@index([userId, status])
@@ -587,6 +587,8 @@ model Expert {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
+  editorialArticles EditorialArticle[]
+
   @@index([isActive])
   @@index([createdAt(sort: Desc)])
 }
@@ -641,7 +643,7 @@ model Insight {
   category  InsightCategory
   short     String          @db.Text // Résumé court (2-3 phrases)
   full      String          @db.Text // Texte complet (1-2 paragraphes)
-  audioUrl  String?         // URL S3 du fichier audio TTS
+  audioUrl  String? // URL S3 du fichier audio TTS
   viewedAt  DateTime? // Null = "Nouveau" badge
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
@@ -658,21 +660,21 @@ model Insight {
 // =============================================================================
 
 model SpiritualPath {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// The sealed reading that promoted this immutable journey. Legacy paths
   /// created before versioning intentionally keep this null.
-  readingVersionId String? @unique
+  readingVersionId String?         @unique
   readingVersion   ReadingVersion? @relation(fields: [readingVersionId], references: [id], onDelete: SetNull)
-  archetype   String // e.g., "Le Guérisseur", "Le Visionnaire"
-  synthesis   String    @db.Text // AI-generated synthesis of the user's spiritual journey
-  keyBlockage String? // Primary spiritual blockage identified
-  monthNumber Int       @default(1) // V2: Which subscription month this path covers (1, 2, 3...)
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  archetype        String // e.g., "Le Guérisseur", "Le Visionnaire"
+  synthesis        String          @db.Text // AI-generated synthesis of the user's spiritual journey
+  keyBlockage      String? // Primary spiritual blockage identified
+  monthNumber      Int             @default(1) // V2: Which subscription month this path covers (1, 2, 3...)
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   steps PathStep[]
 
@@ -872,30 +874,206 @@ enum AiRunStatus {
 }
 
 model AiRun {
-  id              String        @id @default(cuid())
-  orderId         String?
-  order           Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  agent           String
-  mission         AiMission
-  productLevel    ProductLevel?
-  provider        String
-  model           String
-  promptVersionId String?
-  routingSource   String?
+  id                String        @id @default(cuid())
+  orderId           String?
+  order             Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  agent             String
+  mission           AiMission
+  productLevel      ProductLevel?
+  provider          String
+  model             String
+  promptVersionId   String?
+  routingSource     String?
   /// Immutable, sanitized configuration and input snapshots used for this call.
   executionSnapshot Json?
   inputSnapshot     Json?
-  startedAt       DateTime      @default(now())
-  completedAt     DateTime?
-  durationMs      Int?
-  status          AiRunStatus
-  errorCode       String?
-  inputTokens     Int?
-  outputTokens    Int?
-  estimatedCost   Float?
-  createdAt       DateTime      @default(now())
+  startedAt         DateTime      @default(now())
+  completedAt       DateTime?
+  durationMs        Int?
+  status            AiRunStatus
+  errorCode         String?
+  inputTokens       Int?
+  outputTokens      Int?
+  estimatedCost     Float?
+  createdAt         DateTime      @default(now())
 
   @@index([orderId])
   @@index([agent, mission])
   @@index([startedAt(sort: Desc)])
+}
+
+// =============================================================================
+// EDITORIAL MODULE — 100% Additive CMS & SEO Engine
+// =============================================================================
+
+enum EditorialArticleStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EditorialInternalLinkStatus {
+  SUGGESTED
+  ACTIVE
+  IGNORED
+}
+
+enum EditorialPublicationEventType {
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+  UNSCHEDULED
+  FAILED
+}
+
+model EditorialArticle {
+  id             String                 @id @default(cuid())
+  title          String
+  slug           String                 @unique
+  excerpt        String?                @db.Text
+  contentJson    Json
+  contentHtml    String                 @db.Text
+  plainText      String                 @db.Text
+  status         EditorialArticleStatus @default(DRAFT)
+  seoTitle       String?
+  seoDescription String?                @db.Text
+  focusKeyword   String?
+  canonical      String?
+  seoScore       Float?
+  aeoScore       Float?
+  geoScore       Float?
+  seoAudit       Json?
+  aeoAudit       Json?
+  geoAudit       Json?
+  featured       Boolean                @default(false)
+  scheduledAt    DateTime?
+  publishedAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  categoryId String
+  category   EditorialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  tags EditorialArticleTag[]
+
+  coverAssetId String?
+  coverAsset   EditorialAsset? @relation(fields: [coverAssetId], references: [id], onDelete: SetNull)
+
+  authorId String?
+  author   Expert? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  outboundLinks EditorialArticleLink[] @relation("EditorialLinkSource")
+  inboundLinks  EditorialArticleLink[] @relation("EditorialLinkTarget")
+
+  publicationEvents EditorialPublicationEvent[]
+
+  @@index([status, publishedAt])
+  @@index([status, scheduledAt])
+  @@index([categoryId, publishedAt])
+  @@index([featured])
+  @@index([createdAt(sort: Desc)])
+}
+
+model EditorialCategory {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  description    String?  @db.Text
+  seoTitle       String?
+  seoDescription String?  @db.Text
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  articles EditorialArticle[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model EditorialTag {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  family    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  articles EditorialArticleTag[]
+  aliases  EditorialTagAlias[]
+
+  @@index([family])
+  @@index([isActive])
+}
+
+model EditorialTagAlias {
+  id        String       @id @default(cuid())
+  alias     String       @unique
+  tagId     String
+  tag       EditorialTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@index([tagId])
+}
+
+model EditorialArticleTag {
+  articleId String
+  article   EditorialArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       EditorialTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([articleId])
+  @@index([tagId])
+}
+
+model EditorialAsset {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  publicUrl String
+  mimeType  String
+  width     Int?
+  height    Int?
+  sizeBytes Int
+  altText   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  coverArticles EditorialArticle[]
+}
+
+model EditorialArticleLink {
+  id              String                      @id @default(cuid())
+  sourceArticleId String
+  sourceArticle   EditorialArticle            @relation("EditorialLinkSource", fields: [sourceArticleId], references: [id], onDelete: Cascade)
+  targetArticleId String
+  targetArticle   EditorialArticle            @relation("EditorialLinkTarget", fields: [targetArticleId], references: [id], onDelete: Cascade)
+  anchorText      String?
+  status          EditorialInternalLinkStatus @default(SUGGESTED)
+  relevanceScore  Float?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  @@unique([sourceArticleId, targetArticleId])
+  @@index([sourceArticleId])
+  @@index([targetArticleId])
+  @@index([status])
+}
+
+model EditorialPublicationEvent {
+  id           String                        @id @default(cuid())
+  articleId    String
+  article      EditorialArticle              @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  type         EditorialPublicationEventType
+  scheduledFor DateTime?
+  executedAt   DateTime?
+  error        String?                       @db.Text
+  createdAt    DateTime                      @default(now())
+
+  @@index([articleId])
+  @@index([articleId, createdAt(sort: Desc)])
+  @@index([scheduledFor])
 }

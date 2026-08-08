@@ -45,10 +45,11 @@ function extendReadingVersion(schema) {
   let extended = block;
 
   if (!extended.includes('inputSnapshotId String?')) {
-    const fieldMarker = '  parentVersionId String?\n';
-    if (!extended.includes(fieldMarker)) {
+    const parentMatch = extended.match(/(\s*parentVersionId\s+String\?\n)/);
+    if (!parentMatch) {
       throw new Error('ReadingVersion shape changed; amendment schema extension must be reviewed');
     }
+    const fieldMarker = parentMatch[1];
     extended = extended.replace(
       fieldMarker,
       `${fieldMarker}  /// Exact immutable input snapshot used for this generated version.\n  inputSnapshotId String?\n`,
