@@ -93,13 +93,13 @@ function parseNode(value: unknown): TipTapNode {
   const attrs = isRecord(value.attrs) ? value.attrs : undefined;
   assertSafeAttributes(attrs);
 
-  const content = value.content === undefined ? undefined : value.content;
-  if (content !== undefined && !Array.isArray(content)) {
+  const content = Array.isArray(value.content) ? value.content : undefined;
+  if (value.content !== undefined && content === undefined) {
     throw new BadRequestException('La structure du contenu Tiptap est invalide.');
   }
 
-  const marks = value.marks === undefined ? undefined : value.marks;
-  if (marks !== undefined && !Array.isArray(marks)) {
+  const marks = Array.isArray(value.marks) ? value.marks : undefined;
+  if (value.marks !== undefined && marks === undefined) {
     throw new BadRequestException('Les marques du contenu Tiptap sont invalides.');
   }
 

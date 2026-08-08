@@ -928,29 +928,32 @@ enum EditorialPublicationEventType {
 }
 
 model EditorialArticle {
-  id             String                 @id @default(cuid())
-  title          String
-  slug           String                 @unique
-  excerpt        String?                @db.Text
-  contentJson    Json
-  contentHtml    String                 @db.Text
-  plainText      String                 @db.Text
-  status         EditorialArticleStatus @default(DRAFT)
-  seoTitle       String?
-  seoDescription String?                @db.Text
-  focusKeyword   String?
-  canonical      String?
-  seoScore       Float?
-  aeoScore       Float?
-  geoScore       Float?
-  seoAudit       Json?
-  aeoAudit       Json?
-  geoAudit       Json?
-  featured       Boolean                @default(false)
-  scheduledAt    DateTime?
-  publishedAt    DateTime?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id               String                 @id @default(cuid())
+  title            String
+  slug             String                 @unique
+  excerpt          String?                @db.Text
+  contentJson      Json
+  contentHtml      String                 @db.Text
+  plainText        String                 @db.Text
+  status           EditorialArticleStatus @default(DRAFT)
+  seoTitle         String?
+  seoDescription   String?                @db.Text
+  focusKeyword     String?
+  canonical        String?
+  seoScore         Float?
+  aeoScore         Float?
+  geoScore         Float?
+  seoAudit         Json?
+  aeoAudit         Json?
+  geoAudit         Json?
+  auditRuleVersion String?
+  auditInputHash   String?
+  searchModifiedAt DateTime?
+  featured         Boolean                @default(false)
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   categoryId String
   category   EditorialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)

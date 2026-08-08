@@ -22,6 +22,7 @@ import {
   EditorialContentAuditInput,
   EditorialContentAuditService,
 } from './editorial-content-audit.service';
+import { EDITORIAL_AUDIT_RULE_VERSION } from './editorial-content-audit.config';
 
 const ARTICLE_AUDIT_INCLUDE = {
   category: { select: { id: true, isActive: true } },
@@ -166,6 +167,7 @@ export class EditorialService {
           featured: dto.featured ?? false,
           authorId: authorId || null,
           status: EditorialArticleStatus.DRAFT,
+          searchModifiedAt: null,
           tags: dto.tagIds?.length ? { create: dto.tagIds.map((tagId) => ({ tagId })) } : undefined,
         },
         include: ARTICLE_AUDIT_INCLUDE,
@@ -220,6 +222,16 @@ export class EditorialService {
       dto.seoDescription !== undefined ||
       dto.focusKeyword !== undefined ||
       dto.canonical !== undefined;
+    const changesPublicContent =
+      dto.title !== undefined ||
+      dto.excerpt !== undefined ||
+      dto.contentJson !== undefined ||
+      dto.categoryId !== undefined ||
+      dto.tagIds !== undefined ||
+      dto.coverAssetId !== undefined ||
+      dto.seoTitle !== undefined ||
+      dto.seoDescription !== undefined ||
+      dto.canonical !== undefined;
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.categoryId !== undefined) {
@@ -259,6 +271,10 @@ export class EditorialService {
           focusKeyword: dto.focusKeyword,
           canonical: dto.canonical,
           featured: dto.featured,
+          searchModifiedAt:
+            article.status === EditorialArticleStatus.PUBLISHED && changesPublicContent
+              ? new Date()
+              : undefined,
         },
         include: ARTICLE_AUDIT_INCLUDE,
       });
@@ -325,7 +341,7 @@ export class EditorialService {
       include: ARTICLE_AUDIT_INCLUDE,
     });
     if (!article) throw new NotFoundException(`Article introuvable (${id})`);
-    return this.persistAudit(this.prisma, article);
+    return this.persistAudit(this.prisma, article, true);
   }
 
   private async validateArticleRelations(
@@ -378,23 +394,35 @@ export class EditorialService {
 
       const update = await tx.editorialArticle.updateMany({
         where: { id: options.id, status: { in: options.allowedFrom } },
-        data: { ...options.data, status: options.target },
+        data: {
+          ...options.data,
+          status: options.target,
+          searchModifiedAt:
+            options.target === EditorialArticleStatus.PUBLISHED ? new Date() : undefined,
+        },
       });
       if (update.count !== 1) {
         throw new ConflictException('La transition éditoriale a été modifiée par une autre opération.');
       }
       await tx.editorialPublicationEvent.create({ data: { articleId: options.id, ...options.event } });
-      return tx.editorialArticle.findUniqueOrThrow({ where: { id: options.id } });
+      const transitioned = await tx.editorialArticle.findUniqueOrThrow({
+        where: { id: options.id },
+        include: ARTICLE_AUDIT_INCLUDE,
+      });
+      return this.persistAudit(tx, transitioned);
     });
   }
 
-  private async persistAudit(tx: Prisma.TransactionClient | PrismaService, article: EditorialArticleForAudit) {
+  private async persistAudit(
+    tx: Prisma.TransactionClient | PrismaService,
+    article: EditorialArticleForAudit,
+    force = false,
+  ) {
     const input: EditorialContentAuditInput = {
       title: article.title,
       slug: article.slug,
       excerpt: article.excerpt,
-      contentHtml: article.contentHtml,
-      plainText: article.plainText,
+      contentJson: article.contentJson,
       status: article.status,
       seoTitle: article.seoTitle,
       seoDescription: article.seoDescription,
@@ -405,10 +433,17 @@ export class EditorialService {
       coverAsset: article.coverAsset,
       author: article.author,
       publishedAt: article.publishedAt,
-      updatedAt: article.updatedAt,
+      searchModifiedAt: article.searchModifiedAt,
       outboundLinks: article.outboundLinks,
     };
     const audit = this.contentAudit.auditAll(input);
+    if (
+      !force &&
+      article.auditRuleVersion === EDITORIAL_AUDIT_RULE_VERSION &&
+      article.auditInputHash === audit.seo.inputHash
+    ) {
+      return article;
+    }
     return tx.editorialArticle.update({
       where: { id: article.id },
       data: {
@@ -418,6 +453,8 @@ export class EditorialService {
         seoAudit: audit.seo as Prisma.InputJsonValue,
         aeoAudit: audit.aeo as Prisma.InputJsonValue,
         geoAudit: audit.geo as Prisma.InputJsonValue,
+        auditRuleVersion: EDITORIAL_AUDIT_RULE_VERSION,
+        auditInputHash: audit.seo.inputHash,
       },
       include: ARTICLE_AUDIT_INCLUDE,
     });

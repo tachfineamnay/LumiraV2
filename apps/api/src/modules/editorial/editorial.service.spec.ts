@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EditorialArticleStatus, EditorialPublicationEventType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EditorialContentAuditService } from './editorial-content-audit.service';
+import { EDITORIAL_AUDIT_RULE_VERSION } from './editorial-content-audit.config';
 import { normalizeEditorialContent } from './editorial-content-normalizer';
 import { EditorialService } from './editorial.service';
 
@@ -121,6 +122,7 @@ describe('EditorialService hardening', () => {
     prisma.editorialArticle.findUnique.mockResolvedValue({ ...auditArticle, status: EditorialArticleStatus.DRAFT });
     prisma.editorialArticle.updateMany.mockResolvedValue({ count: 1 });
     prisma.editorialArticle.findUniqueOrThrow.mockResolvedValue(published);
+    prisma.editorialArticle.update.mockResolvedValue(published);
 
     const result = await service.publishArticle('art-1');
 
@@ -186,6 +188,50 @@ describe('EditorialService hardening', () => {
     const auditData = prisma.editorialArticle.update.mock.calls[0][0].data;
     expect(auditData.seoScore).toBeGreaterThanOrEqual(0);
     expect(auditData.geoAudit).toEqual(expect.objectContaining({ rules: expect.any(Array) }));
+  });
+
+  it('does not persist a second audit when the audited input hash and rule version are unchanged', async () => {
+    const auditService = new EditorialContentAuditService();
+    const existingAudit = auditService.auditAll({
+      title: auditArticle.title,
+      slug: auditArticle.slug,
+      excerpt: auditArticle.excerpt,
+      contentJson: auditArticle.contentJson,
+      status: auditArticle.status,
+      seoTitle: auditArticle.seoTitle,
+      seoDescription: auditArticle.seoDescription,
+      focusKeyword: auditArticle.focusKeyword,
+      canonical: auditArticle.canonical,
+      category: auditArticle.category,
+      tags: auditArticle.tags.map(({ tag: existingTag }) => existingTag),
+      coverAsset: auditArticle.coverAsset,
+      author: auditArticle.author,
+      publishedAt: auditArticle.publishedAt,
+      searchModifiedAt: null,
+      outboundLinks: auditArticle.outboundLinks,
+    });
+    const current = {
+      ...auditArticle,
+      auditRuleVersion: EDITORIAL_AUDIT_RULE_VERSION,
+      auditInputHash: existingAudit.seo.inputHash,
+      searchModifiedAt: null,
+    };
+    prisma.editorialArticle.findUnique.mockResolvedValue(current);
+    prisma.editorialArticle.update.mockResolvedValue(current);
+
+    await service.updateArticle('art-1', { title: auditArticle.title });
+
+    expect(prisma.editorialArticle.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('records searchModifiedAt only for a significant public edit, not from updatedAt', async () => {
+    const published = { ...auditArticle, status: EditorialArticleStatus.PUBLISHED, publishedAt: new Date(), searchModifiedAt: null };
+    prisma.editorialArticle.findUnique.mockResolvedValue(published);
+    prisma.editorialArticle.update.mockResolvedValue({ ...published, excerpt: 'Extrait éditorial mis à jour', searchModifiedAt: new Date() });
+
+    await service.updateArticle('art-1', { excerpt: 'Extrait éditorial mis à jour' });
+
+    expect(prisma.editorialArticle.update.mock.calls[0][0].data.searchModifiedAt).toEqual(expect.any(Date));
   });
 
   it('still protects draft, scheduled and archived articles from public lookup', async () => {
