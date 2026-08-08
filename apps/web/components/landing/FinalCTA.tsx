@@ -1,4 +1,4 @@
-import { Sparkles, ShieldCheck, Clock, Star } from 'lucide-react';
+import { Sparkles, ShieldCheck, Clock, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { SUBSCRIPTION } from '../../lib/products';
 
@@ -12,22 +12,21 @@ export function FinalCTA() {
         <div className="mb-8">
           <span className="inline-flex items-center gap-2 text-amber-400/70 text-[11px] uppercase tracking-[0.3em] font-bold">
             <span className="w-8 h-px bg-amber-400/30" />
-            Votre transformation commence ici
+            Un autre regard sur ce que vous traversez
             <span className="w-8 h-px bg-amber-400/30" />
           </span>
         </div>
 
         <h2 className="font-playfair italic text-4xl md:text-5xl lg:text-7xl text-white leading-[1.05] mb-6 md:mb-8">
-          Êtes-vous prêt à{' '}
+          Et si vous pouviez{' '}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-amber-500">
-            vous voir vraiment ?
+            y voir plus clair ?
           </span>
         </h2>
 
         <p className="text-white/60 text-base md:text-lg font-light leading-relaxed max-w-2xl mx-auto mb-10 md:mb-16">
-          Des milliers de personnes ont reçu leur lecture. Elles décrivent toutes le même moment :
-          celui où les mots de l&apos;Oracle ont mis des mots sur quelque chose qu&apos;elles
-          ressentaient depuis des années sans pouvoir l&apos;exprimer.
+          Transmettez votre intention et vos repères dans votre Sanctuaire. Lumira prépare une
+          lecture personnelle, puis un expert humain la relit et la valide avant livraison.
         </p>
 
         <div className="flex flex-col items-center gap-6">
@@ -38,14 +37,14 @@ export function FinalCTA() {
             <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300" />
             <Sparkles className="w-6 h-6 relative z-10" aria-hidden />
             <span className="relative z-10 tracking-wide">
-              Recevoir ma Lecture — {SUBSCRIPTION.price}€
+              Recevoir ma lecture — {SUBSCRIPTION.price}€
             </span>
           </Link>
 
           <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 text-white/30 text-xs">
             <span className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-amber-400/50" aria-hidden />
-              Livraison sous 24h
+              Livraison 24 à 48h après scellement
             </span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span className="flex items-center gap-1.5">
@@ -54,14 +53,14 @@ export function FinalCTA() {
             </span>
             <span className="w-1 h-1 rounded-full bg-white/10" />
             <span className="flex items-center gap-1.5">
-              <Star className="w-3.5 h-3.5 text-amber-400/50 fill-amber-400/50" aria-hidden />
-              4.9 / 5 sur 2 500+ lectures
+              <UserCheck className="w-3.5 h-3.5 text-amber-400/50" aria-hidden />
+              Révision humaine incluse
             </span>
           </div>
         </div>
 
         <p className="mt-16 text-white/20 text-xs uppercase tracking-[0.25em] font-light">
-          Une seule lecture peut changer votre trajectoire.
+          Une lecture interprétative pour prendre du recul, sans promesse de vérité absolue.
         </p>
       </div>
     </section>
